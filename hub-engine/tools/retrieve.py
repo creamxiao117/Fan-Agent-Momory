@@ -31,11 +31,7 @@ def deterministic_retrieve(root: Path, query: str, mode: str = "word") -> list[C
       （如查询含 "dll" 可命中 tag "dll-lock"，无需精确整句）
     """
     q = query.lower()
-    q_words = (
-        tokenize(query, mode="word")
-        if mode == "word"
-        else []
-    )
+    q_words = tokenize(query, mode="word") if mode == "word" else []
     hits = []
     for c in _walk_active_cards(root):
         if q in c.type:
@@ -45,9 +41,7 @@ def deterministic_retrieve(root: Path, query: str, mode: str = "word") -> list[C
         if any(q in t for t in tags):
             hits.append(c)
             continue
-        if q_words and any(
-            any(w in t or t in w for w in q_words) for t in tags
-        ):
+        if q_words and any(any(w in t or t in w for w in q_words) for t in tags):
             hits.append(c)
     return hits
 

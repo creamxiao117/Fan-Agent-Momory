@@ -11,7 +11,7 @@ INSTRUCTION = """## 统一记忆中枢（AGENT MEMORY HUB）
 
 def hub_location() -> str:
     """中枢当前绝对路径（由本文件位置动态推导，避免硬编码过期路径）。"""
-    return str((Path(__file__).resolve().parents[2] / "AgentMemoryHub"))
+    return str(Path(__file__).resolve().parents[2] / "AgentMemoryHub")
 
 
 def inject_instruction(target: str | Path) -> Path:

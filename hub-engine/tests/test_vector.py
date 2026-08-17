@@ -1,5 +1,4 @@
 import pytest
-
 from common.vector import build_idf, cosine, tokenize, vector
 
 try:

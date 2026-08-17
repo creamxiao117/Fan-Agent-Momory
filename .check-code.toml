@@ -1,0 +1,4 @@
+[check-code]
+# AgentMemoryHub 为引擎自动生成的运行态数据中枢（draft/conflicts/卡片/retro 日志/INDEX.md），
+# 不属于手写源码，排除在静态 lint 与文件收集之外；其内容质量由引擎 lint 子命令（tools/lint.py）负责。
+exclude = ["AgentMemoryHub"]

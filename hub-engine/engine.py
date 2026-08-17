@@ -181,7 +181,9 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--root", required=True)
     p.add_argument("query")
     p.add_argument("--top-k", type=int, default=5, help="语义通道召回条数（默认 5）")
-    p.add_argument("--n", type=int, default=2, help="字符 n-gram 长度（实测 n=2 最优，默认 2）")
+    p.add_argument(
+        "--n", type=int, default=2, help="字符 n-gram 长度（实测 n=2 最优，默认 2）"
+    )
     p.add_argument(
         "--mode",
         choices=("char", "word"),

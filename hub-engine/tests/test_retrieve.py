@@ -1,7 +1,6 @@
 from pathlib import Path
 
 import pytest
-
 from scripts.bootstrap_hub import bootstrap
 from tools.retrieve import deterministic_retrieve, retrieve, semantic_retrieve
 

@@ -9,16 +9,67 @@ _CHAR_RE = re.compile(r"\s+")
 
 # 常用中文停用词（词模式去噪，保持精简）
 STOPWORDS = frozenset(
-    "的 了 在 是 我 你 他 她 它 与 和 并 就 都 要 把 被 对 从 到 会 能 可以 "
-    "怎么 如何 一个 这个 那个 什么 哪些 这些 那些 进行 对于 以及 因为 所以 "
-    "如果 但是 然后 或者 没有 不是 已经 之后 之前 现在 目前 需要 应该 比如 例如"
-    .split()
+    [
+        "的",
+        "了",
+        "在",
+        "是",
+        "我",
+        "你",
+        "他",
+        "她",
+        "它",
+        "与",
+        "和",
+        "并",
+        "就",
+        "都",
+        "要",
+        "把",
+        "被",
+        "对",
+        "从",
+        "到",
+        "会",
+        "能",
+        "可以",
+        "怎么",
+        "如何",
+        "一个",
+        "这个",
+        "那个",
+        "什么",
+        "哪些",
+        "这些",
+        "那些",
+        "进行",
+        "对于",
+        "以及",
+        "因为",
+        "所以",
+        "如果",
+        "但是",
+        "然后",
+        "或者",
+        "没有",
+        "不是",
+        "已经",
+        "之后",
+        "之前",
+        "现在",
+        "目前",
+        "需要",
+        "应该",
+        "比如",
+        "例如",
+    ]
 )
 
 
 def _has_jieba() -> bool:
     try:
         import jieba  # noqa: F401
+
         return True
     except ImportError:
         return False
@@ -27,13 +78,12 @@ def _has_jieba() -> bool:
 @lru_cache(maxsize=1)
 def _jieba():
     import jieba
+
     return jieba
 
 
 def _is_punct(tok: str) -> bool:
-    return all(
-        not c.isalnum() and not ("\u4e00" <= c <= "\u9fff") for c in tok
-    )
+    return all(not c.isalnum() and not ("\u4e00" <= c <= "\u9fff") for c in tok)
 
 
 def tokenize(text: str, n: int = 2, mode: str = "char") -> list[str]:
@@ -54,9 +104,7 @@ def tokenize(text: str, n: int = 2, mode: str = "char") -> list[str]:
     return [norm[i : i + n] for i in range(len(norm) - n + 1)]
 
 
-def build_idf(
-    docs: list[str], n: int = 2, mode: str = "char"
-) -> dict[str, float]:
+def build_idf(docs: list[str], n: int = 2, mode: str = "char") -> dict[str, float]:
     """语料文档 → 各 token 的 IDF 权重（平滑，避免除零）。"""
     df = Counter()
     for doc in docs:
@@ -64,9 +112,7 @@ def build_idf(
     if not df:
         return {}
     doc_count = len(docs)
-    return {
-        tok: math.log((1 + doc_count) / (1 + df[tok])) + 1.0 for tok in df
-    }
+    return {tok: math.log((1 + doc_count) / (1 + df[tok])) + 1.0 for tok in df}
 
 
 def vector(
@@ -77,9 +123,7 @@ def vector(
     if not idf:
         return counts
     default_w = 1.0
-    return Counter(
-        {tok: cnt * idf.get(tok, default_w) for tok, cnt in counts.items()}
-    )
+    return Counter({tok: cnt * idf.get(tok, default_w) for tok, cnt in counts.items()})
 
 
 def cosine(a: Counter, b: Counter) -> float:
