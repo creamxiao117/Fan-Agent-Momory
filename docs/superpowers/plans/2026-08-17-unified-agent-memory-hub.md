@@ -1396,7 +1396,14 @@ def test_archive_moves_to_archive_and_marks_archived(tmp_path):
     dst = archive(root, "rules/old-rule.md", reason="已被新规则取代")
     assert dst.exists()
     assert not src.exists()
-    assert "archived" in dst.read_text(encoding="utf-8")
+    # 保留来源子目录结构：archive/rules/old-rule.md
+    assert dst == root / "archive" / "rules" / "old-rule.md"
+    card = read_card(dst)
+    assert card.status == "archived"
+    assert card.extra.get("archived_reason") == "已被新规则取代"
+    assert card.body.strip() == "过时规则。"
+    log = (root / "retro" / "log.md").read_text(encoding="utf-8")
+    assert "归档 rules/old-rule.md（已被新规则取代）" in log
 
 
 def test_archive_missing_raises(tmp_path):
@@ -1431,7 +1438,9 @@ def archive(root: Path, rel_path: str, reason: str = "") -> Path:
     card = read_card(src)
     card.status = "archived"
     card.extra.setdefault("archived_reason", reason or "未说明")
-    dst = root / "archive" / src.name
+    # 保留来源子目录结构，避免不同目录同名文件互相覆盖
+    rel_dir = src.parent.relative_to(root)
+    dst = root / "archive" / rel_dir / src.name
     dst.parent.mkdir(parents=True, exist_ok=True)
     dst.write_text(write_card(card), encoding="utf-8")
     src.unlink()

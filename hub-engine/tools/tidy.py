@@ -14,7 +14,9 @@ def archive(root: Path, rel_path: str, reason: str = "") -> Path:
     card = read_card(src)
     card.status = "archived"
     card.extra.setdefault("archived_reason", reason or "未说明")
-    dst = root / "archive" / src.name
+    # 保留来源子目录结构，避免不同目录同名文件互相覆盖
+    rel_dir = src.parent.relative_to(root)
+    dst = root / "archive" / rel_dir / src.name
     dst.parent.mkdir(parents=True, exist_ok=True)
     dst.write_text(write_card(card), encoding="utf-8")
     src.unlink()
