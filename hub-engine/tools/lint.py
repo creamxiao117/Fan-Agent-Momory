@@ -9,13 +9,16 @@ STALE_DAYS = 180
 
 
 def _all_cards(root: Path) -> list:
-    """返回 (dir, Path, Card) 列表"""
+    """返回 (dir, Path, Card) 列表；跳过时间线/报告等非卡片文件"""
     out = []
     for sub in AUTHORITY_DIRS:
         d = root / sub
         if not d.exists():
             continue
         for p in sorted(d.glob("*.md")):
+            # 时间线/报告文件无 frontmatter，非卡片，不计入健康检查
+            if p.name == "log.md" or p.name.startswith("lint-report-"):
+                continue
             try:
                 out.append((sub, p, read_card(p)))
             except Exception:

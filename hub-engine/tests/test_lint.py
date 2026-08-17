@@ -37,3 +37,10 @@ def test_lint_returns_full_shape(tmp_path):
     report = lint(root)
     assert set(report) == {"orphans", "stale", "invalid", "notes"}
     assert isinstance(report["invalid"], int)
+
+
+def test_lint_ignores_log_and_report_files(tmp_path):
+    """retro/log.md 等非卡片文件不应计入无效卡片"""
+    root = bootstrap(tmp_path)
+    report = lint(root)
+    assert report["invalid"] == 0

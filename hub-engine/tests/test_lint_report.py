@@ -1,5 +1,3 @@
-from pathlib import Path
-
 from scripts.bootstrap_hub import bootstrap
 from scripts.lint_report import run_report
 
