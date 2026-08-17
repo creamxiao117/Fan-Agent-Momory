@@ -11,3 +11,14 @@ __pycache__/
 *.pyc
 .next/
 coverage/
+
+# 运行产物 / 工具 / 缓存（ruff 等工具据此跳过）
+.venv/
+venv/
+.tools/
+work/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.tox/
+.nox/

@@ -1,8 +1,8 @@
 """复盘 → 候选规则：扫描暂存区复盘草稿，归纳去重，产出 candidate 卡片"""
-from datetime import date
+
 from pathlib import Path
 
-from common.frontmatter import parse_card, write_card
+from common.frontmatter import parse_card, today_iso, write_card
 from common.vector import cosine, vector
 from sync import append_log
 
@@ -58,7 +58,7 @@ def distill(root: Path, platform: str, output: str = "experience") -> list[Path]
 type: exp
 tags:
   - distill
-updated: {date.today().isoformat()}
+updated: {today_iso()}
 status: candidate
 reuse_count: 0
 ---

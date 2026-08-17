@@ -1,6 +1,7 @@
 """统一知识卡片 frontmatter 的解析 / 写入 / 校验"""
+
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 import yaml
@@ -10,17 +11,28 @@ VALID_STATUS = {"active", "archived", "candidate"}
 KNOWN = {"type", "tags", "updated", "status", "reuse_count"}
 
 
+def today_date() -> date:
+    """本地日期（时区感知，满足 lint 的 tz 要求）"""
+    return datetime.now(tz=timezone.utc).astimezone().date()
+
+
+def today_iso() -> str:
+    """本地日期 YYYY-MM-DD"""
+    return today_date().isoformat()
+
+
 @dataclass
 class Card:
     """一张知识卡片（对应一个 .md 文件）"""
+
     type: str = "note"
     tags: list = field(default_factory=list)
     updated: str = ""
     status: str = "active"
     reuse_count: int = 0
-    extra: dict = field(default_factory=dict)   # 其他自定义字段原样保留
+    extra: dict = field(default_factory=dict)  # 其他自定义字段原样保留
     body: str = ""
-    path: Path | None = None                     # 从磁盘读取时记录来源路径
+    path: Path | None = None  # 从磁盘读取时记录来源路径
 
 
 def parse_card(text: str, path: Path | None = None) -> Card:
@@ -48,13 +60,18 @@ def write_card(card: Card) -> str:
     fm = {
         "type": card.type,
         "tags": card.tags,
-        "updated": card.updated or date.today().isoformat(),
+        "updated": card.updated or today_iso(),
         "status": card.status,
         "reuse_count": card.reuse_count,
     }
     fm.update(card.extra)
-    return ("---\n" + yaml.safe_dump(fm, allow_unicode=True, sort_keys=False).rstrip()
-            + "\n---\n\n" + card.body.strip() + "\n")
+    return (
+        "---\n"
+        + yaml.safe_dump(fm, allow_unicode=True, sort_keys=False).rstrip()
+        + "\n---\n\n"
+        + card.body.strip()
+        + "\n"
+    )
 
 
 def validate_card(card: Card) -> list[str]:
@@ -71,6 +88,14 @@ def validate_card(card: Card) -> list[str]:
 
 def read_card(path: Path) -> Card:
     return parse_card(path.read_text(encoding="utf-8"), path=path)
+
+
+def try_read_card(path: Path) -> Card | None:
+    """读取卡片；非卡片/格式错误时返回 None（供各扫描器跳过坏文件）"""
+    try:
+        return read_card(path)
+    except (ValueError, OSError, yaml.YAMLError, TypeError, AttributeError):
+        return None
 
 
 def save_card(card: Card, path: Path) -> None:

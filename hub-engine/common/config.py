@@ -1,4 +1,5 @@
 """配置加载：hub.config.yaml / engine.config.yaml / provider_keys.yaml"""
+
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -17,6 +18,7 @@ def load_yaml(path: Path) -> dict:
 @dataclass
 class HubConfig:
     """中枢根配置（hub.config.yaml 的封装）"""
+
     root: Path
     data: dict = field(default_factory=dict)
 
@@ -38,7 +40,9 @@ class HubConfig:
 def load_engine_config(config_path: str | Path | None = None) -> dict:
     """读取 engine.config.yaml；默认取仓库内 config/ 下的文件"""
     if config_path is None:
-        config_path = Path(__file__).resolve().parent.parent / "config" / "engine.config.yaml"
+        config_path = (
+            Path(__file__).resolve().parent.parent / "config" / "engine.config.yaml"
+        )
     return load_yaml(Path(config_path))
 
 

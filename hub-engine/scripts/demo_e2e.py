@@ -1,8 +1,8 @@
 """端到端演示：一条真实 AutoCAD DLL 规则走通 沉淀→提炼→确认→复用"""
-from datetime import date
+
 from pathlib import Path
 
-from common.frontmatter import write_card, parse_card
+from common.frontmatter import parse_card, today_iso, write_card
 from scripts.bootstrap_hub import bootstrap
 from sync import append_log, confirm_rule, ingest
 from tools.retrieve import retrieve
@@ -18,13 +18,16 @@ def run_demo(root: str | Path) -> dict:
     retro = draft / "retro"
     retro.mkdir(parents=True, exist_ok=True)
     (retro / "retro-2026-08-17.md").write_text(
-        f"""# 复盘 {date.today().isoformat()}
+        f"""# 复盘 {today_iso()}
 今天改完插件 DLL 直接覆盖源文件，结果被 AutoCAD 占用锁住，最后只能递增版本号解决。
 教训：修改 DLL 后必须递增版本号，绝不能原地覆盖同名文件。
-""", encoding="utf-8")
+""",
+        encoding="utf-8",
+    )
 
     # 2) 提炼 → 候选
     from tools.distill import distill
+
     distill(root, "trae")
     cand_dir = root / ".sync" / "drafts" / "trae_draft" / "candidates"
     cands = sorted(cand_dir.glob("*.md"))
@@ -48,7 +51,7 @@ def run_demo(root: str | Path) -> dict:
     append_log(root, "reuse", f"查询命中 {len(hits)} 条")
 
     # 6) 查询产物回写：好答案→新经验卡片（写入暂存区后自动入区）
-    insight = parse_card(f"""---
+    insight = parse_card("""---
 type: exp
 tags:
   - autocad
@@ -70,5 +73,6 @@ reuse_count: 0
 
 if __name__ == "__main__":
     import sys
+
     target = sys.argv[1] if len(sys.argv) > 1 else r"D:\AIwork\AgentMemoryHub"
     print(run_demo(target))

@@ -1,4 +1,5 @@
 """平台固定指令注入：向各平台规则文件写入"执行前先查中枢"指令（幂等）"""
+
 from pathlib import Path
 
 INSTRUCTION = """## 统一记忆中枢（AGENT MEMORY HUB）
@@ -22,6 +23,7 @@ def inject_instruction(target: str | Path) -> Path:
 
 if __name__ == "__main__":
     import sys
+
     if len(sys.argv) < 2:
         sys.exit("用法: python -m tools.inject <目标规则文件路径>")
     print(f"已注入: {inject_instruction(sys.argv[1])}")

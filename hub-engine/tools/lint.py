@@ -1,8 +1,9 @@
 """Lint：周期性库健康检查（孤儿页 / 陈旧页 / 无效卡片 / 摘要）"""
+
 from datetime import date
 from pathlib import Path
 
-from common.frontmatter import read_card, validate_card
+from common.frontmatter import today_date, try_read_card, validate_card
 
 AUTHORITY_DIRS = ("rules", "experience", "projects", "libs", "retro")
 STALE_DAYS = 180
@@ -19,10 +20,7 @@ def _all_cards(root: Path) -> list:
             # 时间线/报告文件无 frontmatter，非卡片，不计入健康检查
             if p.name == "log.md" or p.name.startswith("lint-report-"):
                 continue
-            try:
-                out.append((sub, p, read_card(p)))
-            except Exception:
-                out.append((sub, p, None))
+            out.append((sub, p, try_read_card(p)))
     return out
 
 
@@ -52,7 +50,7 @@ def find_orphans(root: Path) -> list[Path]:
 def lint(root: Path) -> dict:
     """健康检查报告：orphans / stale / invalid / notes"""
     root = Path(root)
-    orphans, stale, invalid = [], [], 0  # 注意：invalid 是 int 计数，初始化为 0（计划原文有 bug）
+    stale, invalid = [], 0  # invalid 是 int 计数（计划原文有 bug）
     for sub, p, card in _all_cards(root):
         if card is None:
             invalid += 1
@@ -62,7 +60,7 @@ def lint(root: Path) -> dict:
             invalid += 1
             continue
         try:
-            age = (date.today() - date.fromisoformat(card.updated)).days
+            age = (today_date() - date.fromisoformat(card.updated)).days
         except ValueError:
             stale.append({"name": p.name, "dir": sub, "updated": card.updated})
             continue

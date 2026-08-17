@@ -1,8 +1,5 @@
-from pathlib import Path
-
 import pytest
-
-from engine import chat
+from engine import chat, main
 
 
 def test_chat_calls_gateway_and_returns_content(monkeypatch, tmp_path):
@@ -42,3 +39,28 @@ def test_chat_raises_when_fallback_disabled(monkeypatch, tmp_path):
     monkeypatch.setattr("engine.requests.post", boom)
     with pytest.raises(RuntimeError):
         chat("x", tmp_path, fallback=False)
+
+
+def test_status_prints_snapshot(tmp_path, capsys):
+    from scripts.bootstrap_hub import bootstrap
+
+    root = bootstrap(tmp_path)
+    code = main(["status", "--root", str(root)])
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "卡片分布" in out
+    assert "Lint:" in out
+    assert "待人工确认" in out
+
+
+def test_status_json_output(tmp_path, capsys):
+    import json
+
+    from scripts.bootstrap_hub import bootstrap
+
+    root = bootstrap(tmp_path)
+    code = main(["status", "--root", str(root), "--json"])
+    data = json.loads(capsys.readouterr().out)
+    assert code == 0
+    assert set(data) >= {"root", "cards", "lint", "pending", "last_commit"}
+    assert data["lint"]["invalid"] == 0

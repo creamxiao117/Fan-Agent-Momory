@@ -1,0 +1,2 @@
+# 归档设计文档/运行产物不在 ruff 检查与格式化范围内
+extend-exclude = ["docs/**", "work/**", ".tools/**"]

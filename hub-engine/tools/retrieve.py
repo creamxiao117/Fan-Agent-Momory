@@ -1,7 +1,8 @@
 """混合检索：确定性通道（按 type/tag 精确命中）+ 语义通道（n-gram 余弦召回）"""
+
 from pathlib import Path
 
-from common.frontmatter import Card, read_card
+from common.frontmatter import Card, try_read_card
 from common.vector import cosine, vector
 
 
@@ -12,11 +13,8 @@ def _walk_active_cards(root: Path) -> list[Card]:
         if not d.exists():
             continue
         for p in sorted(d.glob("*.md")):
-            try:
-                c = read_card(p)
-            except Exception:
-                continue
-            if c.status != "archived":
+            c = try_read_card(p)
+            if c is not None and c.status != "archived":
                 cards.append(c)
     return cards
 
@@ -24,8 +22,11 @@ def _walk_active_cards(root: Path) -> list[Card]:
 def deterministic_retrieve(root: Path, query: str) -> list[Card]:
     """确定性通道：query 命中 type 或任一 tag 即返回"""
     q = query.lower()
-    return [c for c in _walk_active_cards(root)
-            if q in c.type or any(q in t.lower() for t in c.tags)]
+    return [
+        c
+        for c in _walk_active_cards(root)
+        if q in c.type or any(q in t.lower() for t in c.tags)
+    ]
 
 
 def semantic_retrieve(root: Path, query: str, top_k: int = 5) -> list[Card]:

@@ -1,14 +1,24 @@
 import subprocess
-from pathlib import Path
 
 from scripts.bootstrap_hub import bootstrap
 
 
 def test_bootstrap_creates_skeleton(tmp_path):
     root = bootstrap(tmp_path)
-    for sub in ("rules", "libs", "experience", "projects", "retro", "archive",
-                ".sync/drafts/trae_draft", ".sync/drafts/code_draft",
-                ".sync/conflicts", ".sync/locks", ".sync/state", ".sync/pending"):
+    for sub in (
+        "rules",
+        "libs",
+        "experience",
+        "projects",
+        "retro",
+        "archive",
+        ".sync/drafts/trae_draft",
+        ".sync/drafts/code_draft",
+        ".sync/conflicts",
+        ".sync/locks",
+        ".sync/state",
+        ".sync/pending",
+    ):
         assert (root / sub).is_dir(), sub
     assert (root / "INDEX.md").exists()
     assert (root / "retro" / "log.md").exists()
@@ -32,6 +42,10 @@ def test_bootstrap_git_init(tmp_path):
     root = bootstrap(tmp_path)
     assert (root / ".git" / "config").exists()
     # 首次提交应已通过本地身份完成，HEAD 可解析出非空 hash
-    proc = subprocess.run(["git", "-C", str(root), "rev-parse", "HEAD"],
-                          check=True, capture_output=True, text=True)
+    proc = subprocess.run(
+        ["git", "-C", str(root), "rev-parse", "HEAD"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
     assert proc.stdout.strip()

@@ -1,6 +1,10 @@
-from common.frontmatter import Card, parse_card, read_card, save_card, validate_card, write_card
-from pathlib import Path
-
+from common.frontmatter import (
+    parse_card,
+    read_card,
+    save_card,
+    validate_card,
+    write_card,
+)
 
 SAMPLE = """---
 type: rule
@@ -57,5 +61,6 @@ def test_save_and_read(tmp_path):
 
 def test_parse_missing_frontmatter_raises():
     import pytest
+
     with pytest.raises(ValueError):
         parse_card("没有 frontmatter 的纯文本")

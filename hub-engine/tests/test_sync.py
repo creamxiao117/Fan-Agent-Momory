@@ -5,7 +5,9 @@ from scripts.bootstrap_hub import bootstrap
 from sync import append_log, confirm_rule, ingest
 
 
-def _make_draft(root: Path, platform: str, name: str, body: str, ctype: str = "exp") -> Path:
+def _make_draft(
+    root: Path, platform: str, name: str, body: str, ctype: str = "exp"
+) -> Path:
     d = root / ".sync" / "drafts" / f"{platform}_draft"
     d.mkdir(parents=True, exist_ok=True)
     card = parse_card(f"""---
@@ -45,7 +47,8 @@ def test_ingest_duplicate_goes_to_conflicts(tmp_path):
     root = bootstrap(tmp_path)
     (root / "experience" / "exp-a.md").write_text(
         "---\ntype: exp\ntags: [test]\nupdated: 2026-08-17\nstatus: active\nreuse_count: 0\n---\n这是一条经验卡片内容\n",
-        encoding="utf-8")
+        encoding="utf-8",
+    )
     _make_draft(root, "trae", "exp-a.md", "这是一条经验卡片内容", ctype="exp")
     stat = ingest(root, "trae")
     assert stat["duplicate"] == 1
@@ -69,11 +72,14 @@ def test_ingest_same_name_different_content_no_overwrite(tmp_path):
     root = bootstrap(tmp_path)
     (root / "experience" / "exp-a.md").write_text(
         "---\ntype: exp\ntags: [test]\nupdated: 2026-08-17\nstatus: active\nreuse_count: 0\n---\n记录一次排查 Windows 系统崩溃的经验\n",
-        encoding="utf-8")
+        encoding="utf-8",
+    )
     _make_draft(root, "trae", "exp-a.md", "如何制作拿铁咖啡的心得体会", ctype="exp")
     stat = ingest(root, "trae")
     # 权威区内容保持不变（未被草稿覆盖）
-    assert "排查 Windows 系统崩溃" in (root / "experience" / "exp-a.md").read_text(encoding="utf-8")
+    assert "排查 Windows 系统崩溃" in (root / "experience" / "exp-a.md").read_text(
+        encoding="utf-8"
+    )
     # 同名不同内容计入冲突，草稿被删除
     assert stat["duplicate"] == 1
     assert not (root / ".sync" / "drafts" / "trae_draft" / "exp-a.md").exists()

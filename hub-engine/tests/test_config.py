@@ -1,7 +1,5 @@
 from pathlib import Path
 
-import pytest
-
 from common.config import load_engine_config, load_provider_keys
 
 
@@ -13,8 +11,11 @@ def _write(tmp_path: Path, name: str, content: str) -> Path:
 
 
 def test_load_engine_config_returns_gateway(tmp_path):
-    _write(tmp_path, "engine.config.yaml",
-           "gateway_url: http://127.0.0.1:11434\ndefault_model: qwen2.5:7b\ntimeout: 30\n")
+    _write(
+        tmp_path,
+        "engine.config.yaml",
+        "gateway_url: http://127.0.0.1:11434\ndefault_model: qwen2.5:7b\ntimeout: 30\n",
+    )
     cfg = load_engine_config(tmp_path / "engine.config.yaml")
     assert cfg["gateway_url"] == "http://127.0.0.1:11434"
     assert cfg["default_model"] == "qwen2.5:7b"

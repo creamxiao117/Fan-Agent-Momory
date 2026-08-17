@@ -7,13 +7,16 @@ from tools.lint import find_orphans, lint
 def _seed(root: Path) -> None:
     (root / "rules" / "a.md").write_text(
         "---\ntype: rule\ntags: [x]\nupdated: 2026-08-17\nstatus: active\nreuse_count: 0\n---\n规则 A\n",
-        encoding="utf-8")
+        encoding="utf-8",
+    )
     (root / "experience" / "orphan.md").write_text(
         "---\ntype: exp\ntags: [y]\nupdated: 2026-08-17\nstatus: active\nreuse_count: 0\n---\n无人引用的孤立页\n",
-        encoding="utf-8")
+        encoding="utf-8",
+    )
     (root / "rules" / "stale.md").write_text(
         "---\ntype: rule\ntags: [z]\nupdated: 2026-01-01\nstatus: active\nreuse_count: 0\n---\n半年没更新的陈旧页\n",
-        encoding="utf-8")
+        encoding="utf-8",
+    )
 
 
 def test_find_orphans(tmp_path):

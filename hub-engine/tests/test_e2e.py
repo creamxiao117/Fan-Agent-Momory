@@ -1,5 +1,3 @@
-from pathlib import Path
-
 from scripts.bootstrap_hub import bootstrap
 from scripts.demo_e2e import run_demo
 

@@ -1,5 +1,3 @@
-from pathlib import Path
-
 from tools.inject import inject_instruction
 
 

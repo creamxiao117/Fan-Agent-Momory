@@ -1,15 +1,27 @@
 """同步器：单一写入者 + 暂存区提升 + 去重/冲突 + 人工确认 + Git 提交"""
+
 import shutil
 import subprocess
-from datetime import date
 from pathlib import Path
 
-from common.frontmatter import Card, read_card, validate_card, write_card
+from common.frontmatter import (
+    Card,
+    read_card,
+    today_iso,
+    try_read_card,
+    validate_card,
+    write_card,
+)
 from common.vector import cosine, vector
 
-TYPE_DIR = {"rule": "rules", "exp": "experience", "note": "experience",
-            "project": "projects", "retro": "retro"}
-HIGH_RISK = {"rule"}   # 重要规则：须人工确认
+TYPE_DIR = {
+    "rule": "rules",
+    "exp": "experience",
+    "note": "experience",
+    "project": "projects",
+    "retro": "retro",
+}
+HIGH_RISK = {"rule"}  # 重要规则：须人工确认
 
 # 与 bootstrap_hub 一致：注入本地身份，保证未配置全局 user.name/email 也能提交（不污染全局配置）
 GIT_ID = ["-c", "user.name=AgentMemoryHub", "-c", "user.email=hub@local"]
@@ -19,7 +31,9 @@ def _git(repo: Path, *args: str) -> str:
     """运行 git 子命令；返回 stdout，失败时透传真实 stderr（与 bootstrap 的 _run_git 一致）"""
     cmd = ["git", "-C", str(repo), *args]
     try:
-        r = subprocess.run(cmd, check=True, capture_output=True, text=True, encoding="utf-8")
+        r = subprocess.run(
+            cmd, check=True, capture_output=True, text=True, encoding="utf-8"
+        )
         return r.stdout or ""
     except subprocess.CalledProcessError as e:
         stderr = (e.stderr or "").strip()
@@ -31,7 +45,7 @@ def _append_log(root: Path, op: str, title: str) -> None:
     log = root / "retro" / "log.md"
     log.parent.mkdir(parents=True, exist_ok=True)
     with open(log, "a", encoding="utf-8") as f:
-        f.write(f"## [{date.today().isoformat()}] {op} | {title}\n")
+        f.write(f"## [{today_iso()}] {op} | {title}\n")
 
 
 def append_log(root: Path, op: str, title: str) -> None:
@@ -45,10 +59,9 @@ def _authority_cards(root: Path) -> list[Card]:
         if not d.exists():
             continue
         for p in sorted(d.glob("*.md")):
-            try:
-                cards.append(read_card(p))
-            except Exception:
-                continue
+            card = try_read_card(p)
+            if card is not None:
+                cards.append(card)
     return cards
 
 
@@ -96,9 +109,8 @@ def ingest(root: Path, platform: str) -> dict:
     try:
         with _WriteLock(root):
             for p in sorted(drafts.glob("*.md")):
-                try:
-                    card = read_card(p)
-                except Exception:
+                card = try_read_card(p)
+                if card is None:
                     stat["invalid"] += 1
                     continue
                 if validate_card(card):

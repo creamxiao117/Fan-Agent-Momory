@@ -1,13 +1,24 @@
 """幂等创建 AgentMemoryHub 中枢骨架（Obsidian 根 / 唯一事实源）"""
+
 import subprocess
 import sys
-from datetime import date
 from pathlib import Path
 
+from common.frontmatter import today_iso
+
 STRUCTURE = [
-    "rules", "libs", "experience", "projects", "retro", "archive",
-    ".sync/drafts/trae_draft", ".sync/drafts/code_draft",
-    ".sync/conflicts", ".sync/locks", ".sync/state", ".sync/pending",
+    "rules",
+    "libs",
+    "experience",
+    "projects",
+    "retro",
+    "archive",
+    ".sync/drafts/trae_draft",
+    ".sync/drafts/code_draft",
+    ".sync/conflicts",
+    ".sync/locks",
+    ".sync/state",
+    ".sync/pending",
 ]
 
 GITIGNORE = """# Key 与同步器内部状态不提交
@@ -72,13 +83,15 @@ def bootstrap(root: str | Path) -> Path:
         (root / "INDEX.md").write_text(INDEX_TEMPLATE, encoding="utf-8")
     if not (root / "retro" / "log.md").exists():
         (root / "retro" / "log.md").write_text(
-            DEFAULT_LOG + f"## [{date.today().isoformat()}] init | 中枢初始化\n", encoding="utf-8")
+            DEFAULT_LOG + f"## [{today_iso()}] init | 中枢初始化\n", encoding="utf-8"
+        )
     if not (root / "hub.config.yaml").exists():
         (root / "hub.config.yaml").write_text(CONFIG_TEMPLATE, encoding="utf-8")
     if not (root / "provider_keys.yaml").exists():
         (root / "provider_keys.yaml").write_text(
             "# 各免费模型 Key（独立文件，勿提交 Git）\ndefault: sk-REPLACE_WITH_YOUR_KEY\n",
-            encoding="utf-8")
+            encoding="utf-8",
+        )
     _git_init(root)
     return root
 
@@ -86,7 +99,9 @@ def bootstrap(root: str | Path) -> Path:
 def _run_git(cmd: list[str]) -> None:
     """运行 git 子命令；失败时透传真实 stderr，避免裸 traceback"""
     try:
-        subprocess.run(cmd, check=True, capture_output=True, text=True, encoding="utf-8")
+        subprocess.run(
+            cmd, check=True, capture_output=True, text=True, encoding="utf-8"
+        )
     except subprocess.CalledProcessError as e:
         stderr = (e.stderr or "").strip()
         raise RuntimeError(f"git 命令失败: {' '.join(cmd)}\n{stderr or e}") from e
@@ -99,8 +114,20 @@ def _git_init(root: Path) -> None:
     _run_git(["git", "-C", str(root), "init"])
     _run_git(["git", "-C", str(root), "add", "-A"])
     # 注入本地身份，保证未配置全局 user.name/user.email 也能完成首次提交（不污染全局配置）
-    _run_git(["git", "-C", str(root), "-c", "user.name=AgentMemoryHub",
-              "-c", "user.email=hub@local", "commit", "-m", "chore: 中枢初始化"])
+    _run_git(
+        [
+            "git",
+            "-C",
+            str(root),
+            "-c",
+            "user.name=AgentMemoryHub",
+            "-c",
+            "user.email=hub@local",
+            "commit",
+            "-m",
+            "chore: 中枢初始化",
+        ]
+    )
 
 
 if __name__ == "__main__":

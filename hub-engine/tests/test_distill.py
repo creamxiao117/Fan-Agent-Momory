@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from common.frontmatter import parse_card, write_card
+from common.frontmatter import parse_card
 from scripts.bootstrap_hub import bootstrap
 from tools.distill import collect_candidates, distill
 

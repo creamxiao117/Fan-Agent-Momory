@@ -1,0 +1,7 @@
+# 归档设计文档（历史计划/方案，非维护文档，不纳入 lint）
+docs/superpowers/
+# 运行产物 / 工具 / 缓存
+work/
+.tools/
+.pytest_cache/
+.venv/
