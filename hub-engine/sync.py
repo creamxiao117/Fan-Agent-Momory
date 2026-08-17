@@ -1,5 +1,4 @@
 """同步器：单一写入者 + 暂存区提升 + 去重/冲突 + 人工确认 + Git 提交"""
-import hashlib
 import shutil
 import subprocess
 from datetime import date
@@ -10,16 +9,21 @@ from common.vector import cosine, vector
 
 TYPE_DIR = {"rule": "rules", "exp": "experience", "note": "experience",
             "project": "projects", "retro": "retro"}
-LOW_RISK = {"exp", "note", "project", "retro"}   # 低风险：自动入区仅记日志
-HIGH_RISK = {"rule"}                              # 重要规则：须人工确认
+HIGH_RISK = {"rule"}   # 重要规则：须人工确认
 
 # 与 bootstrap_hub 一致：注入本地身份，保证未配置全局 user.name/email 也能提交（不污染全局配置）
 GIT_ID = ["-c", "user.name=AgentMemoryHub", "-c", "user.email=hub@local"]
 
 
-def _git(repo: Path, *args: str) -> None:
-    subprocess.run(["git", "-C", str(repo), *args],
-                   check=True, capture_output=True, text=True, encoding="utf-8")
+def _git(repo: Path, *args: str) -> str:
+    """运行 git 子命令；返回 stdout，失败时透传真实 stderr（与 bootstrap 的 _run_git 一致）"""
+    cmd = ["git", "-C", str(repo), *args]
+    try:
+        r = subprocess.run(cmd, check=True, capture_output=True, text=True, encoding="utf-8")
+        return r.stdout or ""
+    except subprocess.CalledProcessError as e:
+        stderr = (e.stderr or "").strip()
+        raise RuntimeError(f"git 命令失败: {' '.join(cmd)}\n{stderr or e}") from e
 
 
 def _append_log(root: Path, op: str, title: str) -> None:
@@ -32,12 +36,6 @@ def _append_log(root: Path, op: str, title: str) -> None:
 
 def append_log(root: Path, op: str, title: str) -> None:
     _append_log(root, op, title)
-
-
-def _fingerprint(card: Card) -> str:
-    """去重指纹：type|status|body 的 sha1"""
-    payload = f"{card.type}|{card.status}|{card.body}".encode("utf-8")
-    return hashlib.sha1(payload).hexdigest()
 
 
 def _authority_cards(root: Path) -> list[Card]:
@@ -64,11 +62,11 @@ def _find_duplicate(root: Path, card: Card, threshold: float = 0.7) -> Card | No
 
 
 def _commit(root: Path, message: str) -> None:
-    try:
-        _git(root, "add", "-A")
-        _git(root, *GIT_ID, "commit", "-m", message)
-    except subprocess.CalledProcessError:
-        pass  # 无变更可提交时忽略
+    """提交变更：无变更可提交时直接跳过；真实 Git 失败透传 stderr"""
+    if not _git(root, "status", "--porcelain").strip():
+        return
+    _git(root, "add", "-A")
+    _git(root, *GIT_ID, "commit", "-m", message)
 
 
 class _WriteLock:
@@ -112,6 +110,7 @@ def ingest(root: Path, platform: str) -> dict:
                     cdir.mkdir(parents=True, exist_ok=True)
                     shutil.copy2(p, cdir / f"{platform}_{p.name}")
                     _append_log(root, "ingest", f"重复内容进冲突区：{p.name}")
+                    p.unlink()  # 内容已保留在冲突区，草稿无保留价值
                     continue
                 if card.type in HIGH_RISK:
                     # 新增重要规则 → 待人工确认
@@ -123,12 +122,20 @@ def ingest(root: Path, platform: str) -> dict:
                     _append_log(root, "ingest", f"新规则待确认：{p.name}")
                 else:
                     # 低风险内容 → 自动入区，仅记日志
-                    card.status = "active"
                     dst = root / TYPE_DIR.get(card.type, "experience") / p.name
-                    dst.parent.mkdir(parents=True, exist_ok=True)
-                    dst.write_text(write_card(card), encoding="utf-8")
-                    stat["promoted"] += 1
-                    _append_log(root, "ingest", f"自动入区：{p.name}")
+                    if dst.exists():
+                        # 同名不同内容（语义去重已在上方处理过）→ 不覆盖权威区，转冲突区
+                        cdir = root / ".sync" / "conflicts"
+                        cdir.mkdir(parents=True, exist_ok=True)
+                        shutil.copy2(p, cdir / f"{platform}_{p.name}")
+                        stat["duplicate"] += 1
+                        _append_log(root, "ingest", f"同名不同内容进冲突区：{p.name}")
+                    else:
+                        card.status = "active"
+                        dst.parent.mkdir(parents=True, exist_ok=True)
+                        dst.write_text(write_card(card), encoding="utf-8")
+                        stat["promoted"] += 1
+                        _append_log(root, "ingest", f"自动入区：{p.name}")
                 p.unlink()
             _commit(root, f"sync: ingest {platform} draft → hub")
     except RuntimeError as e:
