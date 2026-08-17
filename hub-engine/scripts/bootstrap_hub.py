@@ -65,6 +65,12 @@ platforms:
   code:
     memory_dir: "C:/Users/Fan-SJSS/.codex"
     target_file: "AGENTS.md"
+  hermes:
+    memory_dir: "C:/Users/Fan-SJSS/AppData/Local/hermes/memories"
+    target_file: "MEMORY.md"
+  workbuddy:
+    memory_dir: "C:/Users/Fan-SJSS/.workbuddy"
+    target_file: "MEMORY.md"
 engine:
   provider_keys: provider_keys.yaml
 """

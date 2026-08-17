@@ -55,10 +55,18 @@
 - **停用词审计**：word 高频前 25 无实质噪声词，停用词表无需调整。
 - **IDF 稳定性**：按文档频率分层（常见 vs 稀有）随机子语料 10 次重算，区分度边界 margin=0.405>0，结论稳定（语料增删后权重分层不翻转）。
 
+## 本轮 R6c（hermes + workbuddy 平台接入）
+
+- **平台登记**：`hub.config.yaml` 与 `bootstrap_hub.py` 新增 hermes（`AppData/Local/hermes/memories`）与 workbuddy（`~/.workbuddy`）两平台，现共 4 平台（trae/code/hermes/workbuddy）。
+- **指令注入**：hermes 的 `MEMORY.md`/`USER.md`（§ 分隔格式）、workbuddy 的 `MEMORY.md`/`USER.md` 均注入「执行前先查中枢」指令（幂等）。
+- **记忆沉淀**：hermes 3 张经验入区（omniroute-gateway、browser-automation-chrome、text-extraction-priority）；workbuddy 2 条规则确认入 rules（context-budget-discipline、markdown-revision-style）+ 1 张经验（github-repos-and-skills）；omniroute-api 与 hermes 卡片重复进冲突区。
+- **验收**：中枢 6 exp + 3 rules，pending 0，58 项测试全通过。
+
 ## 下一步候选
 
 1. 语料自然增长后定期重跑 `work/bench_recall.py` 复核（n 值 / 停用词表 / IDF 边界）。
 2. 源目录 `D:\AIwork\AgentMemoryHub` 清理。
+3. 冲突区 `omniroute-api.md` 确认后归档/删除。
 
 ## 阻塞项
 
