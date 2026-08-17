@@ -33,3 +33,10 @@ def test_mixed_retrieve_returns_results(tmp_path):
     _seed(root)
     hits = retrieve(root, "DLL 被锁怎么办")
     assert len(hits) >= 1
+
+
+def test_empty_query_returns_no_results(tmp_path):
+    root = bootstrap(tmp_path)
+    _seed(root)
+    assert retrieve(root, "") == []
+    assert retrieve(root, "   ") == []

@@ -42,6 +42,8 @@ def semantic_retrieve(root: Path, query: str, top_k: int = 5) -> list[Card]:
 
 def retrieve(root: Path, query: str, top_k: int = 5) -> list[Card]:
     """混合检索入口：先确定性，命中即返回；否则语义召回（网关不可用时的兜底方案）"""
+    if not query.strip():
+        return []  # 空查询护栏：避免空串命中全部卡片
     hits = deterministic_retrieve(root, query)
     if hits:
         return hits
