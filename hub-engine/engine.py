@@ -39,3 +39,102 @@ def chat(prompt: str, hub_root: str | Path, fallback: bool = True) -> str:
     parts = [f"[{c.type}/{c.status}] {c.path.name}" for c in cards[:3]]
     bodies = [c.body.strip() for c in cards[:3]]
     return "网关不可用，已回退本地检索：\n" + "\n".join(parts) + "\n---\n" + "\n\n".join(bodies)
+
+
+def _cmd_retrieve(args) -> int:
+    from tools.retrieve import retrieve
+    for c in retrieve(Path(args.root), args.query):
+        print(f"[{c.type}/{c.status}] {c.path.name}")
+        print(c.body[:200])
+    return 0
+
+
+def _cmd_ingest(args) -> int:
+    from sync import ingest
+    stat = ingest(Path(args.root), args.platform)
+    print(stat)
+    return 0 if stat["status"] == "ok" else 1
+
+
+def _cmd_confirm(args) -> int:
+    from sync import confirm_rule
+    dst = confirm_rule(Path(args.root), args.name)
+    print(f"已确认并提升: {dst}")
+    return 0
+
+
+def _cmd_distill(args) -> int:
+    from tools.distill import distill
+    written = distill(Path(args.root), args.platform)
+    print(f"产出候选 {len(written)} 张: {[p.name for p in written]}")
+    return 0
+
+
+def _cmd_tidy(args) -> int:
+    from tools.tidy import archive
+    dst = archive(Path(args.root), args.rel, reason=args.reason)
+    print(f"已归档: {dst}")
+    return 0
+
+
+def _cmd_lint(args) -> int:
+    from tools.lint import lint
+    report = lint(Path(args.root))
+    print("孤儿页:", report["orphans"])
+    print("陈旧页:", report["stale"])
+    print("无效卡片:", report["invalid"])
+    print("备注:", report["notes"])
+    return 0
+
+
+def _cmd_chat(args) -> int:
+    print(chat(args.prompt, Path(args.root)))
+    return 0
+
+
+def main(argv: list[str] | None = None) -> int:
+    import argparse
+    parser = argparse.ArgumentParser(prog="hub", description="跨 Agent 平台统一记忆中枢")
+    sub = parser.add_subparsers(dest="cmd", required=True)
+
+    p = sub.add_parser("retrieve", help="混合检索")
+    p.add_argument("--root", required=True)
+    p.add_argument("query")
+    p.set_defaults(func=_cmd_retrieve)
+
+    p = sub.add_parser("ingest", help="导入暂存区")
+    p.add_argument("--root", required=True)
+    p.add_argument("--platform", required=True)
+    p.set_defaults(func=_cmd_ingest)
+
+    p = sub.add_parser("confirm", help="确认待人工审核的规则")
+    p.add_argument("--root", required=True)
+    p.add_argument("name")
+    p.set_defaults(func=_cmd_confirm)
+
+    p = sub.add_parser("distill", help="复盘→候选规则")
+    p.add_argument("--root", required=True)
+    p.add_argument("--platform", default="trae")
+    p.set_defaults(func=_cmd_distill)
+
+    p = sub.add_parser("tidy", help="归档")
+    p.add_argument("--root", required=True)
+    p.add_argument("rel")
+    p.add_argument("--reason", default="")
+    p.set_defaults(func=_cmd_tidy)
+
+    p = sub.add_parser("lint", help="库健康检查")
+    p.add_argument("--root", required=True)
+    p.set_defaults(func=_cmd_lint)
+
+    p = sub.add_parser("chat", help="omniroute 问答")
+    p.add_argument("--root", required=True)
+    p.add_argument("prompt")
+    p.set_defaults(func=_cmd_chat)
+
+    args = parser.parse_args(argv)
+    return args.func(args)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
