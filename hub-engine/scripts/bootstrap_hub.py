@@ -63,8 +63,8 @@ platforms:
     memory_dir: "C:/Users/Fan-SJSS/.trae-cn/memory"
     target_file: "user_profile.md"
   code:
-    memory_dir: "D:/AIwork/code-memory"
-    target_file: "CLAUDE.md"
+    memory_dir: "C:/Users/Fan-SJSS/.codex"
+    target_file: "AGENTS.md"
 engine:
   provider_keys: provider_keys.yaml
 """

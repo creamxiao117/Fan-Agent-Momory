@@ -48,15 +48,20 @@
 - **默认切 word**：检索默认模式改为 word，CLI `--mode` 可选；`requirements.txt` 加 jieba>=0.42。
 - **评测胜出**：word 全面优于 char（确定性通道 0→5/11、语义 top1 8→9/11、混合 top1 8→10/11）。
 
+## 本轮 R6b（code 平台接入 + 语料增长复核 + IDF 稳定性）
+
+- **code 平台接入生效**：注入目标由 `D:/AIwork/code-memory/CLAUDE.md` 修正为真实机制 `C:/Users/Fan-SJSS/.codex/AGENTS.md`（`hub.config.yaml` 与 `bootstrap_hub.py` 同步修正）；`.codex/AGENTS.md` 已含中枢指令且幂等验证通过。
+- **语料增长重评**：18 卡 / 19 查询评测，word 仍全面优于 char（确定性通道 0→9、语义 top1 12→16、混合 top1 12→17）；n=2 保持最优。
+- **停用词审计**：word 高频前 25 无实质噪声词，停用词表无需调整。
+- **IDF 稳定性**：按文档频率分层（常见 vs 稀有）随机子语料 10 次重算，区分度边界 margin=0.405>0，结论稳定（语料增删后权重分层不翻转）。
+
 ## 下一步候选
 
-1. code 平台本体接入生效（目录已存在，指令已注入，待平台连接）。
-2. 定期重跑 `work/bench_recall.py` 复核召回率（语料增长后 n 值 / 停用词表可能需再调）。
-3. 语料增长后复核 IDF 稳定性与停用词覆盖度。
+1. 语料自然增长后定期重跑 `work/bench_recall.py` 复核（n 值 / 停用词表 / IDF 边界）。
+2. 源目录 `D:\AIwork\AgentMemoryHub` 清理。
 
 ## 阻塞项
 
-- code 平台目录 `D:/AIwork/code-memory` 为注入自动创建，平台本体尚未接入，指令暂未生效。
 - 源目录 `D:\AIwork\AgentMemoryHub` 受沙箱保护无法删除（如需清理，在 TRAE 权限设置放行或手动删除）。
 
 ## 验证方法
