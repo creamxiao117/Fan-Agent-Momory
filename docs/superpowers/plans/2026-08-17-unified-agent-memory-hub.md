@@ -1,6 +1,6 @@
 # 跨 Agent 平台统一记忆中枢 · 实现计划
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** 按 Spec 建成"统一记忆中枢"第一版：Obsidian 中枢骨架 + hub-engine（同步器/混合检索/提炼/整理/Lint）+ trae/code 平台指令注入 + 一条真实 DLL 规则端到端走通。
 
@@ -73,7 +73,7 @@ D:\AIwork\AgentMemoryHub\               ← 中枢（外部，Obsidian 根，由
 - Create: `hub-engine/common/config.py`
 - Test: `hub-engine/tests/test_config.py`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```python
 # hub-engine/tests/test_config.py
@@ -112,12 +112,12 @@ def test_load_engine_config_default_path_exists():
     assert p.exists()
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `python -m pytest tests/test_config.py -v`（在 `hub-engine/` 下）
 Expected: `ModuleNotFoundError: No module named 'common'`（包尚未建，测试失败即为预期）
 
-- [ ] **Step 3: 创建脚手架文件**
+- [x] **Step 3: 创建脚手架文件**
 
 `hub-engine/pyproject.toml`:
 
@@ -235,12 +235,12 @@ def load_provider_keys(hub_root: str | Path) -> dict:
     return load_yaml(Path(hub_root) / "provider_keys.yaml")
 ```
 
-- [ ] **Step 4: 运行确认通过**
+- [x] **Step 4: 运行确认通过**
 
 Run: `python -m pytest tests/test_config.py -v`
 Expected: 3 passed
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add hub-engine/
@@ -255,7 +255,7 @@ git commit -m "feat: hub-engine 脚手架与配置加载"
 - Create: `hub-engine/common/vector.py`
 - Test: `hub-engine/tests/test_vector.py`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```python
 # hub-engine/tests/test_vector.py
@@ -284,12 +284,12 @@ def test_cosine_identity_is_one():
     assert cosine(a, a) == 1.0
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `python -m pytest tests/test_vector.py -v`
 Expected: FAIL（`No module named 'common.vector'`）
 
-- [ ] **Step 3: 写最小实现**
+- [x] **Step 3: 写最小实现**
 
 ```python
 # hub-engine/common/vector.py
@@ -322,12 +322,12 @@ def cosine(a: Counter, b: Counter) -> float:
     return inter / (la * lb)
 ```
 
-- [ ] **Step 4: 运行确认通过**
+- [x] **Step 4: 运行确认通过**
 
 Run: `python -m pytest tests/test_vector.py -v`
 Expected: 4 passed
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add hub-engine/common/vector.py hub-engine/tests/test_vector.py
@@ -342,7 +342,7 @@ git commit -m "feat: 字符 n-gram 向量化与余弦相似度"
 - Create: `hub-engine/common/frontmatter.py`
 - Test: `hub-engine/tests/test_frontmatter.py`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```python
 # hub-engine/tests/test_frontmatter.py
@@ -409,12 +409,12 @@ def test_parse_missing_frontmatter_raises():
         parse_card("没有 frontmatter 的纯文本")
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `python -m pytest tests/test_frontmatter.py -v`
 Expected: FAIL（`No module named 'common.frontmatter'`）
 
-- [ ] **Step 3: 写最小实现**
+- [x] **Step 3: 写最小实现**
 
 ```python
 # hub-engine/common/frontmatter.py
@@ -497,12 +497,12 @@ def save_card(card: Card, path: Path) -> None:
     path.write_text(write_card(card), encoding="utf-8")
 ```
 
-- [ ] **Step 4: 运行确认通过**
+- [x] **Step 4: 运行确认通过**
 
 Run: `python -m pytest tests/test_frontmatter.py -v`
 Expected: 6 passed
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add hub-engine/common/frontmatter.py hub-engine/tests/test_frontmatter.py
@@ -517,7 +517,7 @@ git commit -m "feat: 统一 frontmatter 卡片解析/写入/校验"
 - Create: `hub-engine/scripts/bootstrap_hub.py`
 - Test: `hub-engine/tests/test_bootstrap.py`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```python
 # hub-engine/tests/test_bootstrap.py
@@ -550,12 +550,12 @@ def test_bootstrap_git_init(tmp_path):
     assert (root / ".git" / "config").exists()
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `python -m pytest tests/test_bootstrap.py -v`
 Expected: FAIL（`ModuleNotFoundError: No module named 'scripts'`）
 
-- [ ] **Step 3: 写最小实现**
+- [x] **Step 3: 写最小实现**
 
 ```python
 # hub-engine/scripts/bootstrap_hub.py
@@ -658,12 +658,12 @@ if __name__ == "__main__":
     print(f"中枢已就绪: {bootstrap(target)}")
 ```
 
-- [ ] **Step 4: 运行确认通过**
+- [x] **Step 4: 运行确认通过**
 
 Run: `python -m pytest tests/test_bootstrap.py -v`
 Expected: 3 passed
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add hub-engine/scripts/ hub-engine/tests/test_bootstrap.py
@@ -678,7 +678,7 @@ git commit -m "feat: 中枢骨架引导脚本（幂等创建 Obsidian 库）"
 - Create: `hub-engine/sync.py`
 - Test: `hub-engine/tests/test_sync.py`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```python
 # hub-engine/tests/test_sync.py
@@ -776,12 +776,12 @@ def test_append_log_uses_unified_prefix(tmp_path):
     assert any(line.startswith("## [") and "| 测试写入" in line for line in lines)
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `python -m pytest tests/test_sync.py -v`
 Expected: FAIL（`No module named 'sync'`）
 
-- [ ] **Step 3: 写最小实现**
+- [x] **Step 3: 写最小实现**
 
 ```python
 # hub-engine/sync.py
@@ -954,12 +954,12 @@ def confirm_rule(root: Path, name: str) -> Path:
 > 4. 清理死代码：删除 `_fingerprint`、`import hashlib`、未用的 `LOW_RISK` 常量。
 > 对应补充两条回归测试：`test_ingest_duplicate_deletes_draft`、`test_ingest_same_name_different_content_no_overwrite`。
 
-- [ ] **Step 4: 运行确认通过**
+- [x] **Step 4: 运行确认通过**
 
 Run: `python -m pytest tests/test_sync.py -v`
 Expected: 7 passed
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add hub-engine/sync.py hub-engine/tests/test_sync.py
@@ -974,7 +974,7 @@ git commit -m "feat: 同步器核心（单一写入者/暂存/去重/确认/Git�
 - Create: `hub-engine/tools/retrieve.py`
 - Test: `hub-engine/tests/test_retrieve.py`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```python
 # hub-engine/tests/test_retrieve.py
@@ -1015,12 +1015,12 @@ def test_mixed_retrieve_returns_results(tmp_path):
     assert len(hits) >= 1
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `python -m pytest tests/test_retrieve.py -v`
 Expected: FAIL（`No module named 'tools.retrieve'`）
 
-- [ ] **Step 3: 写最小实现**
+- [x] **Step 3: 写最小实现**
 
 ```python
 # hub-engine/tools/retrieve.py
@@ -1074,12 +1074,12 @@ def retrieve(root: Path, query: str, top_k: int = 5) -> list[Card]:
     return semantic_retrieve(root, query, top_k)
 ```
 
-- [ ] **Step 4: 运行确认通过**
+- [x] **Step 4: 运行确认通过**
 
 Run: `python -m pytest tests/test_retrieve.py -v`
 Expected: 3 passed
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add hub-engine/tools/retrieve.py hub-engine/tests/test_retrieve.py
@@ -1094,7 +1094,7 @@ git commit -m "feat: 混合检索（确定性 + 语义通道）"
 - Create: `hub-engine/engine.py`
 - Test: `hub-engine/tests/test_engine.py`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```python
 # hub-engine/tests/test_engine.py
@@ -1144,12 +1144,12 @@ def test_chat_raises_when_fallback_disabled(monkeypatch, tmp_path):
         chat("x", tmp_path, fallback=False)
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `python -m pytest tests/test_engine.py -v`
 Expected: FAIL（`No module named 'engine'`）
 
-- [ ] **Step 3: 写最小实现**
+- [x] **Step 3: 写最小实现**
 
 ```python
 # hub-engine/engine.py
@@ -1196,12 +1196,12 @@ def chat(prompt: str, hub_root: str | Path, fallback: bool = True) -> str:
         return "网关不可用，已回退本地检索：\n" + "\n".join(parts) + "\n---\n" + "\n\n".join(bodies)
 ```
 
-- [ ] **Step 4: 运行确认通过**
+- [x] **Step 4: 运行确认通过**
 
 Run: `python -m pytest tests/test_engine.py -v`
 Expected: 3 passed
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add hub-engine/engine.py hub-engine/tests/test_engine.py
@@ -1216,7 +1216,7 @@ git commit -m "feat: omniroute 网关统一入口与本地回退"
 - Create: `hub-engine/tools/distill.py`
 - Test: `hub-engine/tests/test_distill.py`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```python
 # hub-engine/tests/test_distill.py
@@ -1268,12 +1268,12 @@ def test_distill_dedupes_repeated_lessons(tmp_path):
     assert len(written) == 1
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `python -m pytest tests/test_distill.py -v`
 Expected: FAIL（`No module named 'tools.distill'`）
 
-- [ ] **Step 3: 写最小实现**
+- [x] **Step 3: 写最小实现**
 
 ```python
 # hub-engine/tools/distill.py
@@ -1352,12 +1352,12 @@ reuse_count: 0
     return written
 ```
 
-- [ ] **Step 4: 运行确认通过**
+- [x] **Step 4: 运行确认通过**
 
 Run: `python -m pytest tests/test_distill.py -v`
 Expected: 3 passed
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add hub-engine/tools/distill.py hub-engine/tests/test_distill.py
@@ -1372,7 +1372,7 @@ git commit -m "feat: 复盘→候选规则（distill，含去重）"
 - Create: `hub-engine/tools/tidy.py`
 - Test: `hub-engine/tests/test_tidy.py`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```python
 # hub-engine/tests/test_tidy.py
@@ -1413,12 +1413,12 @@ def test_archive_missing_raises(tmp_path):
         archive(root, "rules/nope.md")
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `python -m pytest tests/test_tidy.py -v`
 Expected: FAIL（`No module named 'tools.tidy'`）
 
-- [ ] **Step 3: 写最小实现**
+- [x] **Step 3: 写最小实现**
 
 ```python
 # hub-engine/tools/tidy.py
@@ -1448,12 +1448,12 @@ def archive(root: Path, rel_path: str, reason: str = "") -> Path:
     return dst
 ```
 
-- [ ] **Step 4: 运行确认通过**
+- [x] **Step 4: 运行确认通过**
 
 Run: `python -m pytest tests/test_tidy.py -v`
 Expected: 2 passed
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add hub-engine/tools/tidy.py hub-engine/tests/test_tidy.py
@@ -1468,7 +1468,7 @@ git commit -m "feat: 整理/归档（tidy）"
 - Create: `hub-engine/tools/lint.py`
 - Test: `hub-engine/tests/test_lint.py`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```python
 # hub-engine/tests/test_lint.py
@@ -1513,12 +1513,12 @@ def test_lint_returns_full_shape(tmp_path):
     assert isinstance(report["invalid"], int)
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `python -m pytest tests/test_lint.py -v`
 Expected: FAIL（`No module named 'tools.lint'`）
 
-- [ ] **Step 3: 写最小实现**
+- [x] **Step 3: 写最小实现**
 
 ```python
 # hub-engine/tools/lint.py
@@ -1598,12 +1598,12 @@ def lint(root: Path) -> dict:
     }
 ```
 
-- [ ] **Step 4: 运行确认通过**
+- [x] **Step 4: 运行确认通过**
 
 Run: `python -m pytest tests/test_lint.py -v`
 Expected: 3 passed
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add hub-engine/tools/lint.py hub-engine/tests/test_lint.py
@@ -1618,7 +1618,7 @@ git commit -m "feat: 库健康检查（Lint）"
 - Modify: `hub-engine/engine.py`（追加 main()）
 - Test: `hub-engine/tests/test_cli.py`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```python
 # hub-engine/tests/test_cli.py
@@ -1651,12 +1651,12 @@ def test_cli_ingest_and_confirm_flow(tmp_path):
     assert (root / "rules" / "r1.md").exists()
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `python -m pytest tests/test_cli.py -v`
 Expected: FAIL（`AttributeError: ... main`）
 
-- [ ] **Step 3: 在 engine.py 追加 CLI**
+- [x] **Step 3: 在 engine.py 追加 CLI**
 
 在 `hub-engine/engine.py` 末尾追加：
 
@@ -1760,12 +1760,12 @@ if __name__ == "__main__":
     raise SystemExit(main())
 ```
 
-- [ ] **Step 4: 运行确认通过**
+- [x] **Step 4: 运行确认通过**
 
 Run: `python -m pytest tests/test_cli.py -v`
 Expected: 2 passed
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add hub-engine/engine.py hub-engine/tests/test_cli.py
@@ -1782,7 +1782,7 @@ git commit -m "feat: CLI 统一入口（retrieve/ingest/confirm/distill/tidy/lin
 
 **背景说明：** Spec §4.2 要求向各平台规则文件写入"执行前先查中枢"的固定指令。第一版只做 **trae**（目标 `C:/Users/Fan-SJSS/.trae-cn/memory/user_profile.md`）与 **code**（目标 `D:/AIwork/code-memory/CLAUDE.md`，目录由用户按实际调整）。注入为幂等（已存在则跳过），由用户显式触发。
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```python
 # hub-engine/tests/test_inject.py
@@ -1809,12 +1809,12 @@ def test_inject_idempotent(tmp_path):
     assert text.count("统一记忆中枢") == 1
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `python -m pytest tests/test_inject.py -v`
 Expected: FAIL（`No module named 'tools.inject'`）
 
-- [ ] **Step 3: 写最小实现**
+- [x] **Step 3: 写最小实现**
 
 ```python
 # hub-engine/tools/inject.py
@@ -1847,12 +1847,12 @@ if __name__ == "__main__":
     print(f"已注入: {inject_instruction(sys.argv[1])}")
 ```
 
-- [ ] **Step 4: 运行确认通过**
+- [x] **Step 4: 运行确认通过**
 
 Run: `python -m pytest tests/test_inject.py -v`
 Expected: 2 passed
 
-- [ ] **Step 5: 真实注入（需用户确认目录后手动执行）**
+- [x] **Step 5: 真实注入（需用户确认目录后手动执行）**
 
 ```bash
 python -m tools.inject "C:/Users/Fan-SJSS/.trae-cn/memory/user_profile.md"
@@ -1861,7 +1861,7 @@ python -m tools.inject "D:/AIwork/code-memory/CLAUDE.md"   # 目录不存在时�
 
 > 注意：此步写入中枢外部文件，属于平台接入副作用。若用户尚未准备好 code 平台目录，可仅注入 trae，code 留待后续。
 
-- [ ] **Step 6: 提交**
+- [x] **Step 6: 提交**
 
 ```bash
 git add hub-engine/tools/inject.py hub-engine/tests/test_inject.py
@@ -1876,7 +1876,7 @@ git commit -m "feat: 平台固定指令注入（幂等）"
 - Create: `D:\AIwork\AgentMemoryHub\rules\dll-version-lock.md`（由下方命令产生）
 - Create: `hub-engine/scripts/demo_e2e.py`（端到端演示脚本）
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```python
 # hub-engine/tests/test_e2e.py
@@ -1899,12 +1899,12 @@ def test_demo_promotes_rule_and_retrieves(tmp_path):
     assert (root / "experience" / "query-writeback.md").exists()
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `python -m pytest tests/test_e2e.py -v`
 Expected: FAIL（`ModuleNotFoundError: No module named 'scripts.demo_e2e'`）
 
-- [ ] **Step 3: 写端到端演示脚本**
+- [x] **Step 3: 写端到端演示脚本**
 
 ```python
 # hub-engine/scripts/demo_e2e.py
@@ -1978,12 +1978,12 @@ reuse_count: 0
     return {"confirmed": dst.name, "hits": [h.path.name for h in hits]}
 ```
 
-- [ ] **Step 4: 运行确认通过**
+- [x] **Step 4: 运行确认通过**
 
 Run: `python -m pytest tests/test_e2e.py -v`
 Expected: 1 passed
 
-- [ ] **Step 5: 在真实中枢跑通（人工复核产物）**
+- [x] **Step 5: 在真实中枢跑通（人工复核产物）**
 
 ```bash
 cd hub-engine
@@ -1994,7 +1994,7 @@ git -C D:\AIwork\AgentMemoryHub log --oneline -5
 
 Expected: `rules/dll-version-lock.md` 已生成；log 含 confirm/reuse 记录；Git 可回滚。
 
-- [ ] **Step 6: 提交**
+- [x] **Step 6: 提交**
 
 ```bash
 git add hub-engine/scripts/demo_e2e.py hub-engine/tests/test_e2e.py
@@ -2010,7 +2010,7 @@ git commit -m "feat: 端到端示例（DLL 规则沉淀→提炼→确认→复�
 - Create: `D:\AIwork\AgentMemoryHub\retro\lint-report-2026-08-17.md`（运行产物）
 - Modify: `D:\AIwork\AgentMemoryHub\retro\log.md`（追加 Lint 记录）
 
-- [ ] **Step 1: 写报告脚本（含失败测试）**
+- [x] **Step 1: 写报告脚本（含失败测试）**
 
 ```python
 # hub-engine/tests/test_lint_report.py
@@ -2062,12 +2062,12 @@ if __name__ == "__main__":
     print(f"报告已写入: {run_report(target)}")
 ```
 
-- [ ] **Step 2: 运行测试确认通过**
+- [x] **Step 2: 运行测试确认通过**
 
 Run: `python -m pytest tests/test_lint_report.py -v`
 Expected: 1 passed
 
-- [ ] **Step 3: 在真实中枢运行（人工复核产物）**
+- [x] **Step 3: 在真实中枢运行（人工复核产物）**
 
 ```bash
 cd hub-engine
@@ -2076,14 +2076,14 @@ python -m scripts.lint_report D:\AIwork\AgentMemoryHub
 
 Expected: `retro/lint-report-2026-08-17.md` 生成，`log.md` 追加 `## [2026-08-17] lint | 首次健康检查完成`。
 
-- [ ] **Step 4: 提交中枢 Git**
+- [x] **Step 4: 提交中枢 Git**
 
 ```bash
 git -C D:\AIwork\AgentMemoryHub add -A
 git -C D:\AIwork\AgentMemoryHub commit -m "chore: 首次 Lint 报告"
 ```
 
-- [ ] **Step 5: 提交仓库**
+- [x] **Step 5: 提交仓库**
 
 ```bash
 git add -A
