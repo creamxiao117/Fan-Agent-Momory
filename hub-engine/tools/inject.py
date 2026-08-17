@@ -12,7 +12,7 @@ def inject_instruction(target: str | Path) -> Path:
     """把固定指令追加到目标规则文件；已存在则跳过。返回目标文件。"""
     target = Path(target)
     target.parent.mkdir(parents=True, exist_ok=True)
-    if target.exists() and "统一记忆中枢" in target.read_text(encoding="utf-8"):
+    if target.exists() and "## 统一记忆中枢" in target.read_text(encoding="utf-8"):
         return target
     block = ("\n" if target.exists() else "") + INSTRUCTION
     with open(target, "a", encoding="utf-8") as f:
