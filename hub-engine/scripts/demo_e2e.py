@@ -66,3 +66,9 @@ reuse_count: 0
     ingest(root, "trae")  # exp 属低风险 → 自动入区仅记日志
 
     return {"confirmed": dst.name, "hits": [h.path.name for h in hits]}
+
+
+if __name__ == "__main__":
+    import sys
+    target = sys.argv[1] if len(sys.argv) > 1 else r"D:\AIwork\AgentMemoryHub"
+    print(run_demo(target))
