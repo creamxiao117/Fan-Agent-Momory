@@ -20,6 +20,11 @@ def test_bootstrap_idempotent(tmp_path):
     bootstrap(tmp_path)
     bootstrap(tmp_path)  # 重复执行不报错、不覆盖已有文件
     assert (tmp_path / "INDEX.md").exists()
+    # 用户自定义 .gitignore 不应被重复执行覆盖
+    custom = "# 用户自定义规则\n*.tmp\n"
+    (tmp_path / ".gitignore").write_text(custom, encoding="utf-8")
+    bootstrap(tmp_path)
+    assert (tmp_path / ".gitignore").read_text(encoding="utf-8") == custom
 
 
 def test_bootstrap_git_init(tmp_path):

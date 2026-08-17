@@ -66,7 +66,8 @@ def bootstrap(root: str | Path) -> Path:
     root = Path(root).expanduser().resolve()
     for sub in STRUCTURE:
         (root / sub).mkdir(parents=True, exist_ok=True)
-    (root / ".gitignore").write_text(GITIGNORE, encoding="utf-8")
+    if not (root / ".gitignore").exists():
+        (root / ".gitignore").write_text(GITIGNORE, encoding="utf-8")
     if not (root / "INDEX.md").exists():
         (root / "INDEX.md").write_text(INDEX_TEMPLATE, encoding="utf-8")
     if not (root / "retro" / "log.md").exists():
