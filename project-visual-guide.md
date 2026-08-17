@@ -19,7 +19,7 @@ flowchart LR
         AUTH --> TY[tidy 归档]
     end
 
-    subgraph DATA["事实源层 · D:\\AIwork\\AgentMemoryHub"]
+    subgraph DATA["事实源层 · AgentMemoryHub/"]
         D1 --> S
         PEND[.sync/pending<br/>待人工确认] --> CONFIRM{人工确认?}
         CONFIRM -- 是 --> AUTH

@@ -1,6 +1,10 @@
 """跑 Lint 并把报告写入中枢 retro/，同时追加 log 时间线"""
 
+import sys
 from pathlib import Path
+
+# 使脚本可从任意 cwd 以脚本方式运行（将 hub-engine/ 加入模块搜索路径）
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from common.frontmatter import today_iso
 from scripts.bootstrap_hub import bootstrap
