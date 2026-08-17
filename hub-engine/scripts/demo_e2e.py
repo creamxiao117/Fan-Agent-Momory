@@ -74,5 +74,5 @@ reuse_count: 0
 if __name__ == "__main__":
     import sys
 
-    target = sys.argv[1] if len(sys.argv) > 1 else r"D:\AIwork\AgentMemoryHub"
+    target = sys.argv[1] if len(sys.argv) > 1 else "AgentMemoryHub"
     print(run_demo(target))

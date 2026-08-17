@@ -1,5 +1,14 @@
 # RUNLOG.md（迭代日志 · 只追加 · 最新在前）
 
+## [2026-08-17] R5 | 中枢迁移 + 每日巡检 + n-gram 召回率调优
+
+- **中枢迁移**：`D:\AIwork\AgentMemoryHub` 复制到项目内 `AgentMemoryHub/`（规避沙箱权限），scripts 默认值 / AGENTS / CHARTER / visual-guide / draft 卡片 / user_profile 全部改为项目内相对路径。源目录受沙箱保护未删，保留为陈旧副本。
+- **engine.py 解耦**：`import requests` 移入 `chat` 内延迟导入，`status`/`retrieve`/`lint` 等本地子命令不再强依赖网络库；测试 monkeypatch 改打 `requests.post`。
+- **每日巡检 cron**：`Schedule` 每日 09:00（北京时间）巡检，产出 `retro/snapshot-<日期>.json` + `lint-report-<日期>.md`，异常追加 log 并提交 Git。
+- **n-gram 召回率实测**：`work/bench_recall.py` 8 卡 11 查询评测——n=2 最优（top_k=3 即 100% 召回），n=3/4 因中文 n-gram 稀疏性召回降至 0.73~0.82；确定性通道对语义改写查询命中 0（需精确 tag）。
+- **调优**：`semantic_retrieve`/`retrieve` 新增 `n` 参数（默认 2），CLI `retrieve --n` 可调；新增 2 项测试（n 可调 + retrieve 透传），测试 49 项全通过。
+- 决策：继续下一轮（迁移收敛、巡检上线、检索参数已固化）。
+
 ## [2026-08-17] R4 | status --json + methodology 回写 + 全仓质量体检
 
 - `status` 新增 `--json` 输出（卡片分布/Lint/待确认/最近提交），新增 `test_status_json_output`，测试 47 项全通过。

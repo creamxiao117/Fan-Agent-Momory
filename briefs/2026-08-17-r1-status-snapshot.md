@@ -23,4 +23,4 @@
 ## 怎么验证
 
 1. `cd hub-engine && python -m pytest -q` 全量通过（新增 status 测试）。
-2. `python hub-engine/engine.py status --root D:\AIwork\AgentMemoryHub` 输出可读快照。
+2. `python hub-engine/engine.py status --root AgentMemoryHub` 输出可读快照。

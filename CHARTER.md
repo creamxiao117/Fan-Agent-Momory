@@ -8,7 +8,7 @@
 
 三层分工：
 
-- `D:\AIwork\AgentMemoryHub` —— 唯一事实源（Obsidian 库，纯内容）。
+- `C:\Users\Fan-SJSS\.trae-cn\worktrees\20260817-Fan-Agent-Momory\feat-implement-plan-ZilBmv\AgentMemoryHub` —— 唯一事实源（Obsidian 库，纯内容）。
 - 本仓库 `hub-engine/` —— 全部能力：单一写入者同步器、确定性+语义混合检索、复盘提炼、整理归档、Lint 健康检查、omniroute 问答、CLI 统一入口。
 - 各平台 —— 经同步器对接中枢：只读权威区、可写暂存区、重要规则人工确认。
 

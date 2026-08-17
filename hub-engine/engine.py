@@ -2,7 +2,6 @@
 
 from pathlib import Path
 
-import requests
 from common.config import load_engine_config, load_provider_keys
 from tools.lint import _all_cards, lint
 from tools.retrieve import retrieve
@@ -23,6 +22,8 @@ def _gateway_kwargs(hub_root: Path) -> tuple[str, str, str, int]:
 
 def chat(prompt: str, hub_root: str | Path, fallback: bool = True) -> str:
     """调用 omniroute 网关；网关不可用则回退到文件关键词/full-text 检索"""
+    import requests  # 延迟导入：仅 chat 依赖网络库，本地子命令不引入
+
     hub_root = Path(hub_root)
     try:
         url, model, api_key, timeout = _gateway_kwargs(hub_root)
@@ -56,7 +57,7 @@ def chat(prompt: str, hub_root: str | Path, fallback: bool = True) -> str:
 
 
 def _cmd_retrieve(args) -> int:
-    for c in retrieve(Path(args.root), args.query):
+    for c in retrieve(Path(args.root), args.query, top_k=args.top_k, n=args.n):
         print(f"[{c.type}/{c.status}] {c.path.name}")
         print(c.body[:200])
     return 0
@@ -177,6 +178,8 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("retrieve", help="混合检索")
     p.add_argument("--root", required=True)
     p.add_argument("query")
+    p.add_argument("--top-k", type=int, default=5, help="语义通道召回条数（默认 5）")
+    p.add_argument("--n", type=int, default=2, help="字符 n-gram 长度（实测 n=2 最优，默认 2）")
     p.set_defaults(func=_cmd_retrieve)
 
     p = sub.add_parser("ingest", help="导入暂存区")

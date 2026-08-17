@@ -1,13 +1,13 @@
 # WORK.md（当前状态 · 唯一来源）
 
-更新于：2026-08-17（context-engineering-v1 迁移 R4b）
+更新于：2026-08-17（R5：中枢迁移 + 每日巡检 + n-gram 调优）
 
 ## 当前 MVP（已完成）
 
-- **中枢骨架**：`D:\AIwork\AgentMemoryHub`（Obsidian 库：rules/libs/experience/projects/retro/archive + .sync + INDEX.md），已 Git 初始化（5 提交，终态 4264e3f）。
+- **中枢骨架**：`AgentMemoryHub/`（本仓库内，已从 `D:\AIwork\AgentMemoryHub` 迁移，规避沙箱权限）。Obsidian 库：rules/libs/experience/projects/retro/archive + .sync + INDEX.md，已 Git 初始化（6 提交）。
 - **hub-engine**（本仓库）：同步器（单一写入者/暂存/去重/确认/Git）、混合检索、复盘提炼、整理归档、Lint 健康检查、omniroute 问答。
 - **CLI**：`engine.py` 子命令 `retrieve/ingest/confirm/distill/tidy/lint/chat/status`。
-- **测试**：47 项通过（`cd hub-engine && python -m pytest -q`）。
+- **测试**：49 项通过。
 - **注入**：trae 平台指令已注入 `user_profile.md`；code 平台已注入 `D:/AIwork/code-memory/CLAUDE.md`（幂等，待平台目录生效）。
 - **端到端**：DLL 版本防锁规则全流程走通（distill → ingest → confirm → retrieve → 回写经验）。
 
@@ -30,24 +30,29 @@
 - `status` 新增 `--json` 输出：卡片分布 / Lint / 待确认 / 最近提交，结构化供工具链消费（已配测试）。
 - methodology 卡片回写中枢 experience/：`old-project-minimal-migration.md`、`unified-memory-hub-workflow.md`（走 ingest，已在中央 Git 审计）。
 - 全仓 check-code-v1 体检：8 项全通过，失败 0 跳过 0。
-  - Ruff 0 错误（含 format），`hub-engine/` 29 文件已格式化
-  - yamllint 已安装（项目 `.venv`），2 个 YAML 文件通过（仅 warning 缺 `---` 文档头）
-  - Markdown lint 通过（`.markdownlint.json` 放松行宽/表格样式等噪音规则，`.markdownlintignore` 排除归档文档）
-  - pytest 47 项通过
-  - JSON/TOML 语法检查通过
-- 配置新增：`.ruff.toml`（排除 docs/ 归档）、`.markdownlint.json`、`.markdownlintignore`、`.gitignore` 补 `.tools/`/`work/`/`.venv/`
+- 配置新增：`.ruff.toml`、`.markdownlint.json`、`.markdownlintignore`、`.gitignore` 补 `.tools/`/`work/`/`.venv/`
+
+## 本轮 R5（中枢迁移 + 每日巡检 + n-gram 调优）
+
+- **中枢迁移**：`D:\AIwork\AgentMemoryHub` 已复制到项目内 `AgentMemoryHub/`，所有引用更新为相对路径（scripts 默认值、AGENTS/CHARTER、visual-guide、draft 卡片、user_profile）。源目录受沙箱保护未删除，保留为陈旧副本。
+- **engine.py 解耦**：`requests` 改为 chat 内延迟导入，`status`/`retrieve` 等本地子命令不再依赖网络库（.venv 无 requests 也能跑）。
+- **每日巡检 cron**：每日 09:00（北京时间）生成 `retro/snapshot-<日期>.json` + `lint-report-<日期>.md`，异常时记 log 并提交 Git（Schedule ID 35e02dc8）。
+- **n-gram 召回率实测调优**：8 卡 11 查询评测，n=2 最优（top_k=3 即 100% 召回），n=3/4 因稀疏性召回明显下降；确定性通道对语义改写查询命中为 0（依赖精确 tag）。
+- **n 参数化**：`semantic_retrieve`/`retrieve` 新增 `n` 参数（默认 2，CLI `--n`），为语料变化保留调参入口；新增 2 项测试，49 项全通过。
+- **评测脚本**：`work/bench_recall.py`（gitignored，不入库）可复跑召回率评测。
 
 ## 下一步候选
 
 1. code 平台本体接入生效（目录已存在，指令已注入，待平台连接）。
-2. 对真实中枢执行 `engine.py status --json` 快照并纳入自动化巡检。**（已完成，一次实跑正常）**
+2. 定期重跑 `work/bench_recall.py` 复核召回率（语料增长后 n 值可能需再调）。
 
 ## 阻塞项
 
 - code 平台目录 `D:/AIwork/code-memory` 为注入自动创建，平台本体尚未接入，指令暂未生效。
+- 源目录 `D:\AIwork\AgentMemoryHub` 受沙箱保护无法删除（如需清理，在 TRAE 权限设置放行或手动删除）。
 
 ## 验证方法
 
-- `cd hub-engine && python -m pytest -q`（全量测试，47 项）
-- `python hub-engine/engine.py status --root D:\AIwork\AgentMemoryHub --json`（健康快照 JSON）
-- `python hub-engine/engine.py status --root D:\AIwork\AgentMemoryHub`（健康快照）
+- `python -m pytest hub-engine/tests -q`（全量测试，49 项；需有 pytest+yaml 的 python 环境）
+- `python hub-engine/engine.py status --root AgentMemoryHub --json`（健康快照 JSON）
+- `.venv\Scripts\python.exe hub-engine/engine.py retrieve --root AgentMemoryHub --n 2 --top-k 3 "<问题>"`（混检索，n 可调）

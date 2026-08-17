@@ -131,5 +131,5 @@ def _git_init(root: Path) -> None:
 
 
 if __name__ == "__main__":
-    target = sys.argv[1] if len(sys.argv) > 1 else r"D:\AIwork\AgentMemoryHub"
+    target = sys.argv[1] if len(sys.argv) > 1 else "AgentMemoryHub"
     print(f"中枢已就绪: {bootstrap(target)}")

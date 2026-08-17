@@ -38,7 +38,7 @@ flowchart LR
 ```mermaid
 mindmap
   root((统一记忆中枢))
-    数据层 D:\AIwork\AgentMemoryHub
+    数据层 AgentMemoryHub/
       权威区 rules/libs/experience/projects/retro
       暂存区 .sync/drafts
       待确认 .sync/pending

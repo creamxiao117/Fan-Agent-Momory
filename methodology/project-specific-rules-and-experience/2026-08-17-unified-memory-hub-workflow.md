@@ -19,7 +19,7 @@
 - 新子命令必须配测试（pytest，pythonpath=`.`），全量须通过。
 - 注入目标（幂等）：trae → `C:/Users/Fan-SJSS/.trae-cn/memory/user_profile.md`；
   code → `D:/AIwork/code-memory/CLAUDE.md`（已预备，待平台目录生效）。
-- 中枢唯一事实源 `D:\AIwork\AgentMemoryHub`；单写者锁 `.sync/locks/writer.lock`。
+- 中枢唯一事实源 `C:\Users\Fan-SJSS\.trae-cn\worktrees\20260817-Fan-Agent-Momory\feat-implement-plan-ZilBmv\AgentMemoryHub`；单写者锁 `.sync/locks/writer.lock`。
 
 ## 不可违背（用户既定规则）
 

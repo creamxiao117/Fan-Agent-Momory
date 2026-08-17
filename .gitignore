@@ -22,3 +22,6 @@ work/
 .mypy_cache/
 .tox/
 .nox/
+
+# 运行态数据中枢（独立 git 仓库，Obsidian 库，不作为源码纳入）
+AgentMemoryHub/
