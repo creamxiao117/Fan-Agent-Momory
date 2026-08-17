@@ -42,7 +42,6 @@ def chat(prompt: str, hub_root: str | Path, fallback: bool = True) -> str:
 
 
 def _cmd_retrieve(args) -> int:
-    from tools.retrieve import retrieve
     for c in retrieve(Path(args.root), args.query):
         print(f"[{c.type}/{c.status}] {c.path.name}")
         print(c.body[:200])
