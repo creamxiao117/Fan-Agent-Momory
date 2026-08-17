@@ -1,13 +1,13 @@
 # WORK.md（当前状态 · 唯一来源）
 
-更新于：2026-08-17（R5：中枢迁移 + 每日巡检 + n-gram 调优）
+更新于：2026-08-17（R6：中文语义召回增强）
 
 ## 当前 MVP（已完成）
 
 - **中枢骨架**：`AgentMemoryHub/`（本仓库内，已从 `D:\AIwork\AgentMemoryHub` 迁移，规避沙箱权限）。Obsidian 库：rules/libs/experience/projects/retro/archive + .sync + INDEX.md，已 Git 初始化（6 提交）。
 - **hub-engine**（本仓库）：同步器（单一写入者/暂存/去重/确认/Git）、混合检索、复盘提炼、整理归档、Lint 健康检查、omniroute 问答。
 - **CLI**：`engine.py` 子命令 `retrieve/ingest/confirm/distill/tidy/lint/chat/status`。
-- **测试**：49 项通过。
+- **测试**：58 项通过。
 - **注入**：trae 平台指令已注入 `user_profile.md`；code 平台已注入 `D:/AIwork/code-memory/CLAUDE.md`（幂等，待平台目录生效）。
 - **端到端**：DLL 版本防锁规则全流程走通（distill → ingest → confirm → retrieve → 回写经验）。
 
@@ -41,10 +41,18 @@
 - **n 参数化**：`semantic_retrieve`/`retrieve` 新增 `n` 参数（默认 2，CLI `--n`），为语料变化保留调参入口；新增 2 项测试，49 项全通过。
 - **评测脚本**：`work/bench_recall.py`（gitignored，不入库）可复跑召回率评测。
 
+## 本轮 R6（中文语义召回增强）
+
+- **jieba 词模式**：`vector.py` `tokenize(mode="word")` jieba 分词 + 去停用词/标点，无 jieba 回退 char；`build_idf` IDF 加权缓解领域共词抢占。
+- **确定性通道词级匹配**：`retrieve.py` `mode` 参数传播，word 模式下查询分词与 tag 互相包含即命中。
+- **默认切 word**：检索默认模式改为 word，CLI `--mode` 可选；`requirements.txt` 加 jieba>=0.42。
+- **评测胜出**：word 全面优于 char（确定性通道 0→5/11、语义 top1 8→9/11、混合 top1 8→10/11）。
+
 ## 下一步候选
 
 1. code 平台本体接入生效（目录已存在，指令已注入，待平台连接）。
-2. 定期重跑 `work/bench_recall.py` 复核召回率（语料增长后 n 值可能需再调）。
+2. 定期重跑 `work/bench_recall.py` 复核召回率（语料增长后 n 值 / 停用词表可能需再调）。
+3. 语料增长后复核 IDF 稳定性与停用词覆盖度。
 
 ## 阻塞项
 
@@ -53,6 +61,7 @@
 
 ## 验证方法
 
-- `python -m pytest hub-engine/tests -q`（全量测试，49 项；需有 pytest+yaml 的 python 环境）
+- `python -m pytest hub-engine/tests -q`（全量测试，58 项；需有 pytest+yaml+jieba 的 python 环境）
 - `python hub-engine/engine.py status --root AgentMemoryHub --json`（健康快照 JSON）
-- `.venv\Scripts\python.exe hub-engine/engine.py retrieve --root AgentMemoryHub --n 2 --top-k 3 "<问题>"`（混检索，n 可调）
+- `python hub-engine/engine.py retrieve --root AgentMemoryHub --mode word --top-k 3 "<问题>"`（混检索，mode 默认 word，`--mode char` 切回字符 n-gram）
+- `.venv\Scripts\python.exe work\bench_recall.py`（char vs word 召回率对比评测）

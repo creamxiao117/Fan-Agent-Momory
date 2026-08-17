@@ -57,7 +57,9 @@ def chat(prompt: str, hub_root: str | Path, fallback: bool = True) -> str:
 
 
 def _cmd_retrieve(args) -> int:
-    for c in retrieve(Path(args.root), args.query, top_k=args.top_k, n=args.n):
+    for c in retrieve(
+        Path(args.root), args.query, top_k=args.top_k, n=args.n, mode=args.mode
+    ):
         print(f"[{c.type}/{c.status}] {c.path.name}")
         print(c.body[:200])
     return 0
@@ -180,6 +182,12 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("query")
     p.add_argument("--top-k", type=int, default=5, help="语义通道召回条数（默认 5）")
     p.add_argument("--n", type=int, default=2, help="字符 n-gram 长度（实测 n=2 最优，默认 2）")
+    p.add_argument(
+        "--mode",
+        choices=("char", "word"),
+        default="word",
+        help="检索模式：char=字符 n-gram，word=jieba 分词+IDF（默认 word，无 jieba 回退 char）",
+    )
     p.set_defaults(func=_cmd_retrieve)
 
     p = sub.add_parser("ingest", help="导入暂存区")

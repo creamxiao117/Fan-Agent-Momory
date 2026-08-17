@@ -1,5 +1,14 @@
 # RUNLOG.md（迭代日志 · 只追加 · 最新在前）
 
+## [2026-08-17] R6 | 中文语义召回增强（jieba 分词 + IDF 加权）
+
+- **jieba 词模式**：`vector.py` 新增 `tokenize(mode="word")` 支持 jieba 分词 + 去停用词/标点，无 jieba 时自动回退字符 n-gram；`build_idf` 语料 IDF 加权，稀有词权重更高（缓解领域共词抢占）。
+- **确定性通道词级匹配**：`retrieve.py` 新增 `mode` 参数传播，word 模式下查询任一分词与 tag 互相包含即命中（如 "dll 锁文件" 命中 tag "dll-lock"），char 模式仍为整句包含。
+- **评测对比**：`work/bench_recall.py` 扩展对比 char n=2 vs word+IDF——word 全面胜出（确定性通道 0→5/11，语义 top1 8→9/11，混合 top1 8→10/11，top3 两者 100%）。
+- **默认切 word**：`retrieve`/`semantic_retrieve`/`deterministic_retrieve` 默认 mode 改为 "word"，CLI `--mode` 可选 char/word（默认 word）；`requirements.txt` 加入 jieba>=0.42。
+- **测试**：新增 9 项测试（jieba 分词/停用词/标点/回退/IDF 加权/word 检索/确定性词级匹配），58 项全通过。
+- 决策：word 模式推广为默认，检索质量提升明显；无 jieba 环境自动回退 char，零成本兼容。
+
 ## [2026-08-17] R5 | 中枢迁移 + 每日巡检 + n-gram 召回率调优
 
 - **中枢迁移**：`D:\AIwork\AgentMemoryHub` 复制到项目内 `AgentMemoryHub/`（规避沙箱权限），scripts 默认值 / AGENTS / CHARTER / visual-guide / draft 卡片 / user_profile 全部改为项目内相对路径。源目录受沙箱保护未删，保留为陈旧副本。
