@@ -1,4 +1,5 @@
 """复盘 → 候选规则：扫描暂存区复盘草稿，归纳去重，产出 candidate 卡片"""
+from datetime import date
 from pathlib import Path
 
 from common.frontmatter import parse_card, write_card
@@ -28,7 +29,10 @@ def collect_candidates(root: Path, platform: str) -> list[dict]:
         return []
     out = []
     for p in sorted(draft_dir.glob("*.md")):
-        text = p.read_text(encoding="utf-8")
+        try:
+            text = p.read_text(encoding="utf-8")
+        except OSError:
+            continue  # 坏文件跳过，避免中断整个 distill
         for lesson in _split_lessons(text):
             out.append({"source": p.name, "body": lesson})
     return out
@@ -54,7 +58,7 @@ def distill(root: Path, platform: str, output: str = "experience") -> list[Path]
 type: exp
 tags:
   - distill
-updated: 2026-08-17
+updated: {date.today().isoformat()}
 status: candidate
 reuse_count: 0
 ---
