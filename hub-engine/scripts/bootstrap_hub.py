@@ -83,14 +83,24 @@ def bootstrap(root: str | Path) -> Path:
     return root
 
 
+def _run_git(cmd: list[str]) -> None:
+    """运行 git 子命令；失败时透传真实 stderr，避免裸 traceback"""
+    try:
+        subprocess.run(cmd, check=True, capture_output=True, text=True, encoding="utf-8")
+    except subprocess.CalledProcessError as e:
+        stderr = (e.stderr or "").strip()
+        raise RuntimeError(f"git 命令失败: {' '.join(cmd)}\n{stderr or e}") from e
+
+
 def _git_init(root: Path) -> None:
     """确保中枢是 Git 仓库（审计/回滚用）"""
     if (root / ".git").exists():
         return
-    subprocess.run(["git", "-C", str(root), "init"], check=True, capture_output=True)
-    subprocess.run(["git", "-C", str(root), "add", "-A"], check=True, capture_output=True)
-    subprocess.run(["git", "-C", str(root), "commit", "-m", "chore: 中枢初始化"],
-                   check=True, capture_output=True, text=True, encoding="utf-8")
+    _run_git(["git", "-C", str(root), "init"])
+    _run_git(["git", "-C", str(root), "add", "-A"])
+    # 注入本地身份，保证未配置全局 user.name/user.email 也能完成首次提交（不污染全局配置）
+    _run_git(["git", "-C", str(root), "-c", "user.name=AgentMemoryHub",
+              "-c", "user.email=hub@local", "commit", "-m", "chore: 中枢初始化"])
 
 
 if __name__ == "__main__":

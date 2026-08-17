@@ -1,3 +1,4 @@
+import subprocess
 from pathlib import Path
 
 from scripts.bootstrap_hub import bootstrap
@@ -30,3 +31,7 @@ def test_bootstrap_idempotent(tmp_path):
 def test_bootstrap_git_init(tmp_path):
     root = bootstrap(tmp_path)
     assert (root / ".git" / "config").exists()
+    # 首次提交应已通过本地身份完成，HEAD 可解析出非空 hash
+    proc = subprocess.run(["git", "-C", str(root), "rev-parse", "HEAD"],
+                          check=True, capture_output=True, text=True)
+    assert proc.stdout.strip()
