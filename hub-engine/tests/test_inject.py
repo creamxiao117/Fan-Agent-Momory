@@ -33,3 +33,13 @@ def test_inject_refreshes_stale_hub_location(tmp_path):
     assert text.count("## 统一记忆中枢") == 1
     assert "D:\\AIwork\\AgentMemoryHub" not in text
     assert "中枢位置：" + hub_location() in text
+
+
+def test_inject_new_instruction_mentions_bootstrap(tmp_path):
+    target = tmp_path / "AGENTS.md"
+    target.write_text("", encoding="utf-8")
+    inject_instruction(target)
+    text = target.read_text(encoding="utf-8")
+    assert "hub_bootstrap" in text
+    assert "hub_ingest_candidate" in text
+    assert "引用+摘要" in text

@@ -3,8 +3,11 @@
 from pathlib import Path
 
 INSTRUCTION = """## 统一记忆中枢（AGENT MEMORY HUB）
-执行前先查统一记忆中枢：读取 INDEX.md 与五类目录（rules / methodology / longterm / projects / experience），命中再执行；
+任务开始：先调用 MCP 工具 hub_bootstrap（或 hub_search）检索中枢；无 MCP 时读 INDEX.md 与五类目录（rules / methodology / longterm / projects / experience），命中再执行。
+命中结果以「引用+摘要」写入本次任务 AGENTS.md（规则类标注必读全文），执行中需要细节再 hub_get。
+执行中若发现与任务 AGENTS.md 冲突，回中枢复核（以中枢为准）。
 不确定的内容交回用户，不得臆测、不得凭空捏造历史经验。
+任务闭环：exp/project 事实用 hub_ingest_candidate 回写（仅候选）；新规则/方法论进收件箱等待人工审核。
 中枢位置：{hub}
 """
 
