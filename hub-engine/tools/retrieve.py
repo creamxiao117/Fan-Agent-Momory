@@ -8,7 +8,15 @@ from common.vector import build_idf, cosine, tokenize, vector
 
 def _walk_active_cards(root: Path) -> list[Card]:
     cards = []
-    for sub in ("rules", "experience", "projects", "libs", "retro"):
+    for sub in (
+        "rules",
+        "methodology",
+        "longterm",
+        "projects",
+        "experience",
+        "libs",
+        "retro",
+    ):
         d = root / sub
         if not d.exists():
             continue

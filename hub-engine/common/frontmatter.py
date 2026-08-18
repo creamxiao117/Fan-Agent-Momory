@@ -6,7 +6,7 @@ from pathlib import Path
 
 import yaml
 
-VALID_TYPES = {"rule", "exp", "note", "project", "retro"}
+VALID_TYPES = {"rule", "exp", "note", "project", "retro", "methodology", "longterm"}
 VALID_STATUS = {"active", "archived", "candidate"}
 KNOWN = {"type", "tags", "updated", "status", "reuse_count"}
 

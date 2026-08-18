@@ -16,6 +16,8 @@ from common.vector import cosine, vector
 
 TYPE_DIR = {
     "rule": "rules",
+    "methodology": "methodology",
+    "longterm": "longterm",
     "exp": "experience",
     "note": "experience",
     "project": "projects",
@@ -54,7 +56,15 @@ def append_log(root: Path, op: str, title: str) -> None:
 
 def _authority_cards(root: Path) -> list[Card]:
     cards = []
-    for sub in ("rules", "experience", "projects", "libs", "retro"):
+    for sub in (
+        "rules",
+        "methodology",
+        "longterm",
+        "projects",
+        "experience",
+        "libs",
+        "retro",
+    ):
         d = root / sub
         if not d.exists():
             continue

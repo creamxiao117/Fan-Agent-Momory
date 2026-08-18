@@ -5,7 +5,15 @@ from pathlib import Path
 
 from common.frontmatter import today_date, try_read_card, validate_card
 
-AUTHORITY_DIRS = ("rules", "experience", "projects", "libs", "retro")
+AUTHORITY_DIRS = (
+    "rules",
+    "methodology",
+    "longterm",
+    "projects",
+    "experience",
+    "libs",
+    "retro",
+)
 STALE_DAYS = 180
 
 

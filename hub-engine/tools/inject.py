@@ -3,7 +3,7 @@
 from pathlib import Path
 
 INSTRUCTION = """## 统一记忆中枢（AGENT MEMORY HUB）
-执行前先查统一记忆中枢：读取 INDEX.md 与 rules / experience，命中再执行；
+执行前先查统一记忆中枢：读取 INDEX.md 与五类目录（rules / methodology / longterm / projects / experience），命中再执行；
 不确定的内容交回用户，不得臆测、不得凭空捏造历史经验。
 中枢位置：{hub}
 """

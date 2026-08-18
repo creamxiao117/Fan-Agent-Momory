@@ -8,6 +8,8 @@ from common.frontmatter import today_iso
 
 STRUCTURE = [
     "rules",
+    "methodology",
+    "longterm",
     "libs",
     "experience",
     "projects",
@@ -30,6 +32,8 @@ provider_keys.yaml
 INDEX_TEMPLATE = """# 中枢索引（内容目录）
 
 - rules/       权威规则（AutoCAD 命名、DLL 版本防锁、代码规范…）
+- methodology/ 方法论（可复用步骤/流程/思考原则）
+- longterm/    长期记忆（用户级稳定档案，跨项目）
 - libs/        复用代码库 / 插件片段
 - experience/  经验卡片（成功模式 / 踩坑 / 决策理由）
 - projects/    各项目心智档案
@@ -37,7 +41,7 @@ INDEX_TEMPLATE = """# 中枢索引（内容目录）
 - archive/     过时内容归档
 
 ## 使用约定（各平台执行前必读）
-1. 执行前先查 INDEX.md 与 rules / experience，命中再执行。
+1. 执行前先查 INDEX.md 与五类目录（rules / methodology / longterm / projects / experience），命中再执行。
 2. 不确定的内容交回用户，不得臆测、不得凭空捏造历史经验。
 3. 查询好结果回写为经验卡片（查询产物回写）。
 
