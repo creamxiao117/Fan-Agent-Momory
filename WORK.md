@@ -79,6 +79,16 @@
 - **ingest 入区**：4 平台共提升 14 张 exp 卡片（trae 4、code 1、hermes 7、workbuddy 2），3 张语义重复进冲突区；git 自动提交 4 次（ed2988a/0d2a190/b2fbe20/0c5c1c8）。experience 现 21 张。
 - **定期复核**：新增每周自动复核 Schedule（运行 `work/bench_recall.py` 复核 n 值 / 停用词表 / IDF 边界）。
 
+## 本轮 R6f（hub MCP 服务器）
+
+- **MCP stdio 服务器**：`hub-engine/mcp_server.py`（mcp SDK 1.26）暴露 5 个工具 hub_search / hub_get / hub_index / hub_bootstrap / hub_ingest_candidate，参数经 `_normalize` 映射（id/type → id_/type_）。
+- **检索带通道**：`retrieve_with_meta` 一次返回 channel（empty/deterministic/semantic）+ score；路径防逃逸 `resolve_rel` + platform/type 白名单（`tools/mcp_policy.py`）。
+- **审计落盘**：`.sync/state/query.log.jsonl`，8MiB 轮转、best-effort 静默；查询周报 `scripts/query_report.py`。
+- **回写分级**：exp/project 事实经 hub_ingest_candidate 只写 draft（status=candidate，不直写权威区）；新规则/方法论走收件箱人工审核（本版未实现 confirm_rule）。
+- **指令升级**：inject 指令改为任务级引导契约——任务开始 hub_bootstrap 检索、结果「引用+摘要」固化进任务 AGENTS.md、冲突回中枢复核、闭环回写。
+- **客户端样例**：`mcp.example.json`；手动冒烟已验证 initialize / tools/list / tools/call(hub_bootstrap) 端到端 + 审计落盘（bootstrap/trae/dll 命中 rules/dll-version-lock）。
+- **验收**：pytest 全量 115 通过，ruff check/format 全绿。8 任务提交（Task 1-8，commit 469b040 → a4f9993，均已推送）。
+
 ## 下一步候选
 
 1. 源目录 `D:\AIwork\AgentMemoryHub` 清理。
