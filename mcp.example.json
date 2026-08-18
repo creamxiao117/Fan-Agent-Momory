@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "agent-memory-hub": {
+      "command": "python",
+      "args": [
+        "C:/Users/Fan-SJSS/.trae-cn/worktrees/20260817-Fan-Agent-Momory/feat-implement-plan-ZilBmv/hub-engine/mcp_server.py",
+        "--root",
+        "C:/Users/Fan-SJSS/.trae-cn/worktrees/20260817-Fan-Agent-Momory/feat-implement-plan-ZilBmv/AgentMemoryHub"
+      ]
+    }
+  }
+}
