@@ -1,4 +1,4 @@
-# hub-mcp-server · 执行期中枢查询总线设计
+# hub-mcp-server · 执行期中枢查询总线 + 任务级引导设计
 
 > **状态：** 设计稿（未实现，待评审）  
 > **日期：** 2026-08-18  
@@ -15,6 +15,7 @@
 | 查询审计 | 无 | `reuse_count` 不自增；retrieve 无日志 |
 | 候选回写 | 人工放 draft → `ingest` | 「查询产物回写」靠自觉 |
 | 记忆同步 | `platform_bridge` Pull/Push | **与本设计正交**；MCP 不替代文件桥 |
+| 任务启动检索 | 无；agent 自行翻 INDEX/目录 | 每次任务重复低效检索；命中结果不入任务上下文 |
 
 ### 1.2 目标
 
@@ -24,6 +25,7 @@
 2. **可审计读取**：每次查询落日志，解决「有没有先读中枢」。  
 3. **最小权限写**：可选候选卡只进 `.sync/drafts/`，永不直写权威区。  
 4. **与文件桥并存**：MCP = 执行期查询总线；`platform_bridge` = 离线/定时同步总线；`inject` = 行为契约。
+5. **任务级引导**：任务开始一次 `hub_bootstrap` 分类检索，把命中固化进本次任务 AGENTS.md（引用+摘要），执行中按需补全文，避免反复调用。
 
 ### 1.3 非目标（本版不做）
 
@@ -46,6 +48,9 @@
 | D5 | **返回摘要优先，全文按需** | 控制上下文预算；`hub_search` 默认截断 body，`hub_get` 取全文 |
 | D6 | **platform 标识必填（写）/ 强烈建议（读）** | 审计与 draft 分目录依赖 platform；未知 platform 拒绝写入 |
 | D7 | **不在 MCP 内跑 ingest/confirm** | 提升权威卡仍走 CLI + 人工确认（HIGH_RISK 规则） |
+| D8 | **任务级引导一次固化，不反复检索** | 开始 `hub_bootstrap` 分类检索 → 写任务 AGENTS.md（引用+摘要）；后续按需 `hub_get` |
+| D9 | **任务 AGENTS.md 用「引用+摘要」，不整卡拷贝** | 防上下文膨胀 + 防固化即过时；规则类标「必读全文」 |
+| D10 | **回写分级** | exp/project 走 draft→ingest 快路径；rule/methodology 进 `.sync/pending/` 经 confirm_rule 人工审核 |
 
 ---
 
@@ -116,9 +121,10 @@
 注入块升级为（实现 inject 时另改，本设计只定契约）：
 
 ```text
-执行前优先调用 MCP 工具 hub_search；无 MCP 时再读 INDEX.md 与五类目录。
-命中后在回复中引用卡片路径（如 rules/dll-version-lock）。
-查询产物需要沉淀时调用 hub_ingest_candidate（仅候选，不直写权威区）。
+任务开始：先调用 MCP 工具 hub_bootstrap（或 hub_search）检索中枢；无 MCP 时读 INDEX.md 与五类目录。
+命中结果以「引用+摘要」写入本次任务 AGENTS.md（规则类标注必读全文），执行中需要细节再 hub_get。
+执行中若发现与任务 AGENTS.md 冲突，回中枢复核（以中枢为准）。
+任务闭环：exp/project 事实用 hub_ingest_candidate 回写（仅候选）；新规则/方法论进收件箱等待人工审核。
 ```
 
 ---
@@ -149,9 +155,26 @@ type CardHit = {
   body?: string;          // 仅 hub_get 或 search include_body=true
 };
 
+type TaskKind =
+  | "code" | "dll" | "project" | "debug" | "generic";
+
+type BootstrapHit = {
+  kind: CardType;        // 所属类别：rule/methodology/longterm/project/exp
+  hits: CardHit[];
+};
+
+type BootstrapResult = {
+  ok: true;
+  task_kind: TaskKind;
+  snapshot_at: string;   // 命中快照时间戳，用于 staleness 判断
+  blocks: BootstrapHit[];// 按类别分组，供生成任务 AGENTS.md
+  markdown: string;      // 现成的「任务级引导块」Markdown（见 §5）
+  audit_id: string;
+};
+
 type ErrorBody = {
   ok: false;
-  error: string;          // 稳定错误码，见 §6
+  error: string;          // 稳定错误码，见 §7
   message: string;        // 人可读
 };
 ```
@@ -200,7 +223,7 @@ type ErrorBody = {
 - 若 `deterministic_retrieve` 非空 → 整次 `channel=deterministic`，hits 不再跑语义。  
 - 否则语义 → `channel=semantic`，每条可带 `score`（若 retrieve 未返回分数，实现阶段为 `semantic_retrieve` 增加可选 scored API，**或** MCP 层对 semantic 路径调用 scored 变体；**禁止**为拿分数再跑第二遍全库。推荐：在 `retrieve.py` 增补 `retrieve_with_meta(...) -> list[tuple[Card, meta]]`，CLI 仍用旧 `retrieve`）。
 
-**审计：** 每次调用追加 query 日志（§5），含 hits 的 `rel_path` 列表。
+**审计：** 每次调用追加 query 日志（§6），含 hits 的 `rel_path` 列表。
 
 ### 4.3 `hub_get`（只读）
 
@@ -216,7 +239,7 @@ type ErrorBody = {
 
 **解析顺序：**
 
-1. 若 `rel_path` 含 `/`：`root / rel_path`（规范化，禁止 `..` 逃逸，见 §6）。  
+1. 若 `rel_path` 含 `/`：`root / rel_path`（规范化，禁止 `..` 逃逸，见 §7）。  
 2. 若仅 slug：在权威目录 `rules, methodology, longterm, projects, experience, libs, retro` 下查找 `{slug}.md`；多命中返回 `error=ambiguous` 并列出候选路径。  
 3. 文件不存在或非卡 → `error=not_found`。  
 4. `status=archived`：默认仍可读（显式 get），响应标 `status`；search 默认不返回 archived（与 `_walk_active_cards` 一致）。
@@ -261,7 +284,7 @@ type ErrorBody = {
 
 | 参数 | 类型 | 必填 | 默认 | 说明 |
 | --- | --- | --- | --- | --- |
-| `platform` | string | 是 | — | 必须在 `hub.config.yaml` 的 `platforms` **或** 显式允许列表（见 §6）；禁止 `unknown` |
+| `platform` | string | 是 | — | 必须在 `hub.config.yaml` 的 `platforms` **或** 显式允许列表（见 §7）；禁止 `unknown` |
 | `title` | string | 是 | — | 用于 slug；非空 |
 | `body` | string | 是 | — | 候选正文 |
 | `type` | string | 否 | `"exp"` | 允许 `exp` \| `note` \| `project`；**禁止** `rule`（rule 须人工 confirm 路径） |
@@ -293,11 +316,98 @@ source: mcp/<platform>
 | `hub_exec` / 任意 shell | 权限面过大 |
 | 直接写权威目录的任意 write | D3 |
 
+### 4.7 `hub_bootstrap`（只读组合 · 任务级引导）
+
+**映射：** 按 `task_kind` 映射类别清单（§5.2），对每类调 `retrieve_with_meta`，聚合成按类分组的结果 + 现成 Markdown 引导块。**不引入新召回算法**，只是编排多次检索。
+
+| 参数 | 类型 | 必填 | 默认 | 说明 |
+| --- | --- | --- | --- | --- |
+| `task_kind` | string | 是 | — | 取值见 §5.2；未知值回退 `generic` |
+| `context` | string | 否 | `""` | 一句话任务描述，作为各类检索的 query |
+| `platform` | string | 否 | `"unknown"` | 审计 |
+| `top_k` | int | 否 | 3 | 每类语义通道条数；范围 1–10 clamp |
+| `include_body` | bool | 否 | false | 引导块默认不含全文（§5.3 模板） |
+
+**响应：** `BootstrapResult`（§4.1）：`blocks` 按类别分组 + `markdown` 引导块 + `snapshot_at`。
+
+**设计要点：**
+
+- 每类最多 `top_k` 条；规则类恒 `include_body=false` 且响应中标 `must_read=true`（引导 agent 用 `hub_get` 读全文）。
+- `markdown` 由 server 生成（模板 §5.3），agent 直接追加到任务 AGENTS.md。
+- 幂等：同一 `task_kind`+`context` 允许重复调用（每次重新检索，保证最新）；审计可对同 platform 1 分钟内重复 bootstrap 采样只记一条。
+
+**审计：** `action=bootstrap`，含 `task_kind` 与 `category_hits`。
+
 ---
 
-## 5. 审计
+## 5. 任务级引导模式（Task Bootstrap）
 
-### 5.1 日志路径与格式
+目标：任务开始一次检索、固化进任务 AGENTS.md、避免反复调用、结束后回写闭环。这是 `hub_bootstrap` 的使用模式，也是各平台统一的任务行为契约。
+
+### 5.1 任务级闭环流程
+
+```
+任务开始
+  ├─ 判定 task_kind（code/dll/project/debug/generic）
+  ├─ hub_bootstrap(task_kind, context)     # 一次调用，分类检索
+  │     └─ 返回 blocks + markdown 引导块
+  ├─ 把 markdown 追加到本次任务 AGENTS.md（引用+摘要 + 快照时间戳）
+任务执行
+  ├─ 需要细节 → hub_get 单卡全文（按需，不反复检索）
+  ├─ 长任务 > 4h → 中途对关键规则重新 bootstrap 一次（防 staleness）
+任务闭环
+  ├─ exp / project 事实 → hub_ingest_candidate（快路径）
+  ├─ 新规则 / 方法论 → 收件箱（.sync/pending/ + confirm_rule 人工审核）
+  ├─ 审计已自动记录 bootstrap/get/ingest_candidate
+  └─ 清理本次任务 AGENTS.md（可沉淀的已回写，不长期堆积）
+```
+
+### 5.2 task-kind → 类别映射
+
+| task_kind | 必查类别 | 说明 |
+| --- | --- | --- |
+| `dll` | rules, projects | 改 DLL/文件：先查防锁规则 + 相关项目 |
+| `code` | rules, methodology, projects | 写代码/重构：规则 + 方法论 + 相似项目 |
+| `project` | longterm, methodology | 新项目/立项：用户档案 + 方法论 |
+| `debug` | projects, experience | 排障/复盘：相似项目 + 历史经验 |
+| `generic` | rules, methodology, longterm, projects | 兜底全查（每类 top_k 最小化） |
+
+### 5.3 任务级 AGENTS.md 模板（引用 + 摘要）
+
+```markdown
+## 中枢命中（本任务快照 @2026-08-18T15:30Z）
+### 规则（必读全文）
+- rules/dll-version-lock — 改 DLL 必须递增版本号（涉及文件操作前 hub_get 读全文）
+### 方法论
+- methodology/occam-razor — 最少文件/字段/步骤
+### 项目记忆
+- projects/omniroute-gateway — 容器绑 127.0.0.1:20128
+### 长期记忆
+- longterm/memory-hub-location — 中枢路径
+```
+
+### 5.4 staleness 对策（固化结果过时）
+
+1. **快照时间戳**（模板内 `@…Z`）：发生冲突时据此判断该信谁。
+2. **冲突回中枢**：执行中与引导块矛盾 → 以中枢为准，回 `hub_get` 复核。
+3. **长任务刷新**：任务执行 > 4h → 中途对关键规则重新 `hub_bootstrap` 一次。
+
+### 5.5 回写分级
+
+| 内容 | 路径 | 审核 |
+| --- | --- | --- |
+| exp / project 事实 | `hub_ingest_candidate` → draft → `ingest` | 低风险自动 |
+| 新规则 / 方法论 | 收件箱 `.sync/pending/` → `confirm_rule` | 人工必审 |
+
+### 5.6 任务 AGENTS.md 生命周期
+
+任务闭环后，可沉淀内容已回写，任务级 AGENTS.md 随即清理（删除或并入项目记忆），不长期堆积碎片文件。
+
+---
+
+## 6. 审计
+
+### 6.1 日志路径与格式
 
 | 项 | 约定 |
 | --- | --- |
@@ -333,8 +443,9 @@ source: mcp/<platform>
 | `get` | id 或 rel_path, hit_paths（0/1）, hit_count |
 | `index` | types, category_counts |
 | `ingest_candidate` | platform, slug, rel_path, deduped |
+| `bootstrap` | task_kind, types, category_hits |
 
-### 5.2 与 reuse_count / retro
+### 6.2 与 reuse_count / retro
 
 | 机制 | 本版行为 |
 | --- | --- |
@@ -342,7 +453,7 @@ source: mcp/<platform>
 | `retro/log.md` | **不每查追加**（噪声）。仅 `ingest_candidate` 成功时可追加一行摘要；或每日巡检汇总「昨日 MCP 查询次数」 |
 | 验证「是否先读」 | 查 `query.log.jsonl` 是否在任务时间窗内出现对应 `platform` + `action=search|get` |
 
-### 5.3 验证用例（验收）
+### 6.3 验证用例（验收）
 
 1. 平台 A 调 `hub_search` → 日志出现 `platform=A` 与 `hit_paths`。  
 2. 不调工具直接做事 → 时间窗内无日志 → 判定未读中枢。  
@@ -350,9 +461,9 @@ source: mcp/<platform>
 
 ---
 
-## 6. 权限与安全
+## 7. 权限与安全
 
-### 6.1 权限矩阵
+### 7.1 权限矩阵
 
 | 区域 | search/get/index | ingest_candidate |
 | --- | --- | --- |
@@ -364,13 +475,13 @@ source: mcp/<platform>
 | `hub.config.yaml` / `provider_keys.yaml` | 否 | 否 |
 | 中枢外任意路径 | 否 | 否 |
 
-### 6.2 路径安全
+### 7.2 路径安全
 
 - 所有用户输入路径：`Path.resolve()` 后必须 `relative_to(root)` 成功，否则 `error=path_escape`。  
 - 禁止绝对路径、盘符穿越、符号链接跳出 root（resolve 后检查）。  
 - `hub_get` 仅允许后缀 `.md`。
 
-### 6.3 platform 策略
+### 7.3 platform 策略
 
 ```text
 allowed_platforms =
@@ -380,19 +491,19 @@ allowed_platforms =
 - `hub_ingest_candidate`：`platform ∉ allowed` → `error=platform_forbidden`。  
 - 读工具：`platform` 自由字符串仅用于审计（便于 traework 等未登记平台先观察调用率）；实现可在配置打开 `mcp.require_known_platform_on_read: true` 后拒绝未知方。
 
-### 6.4 写类型白名单
+### 7.4 写类型白名单
 
 - 允许：`exp`, `note`, `project`  
 - 拒绝：`rule`, `methodology`, `longterm`, `retro` → `error=type_forbidden`  
   （方法论/长期记忆/规则需人工或专用流程，防会话噪声污染）
 
-### 6.5 密钥与隐私
+### 7.5 密钥与隐私
 
 - Server **不读** `provider_keys.yaml`，不调外部 LLM。  
 - 审计日志可能含用户 query：仅存本机中枢目录；不进 git 时依赖中枢 `.gitignore` 已忽略 `.sync/`（若未忽略，实现前确认不把 query.log 提交主仓）。  
 - 响应不回显环境变量与 server 本地绝对路径以外的系统信息（`root` 可在初始化 resource 中暴露一次便于调试）。
 
-### 6.6 错误码稳定表
+### 7.6 错误码稳定表
 
 | code | 含义 |
 | --- | --- |
@@ -407,7 +518,7 @@ allowed_platforms =
 
 ---
 
-## 7. 与 retrieve / CLI 映射总表
+## 8. 与 retrieve / CLI 映射总表
 
 | MCP 工具 | 引擎调用 | CLI 等价 | 差异 |
 | --- | --- | --- | --- |
@@ -415,6 +526,7 @@ allowed_platforms =
 | `hub_get` | `try_read_card(path)` | 无（手读文件） | 新增能力 |
 | `hub_index` | 扫 AUTHORITY 目录 / 读 INDEX.md | 无 | 新增；目录列表对齐 lint 的 AUTHORITY_DIRS |
 | `hub_ingest_candidate` | `write_card` → drafts | 手写 draft 文件 | 不自动 `ingest` |
+| `hub_bootstrap` | 按 task_kind 映射类别 → 各调 `retrieve_with_meta` | 无 | 新增组合工具；agent 直接追加到任务 AGENTS.md |
 | （无） | `ingest` / `confirm_rule` / `sync` | 对应 CLI | 保持人工/批处理 |
 
 **推荐的 retrieve 小扩展（实现计划内可选 Task 0）：**
@@ -435,7 +547,7 @@ AUTHORITY_DIRS = rules, methodology, longterm, projects, experience, libs, retro
 
 ---
 
-## 8. 模块与文件布局（实现时）
+## 9. 模块与文件布局（实现时）
 
 ```text
 hub-engine/
@@ -443,7 +555,7 @@ hub-engine/
   tools/
     mcp_audit.py         # append_jsonl、audit_id、轮转
     mcp_policy.py        # path_escape、platform/type 白名单
-    mcp_handlers.py      # search/get/index/ingest_candidate 纯函数便于单测
+    mcp_handlers.py      # search/get/index/ingest_candidate/bootstrap 纯函数便于单测
   tests/
     test_mcp_handlers.py
     test_mcp_audit.py
@@ -454,7 +566,7 @@ hub-engine/
 
 ---
 
-## 9. 测试计划（TDD）
+## 10. 测试计划（TDD）
 
 1. **policy**  
    - `../secret.md`、绝对路径、`.sync/../rules` 逃逸 → `path_escape`。  
@@ -473,12 +585,16 @@ hub-engine/
 5. **ingest_candidate**  
    - 文件出现在正确 draft 目录，`status=candidate`。  
    - 指纹重复 → `deduped=true`。  
-6. **不变量**  
+6. **bootstrap**  
+   - 同一 task_kind 结果与手动多次 search 相同 query 的并集一致。  
+   - 生成的 `markdown` 为「引用+摘要」，不含整卡全文。  
+   - 空命中返回 `blocks` 空数组，不报错。  
+7. **不变量**  
    - 全测试结束后权威区 git diff 无新增（仅 draft/state 可写）。
 
 ---
 
-## 10. 落地顺序与成功标准
+## 11. 落地顺序与成功标准
 
 | 阶段 | 内容 | 成功标准 |
 | --- | --- | --- |
@@ -492,7 +608,7 @@ hub-engine/
 
 ---
 
-## 11. 风险与缓解
+## 12. 风险与缓解
 
 | 风险 | 缓解 |
 | --- | --- |
@@ -504,12 +620,12 @@ hub-engine/
 
 ---
 
-## 12. 与双通道总图的关系（备忘）
+## 13. 与三层总图的关系（备忘）
 
 ```text
-inject（契约） → 要求先 hub_search
-MCP（本设计） → 执行期读/候选写 + 审计
+inject（契约） → 要求先 hub_bootstrap / hub_search，任务级引导流程
+MCP（本设计） → 执行期读/写/引导 + 审计
 platform_bridge → 平台 MEMORY ↔ 中枢 批处理同步
 ```
 
-三者互补；本设计 **只规范 MCP 这一层**。
+三者互补；本设计 **规范 MCP 这一层及任务级引导模式**。
