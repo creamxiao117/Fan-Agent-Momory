@@ -1,13 +1,13 @@
 # WORK.md（当前状态 · 唯一来源）
 
-更新于：2026-08-17（R6：中文语义召回增强）
+更新于：2026-08-18（R6e：首批平台记忆沉淀 + 冲突处置）
 
 ## 当前 MVP（已完成）
 
 - **中枢骨架**：`AgentMemoryHub/`（本仓库内，已从 `D:\AIwork\AgentMemoryHub` 迁移，规避沙箱权限）。Obsidian 库：rules/libs/experience/projects/retro/archive + .sync + INDEX.md，已 Git 初始化（6 提交）。
 - **hub-engine**（本仓库）：同步器（单一写入者/暂存/去重/确认/Git）、混合检索、复盘提炼、整理归档、Lint 健康检查、omniroute 问答。
-- **CLI**：`engine.py` 子命令 `retrieve/ingest/confirm/distill/tidy/lint/chat/status`。
-- **测试**：58 项通过。
+- **CLI**：`engine.py` 子命令 `retrieve/ingest/confirm/distill/tidy/lint/chat/status/sync`。
+- **测试**：79 项通过。
 - **注入**：trae 平台指令已注入 `user_profile.md`；code 平台已注入 `D:/AIwork/code-memory/CLAUDE.md`（幂等，待平台目录生效）。
 - **端到端**：DLL 版本防锁规则全流程走通（distill → ingest → confirm → retrieve → 回写经验）。
 
@@ -62,11 +62,28 @@
 - **记忆沉淀**：hermes 3 张经验入区（omniroute-gateway、browser-automation-chrome、text-extraction-priority）；workbuddy 2 条规则确认入 rules（context-budget-discipline、markdown-revision-style）+ 1 张经验（github-repos-and-skills）；omniroute-api 与 hermes 卡片重复进冲突区。
 - **验收**：中枢 6 exp + 3 rules，pending 0，58 项测试全通过。
 
+## 本轮 R6d（sync 平台双向同步桥）
+
+- **设计稿**：`docs/superpowers/specs/2026-08-17-sync-platforms-bridge-design.md`（Pull/Push 双向桥 + Adapter 适配 + 命令接线）。
+- **platform_bridge.py**：`Entry` + `Adapter` 抽象（`MdSectionAdapter` ## 分段 / `SectSeparatedAdapter` § 分隔）+ `fingerprint` 内容规范化哈希 + `pull`/`push`。
+- **pull**：平台记忆 → `.sync/drafts/<platform>_draft/` 候选卡片（type=exp）；标题已存在 skip、语义相似 ≥0.7 进冲突区、指纹状态做幂等（`.sync/state/pulled_<platform>.json`）。
+- **push**（默认关）：中枢 rules/experience 卡片渲染回平台文件；同标题不同正文追加「中枢权威版」不覆盖；mtime+hash 基线检测外部改动即中止；`--only-rules` 过滤。
+- **CLI**：`engine.py sync --root <hub> --platform <name|all> [--push] [--only-rules] [--dry-run]`。
+- **验收**：新增 `test_platform_bridge.py` 21 项（Adapter 往返/去重/幂等/dry-run/Push 安全/外部改动/CLI），全量 79 项通过，ruff 全绿。
+- **4 平台 dry-run 实测**：trae 4 / code 2 / hermes 8+4 冲突 / workbuddy 3+3 冲突；workbuddy `--push --dry-run` 预览 11 条待加。
+
+## 本轮 R6e（首批平台记忆沉淀 + 冲突处置）
+
+- **冲突处置**：`omniroute-api.md` 冲突核对后合并入 `omniroute-gateway.md`（补充 qwen2.5:7b / 超时 30s / 11434 配置，标注来源 workbuddy），冲突文件删除，信息不丢失。
+- **正式 sync**（非 dry-run）：`sync --platform all` → trae 4 / code 2 / hermes 8+4 冲突 / workbuddy 3+3 冲突，draft 全部落 `.sync/drafts/<platform>_draft/`。
+- **ingest 入区**：4 平台共提升 14 张 exp 卡片（trae 4、code 1、hermes 7、workbuddy 2），3 张语义重复进冲突区；git 自动提交 4 次（ed2988a/0d2a190/b2fbe20/0c5c1c8）。experience 现 21 张。
+- **定期复核**：新增每周自动复核 Schedule（运行 `work/bench_recall.py` 复核 n 值 / 停用词表 / IDF 边界）。
+
 ## 下一步候选
 
-1. 语料自然增长后定期重跑 `work/bench_recall.py` 复核（n 值 / 停用词表 / IDF 边界）。
-2. 源目录 `D:\AIwork\AgentMemoryHub` 清理。
-3. 冲突区 `omniroute-api.md` 确认后归档/删除。
+1. 源目录 `D:\AIwork\AgentMemoryHub` 清理。
+2. 冲突区新增 7 张冲突确认处置（hermes/workbuddy pull 冲突 4+3 + ingest 重复 3）。
+3. 视需要评估 Push 默认开启策略（当前保持默认关闭防误写）。
 
 ## 阻塞项
 
@@ -74,7 +91,8 @@
 
 ## 验证方法
 
-- `python -m pytest hub-engine/tests -q`（全量测试，58 项；需有 pytest+yaml+jieba 的 python 环境）
+- `python -m pytest hub-engine/tests -q`（全量测试，79 项；需有 pytest+yaml+jieba 的 python 环境）
 - `python hub-engine/engine.py status --root AgentMemoryHub --json`（健康快照 JSON）
 - `python hub-engine/engine.py retrieve --root AgentMemoryHub --mode word --top-k 3 "<问题>"`（混检索，mode 默认 word，`--mode char` 切回字符 n-gram）
+- `python hub-engine/engine.py sync --root AgentMemoryHub --platform all --dry-run`（平台记忆同步预览）
 - `.venv\Scripts\python.exe work\bench_recall.py`（char vs word 召回率对比评测）

@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from common.config import load_engine_config, load_provider_keys
+from common.config import HubConfig, load_engine_config, load_provider_keys
 from tools.lint import _all_cards, lint
 from tools.retrieve import retrieve
 
@@ -164,6 +164,30 @@ def _cmd_status(args) -> int:
     return 0 if report["invalid"] == 0 and not report["orphans"] else 1
 
 
+def _cmd_sync(args) -> int:
+    """sync 子命令：平台记忆 ↔ 中枢（默认 Pull；--push 显式切 Push；--dry-run 预览）"""
+    from tools.platform_bridge import pull, push
+
+    root = Path(args.root)
+    cfg = HubConfig.load(root)
+    platforms = list(cfg.platforms) if args.platform == "all" else [args.platform]
+    ok = True
+    for name in platforms:
+        try:
+            stat = (
+                push(root, name, only_rules=args.only_rules, dry_run=args.dry_run)
+                if args.push
+                else pull(root, name, dry_run=args.dry_run)
+            )
+        except KeyError as e:
+            print(e)
+            ok = False
+            continue
+        print(f"{name}: {stat}")
+        ok = ok and stat["status"] == "ok"
+    return 0 if ok else 1
+
+
 def _cmd_chat(args) -> int:
     print(chat(args.prompt, Path(args.root)))
     return 0
@@ -221,6 +245,20 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--root", required=True)
     p.add_argument("--json", action="store_true", help="输出结构化 JSON")
     p.set_defaults(func=_cmd_status)
+
+    p = sub.add_parser("sync", help="同步平台记忆（默认 Pull；--push 切 Push）")
+    p.add_argument("--root", required=True)
+    p.add_argument("--platform", required=True, help="平台名或 all")
+    p.add_argument(
+        "--push", action="store_true", help="Push 模式：中枢卡片 → 平台文件（默认关闭）"
+    )
+    p.add_argument(
+        "--only-rules", action="store_true", help="Push 时仅同步 rules/ 卡片"
+    )
+    p.add_argument(
+        "--dry-run", action="store_true", help="预览：只打印统计，不落盘、不写锁"
+    )
+    p.set_defaults(func=_cmd_sync)
 
     p = sub.add_parser("chat", help="omniroute 问答")
     p.add_argument("--root", required=True)
