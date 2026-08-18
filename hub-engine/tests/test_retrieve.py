@@ -2,7 +2,12 @@ from pathlib import Path
 
 import pytest
 from scripts.bootstrap_hub import bootstrap
-from tools.retrieve import deterministic_retrieve, retrieve, semantic_retrieve
+from tools.retrieve import (
+    deterministic_retrieve,
+    retrieve,
+    retrieve_with_meta,
+    semantic_retrieve,
+)
 
 try:
     import jieba  # noqa: F401
@@ -103,3 +108,38 @@ def test_semantic_word_mode_recalls_similar(tmp_path):
     hits = semantic_retrieve(root, "改了插件 DLL 结果被锁住打不开", mode="word")
     names = [h.path.name for h in hits]
     assert "dll-lock.md" in names or "blunder.md" in names
+
+
+def test_retrieve_with_meta_deterministic_channel(tmp_path):
+    root = bootstrap(tmp_path)
+    _seed(root)
+    channel, scored = retrieve_with_meta(root, "dll-lock")
+    assert channel == "deterministic"
+    assert [c.path.name for c, _ in scored] == ["dll-lock.md"]
+    assert all(s is None for _, s in scored)  # 确定性命中不带 score
+
+
+def test_retrieve_with_meta_semantic_scores(tmp_path):
+    root = bootstrap(tmp_path)
+    _seed(root)
+    # 注意：查询不能含 type/tag 词（如 "dll"），否则 word 模式确定性通道先命中
+    channel, scored = retrieve_with_meta(root, "文件被占用打不开")
+    assert channel == "semantic"
+    assert scored and all(s is not None for _, s in scored)
+
+
+def test_retrieve_with_meta_empty_channel(tmp_path):
+    root = bootstrap(tmp_path)
+    _seed(root)
+    channel, scored = retrieve_with_meta(root, "   ")
+    assert channel == "empty"
+    assert scored == []
+
+
+def test_retrieve_still_returns_cards(tmp_path):
+    """retrieve 兼容层：行为与之前一致（返回 Card 列表）"""
+    root = bootstrap(tmp_path)
+    _seed(root)
+    hits = retrieve(root, "DLL 被锁怎么办")
+    assert all(isinstance(c, object) for c in hits)
+    assert len(hits) >= 1

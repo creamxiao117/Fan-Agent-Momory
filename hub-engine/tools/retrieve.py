@@ -54,10 +54,10 @@ def deterministic_retrieve(root: Path, query: str, mode: str = "word") -> list[C
     return hits
 
 
-def semantic_retrieve(
+def _semantic_scored(
     root: Path, query: str, top_k: int = 5, n: int = 2, mode: str = "word"
-) -> list[Card]:
-    """语义通道：对 body+tags 做 token 余弦相似度召回 top-k。
+) -> list[tuple[Card, float]]:
+    """语义通道带分数召回：返回 [(card, sim)]，按相似度降序。
 
     - char：字符 n-gram（实测 n=2 最优）
     - word：jieba 分词 + IDF 加权（语料内稀有词权重更高，缓解领域共词抢占）
@@ -75,20 +75,38 @@ def semantic_retrieve(
         if sim > 0:
             scored.append((sim, c))
     scored.sort(key=lambda x: x[0], reverse=True)
-    return [c for _, c in scored[:top_k]]
+    return [(c, sim) for sim, c in scored[:top_k]]
+
+
+def semantic_retrieve(
+    root: Path, query: str, top_k: int = 5, n: int = 2, mode: str = "word"
+) -> list[Card]:
+    """语义通道：对 body+tags 做 token 余弦相似度召回 top-k（兼容旧接口）"""
+    return [c for c, _ in _semantic_scored(root, query, top_k, n, mode)]
+
+
+def retrieve_with_meta(
+    root: Path, query: str, top_k: int = 5, n: int = 2, mode: str = "word"
+) -> tuple[str, list[tuple[Card, float | None]]]:
+    """混合检索入口，带通道与分数：返回 (channel, [(card, score|None)])
+
+    channel: "empty"（空查询）| "deterministic"（确定性命中，score=None）| "semantic"
+    """
+    if not query.strip():
+        return "empty", []
+    hits = deterministic_retrieve(root, query, mode)
+    if hits:
+        return "deterministic", [(c, None) for c in hits]
+    return "semantic", _semantic_scored(root, query, top_k, n, mode)
 
 
 def retrieve(
     root: Path, query: str, top_k: int = 5, n: int = 2, mode: str = "word"
 ) -> list[Card]:
-    """混合检索入口：先确定性，命中即返回；否则语义召回
+    """混合检索入口（兼容旧接口，仅返回卡片列表）
 
     n: 字符 n-gram 长度（char 模式），默认 2
     mode: "word"（默认，jieba 分词 + IDF）或 "char"（字符 n-gram，零依赖回退）
     """
-    if not query.strip():
-        return []  # 空查询护栏：避免空串命中全部卡片
-    hits = deterministic_retrieve(root, query, mode)
-    if hits:
-        return hits
-    return semantic_retrieve(root, query, top_k, n, mode)
+    _, scored = retrieve_with_meta(root, query, top_k, n, mode)
+    return [c for c, _ in scored]
