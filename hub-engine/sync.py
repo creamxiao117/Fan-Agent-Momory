@@ -22,6 +22,7 @@ TYPE_DIR = {
     "note": "experience",
     "project": "projects",
     "retro": "retro",
+    "blueprint": "blueprints",
 }
 HIGH_RISK = {"rule"}  # 重要规则：须人工确认
 
@@ -63,6 +64,7 @@ def _authority_cards(root: Path) -> list[Card]:
         "projects",
         "experience",
         "libs",
+        "blueprints",
         "retro",
     ):
         d = root / sub
@@ -153,7 +155,9 @@ def ingest(root: Path, platform: str) -> dict:
                         stat["duplicate"] += 1
                         _append_log(root, "ingest", f"同名不同内容进冲突区：{p.name}")
                     else:
-                        card.status = "active"
+                        # 蓝图卡保留草稿声明的 status（reference→T1 前 / active→试用后），其余低风险卡默认为 active
+                        if card.type != "blueprint":
+                            card.status = "active"
                         dst.parent.mkdir(parents=True, exist_ok=True)
                         dst.write_text(write_card(card), encoding="utf-8")
                         stat["promoted"] += 1

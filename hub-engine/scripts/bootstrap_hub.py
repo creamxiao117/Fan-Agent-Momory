@@ -14,6 +14,7 @@ STRUCTURE = [
     "experience",
     "projects",
     "retro",
+    "blueprints",
     "archive",
     ".sync/drafts/trae_draft",
     ".sync/drafts/code_draft",

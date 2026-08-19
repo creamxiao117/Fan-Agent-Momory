@@ -12,6 +12,7 @@ AUTHORITY_DIRS = (
     "experience",
     "libs",
     "retro",
+    "blueprints",
 )
 CANDIDATE_TYPES = {"exp", "note", "project"}
 

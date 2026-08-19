@@ -11,6 +11,7 @@ def test_bootstrap_creates_skeleton(tmp_path):
         "experience",
         "projects",
         "retro",
+        "blueprints",
         "archive",
         ".sync/drafts/trae_draft",
         ".sync/drafts/code_draft",

@@ -26,12 +26,14 @@ SUBDIR_BY_TYPE = {
     "exp": "experience",
     "note": "experience",
     "retro": "retro",
+    "blueprint": "blueprints",
 }
 TASK_KIND_TYPES = {
     "dll": ("rules", "projects"),
     "code": ("rules", "methodology", "projects"),
-    "project": ("longterm", "methodology"),
+    "project": ("longterm", "methodology", "blueprints"),
     "debug": ("projects", "experience"),
+    "ideation": ("blueprints", "methodology", "experience"),
     "generic": ("rules", "methodology", "longterm", "projects"),
 }
 

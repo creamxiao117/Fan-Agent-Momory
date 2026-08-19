@@ -13,6 +13,7 @@ AUTHORITY_DIRS = (
     "experience",
     "libs",
     "retro",
+    "blueprints",
 )
 STALE_DAYS = 180
 

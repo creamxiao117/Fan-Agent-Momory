@@ -26,6 +26,7 @@ _ACTIVE_DIRS = (
     "experience",
     "libs",
     "retro",
+    "blueprints",
 )
 
 # 第二层向量融合（方案 A：bge-small-zh + SQLite）
