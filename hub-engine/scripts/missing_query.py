@@ -9,19 +9,23 @@
   建议为现有相关卡「增补 tag / 别名」，让确定性通道更稳。
 
 只读分析 + 输出清单，不自动写卡（补卡需人工确认，与 sync ingest 收件箱一致）。
+`--since-days N` 限定只分析最近 N 天（A1：每日自动产出的近期缺口候选），默认全历史。
 
 用法：
   python hub-engine/scripts/missing_query.py --root AgentMemoryHub            # Markdown 到终端
   python hub-engine/scripts/missing_query.py --root AgentMemoryHub --json     # 结构化到 stdout
   python hub-engine/scripts/missing_query.py --root AgentMemoryHub -o work/missing.md
+  python hub-engine/scripts/missing_query.py --root AgentMemoryHub --since-days 7 -o work/missing.md
 """
 
 import argparse
 import json
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 LOG = Path(".sync") / "state" / "query.log.jsonl"
 LOW_HIT_DEFAULT = 3  # P1 判定：平均命中数低于该值视为低命中
+LOCAL_TZ = timezone(timedelta(hours=+8))  # Asia/Shanghai
 
 
 def load_records(root: Path) -> list[dict]:
@@ -43,9 +47,21 @@ def _norm(query: str) -> str:
     return " ".join(query.split()).lower()
 
 
-def aggregate(root: Path) -> list[dict]:
+def _local_ts_date(ts) -> date | None:
+    """query.log `ts` 为 UTC ISO；转本地 +8 取日期。缺失/非法返回 None（当作近期保留）。"""
+    if not ts:
+        return None
+    try:
+        dt = datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
+        return dt.astimezone(LOCAL_TZ).date()
+    except ValueError:
+        return None
+
+
+def aggregate(root: Path, since: date | None = None) -> list[dict]:
     """按归一化查询聚合 search 事件 → 按缺口严重度降序的候选列表。
 
+    `since` 非空时只保留该日期（含）之后的记录，用于聚焦近期高频缺口（A1 每日候选）。
     每项: {query, count, misses, hits, zero_ratio, avg_hit, channels, stage}
     stage ∈ {"P0-新增卡片", "P1-补tag别名", "ok-无需处理"}
     """
@@ -53,6 +69,10 @@ def aggregate(root: Path) -> list[dict]:
     for r in load_records(root):
         if r.get("action") != "search":
             continue
+        if since is not None:
+            d = _local_ts_date(r.get("ts"))
+            if d is not None and d < since:
+                continue
         q = r.get("query")
         if not q or not str(q).strip():
             continue
@@ -149,9 +169,18 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--root", required=True, help="中枢根目录")
     ap.add_argument("--json", action="store_true", help="输出结构化 JSON 到 stdout")
     ap.add_argument("-o", "--output", default=None, help="写入 Markdown 文件路径")
+    ap.add_argument(
+        "--since-days",
+        type=int,
+        default=None,
+        help="只分析最近 N 天（本地日期含当天）；A1 每日候选聚焦近期缺口，默认全历史",
+    )
     args = ap.parse_args(argv)
     root = Path(args.root)
-    cands = aggregate(root)
+    since = None
+    if args.since_days is not None:
+        since = datetime.now(LOCAL_TZ).date() - timedelta(days=args.since_days - 1)
+    cands = aggregate(root, since=since)
     if args.json:
         print(json.dumps(cands, ensure_ascii=False, indent=2))
         return 0

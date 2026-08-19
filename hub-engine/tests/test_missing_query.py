@@ -97,3 +97,27 @@ def test_markdown_includes_p0_and_p1(tmp_path):
     _write_log(tmp_path, [_search("缺口A", 0), _search("独立查询B", 1)])
     md = to_markdown(aggregate(tmp_path))
     assert "P0" in md and "P1" in md
+
+
+def test_aggregate_since_filters_outdated(tmp_path):
+    """since 只保留该日期(含)之后的记录（A1 每日候选聚焦近期缺口）"""
+    from datetime import date
+
+    recs = [
+        {**_search("缺口A", 0), "ts": "2026-08-10T02:00:00Z"},  # 旧，应排除
+        {**_search("缺口A", 0), "ts": "2026-08-19T01:00:00Z"},  # +8 仍当日
+        {**_search("缺口A", 0), "ts": "2026-08-19T05:00:00Z"},
+    ]
+    _write_log(tmp_path, recs)
+    assert aggregate(tmp_path)[0]["count"] == 3  # 全历史含所有
+    recent = aggregate(tmp_path, since=date(2026, 8, 19))
+    assert recent[0]["count"] == 2  # 只保留当天
+
+
+def test_main_since_days_ok(tmp_path, capsys):
+    """CLI --since-days 接线正常，聚焦近期仍产出候选"""
+    from scripts.missing_query import main
+
+    _write_log(tmp_path, [{**_search("缺口A", 0), "ts": "2026-08-19T01:00:00Z"}])
+    assert main(["--root", str(tmp_path), "--since-days", "7"]) == 0
+    assert "缺口A" in capsys.readouterr().out
