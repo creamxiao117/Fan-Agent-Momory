@@ -40,11 +40,13 @@ description: "内化 GitHub 项目：隔离克隆->评审判级->参考/首次�
 | C/D | 低价值/不适用 | 不入路由，记录后放弃 |
 
 ### 3. 分流沉淀（方法价值）
-产出卡型与中枢 `exp / methodology / rule` 对齐，且**必须**含象征性「负路由边界」：
+产出卡型与中枢 `exp / methodology / rule / blueprint` 对齐，且**必须**含象征性「负路由边界」：
+- **技术路径型**（可给同类新项目立项做选型导航的，如整类项目的分工/架构/路由范式）→ 用 `blueprint` 卡型，落入 `blueprints/` 目录，供 `hub_bootstrap(kind=ideation)` 立项时命中。
+- **其余** → `exp / methodology / rule`（落到对应权威区）。
 
 ```markdown
 ---
-type: exp            # 或 methodology / rule
+type: blueprint      # 或 exp / methodology / rule
 tags: [从仓库抽象出的主题标签]
 updated: YYYY-MM-DD
 status: reference    # 试用通过后再改 active
@@ -53,15 +55,19 @@ reuse_count: 0
 ## 提炼自
 gh-<owner>-<repo>（一句话来源，不搬运机密/私数据）
 
-## 核心要点
-<不照抄仓库，用自己的话提炼 3-8 条可复用原则>
+## 领域 / 目标
+<这套技术路径服务哪类新项目，立项时要决策什么问题>
 
-## 适用场景
-<至少 2 条日常语义示例，供检索命中>
+## 可选技术路径
+### 路径 A：<名称>
+- 选择理由 / 关键取舍 / 关键组件
+- 证据等级：claim|online|static|t1|t2
+- 适用场景 / 不适用（负路由排除）
 
 ## 不适用/禁止命中
 <非空：注明会误命中/不适用的情形，供负路由排除>（借鉴负路由边界：防英文/语义过命中）
 ```
+- 蓝图卡列出**至少一条 T1（本 hub 亲测）路径**后，status 才可转 `active`；否则维持 `reference`。
 
 ### 4. 试用内化（可执行价值，可选）
 - 仅限低风险可执行项，且用户显式批准后才在当前项目做 T0。
