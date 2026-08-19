@@ -15,6 +15,7 @@ from tools.mcp_policy import (
     resolve_slug,
 )
 from tools.retrieve import retrieve_with_meta
+from tools.snippet import extract_snippet
 
 DEFAULT_EXCERPT = 200
 SUBDIR_BY_TYPE = {
@@ -35,12 +36,13 @@ TASK_KIND_TYPES = {
 }
 
 
-def _excerpt(text: str, limit: int) -> str:
-    return text[:limit]
-
-
 def _hit(
-    card: Card, channel: str, score: float | None, root: Path, include_body: bool
+    card: Card,
+    channel: str,
+    score: float | None,
+    root: Path,
+    include_body: bool,
+    query: str = "",
 ) -> dict:
     rel = card.path.relative_to(root).as_posix()
     h = {
@@ -51,7 +53,7 @@ def _hit(
         "tags": card.tags,
         "updated": card.updated,
         "channel": channel,
-        "excerpt": _excerpt(card.body, DEFAULT_EXCERPT),
+        "excerpt": extract_snippet(card.body, query, DEFAULT_EXCERPT),
     }
     if score is not None:
         h["score"] = round(score, 4)
@@ -77,7 +79,7 @@ def hub_search(
     for card, score in scored:
         if allow is not None and card.type not in allow:
             continue
-        hits.append(_hit(card, channel, score, root, include_body))
+        hits.append(_hit(card, channel, score, root, include_body, query))
     aid = audit_id()
     append_query_log(
         root,
@@ -208,7 +210,7 @@ def hub_bootstrap(
             {
                 "kind": sub,
                 "hits": [
-                    _hit(card, "semantic", score, root, include_body)
+                    _hit(card, "semantic", score, root, include_body, context)
                     for card, score in picked[:top_k]
                 ],
             }

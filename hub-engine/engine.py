@@ -60,8 +60,10 @@ def _cmd_retrieve(args) -> int:
     for c in retrieve(
         Path(args.root), args.query, top_k=args.top_k, n=args.n, mode=args.mode
     ):
+        from tools.snippet import extract_snippet  # 展示层片段节选，延迟导入
+
         print(f"[{c.type}/{c.status}] {c.path.name}")
-        print(c.body[:200])
+        print(extract_snippet(c.body, args.query))
     return 0
 
 

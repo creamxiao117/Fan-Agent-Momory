@@ -1,6 +1,6 @@
 # WORK.md（当前状态 · 唯一来源）
 
-更新于：2026-08-18（R6e：首批平台记忆沉淀 + 冲突处置）
+更新于：2026-08-19（R6g：snippet 片段节选 + 巡检接入向量库）
 
 ## 当前 MVP（已完成）
 
@@ -88,6 +88,11 @@
 - **指令升级**：inject 指令改为任务级引导契约——任务开始 hub_bootstrap 检索、结果「引用+摘要」固化进任务 AGENTS.md、冲突回中枢复核、闭环回写。
 - **客户端样例**：`mcp.example.json`；手动冒烟已验证 initialize / tools/list / tools/call(hub_bootstrap) 端到端 + 审计落盘（bootstrap/trae/dll 命中 rules/dll-version-lock）。
 - **验收**：pytest 全量 115 通过，ruff check/format 全绿。8 任务提交（Task 1-8，commit 469b040 → a4f9993，均已推送）。
+
+## 本轮 R6g（snippet 片段节选 + 巡检接入向量库）
+
+- **snippet 片段节选**：新增 `tools/snippet.py` 的 `extract_snippet(body, query)`，抽取正文中与查询词重叠最多的行(+上下文)作为命中片段，替代旧「卡片前 200 字」；接入 MCP `_hit.excerpt` 与 CLI `_cmd_retrieve`，不动检索核与 MCP schema（对齐 md-GuanLi「命中返回相关段落」）。新增 `test_snippet.py` 5 项，全量 134 通过。
+- **巡检接入 build-vectors**：每日巡检 Schedule（35e02dc8）第 3 步新增 `engine.py build-vectors --root AgentMemoryHub`，当日新增/变更卡自动补写 `.sync/vector.db`（幂等增量，未变卡跳过 embedding；无模型/无网自动退化，不影响快照）。
 
 ## 下一步候选
 
