@@ -111,6 +111,7 @@
    | HARD(5) | base | 4 | 3 | 4 |
 
    结论：同一评测集下 small ≥ base（HARD 向量 4vs3、easy 向量 12vs11）。base 体积/内存约 small 的 3 倍且更慢，本项目向量仅作词袋之上的语义辅助通道，**维持 bge-small-zh-v1.5，不切换**。
+4. 向量规模拐点压测（2026-08-19 固化自 experience/bge-small-zh-sqlite-vector-search，**已核销**）：新增 `hub-engine/scripts/vector_scale_bench.py`（隔离库灌假向量测全表余弦耗时）。实证呈完美线性 ~93μs/卡：1k 即时(93ms)/5k≈468ms/10k≈933ms。**切 ANN 阈值 ≈3.2k 卡（>300ms）**；现状中枢仅几十卡、<100ms，**无需提前引 FAISS**。经验卡 `vector-cosine-scale-benchmark` 已 ingestion 入区并登记 INDEX。
 
 ## 阻塞项
 
@@ -123,3 +124,4 @@
 - `python hub-engine/engine.py retrieve --root AgentMemoryHub --mode word --top-k 3 "<问题>"`（混检索，mode 默认 word，`--mode char` 切回字符 n-gram）
 - `python hub-engine/engine.py sync --root AgentMemoryHub --platform all --dry-run`（平台记忆同步预览）
 - `.venv\Scripts\python.exe work\bench_recall.py`（char vs word 召回率对比评测）
+- `python hub-engine\scripts\vector_scale_bench.py --sizes 100 1000 5000 10000`（向量全表余弦耗时 vs 卡数曲线，定切 ANN 阈值）
