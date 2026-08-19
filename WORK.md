@@ -139,12 +139,13 @@
 13. 路径 C 接线 + 分级注入（2026-08-19，**本会话已落地，即任务1+2**）：MCP 层 `SEARCH_SCHEMA`/`BOOTSTRAP_SCHEMA` 声明 `compress_level` + `hub_bootstrap` handler 补齐透传（此前仅 hub_search 函数支持但 schema 未暴露=协议层够不到）；`inject.py` 指令补「命中正文按用途分级取用（路由 5 级/审计 0 级）」。补测 3 项，全量 174 通过、ruff 绿。后续未做项：单卡压缩 LRU（收益低，评估砍）。
 14. 薄卡体检（2026-08-19，**本会话已落地**）：因 A-lite 对单仓 83 卡是过度工程（成熟度单峰 active、语言合规易误告警），仅取「体量」一维轻量化落地。新增 `scripts/thin_card_scan.py`（只读扫权威区 frontmatter 后正文 < `--min-chars` 默认 80 字的薄卡，体量升序清单，`--json`/`-o`，**不自动改卡、刻意不并入 lint** 防误告警噪音，复用 `tools.lint._all_cards` 遍历）。真机命中 25 张（多为指针/清单型短卡）。新增 `test_thin_card_scan.py` 4 项，全量 178 通过、ruff 绿。
 15. 自驱成长飞轮最小环 A+E 立项（2026-08-19，蓝图 `blueprints/self-growth-flywheel-blueprint` 已固化；**本候选=立项拆分，未落地**）。依据第一性/奥卡姆：A(复用路径反哺)+E(可验证信号度量) 是飞轮发动机，先行；B/C/D 是维护站、按需再开。拆分（奥卡姆收敛为 5 任务）：
-   - **E1 指标日行 `metrics.jsonl`**：新 `.sync/state/metrics.jsonl` append-only 一行/日（date/total_cards/vector_rows/search_count/hit/miss/hit_rate/reuse_ops），复用 status + query.log 产物，纳入每日巡检 append。
-   - **E2 日命中率聚合**：从 query.log 按日聚 hit_rate/miss_rate（复用 `missing_query.py` 解析层），无新增组件。
-   - **E3 真实召回回归门禁**：新 `scripts/real_query_regression.py`——从 query.log 抽高频**未命中**固定集，每日对它们跑 hub_search，全未命中即 fail；`--fail-below X` 退出码契约沿用 `patrol-alert-exit-code` 的 2/3 码，纳入巡检 Schedule。
-   - **A1 未命中→补卡候选每日自动产出**：把 `missing_query.py` 从"每周人工跑"接入每日自动触发，输出候选清单文件，人工确认后 ingest（保持不自动造卡）。
-   - **A2 命中复用累积**：hub_search 命中回写处给命中卡 `reuse_count += 1`（节流防抖），把"被用到"变成可观测权重，供 E 趋势与 B(回收) 消费。
-   - 验收：metrics.jsonl 有日行且 hit_rate 曲线可画；回归门禁真机有一组未命中样本可拦截；daily Schedule 退出码检查覆盖 E1/E3；reuse_count 真实递增。全量测试按其分别 +2~4 项，ruff 绿。
+
+    - **E1 指标日行 `metrics.jsonl`**：新 `.sync/state/metrics.jsonl` append-only 一行/日（date/total_cards/vector_rows/search_count/hit/miss/hit_rate/reuse_ops），复用 status + query.log 产物，纳入每日巡检 append。
+    - **E2 日命中率聚合**：从 query.log 按日聚 hit_rate/miss_rate（复用 `missing_query.py` 解析层），无新增组件。
+    - **E3 真实召回回归门禁**：新 `scripts/real_query_regression.py`——从 query.log 抽高频**未命中**固定集，每日对它们跑 hub_search，全未命中即 fail；`--fail-below X` 退出码契约沿用 `patrol-alert-exit-code` 的 2/3 码，纳入巡检 Schedule。
+    - **A1 未命中→补卡候选每日自动产出**：把 `missing_query.py` 从"每周人工跑"接入每日自动触发，输出候选清单文件，人工确认后 ingest（保持不自动造卡）。
+    - **A2 命中复用累积**：hub_search 命中回写处给命中卡 `reuse_count += 1`（节流防抖），把"被用到"变成可观测权重，供 E 趋势与 B(回收) 消费。
+    - 验收：metrics.jsonl 有日行且 hit_rate 曲线可画；回归门禁真机有一组未命中样本可拦截；daily Schedule 退出码检查覆盖 E1/E3；reuse_count 真实递增。全量测试按其分别 +2~4 项，ruff 绿。
 
 ## 阻塞项
 

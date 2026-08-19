@@ -112,7 +112,11 @@ def _anti_triggers(card: Card) -> set[str]:
     raw = card.extra.get("anti_trigger")
     if not raw:
         return set()
-    atoms = raw if isinstance(raw, list) else str(raw).replace(",", " ").replace("|", " ").split()
+    atoms = (
+        raw
+        if isinstance(raw, list)
+        else str(raw).replace(",", " ").replace("|", " ").split()
+    )
     out: set[str] = set()
     for a in atoms:
         for t in tokenize(str(a), mode="word"):

@@ -140,13 +140,13 @@ def main() -> int:
                 f"平均={ms:.2f}ms"
             )
             if args.fail_above is not None and ms > args.fail_above:
-                print(
-                    f"【性能门禁失败】耗时 {ms:.2f}ms > 阈值 {args.fail_above:.1f}ms"
-                )
+                print(f"【性能门禁失败】耗时 {ms:.2f}ms > 阈值 {args.fail_above:.1f}ms")
                 return 4  # 专用退出码：性能门禁未通过
             return 0
 
-        print(f"format={args.format}  维度={DIM}  top_k={args.top_k}  repeat={args.repeat}（取中位 ms）")
+        print(
+            f"format={args.format}  维度={DIM}  top_k={args.top_k}  repeat={args.repeat}（取中位 ms）"
+        )
         print(
             f"{'条数'.rjust(8)}  {'平均耗时(ms)'.rjust(12)}  {'每条均摊(us)'.rjust(12)}"
         )

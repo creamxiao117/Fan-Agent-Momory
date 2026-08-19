@@ -32,11 +32,13 @@ def test_scan_sorted_ascending_by_chars(tmp_path):
     root = bootstrap(tmp_path)
     (root / "rules").mkdir(parents=True, exist_ok=True)
     (root / "rules" / "a.md").write_text(
-        "---\ntype: rule\ntags: [a]\nupdated: 2026-08-19\nstatus: active\nreuse_count: 0\n---\n" + "x" * 20,
+        "---\ntype: rule\ntags: [a]\nupdated: 2026-08-19\nstatus: active\nreuse_count: 0\n---\n"
+        + "x" * 20,
         encoding="utf-8",
     )
     (root / "rules" / "b.md").write_text(
-        "---\ntype: rule\ntags: [b]\nupdated: 2026-08-19\nstatus: active\nreuse_count: 0\n---\n" + "y" * 50,
+        "---\ntype: rule\ntags: [b]\nupdated: 2026-08-19\nstatus: active\nreuse_count: 0\n---\n"
+        + "y" * 50,
         encoding="utf-8",
     )
     chars = [t["body_chars"] for t in scan(root, min_chars=80)]

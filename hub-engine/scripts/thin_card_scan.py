@@ -69,7 +69,9 @@ def to_markdown(thins: list[dict], min_chars: int) -> str:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="thin-card-scan", description=__doc__)
     ap.add_argument("--root", required=True, help="中枢根目录")
-    ap.add_argument("--min-chars", type=int, default=MIN_CHARS_DEFAULT, help="正文最低字符数阈值")
+    ap.add_argument(
+        "--min-chars", type=int, default=MIN_CHARS_DEFAULT, help="正文最低字符数阈值"
+    )
     ap.add_argument("--json", action="store_true", help="输出结构化 JSON 到 stdout")
     ap.add_argument("-o", "--output", default=None, help="写入 Markdown 文件路径")
     args = ap.parse_args(argv)

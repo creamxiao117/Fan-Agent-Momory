@@ -220,10 +220,14 @@ def test_anti_trigger_penalizes_semantic_score(tmp_path):
         "updated: 2026-08-17\nstatus: active\nreuse_count: 0\n"
         "%s---\n通用技能治理原则，覆盖安装部署、日志、配置等全面场景。\n"
     )
-    (root / "blueprints" / "sem.md").write_text(body % "anti_trigger: [安装, 部署]\n", encoding="utf-8")
+    (root / "blueprints" / "sem.md").write_text(
+        body % "anti_trigger: [安装, 部署]\n", encoding="utf-8"
+    )
     (root / "blueprints" / "ctl.md").write_text(body % "", encoding="utf-8")
     q = "通用技能治理 安装 部署 原则"
-    scored = {c.path.name: s for c, s in _semantic_scored(root, q, top_k=20, mode="word")}
+    scored = {
+        c.path.name: s for c, s in _semantic_scored(root, q, top_k=20, mode="word")
+    }
     assert scored["ctl.md"] > 0  # 对照组有分
     # 命中 2 条 anti_trigger(安装/部署) → 扣 min(2*0.15, 0.5)=0.3，应显著低于对照
     assert scored["sem.md"] <= scored["ctl.md"] - 0.2

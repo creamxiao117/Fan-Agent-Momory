@@ -101,28 +101,39 @@ def aggregate(root: Path) -> list[dict]:
         )
     # 缺口严重度：先按 stage（P0 < P1 < ok），P0 内按 (zero_ratio, count) 降序
     order = {"P0-新增卡片": 0, "P1-补tag别名": 1, "ok-无需处理": 2}
-    out.sort(
-        key=lambda x: (order[x["stage"]], -x["zero_ratio"], -x["count"])
-    )
+    out.sort(key=lambda x: (order[x["stage"]], -x["zero_ratio"], -x["count"]))
     return out
 
 
 def to_markdown(cands: list[dict]) -> str:
     p0 = [c for c in cands if c["stage"].startswith("P0")]
     p1 = [c for c in cands if c["stage"].startswith("P1")]
-    lines = ["# 高频未命中查询 → 补卡候选清单", ""
-             , f"- P0 完全未命中（建议新增卡片）：{len(p0)} 条", f"- P1 低命中（建议补 tag/别名）：{len(p1)} 条", ""]
+    lines = [
+        "# 高频未命中查询 → 补卡候选清单",
+        "",
+        f"- P0 完全未命中（建议新增卡片）：{len(p0)} 条",
+        f"- P1 低命中（建议补 tag/别名）：{len(p1)} 条",
+        "",
+    ]
     if p0:
-        lines += ["## P0 · 完全未命中（知识缺口 → 建议新增卡片）", "",
-                  "| 查询 | 次数 | 零命中占比 | 通道 |", "| --- | --- | --- | --- |"]
+        lines += [
+            "## P0 · 完全未命中（知识缺口 → 建议新增卡片）",
+            "",
+            "| 查询 | 次数 | 零命中占比 | 通道 |",
+            "| --- | --- | --- | --- |",
+        ]
         for c in p0:
             lines.append(
                 f"| {c['query']} | {c['count']} | {c['zero_ratio']:.0%} | {','.join(c['channels'])} |"
             )
         lines.append("")
     if p1:
-        lines += ["## P1 · 低命中（建议为现有相关卡补 tag/别名）", "",
-                  "| 查询 | 次数 | 平均命中 | 通道 |", "| --- | --- | --- | --- |"]
+        lines += [
+            "## P1 · 低命中（建议为现有相关卡补 tag/别名）",
+            "",
+            "| 查询 | 次数 | 平均命中 | 通道 |",
+            "| --- | --- | --- | --- |",
+        ]
         for c in p1:
             lines.append(
                 f"| {c['query']} | {c['count']} | {c['avg_hit']} | {','.join(c['channels'])} |"

@@ -64,7 +64,9 @@ def _hit(
     if include_body:
         # 可选渐进压缩：>0 时返回压缩后的正文（前端/注入按用途取级），0=原文
         h["body"] = (
-            compress_card_text(card.body, int(compress_level)) if compress_level > 0 else card.body
+            compress_card_text(card.body, int(compress_level))
+            if compress_level > 0
+            else card.body
         )
     return h
 
@@ -87,7 +89,9 @@ def hub_search(
     for card, score in scored:
         if allow is not None and card.type not in allow:
             continue
-        hits.append(_hit(card, channel, score, root, include_body, query, compress_level))
+        hits.append(
+            _hit(card, channel, score, root, include_body, query, compress_level)
+        )
     aid = audit_id()
     append_query_log(
         root,
@@ -219,7 +223,15 @@ def hub_bootstrap(
             {
                 "kind": sub,
                 "hits": [
-                    _hit(card, "semantic", score, root, include_body, context, compress_level)
+                    _hit(
+                        card,
+                        "semantic",
+                        score,
+                        root,
+                        include_body,
+                        context,
+                        compress_level,
+                    )
                     for card, score in picked[:top_k]
                 ],
             }
