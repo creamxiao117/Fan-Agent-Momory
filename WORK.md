@@ -98,6 +98,7 @@
 
 - **真实语料回归门禁**：`scripts/vector_bench.py` 新增 `--real ROOT` + `--fail-below` 模式——对真实中枢（AgentMemoryHub）跑 6 条聚焦关键事实的回归查询（REAL_QUERIES 已对齐真实卡名），输出词袋/向量/融合命中率；融合命中率低于阈值返回退出码 3（门禁未过）。`top_k=3` 实测 83% 通过（词袋 6/6、融合 5/6）。
 - **巡检告警闭环**：`engine.py build-vectors` 增加向量通道检测——有卡建库但零向量（模型/网络退化）返回退出码 2 并打印【告警】；`engine.py lint` 有孤儿/陈旧/无效卡返回退出码 2。每日巡检 Schedule（35e02dc8）相应升级：必查退出码，向量退化/健康异常/回归门禁未过均须写 retro/log.md 告警记录并向用户高亮（不允许静默忽略）。
+- **三环经验汇总**：新增方法论卡 `retrieval-quality-three-loop`（C1 模型选型→C2 规模压测→C3 告警闭环）聚合三条经验，作为新平台接入检索质量交付的模板（ingest 入权威区 + 登 INDEX + build 入向量库）。
 - **验收**：新增 3 项测试（build-vectors 正常/退化、lint 异常），全量 137 通过，ruff 全绿。
 
 ## 下一步候选
