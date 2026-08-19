@@ -6,6 +6,7 @@ from pathlib import Path
 
 from common.frontmatter import Card, today_iso, try_read_card, write_card
 
+from tools.compress import compress_card_text
 from tools.mcp_audit import append_query_log, audit_id
 from tools.mcp_policy import (
     AUTHORITY_DIRS,
@@ -45,6 +46,7 @@ def _hit(
     root: Path,
     include_body: bool,
     query: str = "",
+    compress_level: int = 0,
 ) -> dict:
     rel = card.path.relative_to(root).as_posix()
     h = {
@@ -60,7 +62,10 @@ def _hit(
     if score is not None:
         h["score"] = round(score, 4)
     if include_body:
-        h["body"] = card.body
+        # 可选渐进压缩：>0 时返回压缩后的正文（前端/注入按用途取级），0=原文
+        h["body"] = (
+            compress_card_text(card.body, int(compress_level)) if compress_level > 0 else card.body
+        )
     return h
 
 
@@ -72,6 +77,7 @@ def hub_search(
     n: int = 2,
     types: list[str] | None = None,
     include_body: bool = False,
+    compress_level: int = 0,
     platform: str = "unknown",
 ) -> dict:
     top_k = max(1, min(20, int(top_k)))
@@ -81,7 +87,7 @@ def hub_search(
     for card, score in scored:
         if allow is not None and card.type not in allow:
             continue
-        hits.append(_hit(card, channel, score, root, include_body, query))
+        hits.append(_hit(card, channel, score, root, include_body, query, compress_level))
     aid = audit_id()
     append_query_log(
         root,
@@ -198,6 +204,7 @@ def hub_bootstrap(
     platform: str = "unknown",
     top_k: int = 3,
     include_body: bool = False,
+    compress_level: int = 0,
 ) -> dict:
     kinds = TASK_KIND_TYPES.get(task_kind)
     if kinds is None:
@@ -212,7 +219,7 @@ def hub_bootstrap(
             {
                 "kind": sub,
                 "hits": [
-                    _hit(card, "semantic", score, root, include_body, context)
+                    _hit(card, "semantic", score, root, include_body, context, compress_level)
                     for card, score in picked[:top_k]
                 ],
             }

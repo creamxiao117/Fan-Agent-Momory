@@ -136,6 +136,8 @@
 10. 性能/召回回归门禁并入巡检（2026-08-19，**已落地，即建议 3**）：召回门禁此前已在每日巡检（步骤 6 vector_bench --real --fail-below 0.8）；本次补**性能门禁**——`vector_scale_bench.py` 新增 `--single N` 单点模式 + `--fail-above MS` 门禁（专退出码 4），纳入每日巡检 Schedule 步骤 7（`--single 5000 --fail-above 300`）。新增 `test_vector_scale_bench.py` 4 项（单点放行/门禁失败/无门禁/全曲线不干扰）。缺口盘点：原建议预期"性能/召回回归"实为召回已在其、性能乃缺口。
 11. 单卡 push 反哺工作流正式化（2026-08-19，**已落地，即建议 4**）：`sync --push --name` 此前已有（commit 1177a54）；本次补齐 **not-found guard**——`platform_bridge.push` 在 `name_filter` 无匹配权威卡时返回 `status:"not-found: <卡名>"`（engine 据此退出码 1），避免传错卡名静默 0 添加误以为已同步。新增 `test_platform_bridge.py` 2 项（not-found 报错 / name 命中只推目标卡）。全量 156 通过，ruff 绿。
 12. blueprint 蓝图体系 + 两仓内化（2026-08-19，**本会话已落地**，见 R8）。后续候选：横向铺开内化下一仓（用户给 URL）；或把 skill-governance-blueprint 的 invocation 双轨/A 下'shutdown'产物逐步在本 hub 试用。
+13. 路径 C 接线 + 分级注入（2026-08-19，**本会话已落地，即任务1+2**）：MCP 层 `SEARCH_SCHEMA`/`BOOTSTRAP_SCHEMA` 声明 `compress_level` + `hub_bootstrap` handler 补齐透传（此前仅 hub_search 函数支持但 schema 未暴露=协议层够不到）；`inject.py` 指令补「命中正文按用途分级取用（路由 5 级/审计 0 级）」。补测 3 项，全量 174 通过、ruff 绿。后续未做项：单卡压缩 LRU（收益低，评估砍）。
+14. 薄卡体检（2026-08-19，**本会话已落地**）：因 A-lite 对单仓 83 卡是过度工程（成熟度单峰 active、语言合规易误告警），仅取「体量」一维轻量化落地。新增 `scripts/thin_card_scan.py`（只读扫权威区 frontmatter 后正文 < `--min-chars` 默认 80 字的薄卡，体量升序清单，`--json`/`-o`，**不自动改卡、刻意不并入 lint** 防误告警噪音，复用 `tools.lint._all_cards` 遍历）。真机命中 25 张（多为指针/清单型短卡）。新增 `test_thin_card_scan.py` 4 项，全量 178 通过、ruff 绿。
 
 ## 阻塞项
 

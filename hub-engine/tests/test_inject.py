@@ -43,3 +43,15 @@ def test_inject_new_instruction_mentions_bootstrap(tmp_path):
     assert "hub_bootstrap" in text
     assert "hub_ingest_candidate" in text
     assert "引用+摘要" in text
+
+
+def test_inject_new_instruction_mentions_compress_level(tmp_path):
+    """任务2：模板注入时应含 compress_level 分级取用说明，且幂等重跑不重复"""
+    target = tmp_path / "AGENTS.md"
+    target.write_text("", encoding="utf-8")
+    inject_instruction(target)
+    inject_instruction(target)
+    text = target.read_text(encoding="utf-8")
+    assert "compress_level" in text
+    assert "分级取用" in text
+    assert text.count("compress_level") == 1  # 幂等：不重复

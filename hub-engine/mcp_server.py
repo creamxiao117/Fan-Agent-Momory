@@ -35,6 +35,7 @@ SEARCH_SCHEMA = {
         "n": {"type": "integer"},
         "types": {"type": "array", "items": {"type": "string"}},
         "include_body": {"type": "boolean"},
+        "compress_level": {"type": "integer"},
         "platform": {"type": "string"},
     },
     "required": ["query"],
@@ -63,6 +64,7 @@ BOOTSTRAP_SCHEMA = {
         "platform": {"type": "string"},
         "top_k": {"type": "integer"},
         "include_body": {"type": "boolean"},
+        "compress_level": {"type": "integer"},
     },
     "required": ["task_kind"],
 }
