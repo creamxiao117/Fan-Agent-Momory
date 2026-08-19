@@ -143,3 +143,50 @@ def test_retrieve_still_returns_cards(tmp_path):
     hits = retrieve(root, "DLL 被锁怎么办")
     assert all(isinstance(c, object) for c in hits)
     assert len(hits) >= 1
+
+
+def _index_cache_state(root):
+    """返回 (本进程索引缓存里该 root 的命中数)：间接观测缓存是否建立"""
+    from tools import retrieve as _r
+
+    cached = _r._INDEX_CACHE.get(str(root.resolve()))
+    if cached is None:
+        return (None, None)
+    sig, idx = cached
+    return (len(sig), len(idx.cards))
+
+
+def test_first_layer_cache_built_and_reused(tmp_path):
+    """第一层缓存：同一 root 第二次检索不重建索引（直接复用目录签名）"""
+    root = bootstrap(tmp_path)
+    _seed(root)
+    assert _index_cache_state(root) == (None, None)
+    retrieve(root, "DLL 被锁怎么办")
+    hits_after_first = _index_cache_state(root)
+    assert hits_after_first[0] is not None and hits_after_first[0] > 0
+    # 第二次直接命中缓存（签名一致 → 不重建）
+    retrieve(root, "文件被占用打不开")
+    assert _index_cache_state(root) == hits_after_first
+
+
+def test_first_layer_index_invalidates_on_card_change(tmp_path):
+    """第一层缓存失效：卡片内容(mtime/size)变更后重建索引，检索反映新内容"""
+    from tools import retrieve as _r
+
+    root = bootstrap(tmp_path)
+    _seed(root)
+    assert retrieve(root, "DLL 被锁怎么办")  # 建立缓存
+    before = _index_cache_state(root)
+    assert before[0] is not None
+    # 新增一张含独特 tag 的卡 → 签名变化 → 下次检索重建
+    (root / "experience" / "newbie.md").write_text(
+        "---\ntype: exp\ntags: [zebra-finance]\nupdated: 2026-08-17\nstatus: active\nreuse_count: 0\n---\n量化回测要注意过拟合。\n",
+        encoding="utf-8",
+    )
+    hits = deterministic_retrieve(root, "zebra-finance")
+    assert any(h.path.name == "newbie.md" for h in hits)
+    after = _index_cache_state(root)
+    # 重建后索引签名增加 1 项（新增 1 文件），新卡进入索引
+    assert after[0] == before[0] + 1
+    _r._clear_index_for(root)
+    assert _index_cache_state(root) == (None, None)
