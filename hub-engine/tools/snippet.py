@@ -16,11 +16,7 @@ def _query_words(query: str, mode: str = "word") -> list[str]:
     """分词并过滤弱词（单字符 + 英文功能词），无有效词返回空 → 触发回退。"""
     if not query.strip():
         return []
-    return [
-        w
-        for w in tokenize(query, mode=mode)
-        if len(w) >= 2 and w not in _EN_STOP
-    ]
+    return [w for w in tokenize(query, mode=mode) if len(w) >= 2 and w not in _EN_STOP]
 
 
 def extract_snippet(body: str, query: str, limit: int = _DEFAULT_LIMIT) -> str:

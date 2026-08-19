@@ -15,15 +15,15 @@ import threading
 from collections.abc import Callable
 from pathlib import Path
 
-EMBED_MODEL = os.environ.get(
-    "AGENT_MD_EMBED_MODEL", "BAAI/bge-small-zh-v1.5"
-)
+EMBED_MODEL = os.environ.get("AGENT_MD_EMBED_MODEL", "BAAI/bge-small-zh-v1.5")
 _LOCK = threading.Lock()
 _model = None
 _tok = None
 
 # 可注入的 embed 实现（测试用 monkeypatch 替换；生产为 _embed_text）
-embed: Callable[[str], list[float] | None] = None  # 类型标注，实际赋值见 set_embed_backend
+embed: Callable[[str], list[float] | None] = (
+    None  # 类型标注，实际赋值见 set_embed_backend
+)
 
 
 def _load_backend():
@@ -177,7 +177,9 @@ def build(root: Path) -> dict:
         conn.close()
 
 
-def vector_scores(root: Path, query_vec: list[float], top_k: int = 5) -> list[tuple[str, float]]:
+def vector_scores(
+    root: Path, query_vec: list[float], top_k: int = 5
+) -> list[tuple[str, float]]:
     """query 向量与库内每卡向量点积（余弦，均为 L2 归一化）→ [(path, score)] 降序。
 
     库不存在或空 → 返回 []。

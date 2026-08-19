@@ -227,9 +227,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     p.set_defaults(func=_cmd_retrieve)
 
-    p = sub.add_parser(
-        "build-vectors", help="增量补写第二层语义向量库 .sync/vector.db"
-    )
+    p = sub.add_parser("build-vectors", help="增量补写第二层语义向量库 .sync/vector.db")
     p.add_argument("--root", required=True)
     p.set_defaults(func=_cmd_build_vectors)
 
