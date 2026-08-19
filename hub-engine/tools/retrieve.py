@@ -4,6 +4,11 @@
 - 惰性扫描一次 active 卡，构建 type/tag 倒排索引（确定性通道 O(命中)）
 - token counts 按 (path, mtime, size, mode, n) 缓存，jieba 分词只在卡片变更时重算
 - 目录签名做失效校验：卡片增删改后自动重建索引，行为/顺序与逐次全扫完全一致
+
+第二层向量融合（2026-08-18）：语义通道上叠加稠密向量召回（bge-small-zh + SQLite）
+- `semantic_vector_retrieve`：读 .sync/vector.db 做向量余弦召回（只读，不触发 build）
+- `_fused_semantic`：始终并行——词袋 + 向量两通道同时打分，RRF 融合取 top_k
+- 退化：向量后端未装/未建库 → 通道返回空 → 融合等价单通道，0 行为回归
 """
 
 from collections import Counter
@@ -22,6 +27,22 @@ _ACTIVE_DIRS = (
     "libs",
     "retro",
 )
+
+# 第二层向量融合（方案 A：bge-small-zh + SQLite）
+_RRF_K = 60  # RRF rank 常数：rank 分 = 1/(k+rank)，k 越大末位影响越小
+_VEC_POOL = 20  # 融合前每个通道的召回池大小（>top_k，给次要通道上榜机会）
+
+# 英文功能词（停用词）：word 分支 `w in t` 子串匹配会因 "to/for/how" 等
+# 命中几乎所有含 tool/token 等 tag，这里过滤掉避免英文查询过度命中全库
+_EN_STOP = {
+    "a", "an", "i", "is", "am", "are", "was", "were", "be", "been",
+    "the", "to", "of", "for", "and", "or", "but", "in", "on", "at",
+    "it", "its", "this", "that", "these", "those", "how", "what", "why",
+    "who", "when", "where", "which", "do", "does", "did", "not",
+    "you", "your", "my", "we", "our", "with", "as", "by", "from",
+    "up", "down", "out", "over", "than", "then", "just", "can", "use",
+    "get", "way", "go", "there",
+}
 
 
 def _card_text(c: Card) -> str:
@@ -125,6 +146,8 @@ def deterministic_retrieve(root: Path, query: str, mode: str = "word") -> list[C
     """
     q = query.lower()
     q_words = tokenize(query, mode="word") if mode == "word" else []
+    # 过滤无意义的英文词（停用词 + 单字符），避免 word 分支 `w in t` 误命中几乎全部 tag
+    q_words = [w for w in q_words if len(w) >= 2 and w not in _EN_STOP]
     idx = _index(root)
     inv = _build_tag_index(idx.cards)
     matched: set[int] = set()
@@ -176,6 +199,60 @@ def semantic_retrieve(
     return [c for c, _ in _semantic_scored(root, query, top_k, n, mode)]
 
 
+def semantic_vector_retrieve(
+    root: Path, query: str, top_k: int = 5
+) -> list[tuple[Card, float]]:
+    """向量通道（第二层）：embed(query) 与库内每卡向量点积(余弦) 召回 top_k [(card, score)]。
+
+    仅做读库，不触发 build（建库由独立 build 流程负责）。
+    后端不可用 / 未建库(.sync/vector.db) → 返回 [] → 融合自动退化，无行为回归。
+    """
+    from tools import semsearch  # 惰性导入，避免与 semsearch 循环引用
+
+    qv = semsearch.embed(query)
+    if qv is None:
+        return []
+    path_to_card = {str(c.path): c for c in _index(root).cards}
+    out = []
+    for p, s in semsearch.vector_scores(root, qv, top_k=top_k):
+        c = path_to_card.get(p)
+        if c is not None:
+            out.append((c, s))
+    return out
+
+
+def _rrf_fuse(
+    word_scored, vec_scored, top_k: int, k: int = _RRF_K
+) -> list[tuple[Card, float]]:
+    """RRF（Reciprocal Rank Fusion）合并两条按位序排序的召回，取前 top_k。
+
+    任意卡片某通道缺失时该通道贡献为 0；score 为两通道 rank 分之和（非余弦原始值）。
+    """
+    ranks_word = {id(c): r for r, (c, _) in enumerate(word_scored, 1)}
+    ranks_vec = {id(c): r for r, (c, _) in enumerate(vec_scored, 1)}
+    card_by_id = {id(c): c for c, _ in [*word_scored, *vec_scored]}
+    summed = {}
+    for cid in ranks_word.keys() | ranks_vec.keys():
+        s = (1.0 / (k + ranks_word[cid])) if cid in ranks_word else 0.0
+        s += (1.0 / (k + ranks_vec[cid])) if cid in ranks_vec else 0.0
+        summed[cid] = s
+    ranked = sorted(summed.items(), key=lambda kv: kv[1], reverse=True)
+    return [(card_by_id[cid], summed[cid]) for cid, _ in ranked[:top_k]]
+
+
+def _fused_semantic(
+    root: Path, query: str, top_k: int = 5, n: int = 2, mode: str = "word"
+) -> list[tuple[Card, float]]:
+    """始终并行：词袋(n-gram) + 向量两个通道同时打分，RRF 融合取 top_k。
+
+    向量后端未装/未建库 → 该通道返回空 → 融合等价单通道，行为与现状一致（0 回归）。
+    """
+    pool = max(top_k * 2, _VEC_POOL)
+    word_scored = _semantic_scored(root, query, top_k=pool, n=n, mode=mode)
+    vec_scored = semantic_vector_retrieve(root, query, top_k=pool)
+    return _rrf_fuse(word_scored, vec_scored, top_k)
+
+
 def retrieve_with_meta(
     root: Path, query: str, top_k: int = 5, n: int = 2, mode: str = "word"
 ) -> tuple[str, list[tuple[Card, float | None]]]:
@@ -188,7 +265,7 @@ def retrieve_with_meta(
     hits = deterministic_retrieve(root, query, mode)
     if hits:
         return "deterministic", [(c, None) for c in hits]
-    return "semantic", _semantic_scored(root, query, top_k, n, mode)
+    return "semantic", _fused_semantic(root, query, top_k, n, mode)
 
 
 def retrieve(

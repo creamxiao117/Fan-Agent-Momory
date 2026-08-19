@@ -65,6 +65,15 @@ def _cmd_retrieve(args) -> int:
     return 0
 
 
+def _cmd_build_vectors(args) -> int:
+    """增量补写中枢 .sync/vector.db（含 embedding 惰性加载模型，首次联网下载权重）"""
+    from tools.semsearch import build
+
+    stats = build(Path(args.root))
+    print(stats)
+    return 0
+
+
 def _cmd_ingest(args) -> int:
     from sync import ingest
 
@@ -215,6 +224,12 @@ def main(argv: list[str] | None = None) -> int:
         help="检索模式：char=字符 n-gram，word=jieba 分词+IDF（默认 word，无 jieba 回退 char）",
     )
     p.set_defaults(func=_cmd_retrieve)
+
+    p = sub.add_parser(
+        "build-vectors", help="增量补写第二层语义向量库 .sync/vector.db"
+    )
+    p.add_argument("--root", required=True)
+    p.set_defaults(func=_cmd_build_vectors)
 
     p = sub.add_parser("ingest", help="导入暂存区")
     p.add_argument("--root", required=True)
