@@ -1,6 +1,6 @@
 # WORK.md（当前状态 · 唯一来源）
 
-更新于：2026-08-19（R7：真实语料回归门禁 + 巡检告警闭环）
+更新于：2026-08-19（R8：blueprint 蓝图体系 + github-star-distill 两个仓库内化）
 
 ## 当前 MVP（已完成）
 
@@ -101,6 +101,18 @@
 - **三环经验汇总**：新增方法论卡 `retrieval-quality-three-loop`（C1 模型选型→C2 规模压测→C3 告警闭环）聚合三条经验，作为新平台接入检索质量交付的模板（ingest 入权威区 + 登 INDEX + build 入向量库）。
 - **验收**：新增 3 项测试（build-vectors 正常/退化、lint 异常），全量 137 通过，ruff 全绿。
 
+## 本轮 R8（blueprint 蓝图体系 + github-star-distill 仓库内化）
+
+- **blueprint 卡型 + ideation 立项检索类落地**（建议 A1+B1，commit e0bb21d）：`VALID_TYPES`/`VALID_STATUS` 增 blueprint/reference；`TYPE_DIR`/`SUBDIR_BY_TYPE`/authority dirs 六处入列 blueprints；ingest 保留蓝图草稿 status 不强制 active；`TASK_KIND_TYPES` 新增 ideation（bootstrap 立项即命中 blueprints 块）；bootstrap_hub 建 blueprints 目录；新测试 6 项全量 162 + ruff 绿。
+- **立项闭环吹净**：`memory-hub-query-first` 规则补 blueprints 目录 + 立项必查蓝图（evidence 分级）；`ideation-github-scan` 改「先查本地蓝图库 → 外部扫描 → 反哺 blueprint」三段；github-star-distill skill 补 blueprint 产物类型 + T1 才转 active。
+- **github-star-distill 跑通两仓**（worktree 分支 worktree/github-star-distill，commit 1669a04）：
+  - 第一仓 gh-duoduoler-ops（Table-GitHub-Capability-Router，判级 A）→ `methodology/gh-cap-router-paradigm`。
+  - 第二仓 gh-mattpocock（mattpocock/skills，222k★，判级 A）→ `blueprints/skill-governance-blueprint`（路径A promoted桶+invocation双轨+路由器+docs路由 / 路径B 双轴并行审查 / 路径C 领域共用语）。
+- **决策指南**：`methodology/dual-axis-review-routing-guide`（双轴审查 × 复杂度路由三判据：改动文件数>2/跨模块/公开行为；判据收敛路由器一处）。
+- **双轴范式 T1 试用**：对 commit e0bb21d(blueprint) 做 Spec×Standards 双轴核对通过、9 测试、ideation 检索精确命中。
+- **env 陷阱**：项目 `.venv` 是缺 transformers/pytest 的最小运行时；build-vectors 的 embed 与 pytest/ruff 须用系统 python（`C:\Users\Fan-SJSS\AppData\Local\hermes\hermes-agent\venv`）；用 .venv 跑会写空向量（embedded 0）须清 vector.db 重建。
+- **验收**：中枢 82 卡 lint 全健康 0 孤儿；向量库全带向量；中枢已推 master（f8d8301→721227c 等）。
+
 ## 下一步候选
 
 1. 源目录 `D:\AIwork\AgentMemoryHub` 清理 —— 已核销（2026-08-18 复核：该目录已不存在，`D:\AIwork` 下无此项，陈旧副本早已随迁移清理）。
@@ -123,6 +135,7 @@
 9. 高频未命中查询补卡闭环（2026-08-19，**已落地，即建议 2**）：新增 `scripts/missing_query.py` 消费 `.sync/state/query.log.jsonl`（hub_search 审计），按归一化查询聚合，识别两类知识缺口并给建议动作（**只读分析+输出清单，不自动造卡**，补卡走 ingest 人工确认）：P0 完全未命中(零命中占比≥0.5)→建议新增卡片；P1 低命中(平均命中<3)→建议补 tag/别名。`--json` 结构化输出、`-o` 写 Markdown。真机跑通：当前审计 9 条，识别 2 条低命中（DLL 锁定 / codex 升级 changelog）。新增 `test_missing_query.py` 6 项，全量 150 通过，ruff 绿。
 10. 性能/召回回归门禁并入巡检（2026-08-19，**已落地，即建议 3**）：召回门禁此前已在每日巡检（步骤 6 vector_bench --real --fail-below 0.8）；本次补**性能门禁**——`vector_scale_bench.py` 新增 `--single N` 单点模式 + `--fail-above MS` 门禁（专退出码 4），纳入每日巡检 Schedule 步骤 7（`--single 5000 --fail-above 300`）。新增 `test_vector_scale_bench.py` 4 项（单点放行/门禁失败/无门禁/全曲线不干扰）。缺口盘点：原建议预期"性能/召回回归"实为召回已在其、性能乃缺口。
 11. 单卡 push 反哺工作流正式化（2026-08-19，**已落地，即建议 4**）：`sync --push --name` 此前已有（commit 1177a54）；本次补齐 **not-found guard**——`platform_bridge.push` 在 `name_filter` 无匹配权威卡时返回 `status:"not-found: <卡名>"`（engine 据此退出码 1），避免传错卡名静默 0 添加误以为已同步。新增 `test_platform_bridge.py` 2 项（not-found 报错 / name 命中只推目标卡）。全量 156 通过，ruff 绿。
+12. blueprint 蓝图体系 + 两仓内化（2026-08-19，**本会话已落地**，见 R8）。后续候选：横向铺开内化下一仓（用户给 URL）；或把 skill-governance-blueprint 的 invocation 双轨/A 下'shutdown'产物逐步在本 hub 试用。
 
 ## 阻塞项
 
