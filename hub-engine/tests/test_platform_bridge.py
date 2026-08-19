@@ -241,6 +241,32 @@ def test_push_only_rules_skips_experience(tmp_path):
     assert "exp-a" not in text
 
 
+def test_push_name_filter_not_found_reports_not_found(tmp_path):
+    """push --name 卡名不存在时返回 not-found 而非静默 0 添加"""
+    root = _root_with_platform(tmp_path, content="## 平台已有小节\n原有内容\n")
+    _hub_card(root, "存在的卡", "正文")
+    stat = push(root, "testplat", name_filter="不存在的卡")
+    assert stat["status"] != "ok"
+    assert "not-found" in stat["status"]
+    assert stat["added"] == 0
+    text = (tmp_path / "platforms" / "memory.md").read_text(encoding="utf-8")
+    assert "不存在的卡" not in text
+
+
+def test_push_name_filter_matches_existing(tmp_path):
+    """push --name 命中现有权威卡才推，其他卡不动"""
+    root = _root_with_platform(tmp_path, content="## 平台已有小节\n原有内容\n")
+    _hub_card(root, "目标卡", "目标卡正文")
+    _hub_card(root, "其他卡", "其他卡正文")
+    stat = push(root, "testplat", name_filter="目标卡")
+    assert stat["status"] == "ok"
+    assert stat["added"] == 1
+    text = (tmp_path / "platforms" / "memory.md").read_text(encoding="utf-8")
+    assert "## 目标卡" in text
+    assert "## 其他卡" not in text
+    assert "目标卡正文" in text
+
+
 # ---------- CLI 接线 ----------
 
 

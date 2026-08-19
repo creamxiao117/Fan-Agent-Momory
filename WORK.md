@@ -121,6 +121,8 @@
 7. 向量存储 JSON→二进制列（2026-08-19，**已落地，即建议 A**）：`semsearch.py` 将 `embedding` 列 `TEXT(json)` 改为 `BLOB(float32 .tobytes())`，读侧 `_decode_vec` 用 `np.frombuffer` 免全表反序列化，兼容旧 JSON 行回退解析。压测 `vector_scale_bench.py` 增 `--format json|bin` 对比：10k 卡 933ms→160ms（≈5.8×），切 ANN 阈值由 ≈3.2k 卡抬升至 **~20k+ 卡**。经验卡 `vector-cosine-scale-benchmark` 已补充二进制实测与新阈值。测试 +2（二进制落列/旧 JSON 兼容），全量 14 通过，ruff 绿。
 8. 查询侧 embedding LRU 缓存（2026-08-19，**已落地，即建议 1**）：`semsearch.py` 新增 `query_embedded`，仅缓存**查询**文本的向量（LRU 128 条，`_LOCK` 保护，超限淘汰最老），build 批量卡片文本走原 `embed` 不污染热点缓存；退化态（embed 返回 None）不缓存、后端恢复自动命中。`retrieve.semantic_vector_retrieve` 改调 `query_embedded`，MCP hub_bootstrap/hub_search 模板查询免重复模型推理。新增 `test_query_cache.py` 5 项（同 query 复用/异 query 独立/LRU 淘汰/退化不缓存/空查询），全量 144 通过，ruff 绿。
 9. 高频未命中查询补卡闭环（2026-08-19，**已落地，即建议 2**）：新增 `scripts/missing_query.py` 消费 `.sync/state/query.log.jsonl`（hub_search 审计），按归一化查询聚合，识别两类知识缺口并给建议动作（**只读分析+输出清单，不自动造卡**，补卡走 ingest 人工确认）：P0 完全未命中(零命中占比≥0.5)→建议新增卡片；P1 低命中(平均命中<3)→建议补 tag/别名。`--json` 结构化输出、`-o` 写 Markdown。真机跑通：当前审计 9 条，识别 2 条低命中（DLL 锁定 / codex 升级 changelog）。新增 `test_missing_query.py` 6 项，全量 150 通过，ruff 绿。
+10. 性能/召回回归门禁并入巡检（2026-08-19，**已落地，即建议 3**）：召回门禁此前已在每日巡检（步骤 6 vector_bench --real --fail-below 0.8）；本次补**性能门禁**——`vector_scale_bench.py` 新增 `--single N` 单点模式 + `--fail-above MS` 门禁（专退出码 4），纳入每日巡检 Schedule 步骤 7（`--single 5000 --fail-above 300`）。新增 `test_vector_scale_bench.py` 4 项（单点放行/门禁失败/无门禁/全曲线不干扰）。缺口盘点：原建议预期"性能/召回回归"实为召回已在其、性能乃缺口。
+11. 单卡 push 反哺工作流正式化（2026-08-19，**已落地，即建议 4**）：`sync --push --name` 此前已有（commit 1177a54）；本次补齐 **not-found guard**——`platform_bridge.push` 在 `name_filter` 无匹配权威卡时返回 `status:"not-found: <卡名>"`（engine 据此退出码 1），避免传错卡名静默 0 添加误以为已同步。新增 `test_platform_bridge.py` 2 项（not-found 报错 / name 命中只推目标卡）。全量 156 通过，ruff 绿。
 
 ## 阻塞项
 

@@ -317,6 +317,10 @@ def push(
         cards = [c for c in cards if c.path and c.path.parent.name == "rules"]
     if name_filter:
         cards = [c for c in cards if c.path and c.path.stem == name_filter]
+        if not cards:
+            # guard：卡名不存在时报错而非静默 0 添加，避免误以为已同步
+            stat["status"] = f"not-found: 未找到权威卡片 {name_filter}"
+            return stat
 
     pushed_fps = set(state.get("pushed", []))
     blocks: list[str] = []
