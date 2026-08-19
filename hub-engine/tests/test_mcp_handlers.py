@@ -2,11 +2,13 @@ from pathlib import Path
 
 from scripts.bootstrap_hub import bootstrap
 from tools.mcp_handlers import (
+    REUSE_STATE,
     hub_bootstrap,
     hub_get,
     hub_index,
     hub_ingest_candidate,
     hub_search,
+    record_reuse,
 )
 
 
@@ -155,3 +157,78 @@ def test_ingest_candidate_unknown_platform_forbidden(tmp_path):
     root = bootstrap(tmp_path)
     res = hub_ingest_candidate(root, platform="unknown", title="X", body="b")
     assert res["ok"] is False and res["error"] == "platform_forbidden"
+
+
+def _dll(root):
+    return (root / "rules" / "dll-lock.md").read_text(encoding="utf-8")
+
+
+def test_search_tracks_reuse(tmp_path):
+    """hub_search 命中 → 命中卡 reuse_count 元数据 +1（A2）"""
+    root = bootstrap(tmp_path)
+    _seed(root)
+    hub_search(root, "dll-lock", platform="trae")
+    assert "reuse_count: 1" in _dll(root)
+
+
+def test_record_reuse_daily_throttle(tmp_path):
+    """同卡同本地日多次计数只 +1（节流防抖）"""
+    root = bootstrap(tmp_path)
+    _seed(root)
+    rp = "rules/dll-lock.md"
+    assert record_reuse(root, [rp])["counted"] == 1
+    r2 = record_reuse(root, [rp])
+    assert r2["counted"] == 0 and r2["dup_skipped"] == 1
+    assert "reuse_count: 1" in _dll(root)
+
+
+def test_record_reuse_next_day_counts(tmp_path):
+    """跨日（状态记昨天）→ 再次计数 +1"""
+    import json
+
+    root = bootstrap(tmp_path)
+    _seed(root)
+    rp = "rules/dll-lock.md"
+    record_reuse(root, [rp])
+    assert "reuse_count: 1" in _dll(root)
+    # 模拟次日：把节流状态日期改成更早
+    st = json.loads((root / REUSE_STATE).read_text(encoding="utf-8"))
+    st[rp] = "2026-01-01"
+    (root / REUSE_STATE).write_text(json.dumps(st), encoding="utf-8")
+    r = record_reuse(root, [rp])
+    assert r["counted"] == 1
+    assert "reuse_count: 2" in _dll(root)
+
+
+def test_record_reuse_skips_archived_and_missing_field(tmp_path):
+    """归档卡与无 reuse_count 字段卡不计数"""
+    root = bootstrap(tmp_path)
+    (root / "rules" / "old.md").write_text(
+        "---\ntype: rule\ntags: []\nupdated: 2026-08-01\nstatus: archived\nreuse_count: 0\n---\n旧。",
+        encoding="utf-8",
+    )
+    (root / "rules" / "noreuse.md").write_text(
+        "---\ntype: rule\ntags: []\nupdated: 2026-08-01\nstatus: active\n---\n无计数字段。",
+        encoding="utf-8",
+    )
+    r = record_reuse(root, ["rules/old.md", "rules/noreuse.md"])
+    assert r["counted"] == 0 and r["archived_skipped"] == 1
+    assert "reuse_count" not in (root / "rules" / "noreuse.md").read_text(
+        encoding="utf-8"
+    )
+
+
+def test_reuse_bump_minimal_diff(tmp_path):
+    """只改 reuse_count 行，其余字节保持不变（最小 diff）"""
+    root = bootstrap(tmp_path)
+    (root / "rules" / "only.md").write_text(
+        "---\ntype: exp\ntags: [k, v]\nupdated: 2026-08-01\nstatus: active\nreuse_count: 3\n---\n正文 A。",
+        encoding="utf-8",
+    )
+    p = root / "rules" / "only.md"
+    before = p.read_text(encoding="utf-8")
+    assert record_reuse(root, ["rules/only.md"])["counted"] == 1
+    after = p.read_text(encoding="utf-8")
+    assert "reuse_count: 4" in after
+    # 除 reuse_count 行外完全一致
+    assert before.replace("reuse_count: 3", "reuse_count: 4") == after

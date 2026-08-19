@@ -144,7 +144,7 @@
     - **E2 日命中率聚合**（**已落地 2026-08-19，无新增组件**）：扩展 `scripts/metrics_daily.py`——`compute` 新增 `miss_rate` 列；新增 `series()` 按 query.log 已出现日期升序逐日聚 hit_rate/miss_rate 时间序列，CLI 暴露 `--series`（含 `--series --json`）供画命中率曲线。复用 missing_query 解析层，不新增文件。真机两日 hit_rate=1.0 曲线可画。+2 项单测，全量 200 通过、ruff 绿。
     - **E3 真实召回回归门禁**（**已落地 2026-08-19**）：新 `scripts/real_query_regression.py`——从 query.log 抽「高频完全未命中(P0)」查询固化成 canary 固定集 `.sync/state/real_regression.json`（git-ignored，跨日稳定，`--max-age-days` 超龄或 `--refresh` 重建），每日跑 `tools.retrieve.retrieve_with_meta` 融合检索（不写审计）；默认**全未命中即 fail**，`--fail-below X` 可抬阈值，退出码 3 沿用 `patrol-alert-exit-code`；已接入每日巡检 Schedule 步骤 9。真机健康中枢返回 0（无断言样本跳过），端到端冒烟空库全未命中返回 3。12 项单测 + 全量 198 通过、ruff 绿。
     - **A1 未命中→补卡候选每日自动产出**（**已落地 2026-08-20**）：把 `missing_query.py` 从"每周人工跑"接入每日自动触发——新增 `--since-days N` CLI 与 `_local_ts_date`/`aggregate(since=)` 日期窗口过滤，聚焦最近 7 天缺口 `-o AgentMemoryHub\.sync\state\missing_daily.md` 生成候选清单（P0 新增卡 / P1 补 tag）。已接入每日巡检 Schedule 步骤 10（git-ignored 运营数据，**不自动造卡、不发告警**，仅当含 P0 候选时汇报提示人工确认后走 ingest）。真机 `--since-days 7` 产出近期 P1 候选 4 条聚焦正常。+2 项单测（since 过滤 + main 接线），全量 202 通过、ruff 绿。
-    - **A2 命中复用累积**：hub_search 命中回写处给命中卡 `reuse_count += 1`（节流防抖），把"被用到"变成可观测权重，供 E 趋势与 B(回收) 消费。
+    - **A2 命中复用累积**（**已落地 2026-08-20**）：在 `tools/mcp_handlers.py` 新增 `record_reuse`——`hub_search` 命中后对命中卡 frontmatter `reuse_count += 1`（仅改该行，最小 diff，不重排其它字段）；**按日节流**（同卡同本地日只计 1 次，状态落 `.sync/state/reuse_daily.json`，git-ignored）；写入置于单写者锁内、失败静默不影响检索返回；只计非 archived 且含 reuse_count 字段的卡。真机验证命中 dll-lock reuse_count 0→1、二次计数节流 skipped。+5 项单测（search 追踪/日节流/跨日/归档跳过/最小 diff），全量 207 通过、ruff 绿。
     - 验收：metrics.jsonl 有日行且 hit_rate 曲线可画；回归门禁真机有一组未命中样本可拦截；daily Schedule 退出码检查覆盖 E1/E3；reuse_count 真实递增。全量测试按其分别 +2~4 项，ruff 绿。
 
 ## 阻塞项

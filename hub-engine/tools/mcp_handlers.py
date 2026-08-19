@@ -1,5 +1,6 @@
 """MCP 工具处理函数：search/get/index/bootstrap/ingest_candidate（纯函数，便于单测）"""
 
+import json
 import re
 from datetime import datetime, timezone
 from pathlib import Path
@@ -108,6 +109,9 @@ def hub_search(
             "hit_count": len(hits),
         },
     )
+    # A2 命中复用累积：命中卡 reuse_count += 1（按日节流；失败静默，不影响检索返回）
+    if hits:
+        record_reuse(root, [h["rel_path"] for h in hits])
     return {
         "ok": True,
         "query": query,
@@ -115,6 +119,97 @@ def hub_search(
         "hits": hits,
         "audit_id": aid,
     }
+
+
+REUSE_STATE = Path(".sync") / "state" / "reuse_daily.json"
+
+
+def _load_reuse_state(root: Path) -> dict:
+    """读取按日节流状态 {rel_path: YYYY-MM-DD}；缺失/损坏返回空表。"""
+    p = root / REUSE_STATE
+    if not p.exists():
+        return {}
+    try:
+        return json.loads(p.read_text(encoding="utf-8"))
+    except (ValueError, OSError):
+        return {}
+
+
+def _save_reuse_state(root: Path, state: dict) -> None:
+    p = root / REUSE_STATE
+    try:
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(json.dumps(state, ensure_ascii=False, indent=0), encoding="utf-8")
+    except OSError:
+        pass
+
+
+def _bump_reuse(path: Path) -> bool:
+    """只改 frontmatter 的 reuse_count 行 +1，尽量保持其余字节不变（最小 diff）。
+
+    无 frontmatter / 无 reuse_count 行 / 读取失败返回 False（不计次）。
+    """
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError:
+        return False
+    m = re.match(r"(?s)^(---\n.*?)(\n---\n)", text)
+    if not m:
+        return False
+    fm_block = m.group(1)
+
+    def _inc(mo: re.Match) -> str:
+        return f"reuse_count: {int(mo.group(1)) + 1}"
+
+    new_fm, n = re.subn(
+        r"^reuse_count:\s*(\d+)", _inc, fm_block, count=1, flags=re.MULTILINE
+    )
+    if n == 0:
+        return False  # 无 reuse_count 字段则不计数
+    if new_fm == fm_block:
+        return True
+    try:
+        path.write_text(text.replace(fm_block, new_fm, 1), encoding="utf-8")
+    except OSError:
+        return False
+    return True
+
+
+def record_reuse(root: Path, rel_paths: list[str]) -> dict:
+    """A2 命中复用累积：命中卡 reuse_count 元数据 += 1，把"被用到"变为可观测权重。
+
+    - 只对仍存在、非 archived、且 frontmatter 含 reuse_count 字段的卡计数；
+    - 按日节流：同卡同本地日只计 1 次（状态落 .sync/state/reuse_daily.json，git-ignored）；
+    - 写入置于单写者锁内；锁被占用或缺锁时静默跳过，写回失败不影响检索返回。
+    返回 {counted, dup_skipped, archived_skipped}。
+    """
+    today = today_iso()
+    state = _load_reuse_state(root)
+    counted = dup = arc = 0
+    try:
+        from sync import _WriteLock
+    except ImportError:  # pragma: no cover - 极端环境退化为无锁
+        from contextlib import nullcontext as _WriteLock
+    try:
+        with _WriteLock(root):
+            for rp in rel_paths:
+                p = (root / rp).resolve()
+                try:
+                    if "status: archived" in p.read_text(encoding="utf-8"):
+                        arc += 1
+                        continue
+                except OSError:
+                    continue
+                if state.get(rp) == today:  # 节流：同日已计
+                    dup += 1
+                    continue
+                if _bump_reuse(p):
+                    state[rp] = today
+                    counted += 1
+            _save_reuse_state(root, state)
+    except RuntimeError:
+        pass  # 写锁已被占用，静默跳过本次写回
+    return {"counted": counted, "dup_skipped": dup, "archived_skipped": arc}
 
 
 def hub_get(
