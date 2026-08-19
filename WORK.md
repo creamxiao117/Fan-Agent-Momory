@@ -142,7 +142,7 @@
 
     - **E1 指标日行 `metrics.jsonl`**（**已落地 2026-08-19**）：新 `scripts/metrics_daily.py` → `.sync/state/metrics.jsonl` append-only 一行/日（date/total_cards/vector_rows/search_count/hit/miss/hit_rate/reuse_ops），复用 status + query.log 产物；已接入每日巡检 Schedule 步骤 8。真机验证 cards=86/vectors=86/hit_rate=1.0，8 项单测 + 全量 186 通过。metrics.jsonl 为 git-ignored 运营数据不入提交。
     - **E2 日命中率聚合**：从 query.log 按日聚 hit_rate/miss_rate（复用 `missing_query.py` 解析层），无新增组件。
-    - **E3 真实召回回归门禁**：新 `scripts/real_query_regression.py`——从 query.log 抽高频**未命中**固定集，每日对它们跑 hub_search，全未命中即 fail；`--fail-below X` 退出码契约沿用 `patrol-alert-exit-code` 的 2/3 码，纳入巡检 Schedule。
+    - **E3 真实召回回归门禁**（**已落地 2026-08-19**）：新 `scripts/real_query_regression.py`——从 query.log 抽「高频完全未命中(P0)」查询固化成 canary 固定集 `.sync/state/real_regression.json`（git-ignored，跨日稳定，`--max-age-days` 超龄或 `--refresh` 重建），每日跑 `tools.retrieve.retrieve_with_meta` 融合检索（不写审计）；默认**全未命中即 fail**，`--fail-below X` 可抬阈值，退出码 3 沿用 `patrol-alert-exit-code`；已接入每日巡检 Schedule 步骤 9。真机健康中枢返回 0（无断言样本跳过），端到端冒烟空库全未命中返回 3。12 项单测 + 全量 198 通过、ruff 绿。
     - **A1 未命中→补卡候选每日自动产出**：把 `missing_query.py` 从"每周人工跑"接入每日自动触发，输出候选清单文件，人工确认后 ingest（保持不自动造卡）。
     - **A2 命中复用累积**：hub_search 命中回写处给命中卡 `reuse_count += 1`（节流防抖），把"被用到"变成可观测权重，供 E 趋势与 B(回收) 消费。
     - 验收：metrics.jsonl 有日行且 hit_rate 曲线可画；回归门禁真机有一组未命中样本可拦截；daily Schedule 退出码检查覆盖 E1/E3；reuse_count 真实递增。全量测试按其分别 +2~4 项，ruff 绿。
