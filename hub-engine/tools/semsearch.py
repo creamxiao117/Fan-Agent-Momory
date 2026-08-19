@@ -1,11 +1,14 @@
-"""向量语义检索层（方案 A：bge-small-zh + SQLite JSON 向量）。
+"""向量语义检索层（方案 A：bge-small-zh + SQLite 二进制向量列）。
 
 - 持久化：中枢根 `.sync/vector.db`，表 `docs`（path / mtime / size / title / tags / type / body / embedding）
+- 向量编码：`embedding` 存 numpy float32 `.tobytes()` 二进制（读时 `.frombuffer`），
+  替代旧 JSON 文本——免每次全表 json.loads 反序列化，显著降低检索耗时。
+- 兼容：旧数据若为 JSON 文本（历史行）读侧自动识别回退解析，构建时统一落二进制。
 - 增量：按 (mtime, size) 签名复用已有向量，仅新/变更卡重新 embedding
 - 退化：embed 后端（transformers）不可用时返回 None，检索方回退词袋，不报错
 - 可插拔：`AGENT_MD_EMBED_MODEL` 环境变量换模型（默认 BAAI/bge-small-zh-v1.5）
 
-依赖标准库 sqlite3；transformers/torch 为可选运行时（仅 embedding 需要）。
+依赖标准库 sqlite3 + numpy；transformers/torch 为可选运行时（仅 embedding 需要）。
 """
 
 import json
@@ -90,7 +93,7 @@ def _ensure_schema(conn: sqlite3.Connection) -> None:
             tags TEXT,
             type TEXT,
             body TEXT,
-            embedding TEXT
+            embedding BLOB
         )"""
     )
     conn.execute("CREATE INDEX IF NOT EXISTS idx_docs_path ON docs(path)")
@@ -140,8 +143,8 @@ def build(root: Path) -> dict:
                 vec = embed(text)  # type: ignore[misc]
             except Exception:  # noqa: BLE001 - embed 后端异常则存空向量，不中断构建
                 vec = None
-            emb_str = json.dumps(vec, ensure_ascii=False) if vec else None
-            if emb_str:
+            emb = _encode_vec(vec)  # 二进制 float32；None 表示无向量（退化）
+            if emb:
                 stats["embedded"] += 1
 
             if old is not None:
@@ -161,7 +164,7 @@ def build(root: Path) -> dict:
                     ",".join(card.tags),
                     card.type,
                     card.body,
-                    emb_str,
+                    emb,  # bytes(二进制) 或 None
                 ),
             )
 
@@ -197,10 +200,9 @@ def vector_scores(
     if not rows:
         return []
     scored = []
-    for path_, emb_str in rows:
-        try:
-            vec = json.loads(emb_str)
-        except (json.JSONDecodeError, TypeError):
+    for path_, blob in rows:
+        vec = _decode_vec(blob)
+        if vec is None:
             continue
         scored.append((path_, _dot(query_vec, vec)))
     scored.sort(key=lambda x: x[1], reverse=True)
@@ -209,3 +211,36 @@ def vector_scores(
 
 def _dot(a: list[float], b: list[float]) -> float:
     return sum(x * y for x, y in zip(a, b))
+
+
+# ---- 向量二进制编码：float32 .tobytes() 替代 JSON 文本，免每次全表反序列化 ----
+def _encode_vec(vec: list[float] | None) -> bytes | None:
+    """list[float] → float32 二进制 bytes；非向量返回 None。"""
+    if not vec:
+        return None
+    import numpy as np
+
+    try:
+        return np.asarray(vec, dtype=np.float32).tobytes()
+    except Exception:  # noqa: BLE001 - 编码异常视为退化，不强转 float32
+        return None
+
+
+def _decode_vec(blob: object) -> list[float] | None:
+    """embedding 列 → list[float]。兼容旧 JSON 文本行与新二进制（float32）行。"""
+    if blob is None:
+        return None
+    if isinstance(blob, bytes):
+        import numpy as np
+
+        try:
+            arr = np.frombuffer(blob, dtype=np.float32)
+            return arr.tolist()
+        except Exception:  # noqa: BLE001 - 罕见损坏则忽略该行
+            return None
+    if isinstance(blob, str):  # 旧 JSON 文本行（历史数据）回退解析
+        try:
+            return json.loads(blob)
+        except (json.JSONDecodeError, TypeError):
+            return None
+    return None

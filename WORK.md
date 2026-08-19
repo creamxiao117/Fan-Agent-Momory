@@ -118,6 +118,7 @@
    | HARD(5) | base | 4 | 3 | 4 |
 
    结论：同一评测集下 small ≥ base（HARD 向量 4vs3、easy 向量 12vs11）。base 体积/内存约 small 的 3 倍且更慢，本项目向量仅作词袋之上的语义辅助通道，**维持 bge-small-zh-v1.5，不切换**。
+7. 向量存储 JSON→二进制列（2026-08-19，**已落地，即建议 A**）：`semsearch.py` 将 `embedding` 列 `TEXT(json)` 改为 `BLOB(float32 .tobytes())`，读侧 `_decode_vec` 用 `np.frombuffer` 免全表反序列化，兼容旧 JSON 行回退解析。压测 `vector_scale_bench.py` 增 `--format json|bin` 对比：10k 卡 933ms→160ms（≈5.8×），切 ANN 阈值由 ≈3.2k 卡抬升至 **~20k+ 卡**。经验卡 `vector-cosine-scale-benchmark` 已补充二进制实测与新阈值。测试 +2（二进制落列/旧 JSON 兼容），全量 14 通过，ruff 绿。
 
 ## 阻塞项
 

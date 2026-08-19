@@ -158,6 +158,47 @@ def test_db_path_is_under_sync(tmp_path):
     assert str(db_path(root)).replace("\\", "/").endswith(".sync/vector.db")
 
 
+def test_embedding_column_is_binary(tmp_path):
+    """build 后向量列落二进制 bytes（float32 .tobytes），而非 JSON 文本"""
+    root = bootstrap(tmp_path)
+    _seed(root)
+    _fake_embed()
+    build(root)
+    db = db_path(root)
+    import sqlite3
+
+    conn = sqlite3.connect(db)
+    try:
+        rows = conn.execute(
+            "SELECT path, embedding FROM docs WHERE embedding IS NOT NULL"
+        ).fetchall()
+    finally:
+        conn.close()
+    # 全部行向量应为 bytes（二进制），且长度=8*4=32（假 embed 维度 8 float32）
+    assert rows, "应至少有一行向量"
+    for _, emb in rows:
+        assert isinstance(emb, bytes), f"向量应为 bytes，实际 {type(emb)}"
+        assert len(emb) == 32  # 8 维 × float32(4B)
+
+
+def test_decode_vec_compat_with_old_json(tmp_path):
+    """读侧兼容旧 JSON 文本行：_decode_vec 对字符串 JSON 回退解析"""
+    from tools.semsearch import _decode_vec
+
+    old_json = "[0.1, -0.2, 0.3]"
+    assert _decode_vec(old_json) == [0.1, -0.2, 0.3]
+    # 非向量/损坏输入 → None
+    assert _decode_vec(None) is None
+    assert _decode_vec("not-json") is None
+    # 二进制 → float32 还原
+    import numpy as np
+
+    arr = np.asarray([0.1, -0.2, 0.3], dtype=np.float32)
+    got = _decode_vec(arr.tobytes())
+    assert got is not None and abs(got[0] - 0.1) < 1e-6
+    assert len(got) == 3
+
+
 def test_rrf_fuse_surfaces_vector_only_card(tmp_path):
     """RRF 融合：两通道共现卡 rank 分更高；仅向量通道召回的卡也能上榜"""
     root = bootstrap(tmp_path)
