@@ -77,6 +77,41 @@ def set_embed_backend(fn: Callable[[str], list[float] | None] | None) -> None:
 # 默认使用真实后端
 set_embed_backend(_embed_text)
 
+# ---- 查询侧 embedding LRU 缓存（建议 1：相似/模板查询免重复模型推理）----
+# 仅缓存「查询」文本，不缓存 build 的批量卡片文本——避免全库卡片填满热点缓存。
+# 退化态（embed 返回 None）不缓存，后端恢复后即自动命中，不残留脏结果。
+_QUERY_CACHE_LIMIT = 128
+_query_cache: dict[str, list[float]] = {}
+
+
+def query_embedded(query: str) -> list[float] | None:
+    """query → 向量，带 LRU 缓存（热点模板查询如 MCP hub_bootstrap 免重复推理）。
+
+    命中/写入均在 _LOCK 保护下；LRU 超限淘汰最早插入项（dict 迭代序即插入序）。
+    """
+    if not query:
+        return None
+    with _LOCK:
+        cached = _query_cache.pop(query, None)  # 命中即移除，随后重插以刷新「最近使用」
+        if cached is not None:
+            _query_cache[query] = cached  # 刷到队尾
+            return cached
+    vec = embed(query)  # type: ignore[misc]
+    if vec is None:
+        return None
+    with _LOCK:
+        _query_cache.pop(query, None)
+        _query_cache[query] = vec
+        if len(_query_cache) > _QUERY_CACHE_LIMIT:
+            _query_cache.pop(next(iter(_query_cache)))  # 淘汰最老（队首）
+    return vec
+
+
+def clear_query_cache() -> None:
+    """清空查询缓存（仅供测试/主动刷新热点）"""
+    with _LOCK:
+        _query_cache.clear()
+
 
 def db_path(root: Path) -> Path:
     return Path(root) / ".sync" / "vector.db"

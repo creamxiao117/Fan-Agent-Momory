@@ -261,7 +261,7 @@ def semantic_vector_retrieve(
     """
     from tools import semsearch  # 惰性导入，避免与 semsearch 循环引用
 
-    qv = semsearch.embed(query)
+    qv = semsearch.query_embedded(query)
     if qv is None:
         return []
     path_to_card = {str(c.path): c for c in _index(root).cards}
