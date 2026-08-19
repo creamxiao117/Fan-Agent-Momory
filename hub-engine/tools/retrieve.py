@@ -98,6 +98,29 @@ _EN_STOP = {
 }
 
 
+# 反触发罚分（内化自 paulpas/agent-skill-router 路径B）：query 命中卡片声明的
+# anti_trigger 词条时，扣其语义分，防通用/大面卡片抢占特定任务查询（复用 _EN_STOP 粒度）。
+_ANTI_PENALTY = 0.15  # 每命中一条扣分
+_ANTI_CAP = 0.5  # 单卡累计扣分封顶
+
+
+def _anti_triggers(card: Card) -> set[str]:
+    """读取卡片 frontmatter 的 anti_trigger（list / 逗号|空格 / 连字符分隔），归一为小写词集。
+
+    anti_trigger 表示「该卡不适用/禁止命中的语义场景」，配合负路由边界做语义侧降权。
+    """
+    raw = card.extra.get("anti_trigger")
+    if not raw:
+        return set()
+    atoms = raw if isinstance(raw, list) else str(raw).replace(",", " ").replace("|", " ").split()
+    out: set[str] = set()
+    for a in atoms:
+        for t in tokenize(str(a), mode="word"):
+            if len(t) >= 2 and t not in _EN_STOP:
+                out.add(t)
+    return out
+
+
 def _card_text(c: Card) -> str:
     return c.body + " " + " ".join(c.tags)
 
@@ -232,6 +255,12 @@ def _semantic_scored(
     texts = [_card_text(c) for c in idx.cards]
     idf = build_idf(texts, n=n, mode=mode) if mode == "word" else None
     qv = vector(query, n=n, mode=mode, idf=idf)
+    # 反触发：word 模式下取查询词集，供逐卡判是否命中其 anti_trigger（降权）
+    q_tokens = (
+        {t for t in tokenize(query, mode="word") if len(t) >= 2 and t not in _EN_STOP}
+        if mode == "word"
+        else set()
+    )
     scored = []
     for c in idx.cards:
         cv = idx.counts(c, mode, n)
@@ -240,7 +269,12 @@ def _semantic_scored(
             cv = Counter({tok: cnt * idf.get(tok, 1.0) for tok, cnt in cv.items()})
         sim = cosine(qv, cv)
         if sim > 0:
-            scored.append((sim, c))
+            if q_tokens:
+                hits = sum(1 for at in _anti_triggers(c) if at in q_tokens)
+                if hits:
+                    sim -= min(hits * _ANTI_PENALTY, _ANTI_CAP)
+            if sim > 0:
+                scored.append((sim, c))
     scored.sort(key=lambda x: x[0], reverse=True)
     return [(c, sim) for sim, c in scored[:top_k]]
 

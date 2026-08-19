@@ -3,6 +3,7 @@ from pathlib import Path
 import pytest
 from scripts.bootstrap_hub import bootstrap
 from tools.retrieve import (
+    _anti_triggers,
     deterministic_retrieve,
     retrieve,
     retrieve_with_meta,
@@ -190,3 +191,39 @@ def test_first_layer_index_invalidates_on_card_change(tmp_path):
     assert after[0] == before[0] + 1
     _r._clear_index_for(root)
     assert _index_cache_state(root) == (None, None)
+
+
+@skip_no_jieba
+def test_anti_triggers_parse_forms():
+    """反触发词解析：list / 逗号|空格 / 连字符 三形态归一为小写词集，过滤停用词"""
+    from common.frontmatter import Card
+
+    as_list = Card(extra={"anti_trigger": ["安装", "部署", "install"]})
+    assert _anti_triggers(as_list) == {"安装", "部署", "install"}
+    as_str = Card(extra={"anti_trigger": "安装, 部署 | install deploy"})
+    assert _anti_triggers(as_str) == {"安装", "部署", "install", "deploy"}
+    assert _anti_triggers(Card()) == set()
+
+
+@skip_no_jieba
+def test_anti_trigger_penalizes_semantic_score(tmp_path):
+    """核心机制：query 命中卡声明 anti_trigger 词时，其语义分被扣（-0.15/条，封顶-0.5）
+
+    用内容完全一致的「对照组」隔离变量：仅一张卡多声明 anti_trigger，
+    其余同体同 tag → 基线语义分相等，命中罚分让该卡显著低于对照。
+    """
+    from tools.retrieve import _semantic_scored
+
+    root = bootstrap(tmp_path)
+    body = (
+        "---\ntype: blueprint\ntags: [skill-governance]\n"
+        "updated: 2026-08-17\nstatus: active\nreuse_count: 0\n"
+        "%s---\n通用技能治理原则，覆盖安装部署、日志、配置等全面场景。\n"
+    )
+    (root / "blueprints" / "sem.md").write_text(body % "anti_trigger: [安装, 部署]\n", encoding="utf-8")
+    (root / "blueprints" / "ctl.md").write_text(body % "", encoding="utf-8")
+    q = "通用技能治理 安装 部署 原则"
+    scored = {c.path.name: s for c, s in _semantic_scored(root, q, top_k=20, mode="word")}
+    assert scored["ctl.md"] > 0  # 对照组有分
+    # 命中 2 条 anti_trigger(安装/部署) → 扣 min(2*0.15, 0.5)=0.3，应显著低于对照
+    assert scored["sem.md"] <= scored["ctl.md"] - 0.2
