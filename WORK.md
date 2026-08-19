@@ -1,6 +1,6 @@
 # WORK.md（当前状态 · 唯一来源）
 
-更新于：2026-08-19（R6g：snippet 片段节选 + 巡检接入向量库）
+更新于：2026-08-19（R7：真实语料回归门禁 + 巡检告警闭环）
 
 ## 当前 MVP（已完成）
 
@@ -94,6 +94,12 @@
 - **snippet 片段节选**：新增 `tools/snippet.py` 的 `extract_snippet(body, query)`，抽取正文中与查询词重叠最多的行(+上下文)作为命中片段，替代旧「卡片前 200 字」；接入 MCP `_hit.excerpt` 与 CLI `_cmd_retrieve`，不动检索核与 MCP schema（对齐 md-GuanLi「命中返回相关段落」）。新增 `test_snippet.py` 5 项，全量 134 通过。
 - **巡检接入 build-vectors**：每日巡检 Schedule（35e02dc8）第 3 步新增 `engine.py build-vectors --root AgentMemoryHub`，当日新增/变更卡自动补写 `.sync/vector.db`（幂等增量，未变卡跳过 embedding；无模型/无网自动退化，不影响快照）。
 
+## 本轮 R7（真实语料回归门禁 + 巡检告警闭环）
+
+- **真实语料回归门禁**：`scripts/vector_bench.py` 新增 `--real ROOT` + `--fail-below` 模式——对真实中枢（AgentMemoryHub）跑 6 条聚焦关键事实的回归查询（REAL_QUERIES 已对齐真实卡名），输出词袋/向量/融合命中率；融合命中率低于阈值返回退出码 3（门禁未过）。`top_k=3` 实测 83% 通过（词袋 6/6、融合 5/6）。
+- **巡检告警闭环**：`engine.py build-vectors` 增加向量通道检测——有卡建库但零向量（模型/网络退化）返回退出码 2 并打印【告警】；`engine.py lint` 有孤儿/陈旧/无效卡返回退出码 2。每日巡检 Schedule（35e02dc8）相应升级：必查退出码，向量退化/健康异常/回归门禁未过均须写 retro/log.md 告警记录并向用户高亮（不允许静默忽略）。
+- **验收**：新增 3 项测试（build-vectors 正常/退化、lint 异常），全量 137 通过，ruff 全绿。
+
 ## 下一步候选
 
 1. 源目录 `D:\AIwork\AgentMemoryHub` 清理 —— 已核销（2026-08-18 复核：该目录已不存在，`D:\AIwork` 下无此项，陈旧副本早已随迁移清理）。
@@ -125,3 +131,4 @@
 - `python hub-engine/engine.py sync --root AgentMemoryHub --platform all --dry-run`（平台记忆同步预览）
 - `.venv\Scripts\python.exe work\bench_recall.py`（char vs word 召回率对比评测）
 - `python hub-engine\scripts\vector_scale_bench.py --sizes 100 1000 5000 10000`（向量全表余弦耗时 vs 卡数曲线，定切 ANN 阈值）
+- `python hub-engine\scripts\vector_bench.py --real AgentMemoryHub --fail-below 0.8`（真实语料回归门禁：融合命中率低于 0.8 退出码非零，供巡检监控）
