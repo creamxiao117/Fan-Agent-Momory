@@ -134,6 +134,30 @@ def _channels(root: Path, query: str, top_k: int) -> tuple[set, set, set]:
     return bag, vec, fus
 
 
+# 真实中枢回归查询集：(查询, 期望命中文件名)。名称必须匹配 AgentMemoryHub 真实存在的卡，
+# 语料随时间增长，用于回归门禁：返回融合命中率作为健康信号（而非精确断言）。
+REAL_QUERIES = [
+    ("如何避免 AutoCAD 锁住 DLL", "dll-version-lock.md"),
+    ("github 账号是什么", "github-account.md"),
+    ("omniroute 网关怎么配置", "omniroute-gateway.md"),
+    ("CAD 批量出图转 PDF", "cad2020-pdf-merge.md"),
+    ("代理守卫会冲掉 IE 代理覆盖", "proxy-guard-ie-override.md"),
+    ("查询结论怎么回写成经验卡", "query-writeback-dll.md"),
+]
+
+
+def _run_real(root: Path, top_k: int, fail_below: float | None) -> int:
+    """真实中枢回归：对 ROOT 跑各通道命中率；fail_below 设置则低于即返回非零(门禁)。"""
+    eh, ed = _score(root, [(q, w) for q, w in REAL_QUERIES], top_k)
+    _print_group(f"real top_k={top_k}", len(REAL_QUERIES), eh, ed)
+    hit_ratio = eh["fus"] / max(len(REAL_QUERIES), 1)
+    print(f"fusion hit ratio: {hit_ratio:.0%}")
+    if fail_below is not None and hit_ratio < fail_below:
+        print(f"【门禁失败】融合命中率 {hit_ratio:.0%} < 阈值 {fail_below:.0%}")
+        return 3  # 专用退出码：回归门禁未通过
+    return 0
+
+
 def _score(root: Path, queries: list[tuple[str, str]], top_k: int) -> tuple[dict, list]:
     """统计一组查询的三通道命中数；返回 (计数, 逐查询明细[(want, bag, vec, fus, mark)])。"""
     detail = []
@@ -167,7 +191,20 @@ def main() -> int:
         "--no-rebuild", action="store_true",
         help="复用已有向量库（默认：指定模型首次即删库全量重建，保证模型隔离）",
     )
+    ap.add_argument(
+        "--real", metavar="ROOT", default=None,
+        help="真实中枢回归门禁模式：对 ROOT(如 AgentMemoryHub) 跑 REAL_QUERIES，输出融合命中率",
+    )
+    ap.add_argument(
+        "--fail-below", type=float, default=None,
+        help="与 --real 联用：融合命中率低于该值则退出码非零(默认 0.0，即不设门禁)",
+    )
     args = ap.parse_args()
+
+    # ---------- 真实中枢回归门禁：不建语料、不重建向量库，直接对现库回归 ----------
+    if args.real:
+        os.environ["AGENT_MD_EMBED_MODEL"] = args.model  # 向量检索读现库，仍需模型参数一致
+        return _run_real(Path(args.real), top_k=3, fail_below=args.fail_below)
 
     os.environ["AGENT_MD_EMBED_MODEL"] = args.model  # 须在 import semsearch 前设好
     from tools.semsearch import (  # 模块级 EMBED_MODEL 在 .import 时快照，故设 env 之后再导

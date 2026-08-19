@@ -68,11 +68,19 @@ def _cmd_retrieve(args) -> int:
 
 
 def _cmd_build_vectors(args) -> int:
-    """增量补写中枢 .sync/vector.db（含 embedding 惰性加载模型，首次联网下载权重）"""
+    """增量补写中枢 .sync/vector.db（含 embedding 惰性加载模型，首次联网下载权重）。
+    向量通道检测：有卡被建库但零向量 → 模型/网络退化，返回非零触发巡检告警。"""
     from tools.semsearch import build
 
     stats = build(Path(args.root))
     print(stats)
+    touched = stats["inserted"] + stats["updated"] + stats["reused"]
+    if touched > 0 and stats["embedded"] + stats["reused"] == 0:
+        print(
+            "【告警】向量通道退化：有卡片处理但零向量（embed 后端/模型/网络不可用），"
+            "语义检索已回退词袋，请检查 bge 模型与网络。"
+        )
+        return 2  # 专用退出码：向量构建未产出任何向量
     return 0
 
 
@@ -109,6 +117,7 @@ def _cmd_tidy(args) -> int:
 
 
 def _cmd_lint(args) -> int:
+    """健康检查：孤儿/陈旧/无效页。任一非 0 返回非零，供巡检告警闭环捕获异常。"""
     from tools.lint import lint
 
     report = lint(Path(args.root))
@@ -116,6 +125,11 @@ def _cmd_lint(args) -> int:
     print("陈旧页:", report["stale"])
     print("无效卡片:", report["invalid"])
     print("备注:", report["notes"])
+    unhealthy = len(report["orphans"]) + len(report["stale"]) + report["invalid"]
+    if unhealthy:
+        print(f"【告警】发现 {unhealthy} 处健康问题：orphans {len(report['orphans'])} / "
+              f"stale {len(report['stale'])} / invalid {report['invalid']}")
+        return 2  # 专用退出码：健康检查异常
     return 0
 
 
