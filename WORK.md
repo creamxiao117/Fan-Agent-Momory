@@ -140,7 +140,7 @@
 14. 薄卡体检（2026-08-19，**本会话已落地**）：因 A-lite 对单仓 83 卡是过度工程（成熟度单峰 active、语言合规易误告警），仅取「体量」一维轻量化落地。新增 `scripts/thin_card_scan.py`（只读扫权威区 frontmatter 后正文 < `--min-chars` 默认 80 字的薄卡，体量升序清单，`--json`/`-o`，**不自动改卡、刻意不并入 lint** 防误告警噪音，复用 `tools.lint._all_cards` 遍历）。真机命中 25 张（多为指针/清单型短卡）。新增 `test_thin_card_scan.py` 4 项，全量 178 通过、ruff 绿。
 15. 自驱成长飞轮最小环 A+E 立项（2026-08-19，蓝图 `blueprints/self-growth-flywheel-blueprint` 已固化；**本候选=立项拆分，未落地**）。依据第一性/奥卡姆：A(复用路径反哺)+E(可验证信号度量) 是飞轮发动机，先行；B/C/D 是维护站、按需再开。拆分（奥卡姆收敛为 5 任务）：
 
-    - **E1 指标日行 `metrics.jsonl`**：新 `.sync/state/metrics.jsonl` append-only 一行/日（date/total_cards/vector_rows/search_count/hit/miss/hit_rate/reuse_ops），复用 status + query.log 产物，纳入每日巡检 append。
+    - **E1 指标日行 `metrics.jsonl`**（**已落地 2026-08-19**）：新 `scripts/metrics_daily.py` → `.sync/state/metrics.jsonl` append-only 一行/日（date/total_cards/vector_rows/search_count/hit/miss/hit_rate/reuse_ops），复用 status + query.log 产物；已接入每日巡检 Schedule 步骤 8。真机验证 cards=86/vectors=86/hit_rate=1.0，8 项单测 + 全量 186 通过。metrics.jsonl 为 git-ignored 运营数据不入提交。
     - **E2 日命中率聚合**：从 query.log 按日聚 hit_rate/miss_rate（复用 `missing_query.py` 解析层），无新增组件。
     - **E3 真实召回回归门禁**：新 `scripts/real_query_regression.py`——从 query.log 抽高频**未命中**固定集，每日对它们跑 hub_search，全未命中即 fail；`--fail-below X` 退出码契约沿用 `patrol-alert-exit-code` 的 2/3 码，纳入巡检 Schedule。
     - **A1 未命中→补卡候选每日自动产出**：把 `missing_query.py` 从"每周人工跑"接入每日自动触发，输出候选清单文件，人工确认后 ingest（保持不自动造卡）。
