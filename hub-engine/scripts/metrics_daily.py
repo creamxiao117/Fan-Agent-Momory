@@ -1,4 +1,4 @@
-"""E1 指标日行：把中枢成长度量落成时间序列（飞轮 E 环·可验证信号）。
+"""E1/E2 指标日行 + 日命中率聚合（飞轮 E 环·可验证信号）。
 
 产出 `.sync/state/metrics.jsonl`——append-only，一行/日，字段：
   - date          本地日期（YYYY-MM-DD）
@@ -8,14 +8,18 @@
   - hit           当日命中查询数（hit_count>0）
   - miss          当日未命中查询数（hit_count==0）
   - hit_rate      命中率 hit/search_count（无查询记 null）
+  - miss_rate     未命中率 miss/search_count（无查询记 null）
   - reuse_ops     当日复用操作数（query.log action==reuse 计数，A2 落地后填充）
 
 只读聚合 + 追加写 metrics.jsonl，不修改 query.log / 卡片。纳入每日巡检 append。
+E2：`--series` 把 query.log 按日聚全量 hit_rate/miss_rate 时间序列（复用 missing_query 解析层；无新增组件）。
 
 用法：
   python hub-engine/scripts/metrics_daily.py --root AgentMemoryHub            # 本地今天，追加一行
   python hub-engine/scripts/metrics_daily.py --root AgentMemoryHub --date 2026-08-19
   python hub-engine/scripts/metrics_daily.py --root AgentMemoryHub --json     # 只输出本次行，不落盘
+  python hub-engine/scripts/metrics_daily.py --root AgentMemoryHub --series   # E2：全量日命中率曲线
+  python hub-engine/scripts/metrics_daily.py --root AgentMemoryHub --series --json
 """
 
 import argparse
@@ -118,6 +122,7 @@ def compute(root: Path, when: date | None = None) -> dict:
             reuse_ops += 1
 
     hit_rate = round(hit / search_count, 4) if search_count else None
+    miss_rate = round(miss / search_count, 4) if search_count else None
     return {
         "date": when.isoformat(),
         "total_cards": _total_cards(root),
@@ -126,8 +131,15 @@ def compute(root: Path, when: date | None = None) -> dict:
         "hit": hit,
         "miss": miss,
         "hit_rate": hit_rate,
+        "miss_rate": miss_rate,
         "reuse_ops": reuse_ops,
     }
+
+
+def series(root: Path) -> list[dict]:
+    """E2 日命中率聚合：按 query.log 已出现日期升序，逐日聚 hit_rate/miss_rate 时间序列。"""
+    seen = sorted({_local_date_of(r.get("ts")) for r in load_records(root)})
+    return [compute(root, d) for d in seen]
 
 
 def append(root: Path, row: dict) -> None:
@@ -147,9 +159,26 @@ def main(argv: list[str] | None = None) -> int:
     )
     ap.add_argument("--json", action="store_true", help="只输出本次行，不落盘")
     ap.add_argument("--no-append", action="store_true", help="聚合但不写 metrics.jsonl")
+    ap.add_argument(
+        "--series", action="store_true", help="E2：输出全量日命中率时间序列（只读）"
+    )
     args = ap.parse_args(argv)
 
     root = Path(args.root)
+
+    if args.series:
+        rows = series(root)
+        if args.json:
+            print(json.dumps(rows, ensure_ascii=False, indent=2))
+        else:
+            print("date | search | hit | miss | hit_rate | miss_rate | reuse")
+            for r in rows:
+                print(
+                    f"{r['date']} | {r['search_count']} | {r['hit']} | {r['miss']} "
+                    f"| {r['hit_rate']} | {r['miss_rate']} | {r['reuse_ops']}"
+                )
+        return 0
+
     when = date.fromisoformat(args.date) if args.date else _today_local()
     row = compute(root, when)
 

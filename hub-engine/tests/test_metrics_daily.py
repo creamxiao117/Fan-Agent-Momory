@@ -1,14 +1,21 @@
-"""E1 指标日行脚本（metrics_daily）单测。
+"""E1/E2 指标日行脚本（metrics_daily）单测。
 
-覆盖：当日 search/hit/miss/hit_rate 聚合 / reuse 计数 / 跨日过滤 / 无查询 hit_rate=null /
-卡片数与向量行数探测 / append 落盘 / 无日志目录容忍。
+覆盖：当日 search/hit/miss/hit_rate/miss_rate 聚合 / reuse 计数 / 跨日过滤 / 无查询 hit_rate=null /
+卡片数与向量行数探测 / append 落盘 / 无日志目录容忍 / E2 series 时间序列聚合与升序。
 """
 
 import json
 import sqlite3
 from datetime import date
 
-from scripts.metrics_daily import LOG, _total_cards, _vector_rows, append, compute
+from scripts.metrics_daily import (
+    LOG,
+    _total_cards,
+    _vector_rows,
+    append,
+    compute,
+    series,
+)
 
 
 def _write_log(root, records):
@@ -76,6 +83,35 @@ def test_hit_miss_hit_rate_aggregation(tmp_path):
     assert row["hit"] == 2
     assert row["miss"] == 1
     assert row["hit_rate"] == round(2 / 3, 4)
+    assert row["miss_rate"] == round(1 / 3, 4)
+
+
+def test_miss_rate_null_without_search(tmp_path):
+    row = compute(tmp_path, date(2026, 8, 19))
+    assert row["miss_rate"] is None
+    assert row["hit_rate"] is None
+
+
+def test_series_agg_by_day_ascending(tmp_path):
+    _write_log(
+        tmp_path,
+        [
+            _search("2026-08-18T01:00:00Z", 5),
+            _search("2026-08-18T02:00:00Z", 0),
+            _search("2026-08-19T01:00:00Z", 0),
+            _search("2026-08-19T02:10:00Z", 2),
+        ],
+    )
+    rows = series(tmp_path)
+    assert [r["date"] for r in rows] == ["2026-08-18", "2026-08-19"]  # 升序
+    d18, d19 = rows
+    assert d18["search_count"] == 2
+    assert d18["hit"] == 1
+    assert d18["miss"] == 1
+    assert d18["hit_rate"] == round(1 / 2, 4)
+    assert d18["miss_rate"] == round(1 / 2, 4)
+    assert d19["hit"] == 1
+    assert d19["miss"] == 1
 
 
 def test_cross_date_filter_and_reuse(tmp_path):

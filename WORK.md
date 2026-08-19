@@ -141,7 +141,7 @@
 15. 自驱成长飞轮最小环 A+E 立项（2026-08-19，蓝图 `blueprints/self-growth-flywheel-blueprint` 已固化；**本候选=立项拆分，未落地**）。依据第一性/奥卡姆：A(复用路径反哺)+E(可验证信号度量) 是飞轮发动机，先行；B/C/D 是维护站、按需再开。拆分（奥卡姆收敛为 5 任务）：
 
     - **E1 指标日行 `metrics.jsonl`**（**已落地 2026-08-19**）：新 `scripts/metrics_daily.py` → `.sync/state/metrics.jsonl` append-only 一行/日（date/total_cards/vector_rows/search_count/hit/miss/hit_rate/reuse_ops），复用 status + query.log 产物；已接入每日巡检 Schedule 步骤 8。真机验证 cards=86/vectors=86/hit_rate=1.0，8 项单测 + 全量 186 通过。metrics.jsonl 为 git-ignored 运营数据不入提交。
-    - **E2 日命中率聚合**：从 query.log 按日聚 hit_rate/miss_rate（复用 `missing_query.py` 解析层），无新增组件。
+    - **E2 日命中率聚合**（**已落地 2026-08-19，无新增组件**）：扩展 `scripts/metrics_daily.py`——`compute` 新增 `miss_rate` 列；新增 `series()` 按 query.log 已出现日期升序逐日聚 hit_rate/miss_rate 时间序列，CLI 暴露 `--series`（含 `--series --json`）供画命中率曲线。复用 missing_query 解析层，不新增文件。真机两日 hit_rate=1.0 曲线可画。+2 项单测，全量 200 通过、ruff 绿。
     - **E3 真实召回回归门禁**（**已落地 2026-08-19**）：新 `scripts/real_query_regression.py`——从 query.log 抽「高频完全未命中(P0)」查询固化成 canary 固定集 `.sync/state/real_regression.json`（git-ignored，跨日稳定，`--max-age-days` 超龄或 `--refresh` 重建），每日跑 `tools.retrieve.retrieve_with_meta` 融合检索（不写审计）；默认**全未命中即 fail**，`--fail-below X` 可抬阈值，退出码 3 沿用 `patrol-alert-exit-code`；已接入每日巡检 Schedule 步骤 9。真机健康中枢返回 0（无断言样本跳过），端到端冒烟空库全未命中返回 3。12 项单测 + 全量 198 通过、ruff 绿。
     - **A1 未命中→补卡候选每日自动产出**：把 `missing_query.py` 从"每周人工跑"接入每日自动触发，输出候选清单文件，人工确认后 ingest（保持不自动造卡）。
     - **A2 命中复用累积**：hub_search 命中回写处给命中卡 `reuse_count += 1`（节流防抖），把"被用到"变成可观测权重，供 E 趋势与 B(回收) 消费。
