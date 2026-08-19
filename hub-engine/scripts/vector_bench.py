@@ -36,9 +36,7 @@ def _card(type_: str, tags: list[str], body: str) -> str:
     return (
         "---\n"
         f"type: {type_}\n"
-        "tags:\n"
-        + "".join(f"- {t}\n" for t in tags)
-        + "updated: '2026-08-19'\n"
+        "tags:\n" + "".join(f"- {t}\n" for t in tags) + "updated: '2026-08-19'\n"
         "status: active\n"
         "reuse_count: 0\n"
         "---\n\n"
@@ -49,43 +47,53 @@ def _card(type_: str, tags: list[str], body: str) -> str:
 # 评测语料：(相对路径, type, tags, 正文)。中英文主题混合，覆盖规则/经验/长期/项目。
 CARDS = {
     "rules/dll-version-lock.md": _card(
-        "rule", ["autocad", "dll-lock"],
+        "rule",
+        ["autocad", "dll-lock"],
         "教训：修改 DLL 后必须递增版本号，绝不能原地覆盖同名文件，避免发布后被 AutoCAD 锁文件。",
     ),
     "experience/query-writeback.md": _card(
-        "exp", ["writeback", "dll"],
+        "exp",
+        ["writeback", "dll"],
         "查询结论要回写成经验卡片：从查询到命中的复盘沉淀为可复用经验。防止重踩。",
     ),
     "longterm/github-account.md": _card(
-        "lt", ["github", "account"],
+        "lt",
+        ["github", "account"],
         "GitHub 账号 creamxiao117；MCP github 已配 gh CLI token。",
     ),
     "experience/feishu-webhook-setup.md": _card(
-        "exp", ["feishu", "webhook"],
+        "exp",
+        ["feishu", "webhook"],
         "飞书机器人 webhook 配置加签校验、消息幂等发送，防止重复推送。",
     ),
     "experience/obsidian-daily-template.md": _card(
-        "exp", ["obsidian", "template"],
+        "exp",
+        ["obsidian", "template"],
         "Obsidian 日记模板：YAML 属性、每日打卡清单、习惯追踪区块。",
     ),
     "rules/docker-image-tag.md": _card(
-        "rule", ["docker", "tag"],
+        "rule",
+        ["docker", "tag"],
         "Docker 镜像 tag 用语义化版本号而非 latest，按 dev/prod 环境区分。",
     ),
     "rules/python-style.md": _card(
-        "rule", ["python", "ruff"],
+        "rule",
+        ["python", "ruff"],
         "Python 代码规范：Ruff lint、导入按序、注释中文、行宽不过长。",
     ),
     "experience/omniroute-gateway.md": _card(
-        "exp", ["omniroute", "gateway", "llm"],
+        "exp",
+        ["omniroute", "gateway", "llm"],
         "omniroute 网关聚合免费模型：OpenAI 兼容 API，默认 qwen2.5:7b、超时 30s、地址 127.0.0.1:11434。",
     ),
     "experience/pytest-venv.md": _card(
-        "exp", ["pytest", "venv"],
+        "exp",
+        ["pytest", "venv"],
         "跑测试用系统 Python 而非项目 .venv：venv 缺 pytest/yaml/jieba 时报 No module。",
     ),
     "projects/cad2020-pdf-merge.md": _card(
-        "proj", ["cad", "pdf", "batch"],
+        "proj",
+        ["cad", "pdf", "batch"],
         "CAD 批量出图转 PDF：先查目标 pdf 是否 15B 空壳（合并失败），总图 A/B 区分，批量脚本输出。",
     ),
 }
@@ -110,7 +118,10 @@ QUERIES = [
 # 用于区分 small vs base 的语义能力差异（easy 组词袋已饱和无法区分）。
 HARD = [
     ("换了 dll 拖进目录就被会议软件进程把持住了", "dll-version-lock.md"),
-    ("the shipped plugin binary is stuck because a drawing app still holds it", "dll-version-lock.md"),
+    (
+        "the shipped plugin binary is stuck because a drawing app still holds it",
+        "dll-version-lock.md",
+    ),
     ("一次性把几十张施工图批量导出成一个总的 pdf 再归档", "cad2020-pdf-merge.md"),
     ("remember which account is tied to my code hosting login", "github-account.md"),
     ("对话里问出来的东西要怎么沉淀下来下次复用", "query-writeback.md"),
@@ -174,36 +185,49 @@ def _score(root: Path, queries: list[tuple[str, str]], top_k: int) -> tuple[dict
         if want in fus:
             hits["fus"] += 1
             marks.append("F")
-        detail.append((want, want in bag, want in vec, want in fus, "".join(marks) or "-"))
+        detail.append(
+            (want, want in bag, want in vec, want in fus, "".join(marks) or "-")
+        )
     return hits, detail
 
 
 def _print_group(label: str, n: int, hits: dict, detail: list) -> None:
-    print(f"\n-- {label}（{n} 条）--  词袋 {hits['bag']}/{n}   向量 {hits['vec']}/{n}   融合 {hits['fus']}/{n}")
+    print(
+        f"\n-- {label}（{n} 条）--  词袋 {hits['bag']}/{n}   向量 {hits['vec']}/{n}   融合 {hits['fus']}/{n}"
+    )
     for name, b, v, f, m in detail:
         print(f"  [{m:<3}] {name}")
 
 
 def main() -> int:
     ap = argparse.ArgumentParser(description="检索三通道命中率基准")
-    ap.add_argument("--model", default=DEFAULT_MODEL, help="HF 模型 id，默认 bge-small-zh-v1.5")
     ap.add_argument(
-        "--no-rebuild", action="store_true",
+        "--model", default=DEFAULT_MODEL, help="HF 模型 id，默认 bge-small-zh-v1.5"
+    )
+    ap.add_argument(
+        "--no-rebuild",
+        action="store_true",
         help="复用已有向量库（默认：指定模型首次即删库全量重建，保证模型隔离）",
     )
     ap.add_argument(
-        "--real", metavar="ROOT", default=None,
+        "--real",
+        metavar="ROOT",
+        default=None,
         help="真实中枢回归门禁模式：对 ROOT(如 AgentMemoryHub) 跑 REAL_QUERIES，输出融合命中率",
     )
     ap.add_argument(
-        "--fail-below", type=float, default=None,
+        "--fail-below",
+        type=float,
+        default=None,
         help="与 --real 联用：融合命中率低于该值则退出码非零(默认 0.0，即不设门禁)",
     )
     args = ap.parse_args()
 
     # ---------- 真实中枢回归门禁：不建语料、不重建向量库，直接对现库回归 ----------
     if args.real:
-        os.environ["AGENT_MD_EMBED_MODEL"] = args.model  # 向量检索读现库，仍需模型参数一致
+        os.environ["AGENT_MD_EMBED_MODEL"] = (
+            args.model
+        )  # 向量检索读现库，仍需模型参数一致
         return _run_real(Path(args.real), top_k=3, fail_below=args.fail_below)
 
     os.environ["AGENT_MD_EMBED_MODEL"] = args.model  # 须在 import semsearch 前设好
@@ -219,10 +243,14 @@ def main() -> int:
         db.unlink()  # 模型隔离：删库强制全量重建为该模型的向量
     stats = build(BENCH)
 
-    print(f"模型: {args.model}\n语料 {len(CARDS)} 卡 / 查询 {len(QUERIES)}+{len(HARD)} 条")
+    print(
+        f"模型: {args.model}\n语料 {len(CARDS)} 卡 / 查询 {len(QUERIES)}+{len(HARD)} 条"
+    )
     print(f"vector build: {stats}")
     if stats["embedded"] + stats["reused"] == 0:
-        print("警告：无卡片生成向量（模型不可用/无网/退化），以下向量与融合命中受空库影响。")
+        print(
+            "警告：无卡片生成向量（模型不可用/无网/退化），以下向量与融合命中受空库影响。"
+        )
 
     top_k = 1
     eh, _ = _score(BENCH, QUERIES, top_k)

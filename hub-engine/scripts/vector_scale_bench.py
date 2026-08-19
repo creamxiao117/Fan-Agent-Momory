@@ -90,7 +90,9 @@ def main() -> int:
         qv = _rng()
 
         print(f"维度={DIM}  top_k={args.top_k}  repeat={args.repeat}（取中位 ms）")
-        print(f"{'条数'.rjust(8)}  {'平均耗时(ms)'.rjust(12)}  {'每条均摊(us)'.rjust(12)}")
+        print(
+            f"{'条数'.rjust(8)}  {'平均耗时(ms)'.rjust(12)}  {'每条均摊(us)'.rjust(12)}"
+        )
         prev = None
         for n in args.sizes:
             _fill(conn, n)

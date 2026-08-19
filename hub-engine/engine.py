@@ -127,8 +127,10 @@ def _cmd_lint(args) -> int:
     print("备注:", report["notes"])
     unhealthy = len(report["orphans"]) + len(report["stale"]) + report["invalid"]
     if unhealthy:
-        print(f"【告警】发现 {unhealthy} 处健康问题：orphans {len(report['orphans'])} / "
-              f"stale {len(report['stale'])} / invalid {report['invalid']}")
+        print(
+            f"【告警】发现 {unhealthy} 处健康问题：orphans {len(report['orphans'])} / "
+            f"stale {len(report['stale'])} / invalid {report['invalid']}"
+        )
         return 2  # 专用退出码：健康检查异常
     return 0
 

@@ -106,7 +106,7 @@
 1. 源目录 `D:\AIwork\AgentMemoryHub` 清理 —— 已核销（2026-08-18 复核：该目录已不存在，`D:\AIwork` 下无此项，陈旧副本早已随迁移清理）。
 2. 冲突区 10 张已全部处置清零（2026-08-18：7 删除 + 3 合并权威卡）。
 3. Push 默认开启策略已评估（2026-08-18）：**维持默认关闭**。实证：0 个 pushed 状态、MCP 未暴露 push；理由：Pull 低风险沉淀 / Push 高风险写平台原生文件、价值被 MCP hub_search 覆盖、默认开启致外部改动频繁 abort + 无基线首次放行存在隐性污染窗口。保留显式 `--push` + `--dry-run` 受控反哺。
-4. 向量规模拐点压测（2026-08-19 固化自 experience/bge-small-zh-sqlite-vector-search，**待办**）：测中枢卡数增长 vs 全表余弦耗时，据此定「何时切 FAISS/ANN」阈值（经验卡结论：全表余弦不值上万卡、数千卡之上才引 ANN）。
+4. 向量规模拐点压测（2026-08-19 固化自 experience/bge-small-zh-sqlite-vector-search，**已核销**）：新增 `hub-engine/scripts/vector_scale_bench.py`（隔离库灌假向量测全表余弦耗时）。实证呈完美线性 ~93μs/卡：1k 即时(93ms)/5k≈468ms/10k≈933ms。**切 ANN 阈值 ≈3.2k 卡（>300ms）**；现状中枢仅几十卡、<100ms，**无需提前引 FAISS**。经验卡 `vector-cosine-scale-benchmark` 已 ingestion 入区并登记 INDEX。
 5. 稠密检索模型选型定版（2026-08-19，**已核销，维持 bge-small-zh-v1.5**）：以候选 6 同一评测集实证对比（见下），small 全面不劣于 base，无增益，**不切换**。经验卡 `local-dense-retrieval-model-selection` 的「默认 base」决策规则已过时，以本实证为准。
 6. 检索评测基准定版入库（2026-08-19，**已落地**）：新增正式基准 `hub-engine/scripts/vector_bench.py`，中英文语料 10 卡 + 评测集 12 easy + 5 HARD（同义改写/跨语言，专测语义通道），三通道命中率统计，`--model` 可换模型、按 model 删库隔离向量。已纳入每周复核 Schedule（44e1e8ef）。实测（top_k=1，easy 组词袋+jieba 已饱和故由 HARD 组区分模型）：
 
@@ -118,7 +118,6 @@
    | HARD(5) | base | 4 | 3 | 4 |
 
    结论：同一评测集下 small ≥ base（HARD 向量 4vs3、easy 向量 12vs11）。base 体积/内存约 small 的 3 倍且更慢，本项目向量仅作词袋之上的语义辅助通道，**维持 bge-small-zh-v1.5，不切换**。
-4. 向量规模拐点压测（2026-08-19 固化自 experience/bge-small-zh-sqlite-vector-search，**已核销**）：新增 `hub-engine/scripts/vector_scale_bench.py`（隔离库灌假向量测全表余弦耗时）。实证呈完美线性 ~93μs/卡：1k 即时(93ms)/5k≈468ms/10k≈933ms。**切 ANN 阈值 ≈3.2k 卡（>300ms）**；现状中枢仅几十卡、<100ms，**无需提前引 FAISS**。经验卡 `vector-cosine-scale-benchmark` 已 ingestion 入区并登记 INDEX。
 
 ## 阻塞项
 
