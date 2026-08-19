@@ -186,7 +186,13 @@ def _cmd_sync(args) -> int:
     for name in platforms:
         try:
             stat = (
-                push(root, name, only_rules=args.only_rules, dry_run=args.dry_run)
+                push(
+                    root,
+                    name,
+                    only_rules=args.only_rules,
+                    name_filter=args.name,
+                    dry_run=args.dry_run,
+                )
                 if args.push
                 else pull(root, name, dry_run=args.dry_run)
             )
@@ -269,6 +275,9 @@ def main(argv: list[str] | None = None) -> int:
     )
     p.add_argument(
         "--only-rules", action="store_true", help="Push 时仅同步 rules/ 卡片"
+    )
+    p.add_argument(
+        "--name", default=None, help="Push 时仅同步指定卡名（卡文件名不含 .md）"
     )
     p.add_argument(
         "--dry-run", action="store_true", help="预览：只打印统计，不落盘、不写锁"

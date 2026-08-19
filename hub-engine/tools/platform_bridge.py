@@ -279,7 +279,11 @@ def _insert_after_instruction(text: str, extra: str) -> str:
 
 
 def push(
-    root: Path, platform: str, only_rules: bool = False, dry_run: bool = False
+    root: Path,
+    platform: str,
+    only_rules: bool = False,
+    name_filter: str | None = None,
+    dry_run: bool = False,
 ) -> dict:
     """中枢权威卡片 → 平台记忆文件（默认关闭）；外部改动检测到即中止，绝不覆盖本地旧版"""
     root = Path(root)
@@ -311,6 +315,8 @@ def push(
     cards = _authority_cards(root)
     if only_rules:
         cards = [c for c in cards if c.path and c.path.parent.name == "rules"]
+    if name_filter:
+        cards = [c for c in cards if c.path and c.path.stem == name_filter]
 
     pushed_fps = set(state.get("pushed", []))
     blocks: list[str] = []
