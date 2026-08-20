@@ -146,6 +146,7 @@
     - **A1 未命中→补卡候选每日自动产出**（**已落地 2026-08-20**）：把 `missing_query.py` 从"每周人工跑"接入每日自动触发——新增 `--since-days N` CLI 与 `_local_ts_date`/`aggregate(since=)` 日期窗口过滤，聚焦最近 7 天缺口 `-o AgentMemoryHub\.sync\state\missing_daily.md` 生成候选清单（P0 新增卡 / P1 补 tag）。已接入每日巡检 Schedule 步骤 10（git-ignored 运营数据，**不自动造卡、不发告警**，仅当含 P0 候选时汇报提示人工确认后走 ingest）。真机 `--since-days 7` 产出近期 P1 候选 4 条聚焦正常。+2 项单测（since 过滤 + main 接线），全量 202 通过、ruff 绿。
     - **A2 命中复用累积**（**已落地 2026-08-20**）：在 `tools/mcp_handlers.py` 新增 `record_reuse`——`hub_search` 命中后对命中卡 frontmatter `reuse_count += 1`（仅改该行，最小 diff，不重排其它字段）；**按日节流**（同卡同本地日只计 1 次，状态落 `.sync/state/reuse_daily.json`，git-ignored）；写入置于单写者锁内、失败静默不影响检索返回；只计非 archived 且含 reuse_count 字段的卡。真机验证命中 dll-lock reuse_count 0→1、二次计数节流 skipped。+5 项单测（search 追踪/日节流/跨日/归档跳过/最小 diff），全量 207 通过、ruff 绿。
     - 验收：metrics.jsonl 有日行且 hit_rate 曲线可画；回归门禁真机有一组未命中样本可拦截；daily Schedule 退出码检查覆盖 E1/E3；reuse_count 真实递增。全量测试按其分别 +2~4 项，ruff 绿。
+16. 夜间离线自进化引擎（SkillOpt-Sleep 纪律落地，**本会话已落地**，见 R9 蓝图 skillopt-blueprint）：判级 A 隔离克隆内化 microsoft/SkillOpt，方法沉淀为 `blueprints/skillopt-blueprint`（reference，未装依赖）。T2 映射中枢现有底座，实现原生 `scripts/hub_sleep_consolidate.py`——**零外发、零自动改卡**，收割(复用 missing_query.aggregate)→挖掘(P0新卡/P1补tag)→有界候选(--max-candidates 类比编辑预算)→held-out 验证(复用 retrieve_with_meta 标注当前命中)→暂存(.sync/state/sleep/<日期>/proposal.{md,json}，git-ignored，绝不写权威区)→人工采纳(review 后 ingest)。已接入每日巡检 Schedule 步骤 11；真机产出近期 P1 候选 4 条可见。+6 项单测，全量 213 通过、ruff 绿。
 
 ## 阻塞项
 
