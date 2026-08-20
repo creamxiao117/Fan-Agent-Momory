@@ -126,7 +126,12 @@ def _cmd_lint(args) -> int:
     print("陈旧页:", report["stale"])
     print("无效卡片:", report["invalid"])
     print("备注:", report["notes"])
-    unhealthy = len(report["orphans"]) + len(report["ghosts"]) + len(report["stale"]) + report["invalid"]
+    unhealthy = (
+        len(report["orphans"])
+        + len(report["ghosts"])
+        + len(report["stale"])
+        + report["invalid"]
+    )
     if unhealthy:
         print(
             f"【告警】发现 {unhealthy} 处健康问题：orphans {len(report['orphans'])} / "
@@ -190,7 +195,11 @@ def _cmd_status(args) -> int:
             + (f" → {data['pending_first']}" if data["pending_first"] else "")
         )
         print(f"最近提交: {last}")
-    return 0 if report["invalid"] == 0 and not report["orphans"] and not report["ghosts"] else 1
+    return (
+        0
+        if report["invalid"] == 0 and not report["orphans"] and not report["ghosts"]
+        else 1
+    )
 
 
 def _cmd_sync(args) -> int:

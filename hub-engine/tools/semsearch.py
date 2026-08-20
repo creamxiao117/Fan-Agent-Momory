@@ -164,7 +164,9 @@ _META_MODEL = "embed_model"
 def _stored_dim(conn: sqlite3.Connection) -> int | None:
     """从 db_meta 读已存向量维度；无 meta（含旧库无 db_meta 表）则从现有一行向量探测。"""
     try:
-        row = conn.execute("SELECT value FROM db_meta WHERE key=?", (_META_DIM,)).fetchone()
+        row = conn.execute(
+            "SELECT value FROM db_meta WHERE key=?", (_META_DIM,)
+        ).fetchone()
     except sqlite3.OperationalError:
         row = None  # 旧库尚无 db_meta 表
     if row and row[0]:
@@ -279,7 +281,8 @@ def build(root: Path) -> dict:
         # 写入向量库元数据（维度门禁）：记录本次实得维度 + 模型名
         min_dim = _probe_min_dim(conn)
         conn.execute(
-            "INSERT OR REPLACE INTO db_meta(key, value) VALUES(?,?)", (_META_DIM, str(min_dim))
+            "INSERT OR REPLACE INTO db_meta(key, value) VALUES(?,?)",
+            (_META_DIM, str(min_dim)),
         ) if min_dim is not None else None
         conn.execute(
             "INSERT OR REPLACE INTO db_meta(key, value) VALUES(?,?)",

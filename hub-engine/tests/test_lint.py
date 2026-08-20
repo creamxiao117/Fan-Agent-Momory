@@ -48,6 +48,7 @@ def test_lint_ignores_log_and_report_files(tmp_path):
     report = lint(root)
     assert report["invalid"] == 0
 
+
 def test_find_index_ghosts_reports_missing(tmp_path):
     """幽灵登记：INDEX 登记了卡名但权威区无对应文件 → 应被检出。"""
     root = bootstrap(tmp_path)
