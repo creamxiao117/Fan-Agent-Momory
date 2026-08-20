@@ -68,11 +68,30 @@ def enrich_current_hits(cands: list[dict], root: Path, top_k: int) -> list[dict]
     """held-out 验证：对每个候选跑现检索，标注"当前检索命中张数"（只读，不写审计）。
 
     让候选带"现在到底命中几张"的观测，供人工判断是否真缺口；P0 但当前能命中多张 = 需更具体。
+
+    （路径A：Continual Harness 的 RefinementEvent 契约）同时补 `evidence` 与 `outcome` 两个只增字段：
+    - `evidence`：把散在 count/zero_ratio/avg_hit/stage/current_hits 的证据聚合成可读串，
+      让每条候选"为什么进来"可被人为审计，而非只看动作清单。
+    - `outcome`：默认 `"待定"`，供人工采纳后回写（adopted/rejected），让"改完是否生效"可回溯。
     """
     out = []
     for c in cands:
         channel, scored = retrieve_with_meta(root, c["query"], top_k=top_k)
-        out.append({**c, "current_channel": channel, "current_hits": len(scored)})
+        current_hits = len(scored)
+        evidence = (
+            f"{c['stage']}: 近窗口被查 {c['count']} 次, "
+            f"零命中占比 {c['zero_ratio']:.0%}, 平均命中 {c['avg_hit']}; "
+            f"现检索命中 {current_hits} 张(通道 {channel})"
+        )
+        out.append(
+            {
+                **c,
+                "current_channel": channel,
+                "current_hits": current_hits,
+                "evidence": evidence,
+                "outcome": "待定",
+            }
+        )
     return out
 
 
@@ -118,6 +137,8 @@ def _render_markdown(cands: list[dict], meta: dict) -> str:
                 f"- 当前检索命中：{c.get('current_hits', '—')} 张"
                 f"（通道 {c.get('current_channel', '—')}）"
             ),
+            f"- 证据：{c.get('evidence', '—')}",
+            f"- 结果(outcome)：{c.get('outcome', '待定')}",
             "- 卡草稿：",
             _draft_card(c),
             "",
@@ -131,6 +152,8 @@ def _render_markdown(cands: list[dict], meta: dict) -> str:
                 f"- 当前检索命中：{c.get('current_hits', '—')} 张"
                 f"（通道 {c.get('current_channel', '—')}）"
             ),
+            f"- 证据：{c.get('evidence', '—')}",
+            f"- 结果(outcome)：{c.get('outcome', '待定')}",
             "",
         ]
     if not cands:

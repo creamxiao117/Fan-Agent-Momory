@@ -76,6 +76,9 @@ def test_enrich_current_hits(tmp_path, monkeypatch):
     enriched = enrich_current_hits(cands, tmp_path, top_k=5)
     assert enriched[0]["current_channel"] == "semantic"
     assert enriched[0]["current_hits"] == 1
+    # 路径A：evidence/outcome 只增字段
+    assert "evidence" in enriched[0]
+    assert enriched[0]["outcome"] == "待定"
 
 
 def test_stage_writes_under_sleep_only(tmp_path):
@@ -105,9 +108,13 @@ def test_render_markdown_contains_draft_and_adopt_hint():
             "stage": "P0-新增卡片",
             "current_channel": "semantic",
             "current_hits": 0,
+            "evidence": "P0-新增卡片: 近窗口被查 4 次, 零命中占比 100%, 平均命中 0; 现检索命中 0 张(通道 semantic)",
+            "outcome": "待定",
         }
     ]
     md = _render_markdown(cands, {"date": "2026-08-20"})
     assert "P0" in md
     assert "ingest" in md
     assert "护 DLL 版本" in md
+    assert "证据：" in md
+    assert "结果(outcome)" in md
