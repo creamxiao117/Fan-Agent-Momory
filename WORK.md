@@ -157,6 +157,12 @@
 - **vector.db 维度门禁（已落地，主仓）**：直接借鉴 codebase-memory-mcp schema_version 门禁，修复中枢 `tools/semsearch.py` 的**维度静默错分缺陷**——`db_meta` 表记录 `embed_dim/embed_model`；build 检测换模型且维度变→清库全量重建；`vector_scores` 校验 query 维度与库不符→返回 `[]`（上游融合自动退化词袋）；兼容旧库无 `db_meta` 表（`_stored_dim` 容错回退行探测）。新增 3 项单测（写meta/退化/换模型重建），全量 222 通过、ruff 绿；真机中枢库 build 全重建 `stored_dim=512`（bge 维度吻合）。commit `ba80bba`，改动仅 2 文件。
 - 进度小结：本 session 训练集方法价值（semgrep 规则引擎 + codebase-memory 工件共享）均判级 B、沉淀为 reference 蓝图 + 各落地一个真实采纳点（rule_regression 门禁 / vector.db 维度门禁）；待未来真实需求触发再转 active。
 
+## 本轮 R11（diagram-design 内化 + INDEX 幽灵登记落地）
+
+- **diagram-design 蓝图内化（github-star-distill 流程）**：隔离克隆 gh-cathrynlavery-diagram-design（判级 B+，方法价值高且与中枢"技能治理"同构），T0 试跑 `scripts/verify-docs-sync.py` **exit 0 干净**（8 类检查全过：description hooks/gallery reachability/README tree/reference links/packaged support/profile surfaces/manifest/Factory install 契约）证机械可用。沉淀 `blueprints/skill-docroute-verify-blueprint`（**已落地，新卡** reference）：8 类文档↔路由一致性检查互不遮蔽；多宿主单插件根+渐进披露；ADR 决策纪律一决策一档永不重辩；vs 中枢 lint 补 2 切入点（描述↔能力 hook 同步 + INDEX.md 登记防漂移）。INGEST `promoted:1`、lint 96 卡全绿，中枢仓 commit `2d40854`，克隆已清理。
+- **INDEX 幽灵登记落地（已落地，主仓 commit `5e1c338`）**：从 skill-docroute-verify-blueprint 路径A「INDEX.md 登记防漂移」**选取反向盲区落地**——新增 `tools/lint.py find_index_ghosts(root)`：检测「INDEX 已登记但权威区查无对应卡文件」的幽灵登记（支持连字符卡名 `[A-Za-z0-9_-]+`、排除 `/` 目录行），与现有 `find_orphans`（文件在但未登记）双向互补；`engine.py` lint/status 命令输出、JSON、退出码全部纳入 ghosts。补 2 单测，全量 **224 通过**、ruff 全绿（PIE810 startswith tuple）；真机 lint **幽灵=[] 零误报**、孤儿仍仅历史 autocad（保留项）。
+- 进度小结：本 session 绪 method（verify-docs-sync 结构门禁 + ADR 纪律）判级 B+、沉淀 reference 蓝图 + 落地一个真实采纳点（INDEX 幽灵登记）；待未来需求触发再转 active。
+
 ## 阻塞项
 
 - 无（2026-08-18：源目录 `D:\AIwork\AgentMemoryHub` 已核销清理，原沙箱阻塞解除）。
