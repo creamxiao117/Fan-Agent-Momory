@@ -14,7 +14,7 @@ from tools.retrieve import (
     retrieve,
     semantic_vector_retrieve,
 )
-from tools.semsearch import build, db_path, set_embed_backend, vector_scores
+from tools.semsearch import build, db_path, scan_stale, set_embed_backend, vector_scores
 
 
 def _fake_embed(fn=None):
@@ -303,3 +303,34 @@ def test_build_rebuilds_on_model_change_dim_diff(tmp_path, monkeypatch):
         conn.close()
     assert sizes == {4}
     set_embed_backend(None)  # 复位默认
+
+
+def test_scan_stale_reports_modified_since_build(tmp_path):
+    """freshness：卡在 build 之后又改动（mtime 更新）→ 检为待重建；未改动卡不计。"""
+    import os
+    import time as _time
+
+    root = bootstrap(tmp_path)
+    _seed(root)
+    _fake_embed()
+    build(root)
+    assert scan_stale(root)["total"] == 0  # 刚 build 完全部同步
+
+    dll = root / "rules" / "dll-lock.md"
+    # 只把 mtime 改到未来，模拟"内容已变但未跑 build"（不真正改内容避免 size 干扰）
+    future = _time.time() + 3600
+    os.utime(dll, (future, future))
+    report = scan_stale(root)
+    assert report["total"] == 1
+    assert "rule" in report["stale_by_dir"]  # type 字段为 rule（目录 rules）
+    assert report["stale_by_dir"]["rule"] == 1
+    assert any("dll-lock.md" in p for p in report["path_examples"])
+
+
+def test_scan_stale_reports_all_when_db_missing(tmp_path):
+    """无向量库（未 build）→ 全部卡待重建（freshness 如实暴露）"""
+    root = bootstrap(tmp_path)
+    _seed(root)
+    _fake_embed()
+    report = scan_stale(root)
+    assert report["total"] >= 2  # dll-lock + blunder 都未同步

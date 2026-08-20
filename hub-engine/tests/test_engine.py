@@ -64,6 +64,9 @@ def test_status_json_output(tmp_path, capsys):
     assert code == 0
     assert set(data) >= {"root", "cards", "lint", "pending", "last_commit"}
     assert data["lint"]["invalid"] == 0
+    # freshness 软汇报块（OpenViking 路径 A）：未 build 时如实暴露待重建
+    assert "fresh" in data
+    assert "stale_total" in data["fresh"]
 
 
 def test_build_vectors_returns_zero_when_model_ok(tmp_path, capsys):

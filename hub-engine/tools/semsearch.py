@@ -15,6 +15,7 @@ import json
 import os
 import sqlite3
 import threading
+import time
 from collections.abc import Callable
 from pathlib import Path
 
@@ -128,10 +129,15 @@ def _ensure_schema(conn: sqlite3.Connection) -> None:
             tags TEXT,
             type TEXT,
             body TEXT,
-            embedding BLOB
+            embedding BLOB,
+            synced_at REAL
         )"""
     )
     conn.execute("CREATE INDEX IF NOT EXISTS idx_docs_path ON docs(path)")
+    # 兼容旧库：无 synced_at 列时补齐（freshness 变更追踪用，OpenViking 路径 A）。
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(docs)").fetchall()}
+    if "synced_at" not in cols:
+        conn.execute("ALTER TABLE docs ADD COLUMN synced_at REAL")
     # 向量库元数据：记录模型名与向量维度，用于维度一致性门禁（借鉴
     # codebase-memory-mcp artifact 的 schema_version 门禁，防换模型后新旧向量维度混算）。
     conn.execute(
@@ -226,11 +232,14 @@ def build(root: Path) -> dict:
         if rebuild:
             conn.execute("DELETE FROM docs")
         existing = {
-            r[1]: (r[0], r[2], r[3])
-            for r in conn.execute("SELECT id, path, mtime, size FROM docs")
+            r[1]: (r[0], r[2], r[3], r[4])
+            for r in conn.execute(
+                "SELECT id, path, mtime, size, synced_at FROM docs"
+            )
         }
         stats = {"reused": 0, "inserted": 0, "updated": 0, "removed": 0, "embedded": 0}
         current: set[str] = set()
+        now = time.time()
 
         for card in _scan_cards(root):
             full = str(card.path)
@@ -238,8 +247,11 @@ def build(root: Path) -> dict:
             sig = _sig(card.path)
             old = existing.get(full)
             text = f"{card.body} {' '.join(card.tags)}"
-            # 签名未变 → 复用已有行（含向量），跳过 embedding
+            # 签名未变 → 复用已有行（含向量），仅刷新同步时间（freshness 变更追踪）
             if old is not None and sig is not None and (old[1], old[2]) == sig:
+                conn.execute(
+                    "UPDATE docs SET synced_at=? WHERE id=?", (now, old[0])
+                )
                 stats["reused"] += 1
                 continue
 
@@ -258,8 +270,8 @@ def build(root: Path) -> dict:
                 stats["inserted"] += 1
 
             conn.execute(
-                """INSERT INTO docs(path, mtime, size, title, tags, type, body, embedding)
-                VALUES(?,?,?,?,?,?,?,?)""",
+                """INSERT INTO docs(path, mtime, size, title, tags, type, body, embedding, synced_at)
+                VALUES(?,?,?,?,?,?,?,?,?)""",
                 (
                     full,
                     sig[0] if sig else 0.0,
@@ -269,11 +281,12 @@ def build(root: Path) -> dict:
                     card.type,
                     card.body,
                     emb,  # bytes(二进制) 或 None
+                    now,
                 ),
             )
 
         # 清理孤儿：源卡已删除
-        for path_, (pid, _, _) in existing.items():
+        for path_, (pid, _, _, _) in existing.items():
             if path_ not in current:
                 conn.execute("DELETE FROM docs WHERE id=?", (pid,))
                 stats["removed"] += 1
@@ -293,6 +306,47 @@ def build(root: Path) -> dict:
         return stats
     finally:
         conn.close()
+
+
+def scan_stale(root: Path) -> dict:
+    """freshness 变更追踪：检出「内容已变但向量未同步」的待重建卡（OpenViking pending_child_changes）。
+
+    判据：卡文件 mtime 新于向量库该行 synced_at → 说明卡片在最近一次 build-vectors 之后
+    又改动过（或从未被向量化），检索仍会命中旧向量。按 type 目录聚合返回，纯只读软汇报，
+    不提交、不改库、不算告警（嵌入向量通道退化时也如实暴露，供巡检提示补跑 build-vectors）。
+
+    返回 {"stale_by_dir": {dir: count}, "total": n, "path_examples": [..]}。
+    """
+    db = db_path(root)
+    stale_by_dir: dict[str, int] = {}
+    examples: list[str] = []
+    synced: dict[str, float] = {}
+    have_db = db.exists()
+    if have_db:
+        conn = sqlite3.connect(db)
+        try:
+            _ensure_schema(conn)  # 旧库无 synced_at 列时幂等补齐（真机读侧安全）
+            synced = {
+                str(r[0]): r[1] or 0.0
+                for r in conn.execute(
+                    "SELECT path, synced_at FROM docs WHERE embedding IS NOT NULL"
+                ).fetchall()
+            }
+        finally:
+            conn.close()
+    for card in _scan_cards(root):
+        sig = _sig(card.path)
+        if sig is None:
+            continue
+        mtime = sig[0]
+        row = synced.get(str(card.path))
+        if row is None or mtime > row:
+            sub = getattr(card, "type", "unknown") or "unknown"
+            stale_by_dir[sub] = stale_by_dir.get(sub, 0) + 1
+            if len(examples) < 3:
+                examples.append(str(card.path))
+    total = sum(stale_by_dir.values())
+    return {"stale_by_dir": stale_by_dir, "total": total, "path_examples": examples}
 
 
 def vector_scores(

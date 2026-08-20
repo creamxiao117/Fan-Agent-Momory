@@ -179,6 +179,17 @@ def _cmd_status(args) -> int:
         "pending_first": pending[0].name if pending else None,
         "last_commit": last,
     }
+    # freshness 变更追踪（OpenViking 路径 A 落地）：软汇报向量待重建卡，不入退出码
+    try:
+        from tools.semsearch import scan_stale
+
+        fresh = scan_stale(root)
+        data["fresh"] = {
+            "stale_total": fresh["total"],
+            "stale_by_dir": fresh["stale_by_dir"],
+        }
+    except Exception:  # noqa: BLE001 - freshness 为软汇报，任何异常都不阻断 status
+        data["fresh"] = {"stale_total": -1, "stale_by_dir": {}}
     if getattr(args, "json", False):
         import json
 
@@ -193,6 +204,13 @@ def _cmd_status(args) -> int:
         print(
             f"待人工确认: {data['pending']}"
             + (f" → {data['pending_first']}" if data["pending_first"] else "")
+        )
+        fresh_txt = " · ".join(
+            f"{k}={v}" for k, v in data["fresh"]["stale_by_dir"].items()
+        ) or "无"
+        print(
+            f"向量待重建(freshness): {data['fresh']['stale_total']} 张"
+            + (f" ({fresh_txt})" if data["fresh"]["stale_total"] > 0 else "")
         )
         print(f"最近提交: {last}")
     return (
