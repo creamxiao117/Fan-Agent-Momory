@@ -236,3 +236,70 @@ def test_retrieve_fuses_vector_channel(tmp_path):
     build(root)
     hits = retrieve(root, "文件被占用打不开")
     assert len(hits) >= 1
+
+
+def test_build_writes_dim_meta(tmp_path):
+    """build 后 db_meta 记录实得维度与模型名（维度门禁依据）"""
+    root = bootstrap(tmp_path)
+    _seed(root)
+    _fake_embed()
+    build(root)
+    import sqlite3
+
+    conn = sqlite3.connect(db_path(root))
+    try:
+        meta = dict(conn.execute("SELECT key, value FROM db_meta").fetchall())
+    finally:
+        conn.close()
+    assert meta.get("embed_dim") == "8"  # 假 embed 维度 8
+    assert meta.get("embed_model") == semsearch.EMBED_MODEL
+
+
+def test_vector_scores_degrades_on_dim_mismatch(tmp_path):
+    """query 维度与库不符 → 返回 []（不静默错分，上游融合退化词袋）"""
+    root = bootstrap(tmp_path)
+    _seed(root)
+    _fake_embed()
+    build(root)
+    scored = vector_scores(root, [0.0] * 4)  # 4 维 ≠ 库内 8 维
+    assert scored == []
+
+
+def test_build_rebuilds_on_model_change_dim_diff(tmp_path, monkeypatch):
+    """换模型且新维度不同 → 清空 docs 全量重建，避免新旧维度混算"""
+    import math
+
+    root = bootstrap(tmp_path)
+    _seed(root)
+    _fake_embed()  # 8 维
+    build(root)
+    assert len(_vector_rows(db_path(root))) >= 2
+
+    # 换 embed：同样 token 但维度 4
+    def fake4(text: str):
+        h = sum(ord(c) for c in text)
+        v = [math.sin((i + 1) * h) % 2 - 1 for i in range(4)]
+        n = math.sqrt(sum(x * x for x in v)) or 1.0
+        return [x / n for x in v]
+
+    set_embed_backend(fake4)
+    monkeypatch.setattr(semsearch, "EMBED_MODEL", "other-model")
+    st = build(root)
+    # 全量重建 → 全部反为 inserted
+    assert st["reused"] == 0
+    assert st["inserted"] >= 2
+    # 库中向量均为 4 维（float32 → 维度 = 字节数 // 4）
+    import sqlite3
+
+    conn = sqlite3.connect(db_path(root))
+    try:
+        sizes = {
+            len(v) // 4  # 字节 → 维度
+            for (v,) in conn.execute(
+                "SELECT embedding FROM docs WHERE embedding IS NOT NULL"
+            ).fetchall()
+        }
+    finally:
+        conn.close()
+    assert sizes == {4}
+    set_embed_backend(None)  # 复位默认

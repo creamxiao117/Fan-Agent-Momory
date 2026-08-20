@@ -132,6 +132,14 @@ def _ensure_schema(conn: sqlite3.Connection) -> None:
         )"""
     )
     conn.execute("CREATE INDEX IF NOT EXISTS idx_docs_path ON docs(path)")
+    # 向量库元数据：记录模型名与向量维度，用于维度一致性门禁（借鉴
+    # codebase-memory-mcp artifact 的 schema_version 门禁，防换模型后新旧向量维度混算）。
+    conn.execute(
+        """CREATE TABLE IF NOT EXISTS db_meta(
+            key TEXT PRIMARY KEY,
+            value TEXT
+        )"""
+    )
 
 
 def _sig(full: Path) -> tuple[float, int] | None:
@@ -149,13 +157,72 @@ def _scan_cards(root: Path):
     return _index(root).cards
 
 
+_META_DIM = "embed_dim"
+_META_MODEL = "embed_model"
+
+
+def _stored_dim(conn: sqlite3.Connection) -> int | None:
+    """从 db_meta 读已存向量维度；无 meta（含旧库无 db_meta 表）则从现有一行向量探测。"""
+    try:
+        row = conn.execute("SELECT value FROM db_meta WHERE key=?", (_META_DIM,)).fetchone()
+    except sqlite3.OperationalError:
+        row = None  # 旧库尚无 db_meta 表
+    if row and row[0]:
+        try:
+            return int(row[0])
+        except ValueError:
+            return None
+    hit = conn.execute(
+        "SELECT embedding FROM docs WHERE embedding IS NOT NULL LIMIT 1"
+    ).fetchone()
+    if hit is None or hit[0] is None:
+        return None
+    import numpy as np
+
+    try:
+        return int(np.frombuffer(hit[0], dtype=np.float32).size)
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _probe_min_dim(conn: sqlite3.Connection) -> int | None:
+    """返回库内现有非空向量的最小维度（跨行不一致时取最小以保守校验）。"""
+    import numpy as np
+
+    sizes = set()
+    for (blob,) in conn.execute(
+        "SELECT embedding FROM docs WHERE embedding IS NOT NULL"
+    ).fetchall():
+        try:
+            sizes.add(int(np.frombuffer(blob, dtype=np.float32).size))
+        except Exception:  # noqa: BLE001, S112 - 单行损坏则跳过该行，维度以其余行为准
+            continue
+    return min(sizes) if sizes else None
+
+
 def build(root: Path) -> dict:
-    """扫描卡片增量写入向量库；返回统计（reused/inserted/updated/removed/embedded）。"""
+    """扫描卡片增量写入向量库；返回统计（reused/inserted/updated/removed/embedded）。
+
+    维度门禁：记录 embed_dim/embed_model 到 db_meta；若本次 build 实得向量维度与库内
+    已存维度不一致（换模型/维度变化），视为旧库失效，清空 docs 全量重建，避免新旧
+    维度向量混算产生静默错误分（借鉴 codebase-memory-mcp artifact schema_version 门禁）。
+    """
     db = db_path(root)
     db.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(db)
     try:
         _ensure_schema(conn)
+        # 探测库内已存维度；若模型名变了且维度不同 → 全量重建
+        stored_model = conn.execute(
+            "SELECT value FROM db_meta WHERE key=?", (_META_MODEL,)
+        ).fetchone()
+        rebuild = False
+        if stored_model and stored_model[0] != EMBED_MODEL:
+            stored_dim = _stored_dim(conn)
+            if stored_dim is not None and _probe_min_dim(conn) in (None, stored_dim):
+                rebuild = True
+        if rebuild:
+            conn.execute("DELETE FROM docs")
         existing = {
             r[1]: (r[0], r[2], r[3])
             for r in conn.execute("SELECT id, path, mtime, size FROM docs")
@@ -209,6 +276,16 @@ def build(root: Path) -> dict:
                 conn.execute("DELETE FROM docs WHERE id=?", (pid,))
                 stats["removed"] += 1
 
+        # 写入向量库元数据（维度门禁）：记录本次实得维度 + 模型名
+        min_dim = _probe_min_dim(conn)
+        conn.execute(
+            "INSERT OR REPLACE INTO db_meta(key, value) VALUES(?,?)", (_META_DIM, str(min_dim))
+        ) if min_dim is not None else None
+        conn.execute(
+            "INSERT OR REPLACE INTO db_meta(key, value) VALUES(?,?)",
+            (_META_MODEL, EMBED_MODEL),
+        )
+
         conn.commit()
         return stats
     finally:
@@ -221,12 +298,17 @@ def vector_scores(
     """query 向量与库内每卡向量点积（余弦，均为 L2 归一化）→ [(path, score)] 降序。
 
     库不存在或空 → 返回 []。
+    维度门禁：query 维度与库内向量维度不一致（换模型/旧库失效）→ 返回 []，
+    由上游融合回退词袋，避免静默错分（借鉴 codebase-memory-mcp artifact schema_version 门禁）。
     """
     db = db_path(root)
     if not db.exists():
         return []
     conn = sqlite3.connect(db)
     try:
+        stored_dim = _stored_dim(conn)
+        if stored_dim is not None and len(query_vec) != stored_dim:
+            return []
         rows = conn.execute(
             "SELECT path, embedding FROM docs WHERE embedding IS NOT NULL"
         ).fetchall()
