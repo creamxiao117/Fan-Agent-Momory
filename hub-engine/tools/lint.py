@@ -1,5 +1,6 @@
 """Lint：周期性库健康检查（孤儿页 / 陈旧页 / 无效卡片 / 摘要）"""
 
+import re
 from datetime import date
 from pathlib import Path
 
@@ -31,6 +32,34 @@ def _all_cards(root: Path) -> list:
                 continue
             out.append((sub, p, try_read_card(p)))
     return out
+
+
+def find_index_ghosts(root: Path) -> list[str]:
+    """反向盲区：INDEX.md 已登记、但权威区查无对应卡文件的『幽灵登记』。
+
+    与 find_orphans 双向互补：
+    - 孤儿 = 文件在、但 INDEX/他卡无引用（有人评）→ 现有逻辑覆盖；
+    - 幽灵 = INDEX 登记了、但卡文件缺失/改名 → 本函数兜底。
+    复现 ingest 不会自动更新 INDEX 而造成的『登记漂移』。
+    """
+    root = Path(root)
+    index_path = root / "INDEX.md"
+    if not index_path.exists():
+        return []
+    index_text = index_path.read_text(encoding="utf-8")
+    ghosts = []
+    existing = {p.stem for sub, p, card in _all_cards(root)}
+    for line in index_text.splitlines():
+        line = line.strip()
+        if not line.startswith(("- ", "* ")):
+            continue
+        # 登记行形如 `- 卡名 描述...`，取首列词作为登记名
+        stem = line[2:].strip().split()[0].rstrip(":").strip()
+        if not re.fullmatch(r"[A-Za-z0-9_-]+", stem) or "/" in stem:
+            continue
+        if stem not in existing:
+            ghosts.append(stem)
+    return ghosts
 
 
 def find_orphans(root: Path) -> list[Path]:
@@ -78,6 +107,7 @@ def lint(root: Path) -> dict:
     total = sum(1 for _ in _all_cards(root))
     return {
         "orphans": [str(p) for p in find_orphans(root)],
+        "ghosts": find_index_ghosts(root),
         "stale": stale,
         "invalid": invalid,
         "notes": f"共检查 {total} 张卡片",

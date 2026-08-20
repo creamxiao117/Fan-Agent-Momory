@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from scripts.bootstrap_hub import bootstrap
-from tools.lint import find_orphans, lint
+from tools.lint import find_index_ghosts, find_orphans, lint
 
 
 def _seed(root: Path) -> None:
@@ -38,7 +38,7 @@ def test_lint_returns_full_shape(tmp_path):
     root = bootstrap(tmp_path)
     _seed(root)
     report = lint(root)
-    assert set(report) == {"orphans", "stale", "invalid", "notes"}
+    assert set(report) == {"orphans", "ghosts", "stale", "invalid", "notes"}
     assert isinstance(report["invalid"], int)
 
 
@@ -47,3 +47,17 @@ def test_lint_ignores_log_and_report_files(tmp_path):
     root = bootstrap(tmp_path)
     report = lint(root)
     assert report["invalid"] == 0
+
+def test_find_index_ghosts_reports_missing(tmp_path):
+    """幽灵登记：INDEX 登记了卡名但权威区无对应文件 → 应被检出。"""
+    root = bootstrap(tmp_path)
+    (root / "INDEX.md").write_text("- missing-card 幽灵登记\n", encoding="utf-8")
+    ghosts = find_index_ghosts(root)
+    assert "missing-card" in ghosts
+
+
+def test_lint_reports_ghosts(tmp_path):
+    root = bootstrap(tmp_path)
+    (root / "INDEX.md").write_text("- phantom 幽灵登记\n", encoding="utf-8")
+    report = lint(root)
+    assert "phantom" in report["ghosts"]

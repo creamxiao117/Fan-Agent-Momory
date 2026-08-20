@@ -122,14 +122,15 @@ def _cmd_lint(args) -> int:
 
     report = lint(Path(args.root))
     print("孤儿页:", report["orphans"])
+    print("幽灵登记:", report["ghosts"])
     print("陈旧页:", report["stale"])
     print("无效卡片:", report["invalid"])
     print("备注:", report["notes"])
-    unhealthy = len(report["orphans"]) + len(report["stale"]) + report["invalid"]
+    unhealthy = len(report["orphans"]) + len(report["ghosts"]) + len(report["stale"]) + report["invalid"]
     if unhealthy:
         print(
             f"【告警】发现 {unhealthy} 处健康问题：orphans {len(report['orphans'])} / "
-            f"stale {len(report['stale'])} / invalid {report['invalid']}"
+            f"ghosts {len(report['ghosts'])} / stale {len(report['stale'])} / invalid {report['invalid']}"
         )
         return 2  # 专用退出码：健康检查异常
     return 0
@@ -165,6 +166,7 @@ def _cmd_status(args) -> int:
         "cards": counts,
         "lint": {
             "orphans": len(report["orphans"]),
+            "ghosts": len(report["ghosts"]),
             "stale": len(report["stale"]),
             "invalid": report["invalid"],
         },
@@ -181,14 +183,14 @@ def _cmd_status(args) -> int:
         print(f"中枢: {root}")
         print(f"卡片分布: {dist}")
         print(
-            f"Lint: 孤儿 {data['lint']['orphans']} · 陈旧 {data['lint']['stale']} · 无效 {data['lint']['invalid']}"
+            f"Lint: 孤儿 {data['lint']['orphans']} · 幽灵 {data['lint']['ghosts']} · 陈旧 {data['lint']['stale']} · 无效 {data['lint']['invalid']}"
         )
         print(
             f"待人工确认: {data['pending']}"
             + (f" → {data['pending_first']}" if data["pending_first"] else "")
         )
         print(f"最近提交: {last}")
-    return 0 if report["invalid"] == 0 and not report["orphans"] else 1
+    return 0 if report["invalid"] == 0 and not report["orphans"] and not report["ghosts"] else 1
 
 
 def _cmd_sync(args) -> int:
