@@ -1,6 +1,6 @@
 # WORK.md（当前状态 · 唯一来源）
 
-更新于：2026-08-19（R8：blueprint 蓝图体系 + github-star-distill 两个仓库内化）
+更新于：2026-08-20（R10：check-code-v1 规则门禁 + semgrep/codebase-memory 两仓内化 + vector.db 维度门禁落地）
 
 ## 当前 MVP（已完成）
 
@@ -147,6 +147,15 @@
     - **A2 命中复用累积**（**已落地 2026-08-20**）：在 `tools/mcp_handlers.py` 新增 `record_reuse`——`hub_search` 命中后对命中卡 frontmatter `reuse_count += 1`（仅改该行，最小 diff，不重排其它字段）；**按日节流**（同卡同本地日只计 1 次，状态落 `.sync/state/reuse_daily.json`，git-ignored）；写入置于单写者锁内、失败静默不影响检索返回；只计非 archived 且含 reuse_count 字段的卡。真机验证命中 dll-lock reuse_count 0→1、二次计数节流 skipped。+5 项单测（search 追踪/日节流/跨日/归档跳过/最小 diff），全量 207 通过、ruff 绿。
     - 验收：metrics.jsonl 有日行且 hit_rate 曲线可画；回归门禁真机有一组未命中样本可拦截；daily Schedule 退出码检查覆盖 E1/E3；reuse_count 真实递增。全量测试按其分别 +2~4 项，ruff 绿。
 16. 夜间离线自进化引擎（SkillOpt-Sleep 纪律落地，**本会话已落地**，见 R9 蓝图 skillopt-blueprint）：判级 A 隔离克隆内化 microsoft/SkillOpt，方法沉淀为 `blueprints/skillopt-blueprint`（reference，未装依赖）。T2 映射中枢现有底座，实现原生 `scripts/hub_sleep_consolidate.py`——**零外发、零自动改卡**，收割(复用 missing_query.aggregate)→挖掘(P0新卡/P1补tag)→有界候选(--max-candidates 类比编辑预算)→held-out 验证(复用 retrieve_with_meta 标注当前命中)→暂存(.sync/state/sleep/<日期>/proposal.{md,json}，git-ignored，绝不写权威区)→人工采纳(review 后 ingest)。已接入每日巡检 Schedule 步骤 11；真机产出近期 P1 候选 4 条可见。+6 项单测，全量 213 通过、ruff 绿。
+
+## 本轮 R10（check-code-v1 规则门禁 + semgrep/codebase-memory 两仓内化 + vector.db 维度门禁落地）
+
+- **check-code-v1 路径A 注释契约规则回归门禁**（`c:\Users\Fan-SJSS\.trae-cn\skills\check-code-v1`，技能仓非本仓）：新 `scripts/rule_regression.py` + `tests/test_rule_regression.py`——为每类检查器（python/yaml/markdown/json/toml）维护【正样例=应 FAIL + 负样例=应 PASS】合成契约，跑门禁判定 True/False Positive/Negative；正样例遇 SKIP（工具缺失）记为通过不误报。`SKILL.md` 补「第8条」约束：改检查器规则必须先跑门禁，无可回归才交付，新增检查类型先补样例再实现规则。**已借语义检索挂接中枢 `blueprints/semgrep-rules-engine-blueprint`。**
+- **两仓蓝图内化（github-star-distill 流程）**：
+  - `blueprints/semgrep-rules-engine-blueprint`（**已落地，新卡** reference）：路径A 注释契约门禁（零依赖纯纪律，本 hub 真实采纳）／路径B 接入 semgrep CLI 统一规则层（T0/T1 未跑，维持 reference 不落地）；INGEST `promoted:1`、lint 全绿，中枢仓 commit `44a5d1e`。
+  - `blueprints/vector-db-shareable-artifact`（**已落地，新卡** reference）：内化自 gh-deusdata-codebase-memory-mcp artifact.c 的团队共享 zstd 工件+git HEAD 溯源；路径A 快照一致性(只用 VACUUM INTO 勿裸拷WAL)+strip索引再zstd+meta溯源+schema版本门禁+原子写／路径B .gitattributes binary merge=ours 冲突防护(#492行序坑)；对照中枢 vector.db 底层同构、仅缺一等工件外壳、冲突侧 _WriteLock 已覆盖。INGEST `promoted:1`、lint 90 卡全绿，commit `0bd24fe`。
+- **vector.db 维度门禁（已落地，主仓）**：直接借鉴 codebase-memory-mcp schema_version 门禁，修复中枢 `tools/semsearch.py` 的**维度静默错分缺陷**——`db_meta` 表记录 `embed_dim/embed_model`；build 检测换模型且维度变→清库全量重建；`vector_scores` 校验 query 维度与库不符→返回 `[]`（上游融合自动退化词袋）；兼容旧库无 `db_meta` 表（`_stored_dim` 容错回退行探测）。新增 3 项单测（写meta/退化/换模型重建），全量 222 通过、ruff 绿；真机中枢库 build 全重建 `stored_dim=512`（bge 维度吻合）。commit `ba80bba`，改动仅 2 文件。
+- 进度小结：本 session 训练集方法价值（semgrep 规则引擎 + codebase-memory 工件共享）均判级 B、沉淀为 reference 蓝图 + 各落地一个真实采纳点（rule_regression 门禁 / vector.db 维度门禁）；待未来真实需求触发再转 active。
 
 ## 阻塞项
 
