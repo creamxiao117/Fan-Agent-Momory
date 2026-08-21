@@ -1,5 +1,6 @@
 """同步器：单一写入者 + 暂存区提升 + 去重/冲突 + 人工确认 + Git 提交"""
 
+import json
 import os
 import shutil
 import subprocess
@@ -14,6 +15,8 @@ from common.frontmatter import (
     write_card,
 )
 from common.vector import cosine, vector
+from tools.dedup import candidates as dedup_candidates
+from tools.dedup import decide as dedup_decide
 from tools.memory_diff import record as record_diff
 
 TYPE_DIR = {
@@ -113,8 +116,31 @@ class _WriteLock:
         self.lock.unlink(missing_ok=True)
 
 
-def ingest(root: Path, platform: str) -> dict:
-    """把 .sync/drafts/<platform>_draft/ 下的内容提升到中枢；返回统计"""
+def _write_dedup_prediction(
+    cdir: Path, platform: str, draft: Path, card, decision: dict
+) -> None:
+    """把 LLM 去重建议写到冲突区伴生 .pred.json，供人工终审（不自动执行 merge/delete）"""
+    try:
+        payload = {
+            "op": "dedup_prediction",
+            "platform": platform,
+            "draft": draft.name,
+            "decision": decision,
+        }
+        pred = cdir / f"{platform}_{draft.stem}.pred.json"
+        pred.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    except OSError:
+        pass  # 决策留痕失败不阻断同步主流程
+
+
+def ingest(root: Path, platform: str, chat_fn=None) -> dict:
+    """把 .sync/drafts/<platform>_draft/ 下的内容提升到中枢；返回统计。
+
+    chat_fn（可选）：去重 LLM 注入入口（OpenViking 路径 B）。缺省为 None →
+    走 legacy 纯向量去重（离线/离线环境 = 冲突区人工，不误删）。传入时对相似
+    候选产 LLM 路由建议：高置信 skip 丢弃草稿，其余（merge/delete/review）仍进
+    冲突区交人工，绝不自动覆盖权威区。
+    """
     root = Path(root)
     stat = {"promoted": 0, "pending": 0, "duplicate": 0, "invalid": 0, "status": "ok"}
     drafts = root / ".sync" / "drafts" / f"{platform}_draft"
@@ -130,12 +156,45 @@ def ingest(root: Path, platform: str) -> dict:
                 if validate_card(card):
                     stat["invalid"] += 1
                     continue
-                if _find_duplicate(root, card):
+                cands = dedup_candidates(root, card)
+                if cands:
                     stat["duplicate"] += 1
+                    decision = (
+                        dedup_decide(root, card, cands, chat_fn=chat_fn)
+                        if chat_fn
+                        else None
+                    )
+                    # 高置信重复（LLM 明确 skip 且 ≥0.8）→ 丢弃草稿，不落冲突区
+                    if decision and decision["action"] == "skip" and decision[
+                        "confidence"
+                    ] >= 0.8:
+                        _append_log(root, "ingest", f"LLM 判定重复，丢弃草稿：{p.name}")
+                        record_diff(
+                            root,
+                            {
+                                "op": "delete",
+                                "name": p.name,
+                                "type": card.type,
+                                "deleted_content": (
+                                    f"LLM 判定重复(skip conf={decision['confidence']:.2f})，"
+                                    f"丢弃：{decision['reason']}"
+                                ),
+                            },
+                        )
+                        p.unlink()
+                        continue
                     cdir = root / ".sync" / "conflicts"
                     cdir.mkdir(parents=True, exist_ok=True)
                     shutil.copy2(p, cdir / f"{platform}_{p.name}")
-                    _append_log(root, "ingest", f"重复内容进冲突区：{p.name}")
+                    # 决策留痕：冲突区附 .pred.json 建议，供人工终审
+                    if decision:
+                        (_write_dedup_prediction(cdir, platform, p, card, decision))
+                    _append_log(
+                        root,
+                        "ingest",
+                        f"重复内容进冲突区：{p.name}"
+                        + (f"（LLM 建议 {decision['action']}，待人工终审）" if decision else ""),
+                    )
                     record_diff(
                         root,
                         {
