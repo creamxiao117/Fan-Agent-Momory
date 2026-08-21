@@ -327,6 +327,55 @@ def test_scan_stale_reports_modified_since_build(tmp_path):
     assert any("dll-lock.md" in p for p in report["path_examples"])
 
 
+def test_backend_ok_true_for_injected_mock(tmp_path):
+    """注入 mock 后端即便模型不可用也被视为可用（避免测试/降级误伤门禁）"""
+    _fake_embed()
+    assert semsearch._backend_ok() is True
+
+
+def test_build_degraded_keeps_old_vectors_when_backend_down(tmp_path, monkeypatch):
+    """真实后端不可用但库内已有有效向量 → build 返回 degraded，保留旧向量，绝不落 NULL 污染"""
+    root = bootstrap(tmp_path)
+    _seed(root)
+    _fake_embed()
+    build(root)  # 先建立含有效向量的库
+    n_valid = _vector_rows(db_path(root))
+    assert n_valid and all(v is not None for v in n_valid.values())
+
+    # 切回真实后端并模拟模型不可用
+    set_embed_backend(None)
+    monkeypatch.setattr(semsearch, "_load_backend", lambda: (None, None))
+    st = build(root)
+    assert st.get("degraded") is True
+    assert "保留" in st["note"]
+    # 旧向量原样保留（未被 NULL 覆盖、未被重建清空）
+    rows = _vector_rows(db_path(root))
+    assert len(rows) == len(n_valid)
+    assert all(v is not None for v in rows.values())
+    # 未产生任何插入/更新副作用
+    assert st["inserted"] == 0 and st["updated"] == 0
+    set_embed_backend(None)
+
+
+def test_semantic_vector_retrieve_normalizes_path_case(tmp_path, monkeypatch):
+    """库侧路径与卡片路径大小写/形态不同（Windows）→ 归一化后仍能命中映射"""
+    root = bootstrap(tmp_path)
+    _seed(root)
+    _fake_embed()
+    build(root)
+    # 构造：库返回一个「大小写被改」的路径（模拟 build 存绝对路径 vs 检索 Path 相对/大小写不一致）
+    raw = semsearch.vector_scores(root, semsearch.embed("DLL 修改后必须递增版本号避免被锁"))
+    upper_path = str(Path(raw[0][0]).resolve()).upper() if raw else ""
+    assert upper_path
+    # monkeypatch 强制库返回大写绝对路径，断言归一化后仍命中真实卡片
+    def _mocked_scores(*a, **k):
+        return [(upper_path, raw[0][1])]
+
+    monkeypatch.setattr(semsearch, "vector_scores", _mocked_scores)
+    hits = semantic_vector_retrieve(root, "DLL 修改后必须递增版本号避免被锁")
+    assert hits and hits[0][0].path.name == "dll-lock.md"
+
+
 def test_scan_stale_reports_all_when_db_missing(tmp_path):
     """无向量库（未 build）→ 全部卡待重建（freshness 如实暴露）"""
     root = bootstrap(tmp_path)

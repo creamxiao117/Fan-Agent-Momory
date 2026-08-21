@@ -208,18 +208,42 @@ def _probe_min_dim(conn: sqlite3.Connection) -> int | None:
     return min(sizes) if sizes else None
 
 
+def _backend_ok() -> bool:
+    """判断当前 embed 后端是否可用。
+
+    区分注入 mock 与真实后端：测试经 set_embed_backend 注入回调时视为可能产向量，
+    不属模型门禁管辖；生产（embed 是 _embed_text）则看惰性加载模型是否成功。
+    """
+    if embed is not _embed_text:
+        return True
+    return _load_backend()[0] is not None
+
+
 def build(root: Path) -> dict:
     """扫描卡片增量写入向量库；返回统计（reused/inserted/updated/removed/embedded）。
 
     维度门禁：记录 embed_dim/embed_model 到 db_meta；若本次 build 实得向量维度与库内
     已存维度不一致（换模型/维度变化），视为旧库失效，清空 docs 全量重建，避免新旧
     维度向量混算产生静默错误分（借鉴 codebase-memory-mcp artifact schema_version 门禁）。
+
+    后端保护：embed 后端不可用且库内已有有效向量时，保留旧库（degraded），绝不落 NULL 污染。
     """
     db = db_path(root)
     db.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(db)
     try:
         _ensure_schema(conn)
+        # ---- 后端保护：后端不可用且库内已有有效向量时，保留旧库，绝不落 NULL 污染 ----
+        if not _backend_ok():
+            n_valid = conn.execute(
+                "SELECT COUNT(*) FROM docs WHERE embedding IS NOT NULL"
+            ).fetchone()[0]
+            if n_valid > 0:
+                return {
+                    "reused": 0, "inserted": 0, "updated": 0, "removed": 0,
+                    "embedded": 0, "degraded": True,
+                    "note": f"embed 后端不可用，保留 {n_valid} 条有效向量，未覆盖",
+                }
         # 探测库内已存维度；若模型名变了且维度不同 → 全量重建
         stored_model = conn.execute(
             "SELECT value FROM db_meta WHERE key=?", (_META_MODEL,)

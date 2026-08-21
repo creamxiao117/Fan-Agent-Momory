@@ -303,10 +303,17 @@ def semantic_vector_retrieve(
     qv = semsearch.query_embedded(query)
     if qv is None:
         return []
-    path_to_card = {str(c.path): c for c in _index(root).cards}
+    def _norm_path(p) -> str:
+        # 统一为绝对路径 + 小写：兼容 build 侧存绝对路径、检索侧 Path 为相对路径的差异（Windows 大小写不敏感）
+        try:
+            return str(Path(p).resolve()).lower()
+        except OSError:
+            return str(p).replace('\\', '/').lower()
+
+    path_to_card = {_norm_path(c.path): c for c in _index(root).cards}
     out = []
     for p, s in semsearch.vector_scores(root, qv, top_k=top_k):
-        c = path_to_card.get(p)
+        c = path_to_card.get(_norm_path(p))
         if c is not None:
             out.append((c, s))
     return out
