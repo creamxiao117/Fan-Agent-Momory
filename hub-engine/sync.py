@@ -1,5 +1,6 @@
 """同步器：单一写入者 + 暂存区提升 + 去重/冲突 + 人工确认 + Git 提交"""
 
+import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -13,6 +14,7 @@ from common.frontmatter import (
     write_card,
 )
 from common.vector import cosine, vector
+from tools.memory_diff import record as record_diff
 
 TYPE_DIR = {
     "rule": "rules",
@@ -134,6 +136,15 @@ def ingest(root: Path, platform: str) -> dict:
                     cdir.mkdir(parents=True, exist_ok=True)
                     shutil.copy2(p, cdir / f"{platform}_{p.name}")
                     _append_log(root, "ingest", f"重复内容进冲突区：{p.name}")
+                    record_diff(
+                        root,
+                        {
+                            "op": "delete",
+                            "name": p.name,
+                            "type": card.type,
+                            "deleted_content": f"重复，回收进冲突区（hash={hash(card.body) & 0xFFFF:x}）",
+                        },
+                    )
                     p.unlink()  # 内容已保留在冲突区，草稿无保留价值
                     continue
                 if card.type in HIGH_RISK:
@@ -144,6 +155,16 @@ def ingest(root: Path, platform: str) -> dict:
                     (pending / p.name).write_text(write_card(card), encoding="utf-8")
                     stat["pending"] += 1
                     _append_log(root, "ingest", f"新规则待确认：{p.name}")
+                    record_diff(
+                        root,
+                        {
+                            "op": "add",
+                            "name": p.name,
+                            "type": card.type,
+                            "before": None,
+                            "after": f".sync/pending/{p.name}",
+                        },
+                    )
                 else:
                     # 低风险内容 → 自动入区，仅记日志
                     dst = root / TYPE_DIR.get(card.type, "experience") / p.name
@@ -154,6 +175,15 @@ def ingest(root: Path, platform: str) -> dict:
                         shutil.copy2(p, cdir / f"{platform}_{p.name}")
                         stat["duplicate"] += 1
                         _append_log(root, "ingest", f"同名不同内容进冲突区：{p.name}")
+                        record_diff(
+                            root,
+                            {
+                                "op": "delete",
+                                "name": p.name,
+                                "type": card.type,
+                                "deleted_content": f"同名冲突，回收进冲突区（hash={hash(card.body) & 0xFFFF:x}）",
+                            },
+                        )
                     else:
                         # 蓝图卡保留草稿声明的 status（reference→T1 前 / active→试用后），其余低风险卡默认为 active
                         if card.type != "blueprint":
@@ -162,6 +192,16 @@ def ingest(root: Path, platform: str) -> dict:
                         dst.write_text(write_card(card), encoding="utf-8")
                         stat["promoted"] += 1
                         _append_log(root, "ingest", f"自动入区：{p.name}")
+                        record_diff(
+                            root,
+                            {
+                                "op": "add",
+                                "name": p.name,
+                                "type": card.type,
+                                "before": None,
+                                "after": str(dst.relative_to(root)).replace(os.sep, "/"),
+                            },
+                        )
                 p.unlink()
             _commit(root, f"sync: ingest {platform} draft → hub")
     except RuntimeError as e:

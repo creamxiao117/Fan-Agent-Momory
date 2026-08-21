@@ -99,3 +99,19 @@ def test_append_log_uses_unified_prefix(tmp_path):
     append_log(root, "ingest", "测试写入")
     lines = (root / "retro" / "log.md").read_text(encoding="utf-8").splitlines()
     assert any(line.startswith("## [") and "| 测试写入" in line for line in lines)
+
+
+def test_ingest_writes_memory_diff(tmp_path):
+    """ingest 写回路径同步产结构化变更审计（OpenViking 路径 C 落地）"""
+    from tools.memory_diff import read_records
+
+    root = bootstrap(tmp_path)
+    _make_draft(root, "trae", "exp-a.md", "这是一条经验卡片内容", ctype="exp")
+    ingest(root, "trae")
+    recs = read_records(root)
+    assert any(
+        r.get("op") == "add"
+        and r.get("name") == "exp-a.md"
+        and r.get("after") == "experience/exp-a.md"
+        for r in recs
+    )
