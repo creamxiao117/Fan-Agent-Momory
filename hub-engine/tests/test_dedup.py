@@ -17,7 +17,9 @@ def _seed_authority(root: Path, name: str, body: str, ctype: str = "exp") -> Non
     )
 
 
-def _make_draft(root: Path, platform: str, name: str, body: str, ctype: str = "exp") -> Path:
+def _make_draft(
+    root: Path, platform: str, name: str, body: str, ctype: str = "exp"
+) -> Path:
     d = root / ".sync" / "drafts" / f"{platform}_draft"
     d.mkdir(parents=True, exist_ok=True)
     (d / name).write_text(
@@ -32,7 +34,9 @@ def _make_draft(root: Path, platform: str, name: str, body: str, ctype: str = "e
 
 
 def test_parse_decision_valid():
-    d = parse_decision('{"action":"merge","target":"a.md","reason":"同主题互补","confidence":0.9}')
+    d = parse_decision(
+        '{"action":"merge","target":"a.md","reason":"同主题互补","confidence":0.9}'
+    )
     assert d["action"] == "merge"
     assert d["target"] == "a.md"
     assert d["confidence"] == 0.9
@@ -156,3 +160,37 @@ def test_ingest_no_candidate_promotes(tmp_path):
     stat = ingest(root, "trae")
     assert stat["promoted"] == 1
     assert (root / "experience" / "exp-c.md").exists()
+
+
+def test_ingest_llm_create_highconf_auto_promotes(tmp_path):
+    """反哺(2026-08-21)：LLM 高置信 create（新卡、与候选主题不同）→ 自动入区，不落冲突区"""
+
+    def _chat(_prompt, _root):
+        return '{"action":"create","target":null,"reason":"主题不同无重复","confidence":0.92}'
+
+    root = bootstrap(tmp_path)
+    _seed_authority(root, "exp-a.md", "这是一条在线支付日志解析的经验卡片")
+    _make_draft(root, "trae", "exp-b.md", "这是一条治腰痛的经验卡片")
+    stat = ingest(root, "trae", chat_fn=_chat)
+    assert stat["promoted"] == 1, stat
+    assert (root / "experience" / "exp-b.md").exists()
+    assert not list((root / ".sync" / "conflicts").glob("*.md")), (
+        "高置信 create 不应落冲突区"
+    )
+
+
+def test_ingest_llm_create_highconf_same_name_still_conflicts(tmp_path):
+    """反哺安全兜底：LLM 高置信 create 但权威区同名不同内容 → 仍落冲突区，不覆盖"""
+
+    def _chat(_prompt, _root):
+        return '{"action":"create","target":null,"reason":"主题不同无重复","confidence":0.92}'
+
+    root = bootstrap(tmp_path)
+    _seed_authority(root, "exp-a.md", "在线支付时序分析的常规做法")
+    _make_draft(root, "trae", "exp-a.md", "在线支付时序分析的进阶技巧补充")
+    stat = ingest(root, "trae", chat_fn=_chat)
+    assert stat["duplicate"] == 1, stat
+    assert list((root / ".sync" / "conflicts").glob("trae_exp-a.md")), "同名应进冲突区"
+    # 权威区原卡未被覆盖
+    body = (root / "experience" / "exp-a.md").read_text(encoding="utf-8")
+    assert "常规做法" in body

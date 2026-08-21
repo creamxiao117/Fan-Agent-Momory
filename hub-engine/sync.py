@@ -128,7 +128,9 @@ def _write_dedup_prediction(
             "decision": decision,
         }
         pred = cdir / f"{platform}_{draft.stem}.pred.json"
-        pred.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        pred.write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
     except OSError:
         pass  # 决策留痕失败不阻断同步主流程
 
@@ -165,9 +167,11 @@ def ingest(root: Path, platform: str, chat_fn=None) -> dict:
                         else None
                     )
                     # 高置信重复（LLM 明确 skip 且 ≥0.8）→ 丢弃草稿，不落冲突区
-                    if decision and decision["action"] == "skip" and decision[
-                        "confidence"
-                    ] >= 0.8:
+                    if (
+                        decision
+                        and decision["action"] == "skip"
+                        and decision["confidence"] >= 0.8
+                    ):
                         _append_log(root, "ingest", f"LLM 判定重复，丢弃草稿：{p.name}")
                         record_diff(
                             root,
@@ -183,6 +187,62 @@ def ingest(root: Path, platform: str, chat_fn=None) -> dict:
                         )
                         p.unlink()
                         continue
+                    # 反哺经验(2026-08-21)：LLM 高置信判 create（新卡、与候选主题不同无重复，
+                    # target=null）→ 视作无有效候选，低风险卡型直接自动入区不落冲突区；
+                    # rule 仍须人工；权威区同名冲突仍交冲突区兜底。
+                    if (
+                        decision
+                        and decision["action"] == "create"
+                        and decision.get("confidence", 0) >= 0.8
+                        and card.type not in HIGH_RISK
+                    ):
+                        dst_c = root / TYPE_DIR.get(card.type, "experience") / p.name
+                        if dst_c.exists():
+                            cdir = root / ".sync" / "conflicts"
+                            cdir.mkdir(parents=True, exist_ok=True)
+                            shutil.copy2(p, cdir / f"{platform}_{p.name}")
+                            # 外层 cands 命中已 duplicate+=1，此处不重复计数
+                            _append_log(
+                                root,
+                                "ingest",
+                                f"LLM 判 create 高置信但权威区同名，进冲突区：{p.name}",
+                            )
+                            record_diff(
+                                root,
+                                {
+                                    "op": "delete",
+                                    "name": p.name,
+                                    "type": card.type,
+                                    "deleted_content": (
+                                        f"同名冲突，回收进冲突区（hash={hash(card.body) & 0xFFFF:x}）"
+                                    ),
+                                },
+                            )
+                        else:
+                            if card.type != "blueprint":
+                                card.status = "active"
+                            dst_c.parent.mkdir(parents=True, exist_ok=True)
+                            dst_c.write_text(write_card(card), encoding="utf-8")
+                            stat["promoted"] += 1
+                            _append_log(
+                                root,
+                                "ingest",
+                                f"LLM 判 create 高置信，自动入区：{p.name}",
+                            )
+                            record_diff(
+                                root,
+                                {
+                                    "op": "add",
+                                    "name": p.name,
+                                    "type": card.type,
+                                    "before": None,
+                                    "after": str(dst_c.relative_to(root)).replace(
+                                        os.sep, "/"
+                                    ),
+                                },
+                            )
+                        p.unlink()
+                        continue
                     cdir = root / ".sync" / "conflicts"
                     cdir.mkdir(parents=True, exist_ok=True)
                     shutil.copy2(p, cdir / f"{platform}_{p.name}")
@@ -193,7 +253,11 @@ def ingest(root: Path, platform: str, chat_fn=None) -> dict:
                         root,
                         "ingest",
                         f"重复内容进冲突区：{p.name}"
-                        + (f"（LLM 建议 {decision['action']}，待人工终审）" if decision else ""),
+                        + (
+                            f"（LLM 建议 {decision['action']}，待人工终审）"
+                            if decision
+                            else ""
+                        ),
                     )
                     record_diff(
                         root,
@@ -258,7 +322,9 @@ def ingest(root: Path, platform: str, chat_fn=None) -> dict:
                                 "name": p.name,
                                 "type": card.type,
                                 "before": None,
-                                "after": str(dst.relative_to(root)).replace(os.sep, "/"),
+                                "after": str(dst.relative_to(root)).replace(
+                                    os.sep, "/"
+                                ),
                             },
                         )
                 p.unlink()
