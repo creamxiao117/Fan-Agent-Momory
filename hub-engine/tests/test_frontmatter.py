@@ -64,3 +64,12 @@ def test_parse_missing_frontmatter_raises():
 
     with pytest.raises(ValueError):
         parse_card("没有 frontmatter 的纯文本")
+
+
+def test_read_card_tolerates_bom(tmp_path):
+    """带 BOM（EF BB BF）的卡应正常解析，不误判 invalid（实测草稿默认 UTF8 会带 BOM）"""
+    p = tmp_path / "bom.md"
+    p.write_bytes(b"\xef\xbb\xbf" + SAMPLE.encode("utf-8"))
+    card = read_card(p)
+    assert card.type == "rule"
+    assert card.tags == ["autocad", "dll-lock"]

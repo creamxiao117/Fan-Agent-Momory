@@ -96,7 +96,9 @@ def validate_card(card: Card) -> list[str]:
 
 
 def read_card(path: Path) -> Card:
-    return parse_card(path.read_text(encoding="utf-8"), path=path)
+    """读取卡片。utf-8-sig 同时容忍 BOM 与无 BOM——带 EF BB BF 头三字节的卡也能正常解析，
+    避免误判为 invalid（实测 2026-08-21：草稿写入默认 UTF8 会带 BOM，导致 startswith(--) 判空）。"""
+    return parse_card(path.read_text(encoding="utf-8-sig"), path=path)
 
 
 def try_read_card(path: Path) -> Card | None:
