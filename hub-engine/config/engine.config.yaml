@@ -1,5 +1,5 @@
 ---
 # omniroute 网关配置（聚合免费模型，OpenAI 兼容 API）
-gateway_url: http://127.0.0.1:11434
-default_model: qwen2.5:7b
+gateway_url: http://127.0.0.1:20128
+default_model: oc/hy3-free
 timeout: 30

@@ -33,6 +33,7 @@ def chat(prompt: str, hub_root: str | Path, fallback: bool = True) -> str:
             json={
                 "model": model,
                 "messages": [{"role": "user", "content": prompt}],
+                "stream": False,
             },
             headers=headers,
             timeout=timeout,
@@ -87,7 +88,7 @@ def _cmd_build_vectors(args) -> int:
 def _cmd_ingest(args) -> int:
     from sync import ingest
 
-    stat = ingest(Path(args.root), args.platform)
+    stat = ingest(Path(args.root), args.platform, chat_fn=chat)
     print(stat)
     return 0 if stat["status"] == "ok" else 1
 
