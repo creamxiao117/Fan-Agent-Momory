@@ -1,5 +1,47 @@
 ---
 # omniroute 网关配置（聚合免费模型，OpenAI 兼容 API）
 gateway_url: http://127.0.0.1:20128
-default_model: oc/hy3-free
+# 远程/聚合通道默认模型（OmniRoute auto/offline 策略）。
+# 本地默认逻辑模型在 local_chat/batch_model/escalation 段。
+default_model: auto/offline
 timeout: 30
+# llmlingua：高压缩率引擎
+compress: llmlingua
+# 中枢批处理 / 嵌入式任务默认走本地 1.5B；最终由 smart_chat 按质量门禁升级
+batch_model: qwen2.5-coder:1.5b
+
+# 本地向量嵌入后端（LM Studio，text-embedding-bge-m3 中文嵌入模型）
+embed:
+  url: http://localhost:1234/v1/embeddings
+  model: text-embedding-bge-m3
+  api_key: 'lm-studio'
+  label: lmstudio-bge3-m3
+
+# 本地离线兜底 chat（omniroute 网关全挂时直连 LM Studio qwen/qwen3.5-9b）
+fallback_chat:
+  url: http://127.0.0.1:1234/v1/chat/completions
+  model: qwen/qwen3.5-9b
+  api_key: 'lm-studio'
+  max_tokens: 16384
+
+# 本地默认逻辑入口：直连本机 LM Studio，零 token、不走网关
+local_chat:
+  url: http://127.0.0.1:1234/v1/chat/completions
+  model: qwen/qwen3.5-9b
+  max_tokens: 2048
+
+# 量化升级阈值：默认本地模型达不到结构化质量/置信度时升级
+escalation:
+  enabled: true
+  # 本地升级顺序
+  intermediate_model: qwen/qwen3.5-9b
+  # 1. 本机大模型
+  local_model: qwen/qwen3.5-9b
+  # 2. OmniRoute 线上/聚合
+  remote_model: auto/offline
+  # 决策质量打分阈值（结构化 + 理由长度 + 置信区间 + 长度合规）
+  min_score: 0.80
+  # 模型自报 confidence 阈值
+  min_confidence: 0.80
+  # merge/delete/规则卡永远只进入人工审核，不自动落权威区
+  require_human_for: [merge, delete, rule]
