@@ -1,10 +1,11 @@
-"""Ollama 健康检测模块：检测 Ollama 服务状态，支持自动重连。
+"""本地 LLM 健康检测模块：检测 LM Studio / LLM 等本地 LLM 服务状态，支持自动重连。
 
 功能：
-1. 快速检测 Ollama 服务是否在线
+1. 快速检测本地 LLM 服务是否在线
 2. 检测指定模型是否可用
 3. 连接失败时自动重试
 4. 提供降级状态管理（记录最近一次失败时间）
+5. 兼容 LM Studio (端口 1234) 和 LLM (端口 11434)
 """
 
 from __future__ import annotations
@@ -15,10 +16,14 @@ import urllib.error
 from dataclasses import dataclass, field
 from typing import Callable
 
+# 健康检测阈值配置
+RESPONSE_TIME_WARNING_THRESHOLD = 3000  # 响应时间警告阈值（毫秒）
+RESPONSE_TIME_CRITICAL_THRESHOLD = 5000  # 响应时间严重阈值（毫秒）
+
 
 @dataclass
-class OllamaStatus:
-    """Ollama 服务状态。"""
+class LLMStatus:
+    """本地 LLM 服务状态。"""
     available: bool
     url: str
     models: list[str] = field(default_factory=list)
@@ -27,21 +32,22 @@ class OllamaStatus:
     response_time: float = 0.0
 
 
-class OllamaHealthChecker:
-    """Ollama 健康检测器。
+class LLMHealthChecker:
+    """本地 LLM 健康检测器。
 
     支持：
     - 快速检测（超时 3s）
     - 模型可用性检测
     - 失败冷却（避免反复请求已崩溃的服务）
+    - 兼容 LM Studio 和 LLM 的 API 端点
     """
 
     # 单例缓存
-    _instance: OllamaHealthChecker | None = None
+    _instance: LLMHealthChecker | None = None
 
     def __init__(
         self,
-        base_url: str = "http://localhost:11434",
+        base_url: str = "http://localhost:1234",
         check_timeout: float = 3.0,
         cooldown_after_fail: float = 30.0,
     ):
@@ -49,10 +55,10 @@ class OllamaHealthChecker:
         self.check_timeout = check_timeout
         self.cooldown_after_fail = cooldown_after_fail
         self._last_fail_time: float = 0.0
-        self._cached_status: OllamaStatus | None = None
+        self._cached_status: LLMStatus | None = None
 
     @classmethod
-    def get_instance(cls, base_url: str = "http://localhost:1234") -> OllamaHealthChecker:
+    def get_instance(cls, base_url: str = "http://localhost:1234") -> LLMHealthChecker:
         """获取单例实例。"""
         if cls._instance is None:
             cls._instance = cls(base_url=base_url)
@@ -64,7 +70,7 @@ class OllamaHealthChecker:
         cls._instance = None
 
     def is_available(self) -> bool:
-        """快速检测 LM Studio / Ollama 是否在线。"""
+        """快速检测 LM Studio / LLM 是否在线。"""
         # 冷却期内直接返回不可用
         if time.time() - self._last_fail_time < self.cooldown_after_fail:
             return False
@@ -82,7 +88,7 @@ class OllamaHealthChecker:
                 return True
         except Exception as e:
             self._last_fail_time = time.time()
-            self._cached_status = OllamaStatus(
+            self._cached_status = LLMStatus(
                 available=False,
                 url=self.base_url,
                 last_check=time.time(),
@@ -113,7 +119,7 @@ class OllamaHealthChecker:
         except Exception:
             return False
 
-    def get_status(self) -> OllamaStatus:
+    def get_status(self) -> LLMStatus:
         """获取完整状态（含模型列表）。"""
         start = time.time()
         try:
@@ -128,7 +134,7 @@ class OllamaHealthChecker:
                     data = json.loads(resp.read())
                     models = [m["id"] for m in data.get("data", [])]
                     self._last_fail_time = 0.0
-                    status = OllamaStatus(
+                    status = LLMStatus(
                         available=True,
                         url=self.base_url,
                         models=models,
@@ -147,7 +153,7 @@ class OllamaHealthChecker:
                 data = json.loads(resp.read())
                 models = [m["name"] for m in data.get("models", [])]
                 self._last_fail_time = 0.0
-                status = OllamaStatus(
+                status = LLMStatus(
                     available=True,
                     url=self.base_url,
                     models=models,
@@ -158,7 +164,7 @@ class OllamaHealthChecker:
                 return status
         except Exception as e:
             self._last_fail_time = time.time()
-            status = OllamaStatus(
+            status = LLMStatus(
                 available=False,
                 url=self.base_url,
                 last_check=time.time(),
@@ -168,7 +174,7 @@ class OllamaHealthChecker:
             self._cached_status = status
             return status
 
-    def get_cached_status(self) -> OllamaStatus | None:
+    def get_cached_status(self) -> LLMStatus | None:
         """获取上次缓存的状态（不发起请求）。"""
         return self._cached_status
 
@@ -177,36 +183,36 @@ class OllamaHealthChecker:
         self._last_fail_time = 0.0
 
 
-def create_ollama_health_wrapper(
+def create_llm_health_wrapper(
     fn: Callable[..., str],
     on_unavailable: Callable[..., str] | None = None,
     base_url: str = "http://localhost:11434",
 ) -> Callable[..., str]:
-    """创建 Ollama 健康检测包装器。
+    """创建 LLM 健康检测包装器。
 
     用法：
-        def my_ollama_call():
-            # 实际 Ollama 调用
+        def my_llm_call():
+            # 实际 LLM 调用
             ...
 
         def fallback_to_gateway():
-            # Ollama 不可用时的降级方案
+            # LLM 不可用时的降级方案
             ...
 
-        safe_call = create_ollama_health_wrapper(
-            my_ollama_call,
+        safe_call = create_llm_health_wrapper(
+            my_llm_call,
             on_unavailable=fallback_to_gateway
         )
         result = safe_call()  # 自动检测健康状态
     """
-    checker = OllamaHealthChecker.get_instance(base_url)
+    checker = LLMHealthChecker.get_instance(base_url)
 
     def wrapper(*args, **kwargs) -> str:
         if not checker.is_available():
             if on_unavailable:
-                print(f"[ollama_health] Ollama 不可用，执行降级方案")
+                print(f"[llm_health] LLM 不可用，执行降级方案")
                 return on_unavailable(*args, **kwargs)
-            raise ConnectionError(f"Ollama 服务不可用: {checker._cached_status.last_error if checker._cached_status else '未知错误'}")
+            raise ConnectionError(f"LLM 服务不可用: {checker._cached_status.last_error if checker._cached_status else '未知错误'}")
         return fn(*args, **kwargs)
 
     return wrapper
@@ -214,21 +220,21 @@ def create_ollama_health_wrapper(
 
 # 便捷函数
 def quick_check(url: str = "http://localhost:11434") -> bool:
-    """快速检测 Ollama 是否在线。"""
-    checker = OllamaHealthChecker(base_url=url)
+    """快速检测 LLM 是否在线。"""
+    checker = LLMHealthChecker(base_url=url)
     return checker.is_available()
 
 
 def check_model(model: str, url: str = "http://localhost:11434") -> bool:
     """检测指定模型是否可用。"""
-    checker = OllamaHealthChecker(base_url=url)
+    checker = LLMHealthChecker(base_url=url)
     return checker.check_model(model)
 
 
 if __name__ == "__main__":
     # 自测
-    checker = OllamaHealthChecker()
-    print("=== Ollama 健康检测 ===")
+    checker = LLMHealthChecker()
+    print("=== LLM 健康检测 ===")
     status = checker.get_status()
     print(f"可用: {status.available}")
     print(f"模型: {status.models}")

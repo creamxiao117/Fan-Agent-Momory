@@ -24,7 +24,15 @@
 
 ## 执行前必读（用户既定规则）
 
+<important if="you are starting a task, planning, or planning a plan that touches the hub">
 - 先查统一记忆中枢：读 `C:\Users\Fan-SJSS\.trae-cn\worktrees\20260817-Fan-Agent-Momory\feat-implement-plan-ZilBmv\AgentMemoryHub\INDEX.md` 与 `rules/`、`experience/`，命中再执行。
-- 不确定的内容交回用户，不得臆测、不得凭空捏造历史经验。
 - 查询好结果回写为经验卡片（查询产物回写）。
+</important>
+
+<important if="you are in any ambiguous or uncertain situation, or the answer is not found in the hub">
+- 不确定的内容交回用户，不得臆测、不得凭空捏造历史经验。
+</important>
+
+<important if="you need a missing tool, or you are writing or generating code or shell commands">
 - 缺工具就主动找/装；代码注释尽量中文；lint 规范。
+</important>

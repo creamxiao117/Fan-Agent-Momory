@@ -9,7 +9,7 @@ from common.config import HubConfig, load_engine_config, load_provider_keys
 from tools.lint import _all_cards, lint
 from tools.retrieve import retrieve
 from tools.resilience import ResiliencePipelineBuilder, PipelineEvent
-from tools.ollama_health import OllamaHealthChecker
+from tools.llm_health import LLMHealthChecker
 
 
 def _gateway_kwargs(
@@ -147,7 +147,7 @@ def _local_fallback_chat(
     hub_root: Path, prompt: str, parts: list[str], bodies: list[str]
 ) -> str:
     """直连本地 Ollama 生成骨架回答（不经 OmniRoute，外部源全挂仍可用）。
-    接入 Ollama 健康检测 + 弹性管道：Ollama 不可用时返回空字符串，由上层处理。"""
+    接入 LLM 健康检测 + 弹性管道：Ollama 不可用时返回空字符串，由上层处理。"""
     from common.config import load_engine_config
 
     cfg = (load_engine_config() or {}).get("fallback_chat") or {}
@@ -158,12 +158,12 @@ def _local_fallback_chat(
         return ""
     import requests
 
-    # Ollama 健康检测
+    # LLM 健康检测
     ollama_base = url.rsplit("/v1/", 1)[0] if "/v1/" in url else url.rsplit("/", 1)[0]
-    health_checker = OllamaHealthChecker.get_instance(ollama_base)
+    health_checker = LLMHealthChecker.get_instance(ollama_base)
 
     if not health_checker.is_available():
-        print(f"[ollama_health] fallback_chat Ollama 不可用，跳过本地兜底")
+        print(f"[llm_health] fallback_chat Ollama 不可用，跳过本地兜底")
         return ""
 
     ref = "\n".join(f"- {p}:\n{b[:400]}" for p, b in zip(parts, bodies))
@@ -203,7 +203,7 @@ def _local_fallback_chat(
 
 def _local_chat(prompt: str, hub_root: Path, model: str | None = None) -> str:
     """直连本机 Ollama 的统一入口，供本地默认逻辑任务使用。
-    接入 Ollama 健康检测 + 弹性管道：Ollama 不可用时自动降级到网关。"""
+    接入 LLM 健康检测 + 弹性管道：Ollama 不可用时自动降级到网关。"""
     import requests
 
     cfg = load_engine_config()
@@ -222,12 +222,12 @@ def _local_chat(prompt: str, hub_root: Path, model: str | None = None) -> str:
     }
     timeout = int(cfg.get("timeout", 30))
 
-    # Ollama 健康检测
+    # LLM 健康检测
     ollama_base = url.rsplit("/v1/", 1)[0] if "/v1/" in url else url.rsplit("/", 1)[0]
-    health_checker = OllamaHealthChecker.get_instance(ollama_base)
+    health_checker = LLMHealthChecker.get_instance(ollama_base)
 
     if not health_checker.is_available():
-        print(f"[ollama_health] Ollama 不可用，降级到 OmniRoute 网关")
+        print(f"[llm_health] Ollama 不可用，降级到 OmniRoute 网关")
         # 降级到网关
         return chat(prompt, hub_root, fallback=True)
 
@@ -274,7 +274,7 @@ def _decision_quality(text: str) -> tuple[float, dict]:
 def smart_chat(prompt: str, hub_root: str | Path) -> str:
     """本地优先 + 量化升级的统一逻辑任务入口。
 
-    接入 Ollama 健康检测：Ollama 不可用时直接跳过本地通道，使用网关。
+    接入 LLM 健康检测：Ollama 不可用时直接跳过本地通道，使用网关。
     去重任务（包含记忆库去重决策器）按决策质量分 + 模型自报 confidence 双重门禁。
     达不到阈值时升级路径：本地模型 -> OmniRoute auto/offline。
     """
@@ -287,14 +287,14 @@ def smart_chat(prompt: str, hub_root: str | Path) -> str:
     min_score = float(escalation.get("min_score", 0.80))
     min_conf = float(escalation.get("min_confidence", 0.80))
 
-    # LM Studio / Ollama 健康检测
+    # LM Studio / LLM 健康检测
     ollama_url = str(local_cfg.get("url", "http://127.0.0.1:1234/v1/chat/completions"))
     ollama_base = ollama_url.rsplit("/v1/", 1)[0] if "/v1/" in ollama_url else ollama_url.rsplit("/", 1)[0]
-    health_checker = OllamaHealthChecker.get_instance(ollama_base)
+    health_checker = LLMHealthChecker.get_instance(ollama_base)
 
     ollama_available = health_checker.is_available()
     if not ollama_available:
-        print(f"[ollama_health] Ollama 不可用，直接使用 OmniRoute 网关")
+        print(f"[llm_health] Ollama 不可用，直接使用 OmniRoute 网关")
         return chat(
             prompt, root, fallback=False,
             model=str(escalation.get("remote_model", "auto/offline")),
@@ -320,9 +320,9 @@ def smart_chat(prompt: str, hub_root: str | Path) -> str:
         ]
         for upgrade_model in local_upgrade_models:
             try:
-                # 再次检查 Ollama 健康状态
+                # 再次检查 LLM 健康状态
                 if not health_checker.is_available():
-                    print(f"[ollama_health] Ollama 在升级期间不可用，切换到网关")
+                    print(f"[llm_health] Ollama 在升级期间不可用，切换到网关")
                     break
                 upgraded = _local_chat(prompt, root, upgrade_model)
             except OSError as e:
@@ -436,7 +436,7 @@ def _cmd_lint(args) -> int:
 
 
 def _cmd_status(args) -> int:
-    """一键健康快照 v2：卡片分布 / Lint / Ollama 健康 / 健康评分 / 告警 / 今日指标 / 最近提交"""
+    """一键健康快照 v2：卡片分布 / Lint / LLM 健康 / 健康评分 / 告警 / 今日指标 / 最近提交"""
     import json
     import subprocess
     from collections import Counter
@@ -493,9 +493,9 @@ def _cmd_status(args) -> int:
     except Exception:
         data["fresh"] = {"stale_total": -1, "stale_by_dir": {}}
 
-    # === 2. Ollama 健康检测 ===
-    ollama_status = _collect_ollama_status()
-    data["ollama"] = ollama_status
+    # === 2. LLM 健康检测 ===
+    llm_status = _collect_llm_status()
+    data["ollama"] = llm_status
 
     # === 3. 今日指标聚合 ===
     today_metrics = _collect_today_metrics(root)
@@ -503,13 +503,13 @@ def _cmd_status(args) -> int:
 
     # === 4. 健康度评分 ===
     health_scores = _compute_snapshot_health_scores(
-        counts, report, ollama_status, root
+        counts, report, llm_status, root
     )
     data["health_scores"] = health_scores
 
     # === 5. 自监控告警 ===
     alerts = _collect_snapshot_alerts(
-        report, ollama_status, today_metrics, health_scores, pending
+        report, llm_status, today_metrics, health_scores, pending
     )
     data["alerts"] = alerts
 
@@ -535,11 +535,11 @@ def _cmd_status(args) -> int:
     return 0
 
 
-def _collect_ollama_status() -> dict:
-    """采集 Ollama 服务状态。"""
+def _collect_llm_status() -> dict:
+    """采集 LM Studio 服务状态。"""
     try:
-        from tools.ollama_health import OllamaHealthChecker
-        checker = OllamaHealthChecker.get_instance("http://localhost:1234")
+        from tools.llm_health import LLMHealthChecker
+        checker = LLMHealthChecker.get_instance("http://localhost:1234")
         status = checker.get_status()
         return {
             "available": status.available,
@@ -621,7 +621,7 @@ def _collect_today_metrics(root: Path) -> dict:
 def _compute_snapshot_health_scores(
     counts: dict,
     report: dict,
-    ollama_status: dict,
+    llm_status: dict,
     root: Path,
 ) -> dict:
     """计算快照健康度评分（4 维 + 总分）。"""
@@ -673,37 +673,37 @@ def _compute_snapshot_health_scores(
         except (json.JSONDecodeError, ValueError, OSError):
             pass
 
-    ollama_health = 100.0
-    if not ollama_status.get("available", False):
-        ollama_health = 0.0
+    llm_health = 100.0
+    if not llm_status.get("available", False):
+        llm_health = 0.0
     else:
-        rt = ollama_status.get("response_time_ms", 1000)
+        rt = llm_status.get("response_time_ms", 1000)
         if rt < 100:
-            ollama_health = 100.0
+            llm_health = 100.0
         elif rt < 500:
-            ollama_health = 80.0
+            llm_health = 80.0
         else:
-            ollama_health = 60.0
+            llm_health = 60.0
 
     overall = (
         card_health * 0.25
         + skill_health * 0.35
         + flywheel_activity * 0.20
-        + ollama_health * 0.20
+        + llm_health * 0.20
     )
 
     return {
         "card_health": round(card_health, 1),
         "skill_health": round(skill_health, 1),
         "flywheel_activity": round(flywheel_activity, 1),
-        "ollama_health": round(ollama_health, 1),
+        "llm_health": round(llm_health, 1),
         "overall": round(overall, 1),
     }
 
 
 def _collect_snapshot_alerts(
     report: dict,
-    ollama_status: dict,
+    llm_status: dict,
     today_metrics: dict,
     health_scores: dict,
     pending: list,
@@ -711,11 +711,11 @@ def _collect_snapshot_alerts(
     """采集快照自监控告警（分级：critical / warning / info）。"""
     alerts = []
 
-    if not ollama_status.get("available", False):
+    if not llm_status.get("available", False):
         alerts.append({
             "level": "critical",
             "rule": "ollama_unavailable",
-            "message": f"Ollama 服务不可用: {ollama_status.get('last_error', '未知错误')}",
+            "message": f"Ollama 服务不可用: {llm_status.get('last_error', '未知错误')}",
             "suggestion": "检查 Ollama 服务状态，必要时重启 Ollama",
         })
 
@@ -758,11 +758,11 @@ def _collect_snapshot_alerts(
             "suggestion": "运行 hub confirm 逐张确认 pending 目录下的卡",
         })
 
-    if ollama_status.get("available") and ollama_status.get("response_time_ms", 0) > 500:
+    if llm_status.get("available") and llm_status.get("response_time_ms", 0) > 500:
         alerts.append({
             "level": "info",
             "rule": "ollama_slow",
-            "message": f"Ollama 响应时间 {ollama_status['response_time_ms']}ms，建议优化",
+            "message": f"Ollama 响应时间 {llm_status['response_time_ms']}ms，建议优化",
             "suggestion": "检查 Ollama 资源占用，考虑模型冷启动预热",
         })
 
@@ -816,7 +816,7 @@ def _compare_snapshots(prev: dict, curr: dict) -> dict:
     prev_avail = prev_ollama.get("available", True)
     curr_avail = curr_ollama.get("available", True)
     if prev_avail != curr_avail:
-        changes["ollama_status"] = {
+        changes["llm_status"] = {
             "prev": "available" if prev_avail else "unavailable",
             "curr": "available" if curr_avail else "unavailable",
         }
@@ -868,12 +868,12 @@ def _print_snapshot_report(data: dict, report: dict, pending: list):
     if ollama.get("available"):
         models_str = ", ".join(ollama.get("models", [])[:3])
         print(
-            f"🦙 Ollama 健康: ✅ 可用 · {ollama.get('model_count', 0)} 模型"
+            f"🦙 LLM 健康: ✅ 可用 · {ollama.get('model_count', 0)} 模型"
             f" · 响应 {ollama.get('response_time_ms', 0)}ms"
             + (f" · 模型: {models_str}" if models_str else "")
         )
     else:
-        print(f"🦙 Ollama 健康: ❌ 不可用 · 错误: {ollama.get('last_error', '未知')}")
+        print(f"🦙 LLM 健康: ❌ 不可用 · 错误: {ollama.get('last_error', '未知')}")
 
     scores = data.get("health_scores", {})
     if scores:
@@ -882,7 +882,7 @@ def _print_snapshot_report(data: dict, report: dict, pending: list):
             "card_health": "卡片",
             "skill_health": "技能",
             "flywheel_activity": "飞轮",
-            "ollama_health": "Ollama",
+            "llm_health": "Ollama",
             "overall": "📈 总分",
         }
         for k, v in scores.items():
@@ -923,7 +923,7 @@ def _print_snapshot_report(data: dict, report: dict, pending: list):
                 for k, v in changes.items():
                     arrow = "📈" if v["delta"] > 0 else "📉"
                     print(f"  {arrow} 健康分 {k}: {v['prev']} → {v['curr']} ({v['delta']:+.1f})")
-            elif area == "ollama_status":
+            elif area == "llm_status":
                 print(f"  ⚡ Ollama: {changes['prev']} → {changes['curr']}")
             elif area == "alerts":
                 for r in changes.get("new", []):

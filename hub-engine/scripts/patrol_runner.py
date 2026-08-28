@@ -165,7 +165,7 @@ def _ollama_pre_check() -> StepResult:
     """P0-2: Ollama 服务前置检测。"""
     try:
         # 默认使用本地的 LM Studio 端口 1234
-        checker = OllamaHealthChecker.get_instance("http://localhost:1234")
+        checker = LLMHealthChecker.get_instance("http://localhost:1234")
         status = checker.get_status()
         models_str = ", ".join(status.models[:3]) if status.models else "无模型"
         rt_ms = round(status.response_time * 1000, 1)
@@ -765,7 +765,7 @@ def print_report(report: PatrolReport):
     if scores:
         print(f"\n📊 健康度评分:")
         labels = {"card_health": "卡片", "skill_health": "技能",
-                   "flywheel_activity": "飞轮", "ollama_health": "Ollama",
+                   "flywheel_activity": "飞轮", "llm_health": "Ollama",
                    "overall": "📈 总分"}
         for k, v in scores.items():
             label = labels.get(k, k)

@@ -1,2 +1,5 @@
-# 归档设计文档/运行产物不在 ruff 检查与格式化范围内
-extend-exclude = ["docs/**", "work/**", ".tools/**"]
+# 归档设计文档/运行产物/虚拟环境/第三方依赖不在 ruff 检查与格式化范围内
+extend-exclude = ["docs/**", "work/**", ".tools/**", "_t1_venv/**", "_t1_deps/**", "AgentMemoryHub/**"]
+
+# 行宽放宽到 120：覆盖内嵌 HTML/CSS 模板字符串和 docstring
+line-length = 120

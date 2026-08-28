@@ -24,7 +24,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from tools.ollama_health import OllamaHealthChecker
+from tools.llm_health import LLMHealthChecker
 
 # 飞轮各阶段对应的脚本
 FLYWHEEL_STAGES = {
@@ -172,10 +172,10 @@ def collect_skill_stats(skillhub_root: Path) -> dict:
     }
 
 
-def collect_ollama_status() -> dict:
+def collect_llm_status() -> dict:
     """采集 Ollama 服务状态。"""
     try:
-        checker = OllamaHealthChecker.get_instance("http://localhost:1234")
+        checker = LLMHealthChecker.get_instance("http://localhost:1234")
         status = checker.get_status()
         return {
             "available": status.available,
@@ -193,7 +193,7 @@ def collect_ollama_status() -> dict:
         }
 
 
-def compute_health_score(card_stats: dict, skill_stats: dict, flywheel_stats: dict, ollama_status: dict | None = None) -> dict:
+def compute_health_score(card_stats: dict, skill_stats: dict, flywheel_stats: dict, llm_status: dict | None = None) -> dict:
     """计算飞轮健康度评分（0-100）。"""
     scores = {}
 
@@ -216,23 +216,23 @@ def compute_health_score(card_stats: dict, skill_stats: dict, flywheel_stats: di
     scores["flywheel_activity"] = round(flywheel_activity, 1)
 
     # 4. Ollama 健康度
-    ollama_health = 100.0  # 默认满分
-    if ollama_status:
-        if not ollama_status.get("available", False):
-            ollama_health = 0.0  # Ollama 不可用
+    llm_health = 100.0  # 默认满分
+    if llm_status:
+        if not llm_status.get("available", False):
+            llm_health = 0.0  # Ollama 不可用
         else:
             # 响应时间评分（<100ms = 100分, <500ms = 80分, 其他 = 60分）
-            response_time = ollama_status.get("response_time_ms", 1000)
+            response_time = llm_status.get("response_time_ms", 1000)
             if response_time < 100:
-                ollama_health = 100.0
+                llm_health = 100.0
             elif response_time < 500:
-                ollama_health = 80.0
+                llm_health = 80.0
             else:
-                ollama_health = 60.0
-    scores["ollama_health"] = round(ollama_health, 1)
+                llm_health = 60.0
+    scores["llm_health"] = round(llm_health, 1)
 
     # 总分
-    overall = card_health * 0.25 + skill_health * 0.35 + flywheel_activity * 0.2 + ollama_health * 0.2
+    overall = card_health * 0.25 + skill_health * 0.35 + flywheel_activity * 0.2 + llm_health * 0.2
     scores["overall"] = round(overall, 1)
 
     return scores
@@ -326,12 +326,12 @@ def check_alerts(
         })
 
     # 规则 4: Ollama 不可用
-    ollama_status = collect_ollama_status()
-    if not ollama_status.get("available", True):
+    llm_status = collect_llm_status()
+    if not llm_status.get("available", True):
         alerts.append({
             "level": "critical",
             "rule": "ollama_unavailable",
-            "message": f"Ollama 服务不可用: {ollama_status.get('last_error', '未知错误')}",
+            "message": f"Ollama 服务不可用: {llm_status.get('last_error', '未知错误')}",
             "suggestion": "检查 Ollama 服务状态，必要时重启 Ollama",
         })
 
@@ -356,13 +356,13 @@ def main():
     card_stats = collect_card_stats(hub_root)
     skill_stats = collect_skill_stats(skillhub_root)
     flywheel_stats = count_scripts_run(log_dir, days=args.days)
-    ollama_status = collect_ollama_status()
-    health_scores = compute_health_score(card_stats, skill_stats, flywheel_stats, ollama_status)
+    llm_status = collect_llm_status()
+    health_scores = compute_health_score(card_stats, skill_stats, flywheel_stats, llm_status)
 
     report = {
         "generated_at": datetime.now(tz=timezone.utc).isoformat(),
         "period_days": args.days,
-        "ollama_status": ollama_status,
+        "llm_status": llm_status,
         "flywheel_stats": flywheel_stats,
         "card_stats": card_stats,
         "skill_stats": skill_stats,
