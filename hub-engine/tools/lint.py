@@ -108,6 +108,7 @@ def lint(root: Path) -> dict:
     return {
         "orphans": [str(p) for p in find_orphans(root)],
         "ghosts": find_index_ghosts(root),
+        "hooks": [],  # 预留：hook 漂移检测（未实现）
         "stale": stale,
         "invalid": invalid,
         "notes": f"共检查 {total} 张卡片",
