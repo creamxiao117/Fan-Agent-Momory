@@ -12,7 +12,7 @@ batch_model: qwen2.5-coder:1.5b
 
 # 本地向量嵌入后端（LM Studio，text-embedding-bge-m3 中文嵌入模型）
 embed:
-  url: http://localhost:1234/v1/embeddings
+  url: http://127.0.0.1:1234/v1/embeddings  # 2026-08-29 修：localhost 解析到 IPv6 ::1，LM Studio 只听 IPv4 → 连接失败(HTTP 000)
   model: text-embedding-bge-m3
   api_key: 'lm-studio'
   label: lmstudio-bge3-m3

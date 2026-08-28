@@ -30,6 +30,66 @@ embed: Callable[[str], list[float] | None] = (
 )
 
 
+# ---- HTTP embed 后端（OpenAI 兼容 /v1/embeddings，本机为 LM Studio + bge-m3）----
+# 为什么需要：本机无任何解释器装齐 transformers+torch，本地模型后端实际跑不起来；
+# 且库内现存 188 条向量为 bge-m3 的 1024 维，HTTP 端必须产出同维度模型，否则检索失效。
+_HTTP_CFG: tuple[str, str, str, int] | None = None
+_HTTP_PROBED = False
+
+
+def _http_cfg() -> tuple[str, str, str, int] | None:
+    """懒加载 engine.config.yaml 的 embed 段；无配置返回 None（只读一次）。"""
+    global _HTTP_CFG, _HTTP_PROBED
+    if _HTTP_PROBED:
+        return _HTTP_CFG
+    _HTTP_PROBED = True
+    cfg_path = Path(__file__).resolve().parent.parent / "config" / "engine.config.yaml"
+    try:
+        import yaml
+
+        raw = yaml.safe_load(cfg_path.read_text(encoding="utf-8")) or {}
+        emb = raw.get("embed") or {}
+        if emb.get("url") and emb.get("model"):
+            _HTTP_CFG = (
+                emb["url"],
+                emb["model"],
+                emb.get("api_key") or "",
+                int(emb.get("timeout", 30)),
+            )
+    except Exception:  # noqa: BLE001 - 配置缺失/损坏 → 交本地兜底
+        _HTTP_CFG = None
+    return _HTTP_CFG
+
+
+def _embed_via_http(text: str) -> list[float] | None:
+    """调 /v1/embeddings 取向量并 L2 归一化；失败返回 None（不抛错）。"""
+    cfg = _http_cfg()
+    if not cfg:
+        return None
+    url, model, api_key, timeout = cfg
+    try:
+        import json
+        import urllib.request
+
+        headers = {"Content-Type": "application/json"}
+        if api_key:
+            headers["Authorization"] = f"Bearer {api_key}"
+        req = urllib.request.Request(
+            url,
+            data=json.dumps({"model": model, "input": text}).encode("utf-8"),
+            headers=headers,
+        )
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            payload = json.loads(resp.read().decode("utf-8"))
+        import numpy as np
+
+        v = np.asarray(payload["data"][0]["embedding"], dtype="float32")
+        norm = float(np.linalg.norm(v))
+        return (v / norm).tolist() if norm else None  # L2 → 点积=余弦
+    except Exception:  # noqa: BLE001 - HTTP 后端不可用 → 交本地兜底
+        return None
+
+
 def _load_backend():
     """惰性加载模型（进程单例）；失败返回 None,None（不抛错,检索退化）"""
     global _model, _tok
@@ -49,7 +109,13 @@ def _load_backend():
 
 
 def _embed_text(text: str) -> list[float] | None:
-    """文本 → 512 维 L2 归一化向量（CLS）；后端不可用返回 None（退化）"""
+    """文本 → L2 归一化向量；HTTP 后端优先，本地 transformers 兜底，均不可用返回 None。
+
+    维度取决于后端：HTTP bge-m3=1024（与库内现存向量一致）/ 本地 bge-small-zh=512。
+    """
+    vec = _embed_via_http(text)
+    if vec is not None:
+        return vec
     model, tok = _load_backend()
     if model is None:
         return None
@@ -193,6 +259,18 @@ def _stored_dim(conn: sqlite3.Connection) -> int | None:
         return None
 
 
+def _active_model_id() -> str:
+    """实际生效的 embed 模型标识：HTTP 后端优先记 `http:<模型名>`，否则记本地模型名。
+
+    为什么不能固定写 EMBED_MODEL：db_meta.embed_model 是维度门禁的判断依据，
+    记错会让"换了后端但维度恰好相同"的情况漏判重建，导致不同模型向量混算。
+    """
+    cfg = _http_cfg()
+    if cfg and _embed_via_http("model-id-probe") is not None:
+        return f"http:{cfg[1]}"
+    return EMBED_MODEL
+
+
 def _probe_min_dim(conn: sqlite3.Connection) -> int | None:
     """返回库内现有非空向量的最小维度（跨行不一致时取最小以保守校验）。"""
     import numpy as np
@@ -212,9 +290,14 @@ def _backend_ok() -> bool:
     """判断当前 embed 后端是否可用。
 
     区分注入 mock 与真实后端：测试经 set_embed_backend 注入回调时视为可能产向量，
-    不属模型门禁管辖；生产（embed 是 _embed_text）则看惰性加载模型是否成功。
+    不属模型门禁管辖；生产（embed 是 _embed_text）则依次探测 HTTP 后端、本地模型。
+
+    为什么 HTTP 也要实测一次：配置存在 ≠ 服务在跑（LM Studio 未启动时配置仍在），
+    只判配置会让 build 在后端真挂时误判可用、落 NULL 污染库。
     """
     if embed is not _embed_text:
+        return True
+    if _http_cfg() and _embed_via_http("backend-probe") is not None:
         return True
     return _load_backend()[0] is not None
 
@@ -248,8 +331,9 @@ def build(root: Path) -> dict:
         stored_model = conn.execute(
             "SELECT value FROM db_meta WHERE key=?", (_META_MODEL,)
         ).fetchone()
+        active_model = _active_model_id()  # 实际生效后端（HTTP 优先）：供比较与落库
         rebuild = False
-        if stored_model and stored_model[0] != EMBED_MODEL:
+        if stored_model and stored_model[0] != active_model:
             stored_dim = _stored_dim(conn)
             if stored_dim is not None and _probe_min_dim(conn) in (None, stored_dim):
                 rebuild = True
@@ -323,7 +407,7 @@ def build(root: Path) -> dict:
         ) if min_dim is not None else None
         conn.execute(
             "INSERT OR REPLACE INTO db_meta(key, value) VALUES(?,?)",
-            (_META_MODEL, EMBED_MODEL),
+            (_META_MODEL, active_model),
         )
 
         conn.commit()
