@@ -26,3 +26,11 @@ work/
 # 运行态数据中枢（独立 git 仓库，Obsidian 库，不作为源码纳入）
 AgentMemoryHub/
 _worktrees/
+# 临时虚拟环境与依赖
+_t1_venv/
+_t1_deps/
+_t1_*.step
+_t1_*.stl
+
+# hub-engine 子模块未追踪目录
+hub-engine/--root/
