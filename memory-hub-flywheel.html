@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>记忆中枢自驱成长飞轮 · 经验→方法论→技能</title>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #f5f5f5;
+    --ink: #2d3142;
+    --muted: #4f5d75;
+    --soft: #7a8399;
+    --rule: rgba(45,49,66,0.12);
+    --accent: #eb6c36;
+    --accent-tint: rgba(235,108,54,0.10);
+    --link: #2e5aa8;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: 'Geist', sans-serif;
+    padding: 2rem 1.5rem 3rem;
+    max-width: 920px;
+    margin: 0 auto;
+  }
+  .eyebrow {
+    font-family: 'Geist Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    color: var(--muted);
+    text-transform: uppercase;
+  }
+  h1 {
+    font-family: 'Instrument Serif', serif;
+    font-weight: 400;
+    font-size: 2rem;
+    color: var(--ink);
+    margin: 8px 0 4px;
+    line-height: 1.25;
+  }
+  .subtitle {
+    color: var(--muted);
+    font-size: 14px;
+    margin-bottom: 1.5rem;
+  }
+  svg { display: block; width: 100%; height: auto; }
+  .legend-strip { margin-top: 16px; }
+  .cards {
+    display: grid;
+    grid-template-columns: 1.1fr 1fr 0.9fr;
+    gap: 16px;
+    margin-top: 2rem;
+  }
+  .card {
+    background: #ffffff;
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    padding: 1.25rem;
+  }
+  .card-dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    display: inline-block;
+    margin-right: 6px;
+  }
+  .card-dot.ink { background: var(--ink); }
+  .card-dot.coral { background: var(--accent); }
+  .card-dot.link { background: var(--link); }
+  .card-header {
+    display: flex; align-items: center; gap: 8px;
+    margin-bottom: 8px;
+  }
+  .card h3 { font-size: 13px; font-weight: 600; }
+  .card ul {
+    list-style: none; padding: 0;
+    font-size: 12px; color: var(--muted);
+    line-height: 1.6;
+  }
+  .card ul li { margin-bottom: 3px; }
+  .colophon {
+    margin-top: 2rem; padding-top: 12px;
+    border-top: 1px solid var(--rule);
+    font-family: 'Geist Mono', monospace;
+    font-size: 10px; color: var(--soft);
+    letter-spacing: 0.06em;
+  }
+</style>
+</head>
+<body>
+
+<p class="eyebrow">AGENT MEMORY HUB · SELF-DRIVEN GROWTH FLYWHEEL</p>
+<h1>自驱成长飞轮<br><em style="color:var(--muted);font-size:0.75em;">经验 → 方法论 → 技能 的 6 阶段闭环</em></h1>
+
+<!-- SVG 飞轮图 -->
+<svg viewBox="0 0 820 640" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="flywheel-title flywheel-desc">
+  <title id="flywheel-title">记忆中枢自驱成长飞轮</title>
+  <desc id="flywheel-desc">6 阶段闭环：实践→沉淀→提炼→萃取→淬炼→反馈，每一圈都把经验内化成方法论、再变成可复用技能，A-E 挂点提供发动机与维护站</desc>
+
+  <!-- 背景 -->
+  <rect width="820" height="640" fill="#f5f5f5"/>
+
+  <!-- ===== 飞轮几何参数 ===== -->
+  <!-- 中心 C=(410, 320)，半径 R=196，6 个 station -->
+  <!-- 角度：station 0 = 顶部 (-90°)，顺时针递增 -->
+
+  <!-- ===== 1. 外圈环（虚线，表示飞轮持续运转） ===== -->
+  <circle cx="410" cy="320" r="196" fill="none" stroke="rgba(45,49,66,0.08)" stroke-width="1" stroke-dasharray="2,4"/>
+
+  <!-- ===== 2. 中心 Hub（记忆中枢） ===== -->
+  <!-- hub 中心 rect: 180x96, 位于 (320, 272) -->
+  <rect x="320" y="272" width="180" height="96" rx="6" fill="#eb6c36" fill-opacity="0.10" stroke="#eb6c36" stroke-width="1"/>
+  <!-- type tag -->
+  <rect x="356" y="280" width="72" height="12" rx="2" fill="transparent" stroke="#eb6c36" stroke-opacity="0.40" stroke-width="0.8"/>
+  <text x="392" y="289" fill="#eb6c36" fill-opacity="0.80" font-size="7" font-family="Geist Mono, monospace" text-anchor="middle" letter-spacing="0.08em">HUB</text>
+  <!-- hub 名称 -->
+  <text x="410" y="310" fill="#2d3142" font-size="14" font-weight="600" font-family="Geist, sans-serif" text-anchor="middle">记忆中枢</text>
+  <text x="410" y="328" fill="#4f5d75" font-size="9" font-family="Geist Mono, monospace" text-anchor="middle">AgentMemoryHub</text>
+  <!-- hub 副标签 -->
+  <text x="410" y="348" fill="#7a8399" font-size="8" font-family="Geist Mono, monospace" text-anchor="middle">唯一事实源 · 索引 · 向量</text>
+
+  <!-- ===== 3. 6 个 Station ===== -->
+  <!-- 参数: N=6, R=196, cx=410, cy=320, station_w=144, station_h=56 -->
+  <!-- 角度计算: theta_k = -90 + k*60 -->
+  <!-- k=0: -90° → (410, 124) -->
+  <!-- k=1: -30° → (580, 224) -->
+  <!-- k=2: 30°  → (580, 416) -->
+  <!-- k=3: 90°  → (410, 516) -->
+  <!-- k=4: 150° → (240, 416) -->
+  <!-- k=5: 210° → (240, 224) -->
+
+  <!-- Station 0: 实践 (顶部) -->
+  <rect x="338" y="96" width="144" height="56" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+  <rect x="346" y="102" width="36" height="12" rx="2" fill="transparent" stroke="#2d3142" stroke-opacity="0.40" stroke-width="0.8"/>
+  <text x="364" y="111" fill="#2d3142" fill-opacity="0.80" font-size="7" font-family="Geist Mono, monospace" text-anchor="middle" letter-spacing="0.08em">STAGE 01</text>
+  <text x="410" y="126" fill="#2d3142" font-size="12" font-weight="600" font-family="Geist, sans-serif" text-anchor="middle">实践</text>
+  <text x="410" y="144" fill="#4f5d75" font-size="8" font-family="Geist Mono, monospace" text-anchor="middle">执行任务 · 产生经验</text>
+
+  <!-- Station 1: 沉淀 (右上) -->
+  <rect x="510" y="196" width="144" height="56" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+  <rect x="518" y="202" width="36" height="12" rx="2" fill="transparent" stroke="#2d3142" stroke-opacity="0.40" stroke-width="0.8"/>
+  <text x="536" y="211" fill="#2d3142" fill-opacity="0.80" font-size="7" font-family="Geist Mono, monospace" text-anchor="middle" letter-spacing="0.08em">STAGE 02</text>
+  <text x="582" y="226" fill="#2d3142" font-size="12" font-weight="600" font-family="Geist, sans-serif" text-anchor="middle">沉淀</text>
+  <text x="582" y="244" fill="#4f5d75" font-size="8" font-family="Geist Mono, monospace" text-anchor="middle">经验卡 → 草稿区</text>
+
+  <!-- Station 2: 提炼 (右下) -->
+  <rect x="510" y="388" width="144" height="56" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+  <rect x="518" y="394" width="36" height="12" rx="2" fill="transparent" stroke="#2d3142" stroke-opacity="0.40" stroke-width="0.8"/>
+  <text x="536" y="403" fill="#2d3142" fill-opacity="0.80" font-size="7" font-family="Geist Mono, monospace" text-anchor="middle" letter-spacing="0.08em">STAGE 03</text>
+  <text x="582" y="418" fill="#2d3142" font-size="12" font-weight="600" font-family="Geist, sans-serif" text-anchor="middle">提炼</text>
+  <text x="582" y="436" fill="#4f5d75" font-size="8" font-family="Geist Mono, monospace" text-anchor="middle">模式 → 方法论/规则</text>
+
+  <!-- Station 3: 萃取 (底部) -->
+  <rect x="338" y="488" width="144" height="56" rx="6" fill="#ffffff" stroke="#eb6c36" stroke-width="1.2"/>
+  <rect x="346" y="494" width="36" height="12" rx="2" fill="transparent" stroke="#eb6c36" stroke-opacity="0.40" stroke-width="0.8"/>
+  <text x="364" y="503" fill="#eb6c36" fill-opacity="0.80" font-size="7" font-family="Geist Mono, monospace" text-anchor="middle" letter-spacing="0.08em">STAGE 04</text>
+  <text x="410" y="518" fill="#2d3142" font-size="12" font-weight="600" font-family="Geist, sans-serif" text-anchor="middle">萃取 ⭐</text>
+  <text x="410" y="536" fill="#4f5d75" font-size="8" font-family="Geist Mono, monospace" text-anchor="middle">方法论 → Skill/MCP</text>
+
+  <!-- Station 4: 淬炼 (左下) -->
+  <rect x="166" y="388" width="144" height="56" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+  <rect x="174" y="394" width="36" height="12" rx="2" fill="transparent" stroke="#2d3142" stroke-opacity="0.40" stroke-width="0.8"/>
+  <text x="192" y="403" fill="#2d3142" fill-opacity="0.80" font-size="7" font-family="Geist Mono, monospace" text-anchor="middle" letter-spacing="0.08em">STAGE 05</text>
+  <text x="238" y="418" fill="#2d3142" font-size="12" font-weight="600" font-family="Geist, sans-serif" text-anchor="middle">淬炼</text>
+  <text x="238" y="436" fill="#4f5d75" font-size="8" font-family="Geist Mono, monospace" text-anchor="middle">T1 试用 → 真实验证</text>
+
+  <!-- Station 5: 反馈 (左上) -->
+  <rect x="166" y="196" width="144" height="56" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+  <rect x="174" y="202" width="36" height="12" rx="2" fill="transparent" stroke="#2d3142" stroke-opacity="0.40" stroke-width="0.8"/>
+  <text x="192" y="211" fill="#2d3142" fill-opacity="0.80" font-size="7" font-family="Geist Mono, monospace" text-anchor="middle" letter-spacing="0.08em">STAGE 06</text>
+  <text x="238" y="226" fill="#2d3142" font-size="12" font-weight="600" font-family="Geist, sans-serif" text-anchor="middle">反馈</text>
+  <text x="238" y="244" fill="#4f5d75" font-size="8" font-family="Geist Mono, monospace" text-anchor="middle">有效技能 → 反哺</text>
+
+  <!-- ===== 4. 环上箭头（顺时针流动） ===== -->
+  <!-- 使用圆弧连接 station 边缘 -->
+  <!-- 计算 station 边缘交点，用弧形路径 -->
+
+  <!-- 0→1: 实践右下 → 沉淀左上 -->
+  <path d="M 482 152 A 196 196 0 0 1 510 212" fill="none" stroke="#4f5d75" stroke-width="1.2"/>
+  <marker id="arrow-default" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+    <polygon points="0 0, 8 3, 0 6" fill="#4f5d75"/>
+  </marker>
+  <path d="M 482 152 A 196 196 0 0 1 510 212" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow-default)"/>
+
+  <!-- 1→2 -->
+  <path d="M 580 252 A 196 196 0 0 1 580 388" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow-default)"/>
+
+  <!-- 2→3 -->
+  <path d="M 510 444 A 196 196 0 0 1 482 496" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow-default)"/>
+
+  <!-- 3→4: 萃取 → 淬炼 (用 accent 色) -->
+  <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+    <polygon points="0 0, 8 3, 0 6" fill="#eb6c36"/>
+  </marker>
+  <path d="M 338 544 A 196 196 0 0 1 310 444" fill="none" stroke="#eb6c36" stroke-width="1.2" marker-end="url(#arrow-accent)"/>
+
+  <!-- 4→5 -->
+  <path d="M 238 388 A 196 196 0 0 1 238 252" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow-default)"/>
+
+  <!-- 5→0 -->
+  <path d="M 310 212 A 196 196 0 0 1 338 152" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow-default)"/>
+
+  <!-- ===== 5. Hub ↔ Station 写回辐射线 ===== -->
+  <!-- 中心到每个 station 的虚线，表示写回中枢 -->
+  <line x1="410" y1="296" x2="410" y2="152" stroke="#7a8399" stroke-width="0.8" stroke-dasharray="4,4"/>
+  <line x1="470" y1="312" x2="580" y2="252" stroke="#7a8399" stroke-width="0.8" stroke-dasharray="4,4"/>
+  <line x1="470" y1="328" x2="580" y2="388" stroke="#7a8399" stroke-width="0.8" stroke-dasharray="4,4"/>
+  <line x1="410" y1="368" x2="410" y2="488" stroke="#eb6c36" stroke-width="0.8" stroke-dasharray="4,4"/>
+  <line x1="350" y1="328" x2="238" y2="388" stroke="#7a8399" stroke-width="0.8" stroke-dasharray="4,4"/>
+  <line x1="350" y1="312" x2="238" y2="252" stroke="#7a8399" stroke-width="0.8" stroke-dasharray="4,4"/>
+
+  <!-- ===== 6. A-E 挂点标注 ===== -->
+  <!-- A: 反哺复用路径（萃取→反馈） -->
+  <text x="24" y="330" fill="#eb6c36" font-size="10" font-weight="600" font-family="Geist, sans-serif">A · 发动机</text>
+  <text x="24" y="344" fill="#7a8399" font-size="8" font-family="Geist Mono, monospace">反哺复用路径</text>
+  <line x1="120" y1="336" x2="166" y2="336" stroke="#eb6c36" stroke-width="0.8" stroke-dasharray="3,3"/>
+
+  <!-- E: 验证信号（淬炼→反馈） -->
+  <text x="24" y="420" fill="#eb6c36" font-size="10" font-weight="600" font-family="Geist, sans-serif">E · 发动机</text>
+  <text x="24" y="434" fill="#7a8399" font-size="8" font-family="Geist Mono, monospace">验证信号</text>
+  <line x1="120" y1="426" x2="166" y2="426" stroke="#eb6c36" stroke-width="0.8" stroke-dasharray="3,3"/>
+
+  <!-- B/C/D: 维护站 -->
+  <text x="660" y="200" fill="#4f5d75" font-size="9" font-family="Geist Mono, monospace">B · 回收</text>
+  <text x="660" y="248" fill="#4f5d75" font-size="9" font-family="Geist Mono, monospace">C · 去重</text>
+  <text x="660" y="398" fill="#4f5d75" font-size="9" font-family="Geist Mono, monospace">D · 养分</text>
+
+  <!-- ===== 7. 图例 ===== -->
+  <line x1="30" y1="580" x2="790" y2="580" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
+  <text x="30" y="596" fill="#4f5d75" font-size="8" font-family="Geist Mono, monospace" letter-spacing="0.14em">LEGEND</text>
+
+  <!-- 图例项 -->
+  <rect x="90" y="588" width="12" height="8" rx="2" fill="#eb6c36" fill-opacity="0.10" stroke="#eb6c36" stroke-width="0.8"/>
+  <text x="108" y="596" fill="#4f5d75" font-size="8" font-family="Geist Mono, monospace">Hub：唯一事实源</text>
+
+  <rect x="220" y="588" width="12" height="8" rx="2" fill="#ffffff" stroke="#2d3142" stroke-width="0.8"/>
+  <text x="238" y="596" fill="#4f5d75" font-size="8" font-family="Geist Mono, monospace">Stage：飞轮阶段</text>
+
+  <rect x="340" y="588" width="12" height="8" rx="2" fill="#ffffff" stroke="#eb6c36" stroke-width="1.2"/>
+  <text x="358" y="596" fill="#4f5d75" font-size="8" font-family="Geist Mono, monospace">⭐ 萃取：关键转码点</text>
+
+  <line x1="480" y1="592" x2="510" y2="592" stroke="#4f5d75" stroke-width="1"/>
+  <text x="516" y="596" fill="#4f5d75" font-size="8" font-family="Geist Mono, monospace">顺时针流动</text>
+
+  <line x1="610" y1="592" x2="640" y2="592" stroke="#7a8399" stroke-width="0.8" stroke-dasharray="4,4"/>
+  <text x="646" y="596" fill="#4f5d75" font-size="8" font-family="Geist Mono, monospace">写回中枢</text>
+
+</svg>
+
+<!-- 三张总结卡片 -->
+<div class="cards">
+  <div class="card">
+    <p class="eyebrow">阶段详解</p>
+    <div class="card-header">
+      <span class="card-dot ink"></span>
+      <h3>6 阶段闭环</h3>
+    </div>
+    <ul>
+      <li><strong>实践</strong> → 用户执行任务，产生经验</li>
+      <li><strong>沉淀</strong> → 经验卡写入草稿区 (.sync/drafts/)</li>
+      <li><strong>提炼</strong> → 模式识别 → 方法论/规则/蓝图</li>
+      <li><strong>萃取</strong> → ⭐ 方法论 → Skill/MCP 工具</li>
+      <li><strong>淬炼</strong> → T1 真实任务试用 → 验证通过</li>
+      <li><strong>反馈</strong> → 有效技能反哺下一轮实践</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <p class="eyebrow">挂点分类</p>
+    <div class="card-header">
+      <span class="card-dot coral"></span>
+      <h3>A-E 挂点</h3>
+    </div>
+    <ul>
+      <li><strong>A（发动机）</strong>：反哺复用路径——已验证技能自动推荐</li>
+      <li><strong>E（发动机）</strong>：验证信号——T1 通过触发 active 转态</li>
+      <li><strong>B（维护站）</strong>：回收——过期/失效卡归档</li>
+      <li><strong>C（维护站）</strong>：去重——ingest 相似度判重</li>
+      <li><strong>D（维护站）</strong>：养分——每日巡检补充缺失查询</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <p class="eyebrow">关键转码</p>
+    <div class="card-header">
+      <span class="card-dot link"></span>
+      <h3>萃取（Stage 4）</h3>
+    </div>
+    <ul>
+      <li>经验卡 → 方法论卡（methodology/）</li>
+      <li>方法论卡 → SkillHub 技能（SKILL.md + skill.yaml）</li>
+      <li>技能 → Skill 注册表（router.yaml）</li>
+      <li>Skill → Trae 技能系统（.trae/skills/）</li>
+      <li>每一圈飞轮 = 一个可复用能力的诞生</li>
+    </ul>
+  </div>
+</div>
+
+<p class="colophon">MEMORY HUB · SELF-DRIVEN GROWTH FLYWHEEL · 6-STAGE LOOP + A-E HOOKS</p>
+
+</body>
+</html>

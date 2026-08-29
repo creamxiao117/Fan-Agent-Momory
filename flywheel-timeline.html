@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>飞轮运行时间线回放</title>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--paper:#f5f5f5;--paper-2:#fff;--ink:#2d3142;--muted:#4f5d75;--soft:#7a8399;
+  --rule:rgba(45,49,66,0.12);--rule-strong:rgba(45,49,66,0.24);
+  --accent:#eb6c36;--ok:#3d8b5e;--warn:#c79a3b;--crit:#c94f4f;}
+*{box-sizing:border-box}
+body{background:var(--paper);color:var(--ink);font-family:'Geist',sans-serif;font-size:13px;line-height:1.55;margin:0;padding:32px 24px 48px}
+.wrap{max-width:1080px;margin:0 auto}
+.eyebrow{font-family:'Geist Mono',monospace;font-size:10px;letter-spacing:0.14em;color:var(--muted);text-transform:uppercase;margin-bottom:6px}
+h1{font-family:'Instrument Serif',serif;font-size:28px;font-weight:400;letter-spacing:-0.01em;margin:0}
+.sub{color:var(--muted);margin-top:4px;font-size:12px}
+.meta{display:flex;gap:12px;margin-top:10px;flex-wrap:wrap}
+.meta span{font-family:'Geist Mono',monospace;font-size:10px;padding:3px 8px;background:var(--paper-2);border:1px solid var(--rule);border-radius:4px;color:var(--soft)}
+.grid{display:grid;gap:16px;margin-top:28px}
+.grid.hero{grid-template-columns:1.2fr 1fr 1fr 1fr}
+.grid.two{grid-template-columns:1fr 1.3fr}
+@media(max-width:800px){.grid.hero,.grid.two{grid-template-columns:1fr}}
+.card{background:var(--paper-2);border:1px solid var(--rule);border-radius:6px;padding:20px}
+.card h3{font-size:14px;font-weight:600;margin:0 0 4px}
+.card .val{font-family:'Instrument Serif',serif;font-size:36px;font-weight:400;line-height:1.05}
+.card .unit{font-size:12px;color:var(--muted);margin-left:4px}
+.hero-score{font-family:'Instrument Serif',serif;font-size:56px;font-weight:400;line-height:1}
+.hero-score .pct{font-size:24px;color:var(--muted)}
+.progress{height:8px;background:rgba(45,49,66,0.08);border-radius:4px;margin-top:10px;overflow:hidden}
+.progress .bar{height:100%;border-radius:4px}
+.dot{width:7px;height:7px;border-radius:50%;display:inline-block;margin-right:6px;vertical-align:middle}
+.dot.ok{background:var(--ok)}.dot.fail{background:var(--crit)}.dot.coral{background:var(--accent)}
+.muted{color:var(--soft);font-size:11px}
+
+/* Timeline */
+.timeline{list-style:none;padding:0;margin:0;position:relative}
+.timeline::before{content:"";position:absolute;left:92px;top:4px;bottom:4px;width:2px;background:var(--rule)}
+.tl-item{display:flex;gap:12px;padding:10px 0;position:relative}
+.tl-time{width:84px;flex-shrink:0;font-family:'Geist Mono',monospace;font-size:10px;color:var(--soft);padding-top:4px;text-align:right}
+.tl-body{flex:1;background:var(--paper-2);border:1px solid var(--rule);border-radius:6px;padding:12px 14px}
+.tl-item.tl-ok .tl-body{border-left:3px solid var(--ok)}
+.tl-item.tl-fail .tl-body{border-left:3px solid var(--crit)}
+.tl-title{font-weight:600;font-size:12px;margin-bottom:6px}
+.tl-io{font-size:11px;color:var(--muted);margin-top:4px;word-break:break-all}
+.tl-io.tl-out{color:var(--ink);opacity:.8}
+.tl-empty{padding:40px;text-align:center;color:var(--soft);font-style:italic;font-size:12px}
+
+/* 日统计柱状 */
+.daybar{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+.daybar-label{width:48px;font-family:'Geist Mono',monospace;font-size:10px;color:var(--muted);text-align:right}
+.daybar-track{flex:1;height:20px;background:rgba(45,49,66,0.06);border-radius:3px;overflow:hidden}
+.daybar-fill{height:100%;color:#fff;font-size:10px;padding:2px 8px;font-weight:600;display:flex;align-items:center;white-space:nowrap}
+
+/* Run card */
+.run-card{padding:12px 14px;border:1px solid var(--rule);border-radius:6px;margin-bottom:10px;background:var(--paper-2)}
+.run-head{font-size:12px;margin-bottom:8px}
+.run-head strong{font-size:13px}
+.run-head .muted{margin-left:8px}
+.run-stages{margin-bottom:6px}
+.run-io{font-size:11px;color:var(--muted);word-break:break-all}
+.chip{display:inline-block;padding:2px 8px;border-radius:10px;font-family:'Geist Mono',monospace;font-size:9px;margin-right:4px}
+.chip-ok{background:rgba(61,139,94,0.10);color:var(--ok);border:1px solid var(--ok)}
+.chip-fail{background:rgba(201,79,79,0.10);color:var(--crit);border:1px solid var(--crit)}
+
+footer{margin-top:32px;padding-top:16px;border-top:1px solid var(--rule);font-family:'Geist Mono',monospace;font-size:10px;color:var(--soft);display:flex;justify-content:space-between}
+code{background:rgba(45,49,66,0.06);padding:1px 5px;border-radius:3px;font-family:'Geist Mono',monospace;font-size:11px}
+</style></head><body>
+<div class="wrap">
+  <header>
+    <div class="eyebrow">FLYWHEEL · TIMELINE REPLAY</div>
+    <h1>飞轮运行时间线回放</h1>
+    <p class="sub">按时间顺序展示每一圈飞轮的执行过程，支持审计与复盘</p>
+    <div class="meta">
+      <span>生成时间：2026-08-25T07:42:38+08:00</span>
+      <span>记录总数：14</span>
+      <span>完整飞轮圈数：4</span>
+      <span>成功率：85.7%</span>
+    </div>
+  </header>
+
+  <div class="grid hero">
+    <div class="card" style="background:rgba(235,108,54,0.08);border-color:var(--accent)">
+      <div class="eyebrow" style="color:var(--accent)">OVERALL</div>
+      <div class="hero-score">14<span class="pct"> 阶段</span></div>
+      <div class="progress"><div class="bar" style="width:85.7%;background:var(--accent)"></div></div>
+      <div class="muted" style="margin-top:8px"><span class="dot coral"></span>4 圈完整飞轮 · 成功率 85.7%</div>
+    </div>
+    <div class="card">
+      <div class="eyebrow">SUCCESS</div>
+      <div class="val">12<span class="unit">/ 14</span></div>
+      <div class="progress"><div class="bar" style="width:85.7%;background:var(--ok)"></div></div>
+      <div class="muted" style="margin-top:8px">成功阶段数</div>
+    </div>
+    <div class="card">
+      <div class="eyebrow">FULL RUNS</div>
+      <div class="val">4<span class="unit"> 圈</span></div>
+      <div class="progress"><div class="bar" style="width:80%;background:var(--accent)"></div></div>
+      <div class="muted" style="margin-top:8px">完整闭环飞轮数</div>
+    </div>
+    <div class="card">
+      <div class="eyebrow">RECENT 7D</div>
+      <div class="val">14<span class="unit"> 阶段</span></div>
+      <div class="progress"><div class="bar" style="width:70%;background:var(--muted)"></div></div>
+      <div class="muted" style="margin-top:8px">近 7 天活跃度</div>
+    </div>
+  </div>
+
+  <div class="grid two" style="margin-top:24px">
+    <div class="card">
+      <div class="eyebrow">DAILY RUNS</div>
+      <h3>每日运行统计 · 近 14 天</h3>
+      <div style="margin-top:12px">
+            <div class="daybar">
+              <div class="daybar-label">08-24</div>
+              <div class="daybar-track"><div class="daybar-fill" style="width:100%;background:#3d8b5e">12/14</div></div>
+            </div>
+        </div>
+    </div>
+    <div class="card">
+      <div class="eyebrow">FULL FLYWHEEL RUNS</div>
+      <h3>最近 4 圈完整飞轮</h3>
+      <div style="margin-top:12px">
+        <div class="run-card">
+          <div class="run-head"><strong>#4 飞轮</strong> ✅ <span class="muted">2026-08-24 22:52:46</span></div>
+          <div class="run-stages"><span class="chip chip-ok">🚀 完整飞轮</span></div>
+          <div class="run-io">dry-run=True, auto=True, promote=True, tag=True, flywheel-tag=True → 子步骤数=3  成功子步骤=3  tagged=9</div>
+        </div>
+        
+        <div class="run-card">
+          <div class="run-head"><strong>#3 飞轮</strong> ✅ <span class="muted">2026-08-24 22:20:43</span></div>
+          <div class="run-stages"><span class="chip chip-ok">🚀 完整飞轮</span> → <span class="chip chip-ok">📥 飞轮触发（草稿→ingest）</span> → <span class="chip chip-ok">📦 技能注册（卡→SkillHub）</span> → <span class="chip chip-ok">✅ T1 验证（smoke test）</span> → <span class="chip chip-ok">📥 飞轮触发（草稿→ingest）</span> → <span class="chip chip-ok">📦 技能注册（卡→SkillHub）</span> → <span class="chip chip-ok">✅ T1 验证（smoke test）</span></div>
+          <div class="run-io">卡分类器 + router-sync + hub-health 采集 → 分类器推荐95张变更，router-sync检出12条缺失，hub-health打分34.7</div>
+        </div>
+        
+        <div class="run-card">
+          <div class="run-head"><strong>#2 飞轮</strong> ❌ <span class="muted">2026-08-24 22:20:43</span></div>
+          <div class="run-stages"><span class="chip chip-fail">🚀 完整飞轮</span> → <span class="chip chip-fail">✅ T1 验证（smoke test）</span></div>
+          <div class="run-io">尝试运行 github-star-distill 真实任务 → 失败：需要先 set GITHUB_TOKEN</div>
+        </div>
+        
+        <div class="run-card">
+          <div class="run-head"><strong>#1 飞轮</strong> ✅ <span class="muted">2026-08-24 22:20:42</span></div>
+          <div class="run-stages"><span class="chip chip-ok">🚀 完整飞轮</span> → <span class="chip chip-ok">📥 飞轮触发（草稿→ingest）</span> → <span class="chip chip-ok">📦 技能注册（卡→SkillHub）</span> → <span class="chip chip-ok">✅ T1 验证（smoke test）</span></div>
+          <div class="run-io">扫描草稿 2 张 + 2 张候选卡 → flywheel: 0新卡, register: hub-inventory-baseline-audit已存在, smoke: 3技能通过</div>
+        </div>
+        </div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:24px">
+    <div class="eyebrow">TIMELINE</div>
+    <h3>运行时间线 · 最近 200 阶段（最新在上）</h3>
+    <ul class="timeline" style="margin-top:16px">
+            <li class="tl-item tl-ok">
+              <div class="tl-time">2026-08-24 22:52:46</div>
+              <div class="tl-body">
+                <div class="tl-title"><span class="dot ok"></span>🚀 完整飞轮</div>
+                <div class="tl-io"><strong>输入：</strong>dry-run=True, auto=True, promote=True, tag=True, flywheel-tag=True</div>
+                <div class="tl-io tl-out"><strong>输出：</strong>子步骤数=3  成功子步骤=3  tagged=9</div>
+              </div>
+            </li>
+        
+
+            <li class="tl-item tl-ok">
+              <div class="tl-time">2026-08-24 22:52:46</div>
+              <div class="tl-body">
+                <div class="tl-title"><span class="dot ok"></span>✅ T1 验证（smoke test）</div>
+                <div class="tl-io"><strong>输入：</strong>skillhub=D:\AIwork\20260821-Fan-SkillHub hub=C:\Users\Fan-SJSS\.trae-cn\worktrees\20260817-Fan-Agent-Momory\feat-impleme</div>
+                <div class="tl-io tl-out"><strong>输出：</strong>  ✓ cross-repo-index-commit: [ok] 找到技能：D:\AIwork\20260821-Fan-SkillHub\skills\dedicated\memory-hub\cross-repo-index-commit
+  trigger 词：['跨仓库提交', '跨库登 🏷️
+  ✓ superpowers: [ok] 找到技能：D:\AIwork\20260821-F</div>
+              </div>
+            </li>
+        
+
+            <li class="tl-item tl-ok">
+              <div class="tl-time">2026-08-24 22:52:45</div>
+              <div class="tl-body">
+                <div class="tl-title"><span class="dot ok"></span>📦 技能注册（卡→SkillHub）</div>
+                <div class="tl-io"><strong>输入：</strong>hub=C:\Users\Fan-SJSS\.trae-cn\worktrees\20260817-Fan-Agent-Momory\feat-implement-plan-ZilBmv\AgentMemoryHub skillhub=D:</div>
+                <div class="tl-io tl-out"><strong>输出：</strong>  ✓ agent-memory-hub-mcp: [ok] 找到卡片：C:\Users\Fan-SJSS\.trae-cn\worktrees\20260817-Fan-Agent-Momory\feat-implement-plan-ZilBmv\
+  ✓ autocad-com-automation-deadlock: [ok] 找到卡片：C:\Users\Fan-SJSS\.trae-cn</div>
+              </div>
+            </li>
+        
+
+            <li class="tl-item tl-ok">
+              <div class="tl-time">2026-08-24 22:52:34</div>
+              <div class="tl-body">
+                <div class="tl-title"><span class="dot ok"></span>📥 飞轮触发（草稿→ingest）</div>
+                <div class="tl-io"><strong>输入：</strong>hub=C:\Users\Fan-SJSS\.trae-cn\worktrees\20260817-Fan-Agent-Momory\feat-implement-plan-ZilBmv\AgentMemoryHub dry-run=Tru</div>
+                <div class="tl-io tl-out"><strong>输出：</strong>扫描到 2 张草稿，分布于 1 个平台：
+  - trae: 2 张
+[dry-run] 仅扫描，不执行 ingest / build-vectors</div>
+              </div>
+            </li>
+        
+
+            <li class="tl-item tl-ok">
+              <div class="tl-time">2026-08-24 22:20:43</div>
+              <div class="tl-body">
+                <div class="tl-title"><span class="dot ok"></span>✅ T1 验证（smoke test）</div>
+                <div class="tl-io"><strong>输入：</strong>skill_version_tag 3个技能</div>
+                <div class="tl-io tl-out"><strong>输出：</strong>3个 active 技能均打好 git tag（2 flywheel, 1 manual）</div>
+              </div>
+            </li>
+        
+
+            <li class="tl-item tl-ok">
+              <div class="tl-time">2026-08-24 22:20:43</div>
+              <div class="tl-body">
+                <div class="tl-title"><span class="dot ok"></span>📦 技能注册（卡→SkillHub）</div>
+                <div class="tl-io"><strong>输入：</strong>SkillHub/router.yaml 同步检查</div>
+                <div class="tl-io tl-out"><strong>输出：</strong>router-sync 无 MISMATCH，12条 SkillHub 独有</div>
+              </div>
+            </li>
+        
+
+            <li class="tl-item tl-ok">
+              <div class="tl-time">2026-08-24 22:20:43</div>
+              <div class="tl-body">
+                <div class="tl-title"><span class="dot ok"></span>📥 飞轮触发（草稿→ingest）</div>
+                <div class="tl-io"><strong>输入：</strong>card-classifier --apply</div>
+                <div class="tl-io tl-out"><strong>输出：</strong>89张卡类型更新成功</div>
+              </div>
+            </li>
+        
+
+            <li class="tl-item tl-ok">
+              <div class="tl-time">2026-08-24 22:20:43</div>
+              <div class="tl-body">
+                <div class="tl-title"><span class="dot ok"></span>🚀 完整飞轮</div>
+                <div class="tl-io"><strong>输入：</strong>卡分类器 + router-sync + hub-health 采集</div>
+                <div class="tl-io tl-out"><strong>输出：</strong>分类器推荐95张变更，router-sync检出12条缺失，hub-health打分34.7</div>
+              </div>
+            </li>
+        
+
+            <li class="tl-item tl-fail">
+              <div class="tl-time">2026-08-24 22:20:43</div>
+              <div class="tl-body">
+                <div class="tl-title"><span class="dot fail"></span>✅ T1 验证（smoke test）</div>
+                <div class="tl-io"><strong>输入：</strong>技能：superpowers</div>
+                <div class="tl-io tl-out"><strong>输出：</strong>失败：源卡 superpowers-blueprint 未命中检索</div>
+              </div>
+            </li>
+        
+
+            <li class="tl-item tl-fail">
+              <div class="tl-time">2026-08-24 22:20:43</div>
+              <div class="tl-body">
+                <div class="tl-title"><span class="dot fail"></span>🚀 完整飞轮</div>
+                <div class="tl-io"><strong>输入：</strong>尝试运行 github-star-distill 真实任务</div>
+                <div class="tl-io tl-out"><strong>输出：</strong>失败：需要先 set GITHUB_TOKEN</div>
+              </div>
+            </li>
+        
+
+            <li class="tl-item tl-ok">
+              <div class="tl-time">2026-08-24 22:20:43</div>
+              <div class="tl-body">
+                <div class="tl-title"><span class="dot ok"></span>✅ T1 验证（smoke test）</div>
+                <div class="tl-io"><strong>输入：</strong>技能列表：hub-inventory-baseline-audit, github-star-distill, memory-hub-card-promotion</div>
+                <div class="tl-io tl-out"><strong>输出：</strong>3/3 验证通过，auto-promote active + 打 git tag</div>
+              </div>
+            </li>
+        
+
+            <li class="tl-item tl-ok">
+              <div class="tl-time">2026-08-24 22:20:42</div>
+              <div class="tl-body">
+                <div class="tl-title"><span class="dot ok"></span>📦 技能注册（卡→SkillHub）</div>
+                <div class="tl-io"><strong>输入：</strong>候选：hub-inventory-baseline-audit, github-star-distill</div>
+                <div class="tl-io tl-out"><strong>输出：</strong>hub-inventory-baseline-audit 已存在，跳过创建</div>
+              </div>
+            </li>
+        
+
+            <li class="tl-item tl-ok">
+              <div class="tl-time">2026-08-24 22:20:42</div>
+              <div class="tl-body">
+                <div class="tl-title"><span class="dot ok"></span>📥 飞轮触发（草稿→ingest）</div>
+                <div class="tl-io"><strong>输入：</strong>.sync/drafts 下 2 张草稿</div>
+                <div class="tl-io tl-out"><strong>输出：</strong>草稿0张新卡待ingest（2张已归档）</div>
+              </div>
+            </li>
+        
+
+            <li class="tl-item tl-ok">
+              <div class="tl-time">2026-08-24 22:20:42</div>
+              <div class="tl-body">
+                <div class="tl-title"><span class="dot ok"></span>🚀 完整飞轮</div>
+                <div class="tl-io"><strong>输入：</strong>扫描草稿 2 张 + 2 张候选卡</div>
+                <div class="tl-io tl-out"><strong>输出：</strong>flywheel: 0新卡, register: hub-inventory-baseline-audit已存在, smoke: 3技能通过</div>
+              </div>
+            </li>
+        </ul>
+  </div>
+
+  <footer>
+    <span>flywheel-timeline.html · 飞轮可视化回放</span>
+    <span>数据源：SkillHub/work/flywheel/runlog/runlog.jsonl</span>
+  </footer>
+</div>
+</body></html>

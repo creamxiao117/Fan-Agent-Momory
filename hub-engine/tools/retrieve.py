@@ -241,9 +241,23 @@ def deterministic_retrieve(root: Path, query: str, mode: str = "word") -> list[C
     for t in tags_to_check:
         if t.startswith("type:"):
             continue
-        if q in t or (q_words and any(w in t or t in w for w in q_words)):
+        if q in t:
+            # 精确子串匹配（最强信号）
             for c in inv[t]:
                 matched.add(id(c))
+        elif q_words:
+            # word 匹配：需要命中足够的词
+            # 保护机制：为防止英文单词短串高频误碰撞（如 'oc' 命中 'lock'），
+            # 只有在：(1) 查询分词过滤后只剩下英文单词，且有多个时，要求 hits >= 2；
+            # (2) 纯中文分词、包含单个词、或命中的是中文词时，只要 hits >= 1 即可。
+            hits = sum(1 for w in q_words if w in t)
+            # 检查命中的词中是否有英文
+            hit_words = [w for w in q_words if w in t]
+            hit_english = any(not all('\u4e00' <= char <= '\u9fff' for char in w) for w in hit_words)
+            threshold = 2 if (hit_english and len(q_words) >= 2 and all(not all('\u4e00' <= char <= '\u9fff' for char in w) for w in q_words)) else 1
+            if hits >= threshold:
+                for c in inv[t]:
+                    matched.add(id(c))
     return [c for c in idx.cards if id(c) in matched]
 
 

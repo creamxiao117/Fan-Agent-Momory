@@ -1,0 +1,333 @@
+{
+  "generated_at": "2026-08-25T07:42:38+08:00",
+  "total_stages": 14,
+  "total_runs": 4,
+  "ok_count": 12,
+  "success_rate": 85.7,
+  "recent_7d": 14,
+  "by_day": [
+    [
+      "2026-08-24",
+      {
+        "total": 14,
+        "ok": 12
+      }
+    ]
+  ],
+  "full_runs": [
+    [
+      {
+        "ts": "2026-08-24T22:20:42+08:00",
+        "date": "2026-08-24",
+        "time": "22:20:42",
+        "stage": "run",
+        "stage_label": "🚀 完整飞轮",
+        "input": "扫描草稿 2 张 + 2 张候选卡",
+        "output": "flywheel: 0新卡, register: hub-inventory-baseline-audit已存在, smoke: 3技能通过",
+        "ok": true
+      },
+      {
+        "ts": "2026-08-24T22:20:42+08:00",
+        "date": "2026-08-24",
+        "time": "22:20:42",
+        "stage": "flywheel",
+        "stage_label": "📥 飞轮触发（草稿→ingest）",
+        "input": ".sync/drafts 下 2 张草稿",
+        "output": "草稿0张新卡待ingest（2张已归档）",
+        "ok": true
+      },
+      {
+        "ts": "2026-08-24T22:20:42+08:00",
+        "date": "2026-08-24",
+        "time": "22:20:42",
+        "stage": "register",
+        "stage_label": "📦 技能注册（卡→SkillHub）",
+        "input": "候选：hub-inventory-baseline-audit, github-star-distill",
+        "output": "hub-inventory-baseline-audit 已存在，跳过创建",
+        "ok": true
+      },
+      {
+        "ts": "2026-08-24T22:20:43+08:00",
+        "date": "2026-08-24",
+        "time": "22:20:43",
+        "stage": "smoke",
+        "stage_label": "✅ T1 验证（smoke test）",
+        "input": "技能列表：hub-inventory-baseline-audit, github-star-distill, memory-hub-card-promotion",
+        "output": "3/3 验证通过，auto-promote active + 打 git tag",
+        "ok": true
+      }
+    ],
+    [
+      {
+        "ts": "2026-08-24T22:20:43+08:00",
+        "date": "2026-08-24",
+        "time": "22:20:43",
+        "stage": "run",
+        "stage_label": "🚀 完整飞轮",
+        "input": "尝试运行 github-star-distill 真实任务",
+        "output": "失败：需要先 set GITHUB_TOKEN",
+        "ok": false
+      },
+      {
+        "ts": "2026-08-24T22:20:43+08:00",
+        "date": "2026-08-24",
+        "time": "22:20:43",
+        "stage": "smoke",
+        "stage_label": "✅ T1 验证（smoke test）",
+        "input": "技能：superpowers",
+        "output": "失败：源卡 superpowers-blueprint 未命中检索",
+        "ok": false
+      }
+    ],
+    [
+      {
+        "ts": "2026-08-24T22:20:43+08:00",
+        "date": "2026-08-24",
+        "time": "22:20:43",
+        "stage": "run",
+        "stage_label": "🚀 完整飞轮",
+        "input": "卡分类器 + router-sync + hub-health 采集",
+        "output": "分类器推荐95张变更，router-sync检出12条缺失，hub-health打分34.7",
+        "ok": true
+      },
+      {
+        "ts": "2026-08-24T22:20:43+08:00",
+        "date": "2026-08-24",
+        "time": "22:20:43",
+        "stage": "flywheel",
+        "stage_label": "📥 飞轮触发（草稿→ingest）",
+        "input": "card-classifier --apply",
+        "output": "89张卡类型更新成功",
+        "ok": true
+      },
+      {
+        "ts": "2026-08-24T22:20:43+08:00",
+        "date": "2026-08-24",
+        "time": "22:20:43",
+        "stage": "register",
+        "stage_label": "📦 技能注册（卡→SkillHub）",
+        "input": "SkillHub/router.yaml 同步检查",
+        "output": "router-sync 无 MISMATCH，12条 SkillHub 独有",
+        "ok": true
+      },
+      {
+        "ts": "2026-08-24T22:20:43+08:00",
+        "date": "2026-08-24",
+        "time": "22:20:43",
+        "stage": "smoke",
+        "stage_label": "✅ T1 验证（smoke test）",
+        "input": "skill_version_tag 3个技能",
+        "output": "3个 active 技能均打好 git tag（2 flywheel, 1 manual）",
+        "ok": true
+      },
+      {
+        "ts": "2026-08-24T22:52:34+08:00",
+        "date": "2026-08-24",
+        "time": "22:52:34",
+        "stage": "flywheel",
+        "stage_label": "📥 飞轮触发（草稿→ingest）",
+        "input": "hub=C:\\Users\\Fan-SJSS\\.trae-cn\\worktrees\\20260817-Fan-Agent-Momory\\feat-implement-plan-ZilBmv\\AgentMemoryHub dry-run=True",
+        "output": "扫描到 2 张草稿，分布于 1 个平台：\n  - trae: 2 张\n[dry-run] 仅扫描，不执行 ingest / build-vectors",
+        "ok": true,
+        "exit_code": 0,
+        "step": "auto-flywheel"
+      },
+      {
+        "ts": "2026-08-24T22:52:45+08:00",
+        "date": "2026-08-24",
+        "time": "22:52:45",
+        "stage": "register",
+        "stage_label": "📦 技能注册（卡→SkillHub）",
+        "input": "hub=C:\\Users\\Fan-SJSS\\.trae-cn\\worktrees\\20260817-Fan-Agent-Momory\\feat-implement-plan-ZilBmv\\AgentMemoryHub skillhub=D:\\AIwork\\20260821-Fan-SkillHub found_new=136",
+        "output": "  ✓ agent-memory-hub-mcp: [ok] 找到卡片：C:\\Users\\Fan-SJSS\\.trae-cn\\worktrees\\20260817-Fan-Agent-Momory\\feat-implement-plan-ZilBmv\\\n  ✓ autocad-com-automation-deadlock: [ok] 找到卡片：C:\\Users\\Fan-SJSS\\.trae-cn\\worktrees\\20260817-Fan-Agent-Momory\\feat-implement-plan-ZilBmv\\\n  ✓ autocad-dotnet-field-direct-textstring: [ok] 找到卡片：C:\\Users\\Fan-SJSS\\.trae-cn\\worktrees\\20260817-Fan-Agent-Momory\\feat-implement-plan-ZilBmv\\\n  ✓ autocad-rein-fontstyle-version-display: [ok] 找到卡片：C:\\Users\\Fan-SJSS\\.trae-cn\\worktrees\\20260817-Fan-Agent-Momory\\feat-implement-plan-ZilBmv\\\n  ✓ autocad-test-copy-isolation: [ok] 找到卡片：C:\\Users\\Fan-SJSS\\.trae-cn\\worktrees\\20260817-Fan-Agent-Momory\\feat-implement-plan-ZilBmv\\\n  ✓ autocad-tiled-viewport-number: [ok] 找到卡片：C:\\Users\\Fan-SJSS\\.trae-cn\\worktrees\\20260817-Fan-Agent-Momory\\feat-implement-plan-ZilBmv\\\n  ✓ bge-small-zh-sqlite-vector-search: [ok] 找到卡片：C:\\Users\\Fan-SJSS\\.trae-cn\\worktrees\\20260817-Fan-Agent-Momory\\feat-implement-plan-ZilBmv\\\n  ✓ browser-chrome-single-instance:",
+        "ok": true,
+        "exit_code": 0,
+        "step": "skill-register",
+        "found_new": 136
+      },
+      {
+        "ts": "2026-08-24T22:52:46+08:00",
+        "date": "2026-08-24",
+        "time": "22:52:46",
+        "stage": "smoke",
+        "stage_label": "✅ T1 验证（smoke test）",
+        "input": "skillhub=D:\\AIwork\\20260821-Fan-SkillHub hub=C:\\Users\\Fan-SJSS\\.trae-cn\\worktrees\\20260817-Fan-Agent-Momory\\feat-implement-plan-ZilBmv\\AgentMemoryHub promote=True tag=True tested=9 tagged=9",
+        "output": "  ✓ cross-repo-index-commit: [ok] 找到技能：D:\\AIwork\\20260821-Fan-SkillHub\\skills\\dedicated\\memory-hub\\cross-repo-index-commit\n  trigger 词：['跨仓库提交', '跨库登 🏷️\n  ✓ superpowers: [ok] 找到技能：D:\\AIwork\\20260821-Fan-SkillHub\\skills\\shared\\engineering\\superpowers\n  trigger 词：['头脑风暴', 'brainstorming', 'T 🏷️\n  ✓ multica: [ok] 找到技能：D:\\AIwork\\20260821-Fan-SkillHub\\skills\\shared\\govern\\multica\n  trigger 词：['multica', 'autopilot', 'agent 管理',  🏷️\n  ✓ all-in-one-media-notes: [ok] 找到技能：D:\\AIwork\\20260821-Fan-SkillHub\\skills\\shared\\productivity\\all-in-one-media-notes\n  trigger 词：['音频总结', '视频总结', 🏷️\n  ✓ browser-bridge: [ok] 找到技能：D:\\AIwork\\20260821-Fan-SkillHub\\skills\\shared\\productivity\\browser-bridge\n  trigger 词：['浏览器', 'browser', '网页爬取 🏷️\n  ✓ computer-use: [ok] 找到技能：D:\\AIwork\\20260821-Fan-SkillHub\\skills\\shared\\productivity\\computer-use\n  trigger 词：['控制电脑', '桌面操作', 'CAD 死锁', 🏷️\n  ✓ personal-workbench: [ok] 找到技能：D:\\AIwork\\20260821-Fan-SkillHub\\skills\\shared\\productivity\\personal-workbench\n  trigger 词：['日程', ",
+        "ok": true,
+        "exit_code": 0,
+        "step": "smoke-test",
+        "tested": 9,
+        "tagged": 9
+      }
+    ],
+    [
+      {
+        "ts": "2026-08-24T22:52:46+08:00",
+        "date": "2026-08-24",
+        "time": "22:52:46",
+        "stage": "run",
+        "stage_label": "🚀 完整飞轮",
+        "input": "dry-run=True, auto=True, promote=True, tag=True, flywheel-tag=True",
+        "output": "子步骤数=3  成功子步骤=3  tagged=9",
+        "ok": true,
+        "stages": 3,
+        "start_ts": "2026-08-24T22:52:34+08:00",
+        "tagged": 9
+      }
+    ]
+  ],
+  "records": [
+    {
+      "ts": "2026-08-24T22:20:42+08:00",
+      "date": "2026-08-24",
+      "time": "22:20:42",
+      "stage": "run",
+      "stage_label": "🚀 完整飞轮",
+      "input": "扫描草稿 2 张 + 2 张候选卡",
+      "output": "flywheel: 0新卡, register: hub-inventory-baseline-audit已存在, smoke: 3技能通过",
+      "ok": true
+    },
+    {
+      "ts": "2026-08-24T22:20:42+08:00",
+      "date": "2026-08-24",
+      "time": "22:20:42",
+      "stage": "flywheel",
+      "stage_label": "📥 飞轮触发（草稿→ingest）",
+      "input": ".sync/drafts 下 2 张草稿",
+      "output": "草稿0张新卡待ingest（2张已归档）",
+      "ok": true
+    },
+    {
+      "ts": "2026-08-24T22:20:42+08:00",
+      "date": "2026-08-24",
+      "time": "22:20:42",
+      "stage": "register",
+      "stage_label": "📦 技能注册（卡→SkillHub）",
+      "input": "候选：hub-inventory-baseline-audit, github-star-distill",
+      "output": "hub-inventory-baseline-audit 已存在，跳过创建",
+      "ok": true
+    },
+    {
+      "ts": "2026-08-24T22:20:43+08:00",
+      "date": "2026-08-24",
+      "time": "22:20:43",
+      "stage": "smoke",
+      "stage_label": "✅ T1 验证（smoke test）",
+      "input": "技能列表：hub-inventory-baseline-audit, github-star-distill, memory-hub-card-promotion",
+      "output": "3/3 验证通过，auto-promote active + 打 git tag",
+      "ok": true
+    },
+    {
+      "ts": "2026-08-24T22:20:43+08:00",
+      "date": "2026-08-24",
+      "time": "22:20:43",
+      "stage": "run",
+      "stage_label": "🚀 完整飞轮",
+      "input": "尝试运行 github-star-distill 真实任务",
+      "output": "失败：需要先 set GITHUB_TOKEN",
+      "ok": false
+    },
+    {
+      "ts": "2026-08-24T22:20:43+08:00",
+      "date": "2026-08-24",
+      "time": "22:20:43",
+      "stage": "smoke",
+      "stage_label": "✅ T1 验证（smoke test）",
+      "input": "技能：superpowers",
+      "output": "失败：源卡 superpowers-blueprint 未命中检索",
+      "ok": false
+    },
+    {
+      "ts": "2026-08-24T22:20:43+08:00",
+      "date": "2026-08-24",
+      "time": "22:20:43",
+      "stage": "run",
+      "stage_label": "🚀 完整飞轮",
+      "input": "卡分类器 + router-sync + hub-health 采集",
+      "output": "分类器推荐95张变更，router-sync检出12条缺失，hub-health打分34.7",
+      "ok": true
+    },
+    {
+      "ts": "2026-08-24T22:20:43+08:00",
+      "date": "2026-08-24",
+      "time": "22:20:43",
+      "stage": "flywheel",
+      "stage_label": "📥 飞轮触发（草稿→ingest）",
+      "input": "card-classifier --apply",
+      "output": "89张卡类型更新成功",
+      "ok": true
+    },
+    {
+      "ts": "2026-08-24T22:20:43+08:00",
+      "date": "2026-08-24",
+      "time": "22:20:43",
+      "stage": "register",
+      "stage_label": "📦 技能注册（卡→SkillHub）",
+      "input": "SkillHub/router.yaml 同步检查",
+      "output": "router-sync 无 MISMATCH，12条 SkillHub 独有",
+      "ok": true
+    },
+    {
+      "ts": "2026-08-24T22:20:43+08:00",
+      "date": "2026-08-24",
+      "time": "22:20:43",
+      "stage": "smoke",
+      "stage_label": "✅ T1 验证（smoke test）",
+      "input": "skill_version_tag 3个技能",
+      "output": "3个 active 技能均打好 git tag（2 flywheel, 1 manual）",
+      "ok": true
+    },
+    {
+      "ts": "2026-08-24T22:52:34+08:00",
+      "date": "2026-08-24",
+      "time": "22:52:34",
+      "stage": "flywheel",
+      "stage_label": "📥 飞轮触发（草稿→ingest）",
+      "input": "hub=C:\\Users\\Fan-SJSS\\.trae-cn\\worktrees\\20260817-Fan-Agent-Momory\\feat-implement-plan-ZilBmv\\AgentMemoryHub dry-run=True",
+      "output": "扫描到 2 张草稿，分布于 1 个平台：\n  - trae: 2 张\n[dry-run] 仅扫描，不执行 ingest / build-vectors",
+      "ok": true,
+      "exit_code": 0,
+      "step": "auto-flywheel"
+    },
+    {
+      "ts": "2026-08-24T22:52:45+08:00",
+      "date": "2026-08-24",
+      "time": "22:52:45",
+      "stage": "register",
+      "stage_label": "📦 技能注册（卡→SkillHub）",
+      "input": "hub=C:\\Users\\Fan-SJSS\\.trae-cn\\worktrees\\20260817-Fan-Agent-Momory\\feat-implement-plan-ZilBmv\\AgentMemoryHub skillhub=D:\\AIwork\\20260821-Fan-SkillHub found_new=136",
+      "output": "  ✓ agent-memory-hub-mcp: [ok] 找到卡片：C:\\Users\\Fan-SJSS\\.trae-cn\\worktrees\\20260817-Fan-Agent-Momory\\feat-implement-plan-ZilBmv\\\n  ✓ autocad-com-automation-deadlock: [ok] 找到卡片：C:\\Users\\Fan-SJSS\\.trae-cn\\worktrees\\20260817-Fan-Agent-Momory\\feat-implement-plan-ZilBmv\\\n  ✓ autocad-dotnet-field-direct-textstring: [ok] 找到卡片：C:\\Users\\Fan-SJSS\\.trae-cn\\worktrees\\20260817-Fan-Agent-Momory\\feat-implement-plan-ZilBmv\\\n  ✓ autocad-rein-fontstyle-version-display: [ok] 找到卡片：C:\\Users\\Fan-SJSS\\.trae-cn\\worktrees\\20260817-Fan-Agent-Momory\\feat-implement-plan-ZilBmv\\\n  ✓ autocad-test-copy-isolation: [ok] 找到卡片：C:\\Users\\Fan-SJSS\\.trae-cn\\worktrees\\20260817-Fan-Agent-Momory\\feat-implement-plan-ZilBmv\\\n  ✓ autocad-tiled-viewport-number: [ok] 找到卡片：C:\\Users\\Fan-SJSS\\.trae-cn\\worktrees\\20260817-Fan-Agent-Momory\\feat-implement-plan-ZilBmv\\\n  ✓ bge-small-zh-sqlite-vector-search: [ok] 找到卡片：C:\\Users\\Fan-SJSS\\.trae-cn\\worktrees\\20260817-Fan-Agent-Momory\\feat-implement-plan-ZilBmv\\\n  ✓ browser-chrome-single-instance:",
+      "ok": true,
+      "exit_code": 0,
+      "step": "skill-register",
+      "found_new": 136
+    },
+    {
+      "ts": "2026-08-24T22:52:46+08:00",
+      "date": "2026-08-24",
+      "time": "22:52:46",
+      "stage": "smoke",
+      "stage_label": "✅ T1 验证（smoke test）",
+      "input": "skillhub=D:\\AIwork\\20260821-Fan-SkillHub hub=C:\\Users\\Fan-SJSS\\.trae-cn\\worktrees\\20260817-Fan-Agent-Momory\\feat-implement-plan-ZilBmv\\AgentMemoryHub promote=True tag=True tested=9 tagged=9",
+      "output": "  ✓ cross-repo-index-commit: [ok] 找到技能：D:\\AIwork\\20260821-Fan-SkillHub\\skills\\dedicated\\memory-hub\\cross-repo-index-commit\n  trigger 词：['跨仓库提交', '跨库登 🏷️\n  ✓ superpowers: [ok] 找到技能：D:\\AIwork\\20260821-Fan-SkillHub\\skills\\shared\\engineering\\superpowers\n  trigger 词：['头脑风暴', 'brainstorming', 'T 🏷️\n  ✓ multica: [ok] 找到技能：D:\\AIwork\\20260821-Fan-SkillHub\\skills\\shared\\govern\\multica\n  trigger 词：['multica', 'autopilot', 'agent 管理',  🏷️\n  ✓ all-in-one-media-notes: [ok] 找到技能：D:\\AIwork\\20260821-Fan-SkillHub\\skills\\shared\\productivity\\all-in-one-media-notes\n  trigger 词：['音频总结', '视频总结', 🏷️\n  ✓ browser-bridge: [ok] 找到技能：D:\\AIwork\\20260821-Fan-SkillHub\\skills\\shared\\productivity\\browser-bridge\n  trigger 词：['浏览器', 'browser', '网页爬取 🏷️\n  ✓ computer-use: [ok] 找到技能：D:\\AIwork\\20260821-Fan-SkillHub\\skills\\shared\\productivity\\computer-use\n  trigger 词：['控制电脑', '桌面操作', 'CAD 死锁', 🏷️\n  ✓ personal-workbench: [ok] 找到技能：D:\\AIwork\\20260821-Fan-SkillHub\\skills\\shared\\productivity\\personal-workbench\n  trigger 词：['日程', ",
+      "ok": true,
+      "exit_code": 0,
+      "step": "smoke-test",
+      "tested": 9,
+      "tagged": 9
+    },
+    {
+      "ts": "2026-08-24T22:52:46+08:00",
+      "date": "2026-08-24",
+      "time": "22:52:46",
+      "stage": "run",
+      "stage_label": "🚀 完整飞轮",
+      "input": "dry-run=True, auto=True, promote=True, tag=True, flywheel-tag=True",
+      "output": "子步骤数=3  成功子步骤=3  tagged=9",
+      "ok": true,
+      "stages": 3,
+      "start_ts": "2026-08-24T22:52:34+08:00",
+      "tagged": 9
+    }
+  ]
+}
