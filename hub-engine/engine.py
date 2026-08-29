@@ -7,9 +7,9 @@ from pathlib import Path
 
 from common.config import HubConfig, load_engine_config, load_provider_keys
 from tools.lint import _all_cards, lint
-from tools.retrieve import retrieve
-from tools.resilience import ResiliencePipelineBuilder, PipelineEvent
 from tools.llm_health import LLMHealthChecker
+from tools.resilience import ResiliencePipelineBuilder
+from tools.retrieve import retrieve
 
 
 def _gateway_kwargs(
@@ -146,8 +146,8 @@ def _do_fallback(prompt: str, hub_root: Path) -> str:
 def _local_fallback_chat(
     hub_root: Path, prompt: str, parts: list[str], bodies: list[str]
 ) -> str:
-    """直连本地 Ollama 生成骨架回答（不经 OmniRoute，外部源全挂仍可用）。
-    接入 LLM 健康检测 + 弹性管道：Ollama 不可用时返回空字符串，由上层处理。"""
+    """直连本地 LLM (LM Studio) 生成骨架回答（不经 OmniRoute，外部源全挂仍可用）。
+    接入 LLM 健康检测 + 弹性管道：本地 LLM 不可用时返回空字符串，由上层处理。"""
     from common.config import load_engine_config
 
     cfg = (load_engine_config() or {}).get("fallback_chat") or {}
@@ -163,7 +163,7 @@ def _local_fallback_chat(
     health_checker = LLMHealthChecker.get_instance(ollama_base)
 
     if not health_checker.is_available():
-        print(f"[llm_health] fallback_chat Ollama 不可用，跳过本地兜底")
+        print("[llm_health] fallback_chat 本地 LLM 不可用，跳过本地兜底")
         return ""
 
     ref = "\n".join(f"- {p}:\n{b[:400]}" for p, b in zip(parts, bodies))
@@ -197,13 +197,13 @@ def _local_fallback_chat(
     try:
         return pipeline.build().execute(_do_fallback_http)
     except Exception as e:
-        print(f"[resilience/local_fallback] Ollama 兜底失败: {e}")
+        print(f"[resilience/local_fallback] 本地 LLM 兜底失败: {e}")
         return ""
 
 
 def _local_chat(prompt: str, hub_root: Path, model: str | None = None) -> str:
-    """直连本机 Ollama 的统一入口，供本地默认逻辑任务使用。
-    接入 LLM 健康检测 + 弹性管道：Ollama 不可用时自动降级到网关。"""
+    """直连本地 LLM 的统一入口 (LM Studio)，供本地默认逻辑任务使用。
+    接入 LLM 健康检测 + 弹性管道：本地 LLM 不可用时自动降级到网关。"""
     import requests
 
     cfg = load_engine_config()
@@ -227,7 +227,7 @@ def _local_chat(prompt: str, hub_root: Path, model: str | None = None) -> str:
     health_checker = LLMHealthChecker.get_instance(ollama_base)
 
     if not health_checker.is_available():
-        print(f"[llm_health] Ollama 不可用，降级到 OmniRoute 网关")
+        print("[llm_health] 本地 LLM 不可用，降级到 OmniRoute 网关")
         # 降级到网关
         return chat(prompt, hub_root, fallback=True)
 
@@ -294,7 +294,7 @@ def smart_chat(prompt: str, hub_root: str | Path) -> str:
 
     ollama_available = health_checker.is_available()
     if not ollama_available:
-        print(f"[llm_health] Ollama 不可用，直接使用 OmniRoute 网关")
+        print("[llm_health] 本地 LLM 不可用，直接使用 OmniRoute 网关")
         return chat(
             prompt, root, fallback=False,
             model=str(escalation.get("remote_model", "auto/offline")),
@@ -322,7 +322,7 @@ def smart_chat(prompt: str, hub_root: str | Path) -> str:
             try:
                 # 再次检查 LLM 健康状态
                 if not health_checker.is_available():
-                    print(f"[llm_health] Ollama 在升级期间不可用，切换到网关")
+                    print("[llm_health] 本地 LLM 在升级期间不可用，切换到网关")
                     break
                 upgraded = _local_chat(prompt, root, upgrade_model)
             except OSError as e:
@@ -715,8 +715,8 @@ def _collect_snapshot_alerts(
         alerts.append({
             "level": "critical",
             "rule": "ollama_unavailable",
-            "message": f"Ollama 服务不可用: {llm_status.get('last_error', '未知错误')}",
-            "suggestion": "检查 Ollama 服务状态，必要时重启 Ollama",
+            "message": f"本地 LLM 服务不可用 (LM Studio): {llm_status.get('last_error', '未知错误')}",
+            "suggestion": "检查 LM Studio 是否在运行，确认 API 端口 1234",
         })
 
     unhealthy = (
@@ -762,8 +762,8 @@ def _collect_snapshot_alerts(
         alerts.append({
             "level": "info",
             "rule": "ollama_slow",
-            "message": f"Ollama 响应时间 {llm_status['response_time_ms']}ms，建议优化",
-            "suggestion": "检查 Ollama 资源占用，考虑模型冷启动预热",
+            "message": f"本地 LLM 响应时间 (LM Studio) {llm_status['response_time_ms']}ms，建议优化",
+            "suggestion": "检查 LM Studio 资源占用，考虑开启 GPU 加速或冷启动预热",
         })
 
     return alerts
@@ -868,21 +868,21 @@ def _print_snapshot_report(data: dict, report: dict, pending: list):
     if ollama.get("available"):
         models_str = ", ".join(ollama.get("models", [])[:3])
         print(
-            f"🦙 LLM 健康: ✅ 可用 · {ollama.get('model_count', 0)} 模型"
+            f"🦙 本地 LLM 健康 (LM Studio): ✅ 可用 · {ollama.get('model_count', 0)} 模型"
             f" · 响应 {ollama.get('response_time_ms', 0)}ms"
             + (f" · 模型: {models_str}" if models_str else "")
         )
     else:
-        print(f"🦙 LLM 健康: ❌ 不可用 · 错误: {ollama.get('last_error', '未知')}")
+        print(f"🦙 本地 LLM 健康 (LM Studio): ❌ 不可用 · 错误: {ollama.get('last_error', '未知')}")
 
     scores = data.get("health_scores", {})
     if scores:
-        print(f"\n📊 健康度评分:")
+        print("\n📊 健康度评分:")
         score_labels = {
             "card_health": "卡片",
             "skill_health": "技能",
             "flywheel_activity": "飞轮",
-            "llm_health": "Ollama",
+            "llm_health": "本地 LLM",
             "overall": "📈 总分",
         }
         for k, v in scores.items():
@@ -892,7 +892,7 @@ def _print_snapshot_report(data: dict, report: dict, pending: list):
 
     metrics = data.get("today_metrics", {})
     if metrics:
-        print(f"\n📈 今日指标:")
+        print("\n📈 今日指标:")
         hr = metrics.get("hit_rate", "N/A")
         print(f"  查询 {metrics.get('searches', 0)} 次"
               f" · 命中 {metrics.get('hits', 0)}"
@@ -909,11 +909,11 @@ def _print_snapshot_report(data: dict, report: dict, pending: list):
             if a.get("suggestion"):
                 print(f"     💡 {a['suggestion']}")
     else:
-        print(f"\n✅ 无告警")
+        print("\n✅ 无告警")
 
     comparison = data.get("comparison", {})
     if comparison:
-        print(f"\n🔄 较昨日变化:")
+        print("\n🔄 较昨日变化:")
         for area, changes in comparison.items():
             if area == "cards":
                 for k, v in changes.items():
@@ -924,7 +924,7 @@ def _print_snapshot_report(data: dict, report: dict, pending: list):
                     arrow = "📈" if v["delta"] > 0 else "📉"
                     print(f"  {arrow} 健康分 {k}: {v['prev']} → {v['curr']} ({v['delta']:+.1f})")
             elif area == "llm_status":
-                print(f"  ⚡ Ollama: {changes['prev']} → {changes['curr']}")
+                print(f"  ⚡ 本地 LLM: {changes['prev']} → {changes['curr']}")
             elif area == "alerts":
                 for r in changes.get("new", []):
                     print(f"  🆕 新告警: {r}")

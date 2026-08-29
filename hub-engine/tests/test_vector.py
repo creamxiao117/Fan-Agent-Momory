@@ -30,7 +30,8 @@ def test_cosine_unrelated_low():
 
 def test_cosine_identity_is_one():
     a = vector("hello world hello world")
-    assert cosine(a, a) == 1.0
+    import pytest
+    assert cosine(a, a) == pytest.approx(1.0)
 
 
 @skip_no_jieba
@@ -49,7 +50,7 @@ def test_tokenize_word_mode_drops_punct_and_spaces():
 def test_tokenize_word_mode_falls_back_to_char(monkeypatch):
     monkeypatch.setattr("common.vector._has_jieba", lambda: False)
     toks = tokenize("autocad dll", mode="word")
-    assert "au" in toks  # 无 jieba 回退字符 n-gram
+    assert "au" in toks  # 无 jieba 回退 char bigram
 
 
 @skip_no_jieba

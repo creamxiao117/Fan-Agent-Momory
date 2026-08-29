@@ -14,6 +14,7 @@ from common.frontmatter import (
     validate_card,
     write_card,
 )
+from common.constants import HIGH_RISK  # 高风险类型：rule + methodology
 from common.vector import cosine, vector
 from tools.dedup import candidates as dedup_candidates
 from tools.dedup import decide as dedup_decide
@@ -29,7 +30,7 @@ TYPE_DIR = {
     "retro": "retro",
     "blueprint": "blueprints",
 }
-HIGH_RISK = {"rule"}  # 重要规则：须人工确认
+# HIGH_RISK 已统一到 common/constants.py（含 rule + methodology）
 
 # 与 bootstrap_hub 一致：注入本地身份，保证未配置全局 user.name/email 也能提交（不污染全局配置）
 GIT_ID = ["-c", "user.name=AgentMemoryHub", "-c", "user.email=hub@local"]

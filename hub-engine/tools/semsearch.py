@@ -265,6 +265,10 @@ def _active_model_id() -> str:
     为什么不能固定写 EMBED_MODEL：db_meta.embed_model 是维度门禁的判断依据，
     记错会让"换了后端但维度恰好相同"的情况漏判重建，导致不同模型向量混算。
     """
+    # mock/None 场景不探测真实 HTTP，避免跨环境副作用
+    if embed is not _embed_text:
+        return EMBED_MODEL
+
     cfg = _http_cfg()
     if cfg and _embed_via_http("model-id-probe") is not None:
         return f"http:{cfg[1]}"
@@ -295,6 +299,8 @@ def _backend_ok() -> bool:
     为什么 HTTP 也要实测一次：配置存在 ≠ 服务在跑（LM Studio 未启动时配置仍在），
     只判配置会让 build 在后端真挂时误判可用、落 NULL 污染库。
     """
+    if embed is None:
+        return False
     if embed is not _embed_text:
         return True
     if _http_cfg() and _embed_via_http("backend-probe") is not None:

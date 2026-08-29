@@ -344,6 +344,7 @@ def test_build_degraded_keeps_old_vectors_when_backend_down(tmp_path, monkeypatc
 
     # 切回真实后端并模拟模型不可用
     set_embed_backend(None)
+    monkeypatch.setattr(semsearch, "_http_cfg", lambda: None)  # 也禁用 HTTP 通道
     monkeypatch.setattr(semsearch, "_load_backend", lambda: (None, None))
     st = build(root)
     assert st.get("degraded") is True

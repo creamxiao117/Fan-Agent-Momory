@@ -61,15 +61,22 @@ def test_empty_query_returns_no_results(tmp_path):
 
 
 def test_semantic_n_is_tunable(tmp_path):
-    """n-gram 长度可调（char 模式）：n 值不同应产出不同召回（实测 n=2 最优）"""
+    """n-gram 长度可调（char 模式）：n 参数确实影响相似度计算"""
+    from tools.retrieve import _semantic_scored
     root = bootstrap(tmp_path)
     _seed(root)
     q = "改了插件 DLL 结果被 AutoCAD 锁住打不开"
-    hits2 = semantic_retrieve(root, q, top_k=2, n=2, mode="char")
-    hits3 = semantic_retrieve(root, q, top_k=2, n=3, mode="char")
-    # n 参数生效：两者至少一端有命中，且召回集合不同（n 影响相似度排序）
-    assert len(hits2) >= 1 or len(hits3) >= 1
-    assert [h.path.name for h in hits2] != [h.path.name for h in hits3]
+    # 用底层带分数接口验证 n 参数确实改变了相似度计算
+    scored2 = _semantic_scored(root, q, top_k=5, n=2, mode="char")
+    scored3 = _semantic_scored(root, q, top_k=5, n=3, mode="char")
+    # n=2 和 n=3 都应有召回
+    assert len(scored2) >= 1 and len(scored3) >= 1
+    # n 参数生效：至少一张卡的分数因 n 不同而不同
+    scores2 = {c.path.name: s for c, s in scored2}
+    scores3 = {c.path.name: s for c, s in scored3}
+    common = set(scores2) & set(scores3)
+    assert any(abs(scores2[k] - scores3[k]) > 0.001 for k in common), \
+        f"n=2 和 n=3 的分数完全相同，n 参数未生效: scores2={scores2} scores3={scores3}"
 
 
 def test_retrieve_passes_n_to_semantic(tmp_path):

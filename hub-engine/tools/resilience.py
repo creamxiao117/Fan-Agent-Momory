@@ -265,9 +265,7 @@ class CircuitBreakerStrategy(ResilienceStrategy):
                 with strategy._lock:
                     strategy._failure_count += 1
                     strategy._last_failure_time = time.time()
-                    if strategy._state == "half_open":
-                        strategy._transition("open")
-                    elif strategy._failure_count >= strategy.failure_threshold:
+                    if strategy._state == "half_open" or strategy._failure_count >= strategy.failure_threshold:
                         strategy._transition("open")
                 raise
 

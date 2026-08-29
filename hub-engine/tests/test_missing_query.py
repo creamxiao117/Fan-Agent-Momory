@@ -105,7 +105,7 @@ def test_aggregate_since_filters_outdated(tmp_path):
 
     recs = [
         {**_search("缺口A", 0), "ts": "2026-08-10T02:00:00Z"},  # 旧，应排除
-        {**_search("缺口A", 0), "ts": "2026-08-19T01:00:00Z"},  # +8 仍当日
+        {**_search("缺口A", 0), "ts": "2026-08-28T01:00:00Z"},  # +8 仍当日
         {**_search("缺口A", 0), "ts": "2026-08-19T05:00:00Z"},
     ]
     _write_log(tmp_path, recs)
@@ -118,6 +118,6 @@ def test_main_since_days_ok(tmp_path, capsys):
     """CLI --since-days 接线正常，聚焦近期仍产出候选"""
     from scripts.missing_query import main
 
-    _write_log(tmp_path, [{**_search("缺口A", 0), "ts": "2026-08-19T01:00:00Z"}])
+    _write_log(tmp_path, [{**_search("缺口A", 0), "ts": "2026-08-28T01:00:00Z"}])
     assert main(["--root", str(tmp_path), "--since-days", "7"]) == 0
     assert "缺口A" in capsys.readouterr().out

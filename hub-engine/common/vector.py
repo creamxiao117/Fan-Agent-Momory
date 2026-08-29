@@ -5,7 +5,7 @@ import re
 from collections import Counter
 from functools import lru_cache
 
-_CHAR_RE = re.compile(r"\s+")
+_CHAR_RE = re.compile(r"[^a-z0-9\u4e00-\u9fff]+")  # 替换所有非字母/数字/中文为空格
 
 # 常用中文停用词（词模式去噪，保持精简）
 STOPWORDS = frozenset(
@@ -98,9 +98,19 @@ def tokenize(text: str, n: int = 2, mode: str = "char") -> list[str]:
             for w in _jieba().lcut(text.lower())
             if w.strip() and not _is_punct(w) and w not in STOPWORDS
         ]
+    # word 模式无 jieba 时的回退：先按非字母数字/中文替换为空格再分词
+    # 避免跨词边界的 bigram 碰撞（如 "dll-lock" + "autocad" 产生 "oc" 误命中）
     norm = _CHAR_RE.sub(" ", text.lower())
-    if len(norm) < n:
-        return [norm] if norm else []
+    words = [w for w in norm.split() if w.strip()]
+    if not words:
+        return []
+    tokens: list[str] = []
+    for w in words:
+        if len(w) <= n:
+            tokens.append(w)
+        else:
+            tokens.extend(w[j:j+n] for j in range(len(w) - n + 1))
+    return tokens
     return [norm[i : i + n] for i in range(len(norm) - n + 1)]
 
 

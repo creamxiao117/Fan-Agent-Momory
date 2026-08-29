@@ -11,10 +11,10 @@
 from __future__ import annotations
 
 import time
-import urllib.request
 import urllib.error
+import urllib.request
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Callable
 
 # 健康检测阈值配置
 RESPONSE_TIME_WARNING_THRESHOLD = 3000  # 响应时间警告阈值（毫秒）
@@ -210,7 +210,7 @@ def create_llm_health_wrapper(
     def wrapper(*args, **kwargs) -> str:
         if not checker.is_available():
             if on_unavailable:
-                print(f"[llm_health] LLM 不可用，执行降级方案")
+                print("[llm_health] LLM 不可用，执行降级方案")
                 return on_unavailable(*args, **kwargs)
             raise ConnectionError(f"LLM 服务不可用: {checker._cached_status.last_error if checker._cached_status else '未知错误'}")
         return fn(*args, **kwargs)

@@ -331,8 +331,8 @@ def check_alerts(
         alerts.append({
             "level": "critical",
             "rule": "ollama_unavailable",
-            "message": f"Ollama 服务不可用: {llm_status.get('last_error', '未知错误')}",
-            "suggestion": "检查 Ollama 服务状态，必要时重启 Ollama",
+            "message": f"本地 LLM 服务不可用 (LM Studio): {llm_status.get('last_error', '未知错误')}",
+            "suggestion": "检查 LM Studio 是否在运行，确认 API 端口 1234",
         })
 
     return alerts

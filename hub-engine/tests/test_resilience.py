@@ -13,16 +13,11 @@ if str(_ENGINE_DIR) not in sys.path:
     sys.path.insert(0, str(_ENGINE_DIR))
 
 import pytest
-
 from tools.resilience import (
+    CircuitBreakerOpenError,
+    CircuitBreakerStrategy,
     ResilienceContext,
     ResiliencePipelineBuilder,
-    PipelineEvent,
-    RetryStrategy,
-    TimeoutStrategy,
-    CircuitBreakerStrategy,
-    CircuitBreakerOpenError,
-    FallbackStrategy,
 )
 
 
@@ -122,7 +117,6 @@ class TestCircuitBreakerStrategy:
         )
         pipeline = ResiliencePipelineBuilder()._strategies
         # 手动构建管道
-        from tools.resilience import ResiliencePipeline
 
         def always_fail():
             raise ConnectionError("连接失败")

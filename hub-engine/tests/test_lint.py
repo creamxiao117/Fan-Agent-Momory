@@ -38,7 +38,7 @@ def test_lint_returns_full_shape(tmp_path):
     root = bootstrap(tmp_path)
     _seed(root)
     report = lint(root)
-    assert set(report) == {"orphans", "ghosts", "stale", "invalid", "notes"}
+    assert set(report) == {"orphans", "ghosts", "stale", "invalid", "notes", "hooks"}
     assert isinstance(report["invalid"], int)
 
 
