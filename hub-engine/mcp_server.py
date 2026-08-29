@@ -16,7 +16,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # 保证可 import too
 import tools.mcp_handlers as H
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
-from mcp.types import TextContent, Tool
+from mcp.types import Resource, TextContent, Tool
 
 HANDLERS = {
     "hub_search": H.hub_search,
@@ -81,6 +81,16 @@ INGEST_SCHEMA = {
     "required": ["platform", "title", "body"],
 }
 
+# WorkBuddy MCP Apps 要求工具声明 UI 资源（_meta.ui.resourceUri）方可进入可用目录（liveApps）。
+# 若不声明，catalog.refresh 会以 missing_ui_resourceUri 拒绝 → Agent 无法调用 → 检索不留痕。
+_UI_META = {
+    "hub_search": "ui://agent-memory-hub/hub_search.html",
+    "hub_get": "ui://agent-memory-hub/hub_get.html",
+    "hub_index": "ui://agent-memory-hub/hub_index.html",
+    "hub_bootstrap": "ui://agent-memory-hub/hub_bootstrap.html",
+    "hub_ingest_candidate": "ui://agent-memory-hub/hub_ingest_candidate.html",
+}
+
 
 def _normalize(name: str, arguments: dict) -> dict:
     """MCP 参数名（id/type）→ Python 参数名（id_/type_）"""
@@ -102,26 +112,31 @@ def build_server(root: Path) -> Server:
                 name="hub_search",
                 description="混合检索中枢（确定性+语义）",
                 inputSchema=SEARCH_SCHEMA,
+                _meta={"ui": {"resourceUri": _UI_META["hub_search"]}},
             ),
             Tool(
                 name="hub_get",
                 description="按 slug/路径读单张卡片全文",
                 inputSchema=GET_SCHEMA,
+                _meta={"ui": {"resourceUri": _UI_META["hub_get"]}},
             ),
             Tool(
                 name="hub_index",
                 description="浏览五类目录结构",
                 inputSchema=INDEX_SCHEMA,
+                _meta={"ui": {"resourceUri": _UI_META["hub_index"]}},
             ),
             Tool(
                 name="hub_bootstrap",
                 description="任务级引导：按 task_kind 分类检索生成引导块",
                 inputSchema=BOOTSTRAP_SCHEMA,
+                _meta={"ui": {"resourceUri": _UI_META["hub_bootstrap"]}},
             ),
             Tool(
                 name="hub_ingest_candidate",
                 description="候选回写（仅写 draft，不直写权威区）",
                 inputSchema=INGEST_SCHEMA,
+                _meta={"ui": {"resourceUri": _UI_META["hub_ingest_candidate"]}},
             ),
         ]
 
@@ -132,6 +147,23 @@ def build_server(root: Path) -> Server:
             raise ValueError(f"未知工具: {name}")
         res = handler(root, **_normalize(name, arguments or {}))
         return [TextContent(type="text", text=json.dumps(res, ensure_ascii=False))]
+
+    @server.list_resources()
+    async def _list_resources() -> list[Resource]:
+        """WorkBuddy MCP Apps 要求 ui:// 资源可枚举（工具目录校验用）"""
+        return [
+            Resource(uri=uri, name=f"{name} 卡片") for name, uri in _UI_META.items()
+        ]
+
+    @server.read_resource()
+    async def _read_resource(uri: str) -> str:
+        """提供极简 HTML 占位页；WorkBuddy 打开资源视图时使用"""
+        name = uri.rsplit("/", 1)[-1].removesuffix(".html") if uri else "hub"
+        safe = "".join(c for c in name if c.isalnum() or c == "_")
+        return f"""<!doctype html><html lang="zh"><meta charset="utf-8">
+<title>{safe}</title><body style="font-family:system-ui;padding:16px">
+<h2>Agent Memory Hub · {safe}</h2><p>此工具以文本响应为主，UI 资源仅供 WorkBuddy MCP Apps 目录展示。</p>
+</body></html>"""
 
     return server
 
