@@ -618,6 +618,59 @@ def _collect_today_metrics(root: Path) -> dict:
     }
 
 
+
+def _estimate_hub_tool_capacity(root: Path) -> float:
+    """当 SkillHub 目录不存在时，用 hub 自身 tools/ 模块数 + MCP handlers 估算技能健康度。
+
+    计分规则（满分 100）：
+    - tools/ 可导入模块数：16 个 expected，每个 4 分（上限 64）
+    - MCP handler 完整性：5 个 expected，每个 6 分（上限 30）
+    - 平台适配器覆盖数：4 个 expected，每个 1.5 分（上限 6）
+    """
+    score = 0.0
+    engine_dir = root.parent / "hub-engine"
+
+    # tools/ 可导入模块
+    tools_dir = engine_dir / "tools"
+    expected_tools = {
+        "compress", "dedup", "distill", "inject", "lint", "llm_health",
+        "mcp_audit", "mcp_handlers", "mcp_policy", "memory_diff",
+        "platform_bridge", "resilience", "retrieve", "semsearch", "snippet", "tidy",
+    }
+    import_ok = 0
+    for mod_name in expected_tools:
+        try:
+            import importlib
+            sys.path.insert(0, str(engine_dir))
+            importlib.import_module(f"tools.{mod_name}")
+            import_ok += 1
+        except (ImportError, Exception):
+            pass
+    score += min(import_ok, 16) * 4  # 上限 64
+
+    # MCP handler 完整性
+    mcp_handlers = ["hub_search", "hub_get", "hub_index", "hub_bootstrap", "hub_ingest_candidate"]
+    try:
+        import importlib
+        sys.path.insert(0, str(engine_dir))
+        mod = importlib.import_module("tools.mcp_handlers")
+        present = sum(1 for fn in mcp_handlers if hasattr(mod, fn) and callable(getattr(mod, fn)))
+        score += present * 6  # 上限 30
+    except Exception:
+        pass
+
+    # 平台适配器覆盖
+    try:
+        from common.config import HubConfig
+        cfg = HubConfig.load(root)
+        platforms = (cfg.platforms or {}).keys()
+        supported = {"hermes", "trae", "code", "workbuddy"}
+        covered = sum(1 for p in platforms if p in supported)
+        score += covered * 1.5  # 上限 6
+    except Exception:
+        pass
+
+    return min(round(score, 1), 100.0)
 def _compute_snapshot_health_scores(
     counts: dict,
     report: dict,
@@ -629,7 +682,8 @@ def _compute_snapshot_health_scores(
     unhealthy_cards = len(report.get("orphans", [])) + len(report.get("ghosts", []))
     card_health = ((total_cards - unhealthy_cards) / max(total_cards, 1)) * 100
 
-    skill_health = 50.0
+    # skill_health 默认值改为 hub 自身工具能力估算（取代硬编码 50.0）
+    skill_health = _estimate_hub_tool_capacity(root)
     skillhub_root = root.parent / "SkillHub"
     if skillhub_root.is_dir():
         try:

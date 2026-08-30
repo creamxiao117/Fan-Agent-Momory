@@ -83,7 +83,7 @@ def auto_fix(engine_dir: Path, *, dry_run: bool = False) -> dict:
     """执行自动修复流程。"""
     exit_code, output = run_pytest(engine_dir)
     if exit_code == 0:
-        return {"fixed": 0, "remaining_failures": 0, "message": "pytest 全绿"}
+        return {"fixed": 0, "remaining_failures": 0, "message": "pytest 全绿", "pytest_exit_code_before": 0}
 
     # 收集所有 ModuleNotFoundError / ImportError 行
     error_lines = [
