@@ -173,6 +173,9 @@ class _CorpusIndex:
 
 # 缓存：root 绝对路径 -> (目录签名, 索引)。签名含每文件 (mtime_ns, size)，变化即重建
 _INDEX_CACHE: dict[str, tuple[tuple, _CorpusIndex]] = {}
+# IDF 结果缓存：按 (root_str, mode, n) 索引；语料签名变化（_dir_signature）时自动失效
+# 避免每次 semantic 查询重跑 build_idf（198 卡 jieba 分词 + DF 统计 = 831ms）
+_IDF_CACHE: dict[tuple[str, str, int, int], dict[str, float]] = {}
 
 
 def _dir_signature(root: Path) -> tuple:
@@ -199,6 +202,10 @@ def _index(root: Path) -> _CorpusIndex:
         return hit[1]
     idx = _CorpusIndex(Path(root))
     _INDEX_CACHE[key] = (sig, idx)
+    # 语料变了 → 清空该 root 的 IDF 缓存（其他 root 的不受影响）
+    stale_keys = [k for k in _IDF_CACHE if k[0] == key]
+    for k in stale_keys:
+        _IDF_CACHE.pop(k, None)
     return idx
 
 
@@ -223,6 +230,9 @@ def deterministic_retrieve(root: Path, query: str, mode: str = "word") -> list[C
     - char 模式：整句包含（原行为）
     - word 模式：额外支持词级匹配——query 任一分词与 tag 互相包含即命中
       （如查询含 "dll" 可命中 tag "dll-lock"，无需精确整句）
+
+    返回按「命中信号分」降序排序：type 精确命中=3 分、tag 精确子串=2 分、word 命中 tag=1+hits 分；
+    多 tag 命中的卡排前，避免调用方取 top_k 时被噪声淹没（2026-08-31 补排序）。
     """
     q = query.lower()
     q_words = tokenize(query, mode="word") if mode == "word" else []
@@ -230,48 +240,75 @@ def deterministic_retrieve(root: Path, query: str, mode: str = "word") -> list[C
     q_words = [w for w in q_words if len(w) >= 2 and w not in _EN_STOP]
     idx = _index(root)
     inv = _build_tag_index(idx.cards)
-    matched: set[int] = set()
+    # id -> 命中信号分
+    score: dict[int, int] = {}
+
+    def _add(card_id: int, pts: int) -> None:
+        score[card_id] = score.get(card_id, 0) + pts
+
     for c in idx.cards:
         if q in c.type:
-            matched.add(id(c))
+            _add(id(c), 3)
     tkey = f"type:{q}"
     for c in inv.get(tkey, []):
-        matched.add(id(c))
-    tags_to_check = list(inv.keys())
-    for t in tags_to_check:
+        _add(id(c), 3)
+    for t in inv:
         if t.startswith("type:"):
             continue
         if q in t:
             # 精确子串匹配（最强信号）
             for c in inv[t]:
-                matched.add(id(c))
+                _add(id(c), 2)
         elif q_words:
-            # word 匹配：需要命中足够的词
-            # 保护机制：为防止英文单词短串高频误碰撞（如 'oc' 命中 'lock'），
-            # 只有在：(1) 查询分词过滤后只剩下英文单词，且有多个时，要求 hits >= 2；
-            # (2) 纯中文分词、包含单个词、或命中的是中文词时，只要 hits >= 1 即可。
             hits = sum(1 for w in q_words if w in t)
-            # 检查命中的词中是否有英文
             hit_words = [w for w in q_words if w in t]
-            hit_english = any(not all('\u4e00' <= char <= '\u9fff' for char in w) for w in hit_words)
-            threshold = 2 if (hit_english and len(q_words) >= 2 and all(not all('\u4e00' <= char <= '\u9fff' for char in w) for w in q_words)) else 1
+            hit_english = any(
+                not all("\u4e00" <= ch <= "\u9fff" for ch in w) for w in hit_words
+            )
+            threshold = (
+                2
+                if (
+                    hit_english
+                    and len(q_words) >= 2
+                    and all(
+                        not all("\u4e00" <= ch <= "\u9fff" for ch in w)
+                        for w in q_words
+                    )
+                )
+                else 1
+            )
             if hits >= threshold:
                 for c in inv[t]:
-                    matched.add(id(c))
-    return [c for c in idx.cards if id(c) in matched]
+                    _add(id(c), 1 + hits)  # 命中词越多分越高
+
+    matched_ids = set(score.keys())
+    # 按命中分降序，同分保持 idx.cards 原始顺序（稳定）
+    return sorted(
+        [c for c in idx.cards if id(c) in matched_ids],
+        key=lambda card: score[id(card)],
+        reverse=True,
+    )
 
 
 def _semantic_scored(
-    root: Path, query: str, top_k: int = 5, n: int = 2, mode: str = "word"
+    root: Path, query: str, top_k: int = 5, n: int = 2, mode: str = "char"
 ) -> list[tuple[Card, float]]:
     """语义通道带分数召回：返回 [(card, sim)]，按相似度降序。
 
-    - char：字符 n-gram（实测 n=2 最优）
-    - word：jieba 分词 + IDF 加权（语料内稀有词权重更高，缓解领域共词抢占）
+    默认 char（2026-08-31 改）：
+    - char：字符 n-gram（实测 n=2 最优；混合 top3 recall 100% vs word 73%；纯 n-gram 无 IDF 开销）
+    - word：jieba 分词 + IDF 加权（语料内稀有词权重更高，缓解领域共词抢占；IDF 结果会缓存到 _IDF_CACHE）
     """
     idx = _index(root)
-    texts = [_card_text(c) for c in idx.cards]
-    idf = build_idf(texts, n=n, mode=mode) if mode == "word" else None
+    idf = None
+    if mode == "word":
+        # IDF 缓存：key=(root_str, mode, n, n_cards)，语料签名变化由 _index() 里清 _IDF_CACHE 兜底
+        cache_key = (str(Path(root).resolve()), mode, n, len(idx.cards))
+        idf = _IDF_CACHE.get(cache_key)
+        if idf is None:
+            texts = [_card_text(c) for c in idx.cards]
+            idf = build_idf(texts, n=n, mode=mode)
+            _IDF_CACHE[cache_key] = idf
     qv = vector(query, n=n, mode=mode, idf=idf)
     # 反触发：word 模式下取查询词集，供逐卡判是否命中其 anti_trigger（降权）
     q_tokens = (
@@ -298,7 +335,7 @@ def _semantic_scored(
 
 
 def semantic_retrieve(
-    root: Path, query: str, top_k: int = 5, n: int = 2, mode: str = "word"
+    root: Path, query: str, top_k: int = 5, n: int = 2, mode: str = "char"
 ) -> list[Card]:
     """语义通道：对 body+tags 做 token 余弦相似度召回 top-k（兼容旧接口）"""
     return [c for c, _ in _semantic_scored(root, query, top_k, n, mode)]
@@ -353,20 +390,42 @@ def _rrf_fuse(
 
 
 def _fused_semantic(
-    root: Path, query: str, top_k: int = 5, n: int = 2, mode: str = "word"
+    root: Path, query: str, top_k: int = 5, n: int = 2, mode: str = "char"
 ) -> list[tuple[Card, float]]:
-    """始终并行：词袋(n-gram) + 向量两个通道同时打分，RRF 融合取 top_k。
+    """词袋 + 向量双路 RRF 融合，带通道退化自修复（方案 A，2026-08-31）。
 
-    向量后端未装/未建库 → 该通道返回空 → 融合等价单通道，行为与现状一致（0 回归）。
+    当某通道严重退化（返回数 < pool 的 10%）时直接返回另一通道结果，
+    避免"双通道都命中"的少数卡用两个 rank 分相加反超"只有好通道命中"的真实目标
+    （典型场景：英文改写查询 -> 词袋 n-gram 余弦几乎全 0 -> 只返回 1-2 张卡）。
+
+    向量后端未装/未建库 -> 该通道返回空 -> 融合等价单通道，行为与现状一致（0 回归）。
     """
     pool = max(top_k * 2, _VEC_POOL)
     word_scored = _semantic_scored(root, query, top_k=pool, n=n, mode=mode)
     vec_scored = semantic_vector_retrieve(root, query, top_k=pool)
+
+    # 退化阈值：返回卡数低于 pool 的 10% 视为该通道失效
+    floor = max(pool // 10, 2)
+    w_deg = len(word_scored) < floor
+    v_deg = len(vec_scored) < floor
+
+    if w_deg and v_deg:
+        # 双通道都严重退化（极罕见），兜底返回两者合并去重取 top_k
+        merged = sorted(
+            {id(c): (c, s) for c, s in [*word_scored, *vec_scored]}.values(),
+            key=lambda x: x[1],
+            reverse=True,
+        )
+        return merged[:top_k]
+    if w_deg:
+        return vec_scored[:top_k]
+    if v_deg:
+        return word_scored[:top_k]
     return _rrf_fuse(word_scored, vec_scored, top_k)
 
 
 def retrieve_with_meta(
-    root: Path, query: str, top_k: int = 5, n: int = 2, mode: str = "word"
+    root: Path, query: str, top_k: int = 5, n: int = 2, mode: str = "char"
 ) -> tuple[str, list[tuple[Card, float | None]]]:
     """混合检索入口，带通道与分数：返回 (channel, [(card, score|None)])
 
@@ -381,7 +440,7 @@ def retrieve_with_meta(
 
 
 def retrieve(
-    root: Path, query: str, top_k: int = 5, n: int = 2, mode: str = "word"
+    root: Path, query: str, top_k: int = 5, n: int = 2, mode: str = "char"
 ) -> list[Card]:
     """混合检索入口（兼容旧接口，仅返回卡片列表）
 
