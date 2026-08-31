@@ -94,6 +94,37 @@ def test_confirm_rule_promotes_to_rules(tmp_path):
     assert dst.parent.name == "rules"
 
 
+def test_confirm_methodology_routes_by_type(tmp_path):
+    """methodology 类型待确认卡 → confirm 后应落 methodology/ 而非硬编码 rules/"""
+    root = bootstrap(tmp_path)
+    _make_draft(
+        root,
+        "trae",
+        "meth-y.md",
+        "收尾建议清单方法论：任务完成后的结构化待办",
+        ctype="methodology",
+    )
+    stat = ingest(root, "trae")
+    assert stat["pending"] == 1  # 高风险类型（rule+methodology）进 pending
+    assert (root / ".sync" / "pending" / "meth-y.md").exists()
+    dst = confirm_rule(root, "meth-y.md")
+    assert dst.exists()
+    assert dst.parent.name == "methodology"  # 路由到类型对应权威区
+    assert not (root / "rules" / "meth-y.md").exists()  # 不得再进 rules
+    card = parse_card(dst.read_text(encoding="utf-8"))
+    assert card.status == "active"
+
+
+def test_confirm_bare_name_without_md_suffix(tmp_path):
+    """CLI 传裸卡名（不含 .md）→ 自动补后缀可确认（此前必报 FileNotFoundError）"""
+    root = bootstrap(tmp_path)
+    _make_draft(root, "trae", "rule-z.md", "重要硬约束：发布前必须过门禁", ctype="rule")
+    ingest(root, "trae")
+    dst = confirm_rule(root, "rule-z")  # 裸名，不带 .md
+    assert dst.exists()
+    assert dst.name == "rule-z.md"
+
+
 def test_append_log_uses_unified_prefix(tmp_path):
     root = bootstrap(tmp_path)
     append_log(root, "ingest", "测试写入")

@@ -336,8 +336,11 @@ def ingest(root: Path, platform: str, chat_fn=None) -> dict:
 
 
 def confirm_rule(root: Path, name: str) -> Path:
-    """人工确认后，把待确认规则提升为 active 并入权威区"""
+    """人工确认后，把待确认卡片提升为 active 并按 card.type 路由入对应权威区"""
     root = Path(root)
+    # 兼容裸卡名：CLI 传 "post-task-recommendations" 时自动补 .md（此前必报 FileNotFoundError）
+    if not name.endswith(".md"):
+        name = f"{name}.md"
     src = root / ".sync" / "pending" / name
     if not src.exists():
         raise FileNotFoundError(f"待确认文件不存在: {src}")
@@ -345,10 +348,12 @@ def confirm_rule(root: Path, name: str) -> Path:
         card = read_card(src)
         card.status = "active"
         card.reuse_count = 0
-        dst = root / "rules" / name
+        # 目标目录跟随卡片类型（复用 ingest 的 TYPE_DIR 映射；此前硬编码 rules/，
+        # methodology/exp 等待确认卡无法经 CLI 提升）
+        dst = root / TYPE_DIR.get(card.type, "experience") / name
         dst.parent.mkdir(parents=True, exist_ok=True)
         dst.write_text(write_card(card), encoding="utf-8")
         src.unlink()
-        _append_log(root, "confirm", f"确认规则：{name}")
-        _commit(root, f"sync: confirm rule {name}")
+        _append_log(root, "confirm", f"确认卡片：{name} → {dst.parent.name}/")
+        _commit(root, f"sync: confirm {card.type} {name}")
     return dst

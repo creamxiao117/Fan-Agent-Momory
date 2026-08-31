@@ -1120,7 +1120,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--platform", required=True)
     p.set_defaults(func=_cmd_ingest)
 
-    p = sub.add_parser("confirm", help="确认待人工审核的规则")
+    p = sub.add_parser("confirm", help="确认待人工审核的卡片（按 card.type 路由入权威区）")
     p.add_argument("--root", required=True)
     p.add_argument("name")
     p.set_defaults(func=_cmd_confirm)
