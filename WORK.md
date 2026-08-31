@@ -159,11 +159,11 @@ ector_bench --real --fail-below 0.8 融合命中率 **67%（4/6）< 80% 门禁�
 
     完成后将本条改「已核销」并附 commit 号（沿用本清单既有惯例 1~4 条）。
 
-19. **待办清单第 18 项执行中新发现（2026-08-31）**：`tests/test_engine.py::test_status_prints_snapshot` / `test_status_json_output` 断言退出码 ∈ (0,2)，但 1234 LLM 离线时 `engine status` 触发 `local_llm_unavailable` critical 告警返回 3，2 测试随机红（与代码无关，纯环境耦合，stash 旧代码复现证实）。
+19. **待办清单第 18 项执行中新发现（2026-08-31）✅ 已核销（2026-08-31，commit `46d21fd`）**：`tests/test_engine.py::test_status_prints_snapshot` / `test_status_json_output` 断言退出码 ∈ (0,2)，但 1234 LLM 离线时 `engine status` 触发 `local_llm_unavailable` critical 告警返回 3，2 测试随机红（与代码无关，纯环境耦合，stash 旧代码复现证实）。
 
     | 任务 | 优先级 | 预估工作量 | 详细说明 |
     |:--|:--|:--|:--|
-    | status 测试与环境解耦 | 🟡中 | 30分钟 | `tests/test_engine.py` 两测试 mock llm_health（或将 3 列入合法退出码并单独测 critical 路径），保证 LLM 离线时测试仍绿 |
+    | ~~status 测试与环境解耦~~ **✅ 已核销（2026-08-31，commit `46d21fd`）** | 🟡中 | 30分钟 | 两测试 monkeypatch `engine._collect_llm_status` 桩注入 available=True；新增 critical 路径测试（available=False → 退出码 3 + 告警断言）。双态实测：LLM 在线/离线 9 passed；全量 268 passed 无回归 |
 
 ## 本轮 R10（check-code-v1 规则门禁 + semgrep/codebase-memory 两仓内化 + vector.db 维度门禁落地）
 
