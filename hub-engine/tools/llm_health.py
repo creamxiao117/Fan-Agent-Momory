@@ -10,11 +10,13 @@
 
 from __future__ import annotations
 
+import os
 import time
 import urllib.error
 import urllib.request
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from pathlib import Path
 
 # 健康检测阈值配置
 RESPONSE_TIME_WARNING_THRESHOLD = 3000  # 响应时间警告阈值（毫秒）
@@ -229,6 +231,93 @@ def check_model(model: str, url: str = "http://localhost:11434") -> bool:
     """检测指定模型是否可用。"""
     checker = LLMHealthChecker(base_url=url)
     return checker.check_model(model)
+
+
+# ---------- 运行时自愈 ----------
+
+# 开机自启同款 VBS（纯 ASCII，静默隐藏窗口拉起 lms server）
+_LMS_AUTOSTART_VBS = (
+    "C:/Users/Fan-SJSS/AppData/Local/Programs/LM Studio"
+    "/resources/app/.webpack/start_lm_studio_api.vbs"
+)
+# 每进程只自愈一次（防离线-重试死循环），测试可经 reset_self_heal_state() 重置
+_self_heal_attempted = False
+
+
+def _manual_offline_flag() -> Path:
+    """手动下线标记文件（用户故意停服务省显存时，自愈不得救活）。"""
+    return Path(os.environ.get("USERPROFILE", str(Path.home()))) / ".lmstudio-manual-offline"
+
+
+def set_manual_offline(off: bool = True) -> Path:
+    """开/关手动下线标记：置位暂停自愈，清除恢复自愈。返回标记路径。"""
+    flag = _manual_offline_flag()
+    if off:
+        flag.touch()
+    elif flag.exists():
+        flag.unlink()
+    return flag
+
+
+def reset_self_heal_state() -> None:
+    """重置自愈尝试标记（测试/长驻进程需要再次自愈时调用）。"""
+    global _self_heal_attempted
+    _self_heal_attempted = False
+
+
+def ensure_llm_service(
+    base_url: str = "http://localhost:1234",
+    probe_timeout: float = 2.0,
+    interval: float = 2.0,
+    retries: int = 15,
+    start_cmd: list[str] | None = None,
+) -> bool:
+    """检测本地 LLM 服务，离线则自动拉起一次（运行时自愈）。
+
+    流程：在线 → 直接 True；离线 → 执行 start_cmd（默认 wscript 跑开机自启
+    同款 VBS）→ 每 interval 秒探测一次、最多 retries 次等就绪。
+    每进程生命周期只自愈一次：二次调用若上次失败直接返回 False，防死循环。
+    拉起失败/超时的原因不静默吞掉：写 stderr 供巡检日志取证。
+    """
+    global _self_heal_attempted
+
+    checker = LLMHealthChecker(base_url=base_url, check_timeout=probe_timeout)
+    if checker.is_available():
+        return True
+    if _manual_offline_flag().exists():
+        # 用户手动下线（如停服务省显存），视为有意为之，不自愈
+        return False
+    if _self_heal_attempted:
+        return False
+    _self_heal_attempted = True
+
+    import subprocess
+    import sys
+
+    cmd = start_cmd or ["wscript.exe", _LMS_AUTOSTART_VBS]
+    try:
+        subprocess.Popen(  # 固定路径 VBS，非用户输入
+            cmd,
+            creationflags=(
+                subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
+            ),
+        )
+    except OSError as e:
+        print(f"[llm_health] 自愈拉起命令执行失败: {cmd} err={e}", file=sys.stderr)
+        return False
+
+    deadline = time.time() + interval * retries
+    while time.time() < deadline:
+        time.sleep(interval)
+        checker.reset_cooldown()  # 绕开 30s 失败冷却，允许即时复测
+        if checker.is_available():
+            print(f"[llm_health] 自愈成功：LLM 服务已恢复在线 ({base_url})")
+            return True
+    print(
+        f"[llm_health] 自愈失败：{base_url} 在 {interval * retries:.0f}s 内未就绪",
+        file=sys.stderr,
+    )
+    return False
 
 
 if __name__ == "__main__":

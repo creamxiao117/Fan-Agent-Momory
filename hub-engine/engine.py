@@ -538,8 +538,13 @@ def _cmd_status(args) -> int:
 def _collect_llm_status() -> dict:
     """采集 LM Studio 服务状态。"""
     try:
-        from tools.llm_health import LLMHealthChecker
+        from tools.llm_health import LLMHealthChecker, ensure_llm_service
+
+        # 运行时自愈（WORK.md 第20条）：离线先尝试拉起一次（手动下线标记则跳过），
+        # 失败才让上层按 available=False 出 critical 告警
+        ensure_llm_service()
         checker = LLMHealthChecker.get_instance("http://localhost:1234")
+        checker.reset_cooldown()  # ensure 可能已在别处记录失败冷却，强制真实复查
         status = checker.get_status()
         return {
             "available": status.available,

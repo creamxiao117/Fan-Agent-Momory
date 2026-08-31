@@ -228,6 +228,11 @@ def main() -> int:
         os.environ["AGENT_MD_EMBED_MODEL"] = (
             args.model
         )  # 向量检索读现库，仍需模型参数一致
+        # 真语料基准须用真实 LLM：前置运行时自愈，离线先拉起再测（WORK.md 第20条）
+        from tools.llm_health import ensure_llm_service
+
+        if not ensure_llm_service():
+            print("⚠️ 本地 LLM 不可用（含自愈失败/手动下线），--real 基准可能无法完成")
         return _run_real(Path(args.real), top_k=3, fail_below=args.fail_below)
 
     os.environ["AGENT_MD_EMBED_MODEL"] = args.model  # 须在 import semsearch 前设好
