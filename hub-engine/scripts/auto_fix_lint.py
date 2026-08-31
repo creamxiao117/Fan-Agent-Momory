@@ -38,7 +38,7 @@ _DIR_TO_TYPE = {
     "retro": "retro",
 }
 
-from common.constants import HUMAN_REQUIRED_TYPES  # noqa: E402
+from common.constants import HUMAN_REQUIRED_TYPES
 
 
 def _dir_to_type(dir_name: str) -> str | None:

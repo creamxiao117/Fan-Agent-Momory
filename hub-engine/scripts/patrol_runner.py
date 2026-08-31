@@ -594,7 +594,7 @@ def _step_auto_sleep_filter(root: Path, engine_dir: Path) -> StepResult:
             name="auto_sleep_filter", stage="自动修复",
             status="skip", output="⏭️ auto_sleep_filter.py 不存在，跳过",
         )
-    exit_code, stdout, stderr = _run_cmd(
+    _exit_code, stdout, stderr = _run_cmd(
         [sys.executable, str(fix_script), "--root", str(root), "--since-days", "3"],
         cwd=engine_dir, timeout=60,
     )
@@ -614,7 +614,7 @@ def _step_auto_process_sleep(root: Path, engine_dir: Path) -> StepResult:
             name="auto_process_sleep", stage="自动修复",
             status="skip", output="⏭️ auto_process_sleep.py 不存在，跳过",
         )
-    exit_code, stdout, stderr = _run_cmd(
+    _exit_code, stdout, stderr = _run_cmd(
         [sys.executable, str(fix_script), "--root", str(root), "--since-days", "3"],
         cwd=engine_dir, timeout=60,
     )
@@ -634,7 +634,7 @@ def _step_auto_review_today(root: Path, engine_dir: Path) -> StepResult:
             name="auto_review_today", stage="自动修复",
             status="skip", output="⏭️ auto_review_today.py 不存在，跳过",
         )
-    exit_code, stdout, stderr = _run_cmd(
+    _exit_code, stdout, stderr = _run_cmd(
         [sys.executable, str(fix_script), "--root", str(root)],
         cwd=engine_dir, timeout=30,
     )
@@ -653,18 +653,17 @@ def _step_auto_review_today(root: Path, engine_dir: Path) -> StepResult:
 def _generate_suggestions(report: PatrolReport) -> list[str]:
     """基于告警结果生成改进建议。"""
     suggestions = []
-    llm_down = not report.llm_available
 
     for alert in report.alerts:
         rule = alert.get("rule", "")
-        msg = alert.get("message", "")
+        alert.get("message", "")
 
-        if rule == "ollama_unavailable":
+        if rule == "local_llm_unavailable":
             suggestions.append(
                 "🟢 本地 LLM 不可用 → 检查 LM Studio 是否在运行，确认 API 端口 1234 可达；"
                 "或在 hub.config.yaml 中配置 OmniRoute 网关地址作为降级通道"
             )
-        elif rule == "ollama_slow":
+        elif rule == "local_llm_slow":
             suggestions.append(
                 "🟢 本地 LLM 响应慢 → 检查 LM Studio 资源占用，考虑使用较小模型或开启 GPU 加速"
             )
@@ -824,7 +823,7 @@ def run_patrol(
 
     # 解析快照
     if snap_result.status == "pass":
-        exit_code, stdout, _ = _run_cmd(
+        _exit_code, stdout, _ = _run_cmd(
             [sys.executable, str(engine_dir / "engine.py"), "status", "--root", str(root), "--json"],
             cwd=engine_dir, timeout=60,
         )

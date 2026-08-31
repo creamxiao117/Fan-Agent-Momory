@@ -33,7 +33,7 @@ if str(_HUB_ENGINE) not in sys.path:
 
 _LOCAL_TZ = timezone(timedelta(hours=+8))
 
-from common.constants import HUMAN_REQUIRED_TYPES  # noqa: E402
+from common.constants import HUMAN_REQUIRED_TYPES
 
 
 def _extract_cn_keywords(query: str, max_words: int = 6) -> list[str]:

@@ -495,7 +495,7 @@ def _cmd_status(args) -> int:
 
     # === 2. LLM 健康检测 ===
     llm_status = _collect_llm_status()
-    data["ollama"] = llm_status
+    data["llm_health"] = llm_status
 
     # === 3. 今日指标聚合 ===
     today_metrics = _collect_today_metrics(root)
@@ -631,7 +631,7 @@ def _estimate_hub_tool_capacity(root: Path) -> float:
     engine_dir = root.parent / "hub-engine"
 
     # tools/ 可导入模块
-    tools_dir = engine_dir / "tools"
+    engine_dir / "tools"
     expected_tools = {
         "compress", "dedup", "distill", "inject", "lint", "llm_health",
         "mcp_audit", "mcp_handlers", "mcp_policy", "memory_diff",
@@ -768,7 +768,7 @@ def _collect_snapshot_alerts(
     if not llm_status.get("available", False):
         alerts.append({
             "level": "critical",
-            "rule": "ollama_unavailable",
+            "rule": "local_llm_unavailable",
             "message": f"本地 LLM 服务不可用 (LM Studio): {llm_status.get('last_error', '未知错误')}",
             "suggestion": "检查 LM Studio 是否在运行，确认 API 端口 1234",
         })
@@ -815,7 +815,7 @@ def _collect_snapshot_alerts(
     if llm_status.get("available") and llm_status.get("response_time_ms", 0) > 500:
         alerts.append({
             "level": "info",
-            "rule": "ollama_slow",
+            "rule": "local_llm_slow",
             "message": f"本地 LLM 响应时间 (LM Studio) {llm_status['response_time_ms']}ms，建议优化",
             "suggestion": "检查 LM Studio 资源占用，考虑开启 GPU 加速或冷启动预热",
         })
@@ -865,8 +865,8 @@ def _compare_snapshots(prev: dict, curr: dict) -> dict:
     if score_changes:
         changes["health_scores"] = score_changes
 
-    prev_ollama = prev.get("ollama", {})
-    curr_ollama = curr.get("ollama", {})
+    prev_ollama = prev.get("llm_health") or prev.get("ollama", {})
+    curr_ollama = curr.get("llm_health") or curr.get("ollama", {})
     prev_avail = prev_ollama.get("available", True)
     curr_avail = curr_ollama.get("available", True)
     if prev_avail != curr_avail:
@@ -918,7 +918,7 @@ def _print_snapshot_report(data: dict, report: dict, pending: list):
         )
     print(f"📦 最近提交: {data['last_commit']}")
 
-    ollama = data.get("ollama", {})
+    ollama = data.get("llm_health") or data.get("ollama", {})
     if ollama.get("available"):
         models_str = ", ".join(ollama.get("models", [])[:3])
         print(

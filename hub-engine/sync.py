@@ -6,6 +6,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
+from common.constants import HIGH_RISK  # 高风险类型：rule + methodology
 from common.frontmatter import (
     Card,
     read_card,
@@ -14,7 +15,6 @@ from common.frontmatter import (
     validate_card,
     write_card,
 )
-from common.constants import HIGH_RISK  # 高风险类型：rule + methodology
 from common.vector import cosine, vector
 from tools.dedup import candidates as dedup_candidates
 from tools.dedup import decide as dedup_decide

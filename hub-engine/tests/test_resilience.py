@@ -115,7 +115,7 @@ class TestCircuitBreakerStrategy:
         cb = CircuitBreakerStrategy(
             failure_threshold=2, cooldown=10.0, half_open_max_calls=1
         )
-        pipeline = ResiliencePipelineBuilder()._strategies
+        ResiliencePipelineBuilder()._strategies
         # 手动构建管道
 
         def always_fail():
