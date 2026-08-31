@@ -150,6 +150,15 @@
 17. **每周召回评测复核（2026-08-22，修复落地）**：三通道基准 + 缺失查询补卡闭环已验证（结论与定版一致）；work/bench_recall.py 已重建并验证（word 确定性 0→5/11 与 R6 吻合）。**真实回归门禁修复前：** vector_bench --real --fail-below 0.8 融合命中率 67%（4/6）< 80% 退出码 3，语料 123 卡后跌破；**根因** 确定性通道中文高频词 over-hit（如「代理」命中多 tag 短路、期望卡被挤出 top）。**修复落地（建议1+2 收敛版）**：`tools/retrieve.py`——① 确定性命中数>top_k时**短路降级**，不再直接返回；② **确定性纳入RRF作第三通道**，且仅取 det ∩ 语义 top_k 计 rank 分（避免 8+ 条噪点卡叠加 rank 压制纯语义目标）。**修复后** 融合命中率 **100%（6/6）≥ 80% 门禁通过**（退出码 0），proxy-guard-ie-override、query-writeback-dll 两卡已正常召回；全量测试 261 passed 4 skipped 无回归。经验卡 `det-overhit-shortcircuit-fallback` 已 ingest 入区。
 ector_bench --real --fail-below 0.8 融合命中率 **67%（4/6）< 80% 门禁失败**（R7 时为 83% 通过），语料 123 卡后跌破。根因诊断为**确定性通道中文高频词 over-hit**（如「代理」命中多个 tag 即短路返回，期望卡 proxy-guard-ie-override 被挤出	op），即 retrieve-with-meta 确定性短路导致融合通道未参与。**未擅自改码**，需人工评估（建议：确定性命中过多时降级至 RRF 融合、纳入确定性作第三通道）。明细见本会话汇报。
 
+18. **任务收尾建议清单 · 首次实战（2026-08-31，源自 `methodology/post-task-recommendations`）**：LM Studio API 开机自启任务（本会话）收尾产生的待办，按方法论四列格式登记如下：
+
+    | 任务 | 优先级 | 预估工作量 | 详细说明 |
+    |:--|:--|:--|:--|
+    | `confirm` 命令按 `card.type` 路由目标目录 | 🟡中 | 30分钟 | 两处小改：① `hub-engine/sync.py:348` 硬编码 `dst = root / "rules" / name`，改为复用现成 `TYPE_DIR.get(card.type, "experience")`（`sync.py:23`，ingest 路径 200/294 行已在用此映射，仅 confirm 漏接）；② `sync.py:341` 拼接 `pending / name` 不带 `.md`，CLI 传裸卡名必报 FileNotFoundError（本会话实证），统一 name 参数自动补 `.md`。补 2 项单测：methodology 卡 confirm 落 `methodology/`、裸卡名可确认 |
+    | 重启实测 LM Studio API 自启 | 🟡中 | 5分钟 | 下次开机后访问 `http://127.0.0.1:1234/v1/models`，确认 HKCU Run 项 "LM Studio API"（wscript 隐藏 VBS）生效、1234 端口监听、无 GUI 无黑窗 |
+
+    完成后将本条改「已核销」并附 commit 号（沿用本清单既有惯例 1~4 条）。
+
 ## 本轮 R10（check-code-v1 规则门禁 + semgrep/codebase-memory 两仓内化 + vector.db 维度门禁落地）
 
 - **check-code-v1 路径A 注释契约规则回归门禁**（`c:\Users\Fan-SJSS\.trae-cn\skills\check-code-v1`，技能仓非本仓）：新 `scripts/rule_regression.py` + `tests/test_rule_regression.py`——为每类检查器（python/yaml/markdown/json/toml）维护【正样例=应 FAIL + 负样例=应 PASS】合成契约，跑门禁判定 True/False Positive/Negative；正样例遇 SKIP（工具缺失）记为通过不误报。`SKILL.md` 补「第8条」约束：改检查器规则必须先跑门禁，无可回归才交付，新增检查类型先补样例再实现规则。**已借语义检索挂接中枢 `blueprints/semgrep-rules-engine-blueprint`。**
