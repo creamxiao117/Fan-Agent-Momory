@@ -236,10 +236,21 @@ def check_model(model: str, url: str = "http://localhost:11434") -> bool:
 # ---------- 运行时自愈 ----------
 
 # 开机自启同款 VBS（纯 ASCII，静默隐藏窗口拉起 lms server）
-_LMS_AUTOSTART_VBS = (
-    "C:/Users/Fan-SJSS/AppData/Local/Programs/LM Studio"
+# 路径按当前用户 HOME 推导（不硬编码用户名），环境变量 LM_STUDIO_START_VBS 可显式覆盖
+_LMS_AUTOSTART_VBS_DEFAULT = (
+    "AppData/Local/Programs/LM Studio"
     "/resources/app/.webpack/start_lm_studio_api.vbs"
 )
+
+
+def _autostart_vbs_path() -> Path:
+    """解析自愈拉起用 VBS 路径：环境变量优先，否则按用户 HOME 推导。"""
+    override = os.environ.get("LM_STUDIO_START_VBS")
+    if override:
+        return Path(override)
+    return Path.home() / _LMS_AUTOSTART_VBS_DEFAULT
+
+
 # 每进程只自愈一次（防离线-重试死循环），测试可经 reset_self_heal_state() 重置
 _self_heal_attempted = False
 
@@ -294,7 +305,7 @@ def ensure_llm_service(
     import subprocess
     import sys
 
-    cmd = start_cmd or ["wscript.exe", _LMS_AUTOSTART_VBS]
+    cmd = start_cmd or ["wscript.exe", str(_autostart_vbs_path())]
     try:
         subprocess.Popen(  # 固定路径 VBS，非用户输入
             cmd,
