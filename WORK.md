@@ -165,6 +165,12 @@ ector_bench --real --fail-below 0.8 融合命中率 **67%（4/6）< 80% 门禁�
     |:--|:--|:--|:--|
     | ~~status 测试与环境解耦~~ **✅ 已核销（2026-08-31，commit `46d21fd`）** | 🟡中 | 30分钟 | 两测试 monkeypatch `engine._collect_llm_status` 桩注入 available=True；新增 critical 路径测试（available=False → 退出码 3 + 告警断言）。双态实测：LLM 在线/离线 9 passed；全量 268 passed 无回归 |
 
+20. **LLM 服务运行时自愈提案（2026-08-31，用户建议"检测离线→恢复 1234"，分层评估后采纳于运行时层）**：单元测试层维持桩解耦（`46d21fd` 已做，两态确定性覆盖，不宜测前启真服务）；运行时层现状是"检测离线只告警"（`engine.py:768` local_llm_unavailable critical），应升级为"先自愈、失败才告警"。
+
+    | 任务 | 优先级 | 预估工作量 | 详细说明 |
+    |:--|:--|:--|:--|
+    | LLM 运行时自愈 ensure_llm_service() | 🟡中 | 1小时 | `tools/llm_health.py` 新增：探测 1234 离线→subprocess 执行现成 `start_lm_studio_api.vbs`（wscript）→轮询端口就绪（如 2s×15 次）→返回最终态；每进程生命周期只重试 1 次防死循环。接入点：`engine.py _collect_llm_status()`（538 行）判 critical 前调一次；`vector_bench --real` 等真语料基准前置同样调用。补单测：桩 vbs 执行+桩探测验证重试逻辑。**待用户确认**：是否需要"手动下线标记文件"（故意停服务时不被自愈救活） |
+
 ## 本轮 R10（check-code-v1 规则门禁 + semgrep/codebase-memory 两仓内化 + vector.db 维度门禁落地）
 
 - **check-code-v1 路径A 注释契约规则回归门禁**（`c:\Users\Fan-SJSS\.trae-cn\skills\check-code-v1`，技能仓非本仓）：新 `scripts/rule_regression.py` + `tests/test_rule_regression.py`——为每类检查器（python/yaml/markdown/json/toml）维护【正样例=应 FAIL + 负样例=应 PASS】合成契约，跑门禁判定 True/False Positive/Negative；正样例遇 SKIP（工具缺失）记为通过不误报。`SKILL.md` 补「第8条」约束：改检查器规则必须先跑门禁，无可回归才交付，新增检查类型先补样例再实现规则。**已借语义检索挂接中枢 `blueprints/semgrep-rules-engine-blueprint`。**
