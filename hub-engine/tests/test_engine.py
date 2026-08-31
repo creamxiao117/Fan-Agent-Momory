@@ -41,12 +41,27 @@ def test_chat_raises_when_fallback_disabled(monkeypatch, tmp_path):
         chat("x", tmp_path, fallback=False)
 
 
-def test_status_prints_snapshot(tmp_path, capsys):
+def _fake_llm_ok(*_a, **_k):
+    """可控的 LLM 健康桩：令 status 测试与 1234 服务在线状态解耦（预存 flaky 根因）"""
+    return {
+        "available": True,
+        "url": "http://localhost:1234",
+        "models": ["fake-model-a"],
+        "model_count": 1,
+        "response_time_ms": 1.0,
+        "last_check": None,
+        "last_error": None,
+    }
+
+
+def test_status_prints_snapshot(tmp_path, capsys, monkeypatch):
     from scripts.bootstrap_hub import bootstrap
 
     root = bootstrap(tmp_path)
-    # 因为状态快照会检测本地大模型健康度，可能由于服务未启动、冷启动耗时大或无历史飞轮记录产生警告导致返回退出码 2
-    # 我们应在 test 环境中断言返回值为 0 或 2 (包含 warning)，两者都说明状态脚本已正常跑通并输出快照
+    # 状态快照检测本地 LLM 健康度；真实网络探测会让测试随 1234 在线与否随机红
+    # （WORK.md 第19条）。解耦方案：桩注入健康状态，断言收紧到 (0, 2)——warning 仍可能
+    # 来自飞轮历史缺失等软告警，属正常路径。
+    monkeypatch.setattr("engine._collect_llm_status", _fake_llm_ok)
     code = main(["status", "--root", str(root)])
     out = capsys.readouterr().out
     assert code in (0, 2)
@@ -55,12 +70,13 @@ def test_status_prints_snapshot(tmp_path, capsys):
     assert "待人工确认" in out
 
 
-def test_status_json_output(tmp_path, capsys):
+def test_status_json_output(tmp_path, capsys, monkeypatch):
     import json
 
     from scripts.bootstrap_hub import bootstrap
 
     root = bootstrap(tmp_path)
+    monkeypatch.setattr("engine._collect_llm_status", _fake_llm_ok)
     code = main(["status", "--root", str(root), "--json"])
     data = json.loads(capsys.readouterr().out)
     assert code in (0, 2)
@@ -69,6 +85,32 @@ def test_status_json_output(tmp_path, capsys):
     # freshness 软汇报块（OpenViking 路径 A）：未 build 时如实暴露待重建
     assert "fresh" in data
     assert "stale_total" in data["fresh"]
+
+
+def test_status_returns_3_when_llm_unavailable(tmp_path, capsys, monkeypatch):
+    """critical 路径覆盖：LLM 不可用告警 → 退出码 3（真实链路，仅桩掉网络探测）"""
+    import json
+
+    from scripts.bootstrap_hub import bootstrap
+
+    root = bootstrap(tmp_path)
+    monkeypatch.setattr(
+        "engine._collect_llm_status",
+        lambda *a, **k: {
+            "available": False,
+            "url": "http://localhost:1234",
+            "models": [],
+            "model_count": 0,
+            "response_time_ms": 0,
+            "last_check": None,
+            "last_error": "connection refused",
+        },
+    )
+    code = main(["status", "--root", str(root), "--json"])
+    data = json.loads(capsys.readouterr().out)
+    assert code == 3
+    assert any(a["rule"] == "local_llm_unavailable" and a["level"] == "critical"
+               for a in data["alerts"])
 
 
 def test_build_vectors_returns_zero_when_model_ok(tmp_path, capsys):
