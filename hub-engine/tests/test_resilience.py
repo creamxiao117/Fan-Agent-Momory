@@ -13,6 +13,7 @@ if str(_ENGINE_DIR) not in sys.path:
     sys.path.insert(0, str(_ENGINE_DIR))
 
 import pytest
+
 from tools.resilience import (
     CircuitBreakerOpenError,
     CircuitBreakerStrategy,
@@ -115,7 +116,6 @@ class TestCircuitBreakerStrategy:
         cb = CircuitBreakerStrategy(
             failure_threshold=2, cooldown=10.0, half_open_max_calls=1
         )
-        ResiliencePipelineBuilder()._strategies
         # 手动构建管道
 
         def always_fail():

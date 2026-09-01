@@ -1,4 +1,5 @@
 import pytest
+
 from scripts.bootstrap_hub import bootstrap
 from tools.mcp_policy import (
     AUTHORITY_DIRS,

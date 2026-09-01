@@ -6,7 +6,6 @@
 """
 
 from common.vector import tokenize
-
 from tools.retrieve import _EN_STOP
 
 _DEFAULT_LIMIT = 200

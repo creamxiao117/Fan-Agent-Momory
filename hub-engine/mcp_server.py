@@ -13,10 +13,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # 保证可 import tools.*
 
-import tools.mcp_handlers as H
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
 from mcp.types import Resource, TextContent, Tool
+
+import tools.mcp_handlers as H
 
 HANDLERS = {
     "hub_search": H.hub_search,

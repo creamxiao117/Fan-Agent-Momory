@@ -259,7 +259,9 @@ def deterministic_retrieve(root: Path, query: str, mode: str = "word") -> list[C
             # 精确子串匹配（最强信号）
             for c in inv[t]:
                 _add(id(c), 2)
-        elif q_words:
+        # 子串匹配和分词匹配同时累积，独立 if 而非 elif
+        # 2026-09-01 修复：原 elif 导致精确 tag 子串匹配 (+2) 被分词命中 (+3) 反超
+        if q_words:
             hits = sum(1 for w in q_words if w in t)
             hit_words = [w for w in q_words if w in t]
             hit_english = any(

@@ -6,6 +6,7 @@
 import json
 
 import pytest
+
 from scripts.missing_query import LOG, aggregate, to_markdown
 
 

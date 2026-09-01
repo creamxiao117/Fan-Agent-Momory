@@ -170,5 +170,5 @@ def compress_card_text(text: str, level: int = 0, max_level: int = _MAX_LEVEL) -
         if lv >= 5:
             lines = _summary(lines)
         return _restore("\n".join(lines), tokens)
-    except Exception:  # noqa: BLE001 - 压缩是可选加速，任何异常都放回原稿
+    except Exception:
         return text

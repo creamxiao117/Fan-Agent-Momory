@@ -3,6 +3,7 @@
 from pathlib import Path
 
 import yaml
+
 from common.frontmatter import parse_card, write_card
 from engine import main
 from scripts.bootstrap_hub import bootstrap

@@ -252,7 +252,7 @@ def main() -> int:
 
     try:
         data = _collect_snapshot(hub_root, skillhub_root)
-    except Exception as exc:  # noqa: BLE001 —— 启动门禁，须给用户明确失败信号
+    except Exception as exc:
         print(f"❌ 飞轮日报生成失败：{exc}", file=sys.stderr)
         return 1
 

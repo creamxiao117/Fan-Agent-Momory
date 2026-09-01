@@ -56,7 +56,7 @@ def _http_cfg() -> tuple[str, str, str, int] | None:
                 emb.get("api_key") or "",
                 int(emb.get("timeout", 30)),
             )
-    except Exception:  # noqa: BLE001 - 配置缺失/损坏 → 交本地兜底
+    except Exception:
         _HTTP_CFG = None
     return _HTTP_CFG
 
@@ -86,7 +86,7 @@ def _embed_via_http(text: str) -> list[float] | None:
         v = np.asarray(payload["data"][0]["embedding"], dtype="float32")
         norm = float(np.linalg.norm(v))
         return (v / norm).tolist() if norm else None  # L2 → 点积=余弦
-    except Exception:  # noqa: BLE001 - HTTP 后端不可用 → 交本地兜底
+    except Exception:
         return None
 
 
@@ -102,7 +102,7 @@ def _load_backend():
         _tok = AutoTokenizer.from_pretrained(EMBED_MODEL)
         _model = AutoModel.from_pretrained(EMBED_MODEL)
         return _model, _tok
-    except Exception:  # noqa: BLE001 - 后端不可用则退化，绝不中断
+    except Exception:
         return None, None
     finally:
         _LOCK.release()
@@ -130,7 +130,7 @@ def _embed_text(text: str) -> list[float] | None:
         v = out.last_hidden_state[:, 0].float()  # CLS
         v = torch.nn.functional.normalize(v, dim=-1)  # L2 归一化 → 点积=余弦
         return v[0].numpy().tolist()
-    except Exception:  # noqa: BLE001 - 推理异常则退化，绝不中断
+    except Exception:
         return None
 
 
@@ -255,7 +255,7 @@ def _stored_dim(conn: sqlite3.Connection) -> int | None:
 
     try:
         return int(np.frombuffer(hit[0], dtype=np.float32).size)
-    except Exception:  # noqa: BLE001
+    except Exception:
         return None
 
 
@@ -285,7 +285,7 @@ def _probe_min_dim(conn: sqlite3.Connection) -> int | None:
     ).fetchall():
         try:
             sizes.add(int(np.frombuffer(blob, dtype=np.float32).size))
-        except Exception:  # noqa: BLE001, S112 - 单行损坏则跳过该行，维度以其余行为准
+        except Exception:  # noqa: S112 - 单行损坏则跳过该行，维度以其余行为准
             continue
     return min(sizes) if sizes else None
 
@@ -371,7 +371,7 @@ def build(root: Path) -> dict:
 
             try:
                 vec = embed(text)  # type: ignore[misc]
-            except Exception:  # noqa: BLE001 - embed 后端异常则存空向量，不中断构建
+            except Exception:
                 vec = None
             emb = _encode_vec(vec)  # 二进制 float32；None 表示无向量（退化）
             if emb:
@@ -510,7 +510,7 @@ def _encode_vec(vec: list[float] | None) -> bytes | None:
 
     try:
         return np.asarray(vec, dtype=np.float32).tobytes()
-    except Exception:  # noqa: BLE001 - 编码异常视为退化，不强转 float32
+    except Exception:
         return None
 
 
@@ -524,7 +524,7 @@ def _decode_vec(blob: object) -> list[float] | None:
         try:
             arr = np.frombuffer(blob, dtype=np.float32)
             return arr.tolist()
-        except Exception:  # noqa: BLE001 - 罕见损坏则忽略该行
+        except Exception:
             return None
     if isinstance(blob, str):  # 旧 JSON 文本行（历史数据）回退解析
         try:

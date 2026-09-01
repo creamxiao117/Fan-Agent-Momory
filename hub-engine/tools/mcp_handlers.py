@@ -6,7 +6,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from common.frontmatter import Card, today_iso, try_read_card, write_card
-
 from tools.compress import compress_card_text
 from tools.mcp_audit import append_query_log, audit_id
 from tools.mcp_policy import (

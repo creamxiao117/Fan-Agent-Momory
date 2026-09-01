@@ -101,7 +101,7 @@ def parse_decision(text: str) -> dict:
         except (TypeError, ValueError):
             out["confidence"] = 0.0
         return out
-    except Exception:  # noqa: BLE001 - 兜底：任何解析异常不阻塞 ingest
+    except Exception:
         return out
 
 
@@ -132,7 +132,7 @@ def decide(
             chat_fn = chat
         text = chat_fn(_build_prompt(new_card, cands), root)
         return parse_decision(text)
-    except Exception:  # noqa: BLE001 - 网关异常降级 review，绝不阻断同步
+    except Exception:
         return {
             "action": "review",
             "target": None,

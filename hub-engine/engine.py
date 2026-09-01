@@ -649,7 +649,7 @@ def _estimate_hub_tool_capacity(root: Path) -> float:
             sys.path.insert(0, str(engine_dir))
             importlib.import_module(f"tools.{mod_name}")
             import_ok += 1
-        except (ImportError, Exception):
+        except Exception:
             pass
     score += min(import_ok, 16) * 4  # 上限 64
 
