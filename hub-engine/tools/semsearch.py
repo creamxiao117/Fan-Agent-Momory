@@ -487,18 +487,29 @@ def vector_scores(
         conn.close()
     if not rows:
         return []
-    scored = []
+    # P0(2026-09-02)：原逐卡 Python zip 点积 O(N·d·py-loop，实测 712µs/卡)，
+    # 换 numpy 矩阵乘：一次 BLAS matvec 完成全部相似度，2000 卡 <10ms。
+    # 仅收录与 query 同维的向量（维度门禁之外再防遗留异长 JSON 行拖垮 np.asarray）。
+    valid_paths: list[str] = []
+    valid_vecs: list[list[float]] = []
+    q_dims = len(query_vec)
     for path_, blob in rows:
         vec = _decode_vec(blob)
         if vec is None:
             continue
-        scored.append((path_, _dot(query_vec, vec)))
-    scored.sort(key=lambda x: x[1], reverse=True)
-    return scored[:top_k]
+        if len(vec) != q_dims:
+            continue
+        valid_paths.append(path_)
+        valid_vecs.append(vec)
+    if not valid_vecs:
+        return []
+    import numpy as np
 
-
-def _dot(a: list[float], b: list[float]) -> float:
-    return sum(x * y for x, y in zip(a, b))
+    matrix = np.asarray(valid_vecs, dtype=np.float32)  # (N, d)
+    q = np.asarray(query_vec, dtype=np.float32)  # (d,)
+    scores = matrix @ q  # 单次 BLAS matvec → (N,)
+    order = np.argsort(-scores)  # 降序索引
+    return [(valid_paths[i], float(scores[i])) for i in order[:top_k]]
 
 
 # ---- 向量二进制编码：float32 .tobytes() 替代 JSON 文本，免每次全表反序列化 ----
