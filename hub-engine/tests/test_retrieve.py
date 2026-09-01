@@ -26,7 +26,8 @@ def _seed(root: Path) -> None:
         "---\ntype: rule\ntags: [autocad, dll-lock]\nupdated: 2026-08-17\nstatus: active\nreuse_count: 0\n---\nDLL 修改后必须递增版本号避免被锁。\n",
         encoding="utf-8",
     )
-    (root / "experience" / "blunder.md").write_text(
+    # 注意：必须放 _ACTIVE_DIRS 覆盖的目录（rules等），experience 已移出权威区不被扫描
+    (root / "rules" / "blunder.md").write_text(
         "---\ntype: exp\ntags: [autocad]\nupdated: 2026-08-17\nstatus: active\nreuse_count: 0\n---\n上次没重命名导致 AutoCAD 占用文件无法覆盖。\n",
         encoding="utf-8",
     )
@@ -37,6 +38,50 @@ def test_deterministic_by_tag(tmp_path):
     _seed(root)
     hits = deterministic_retrieve(root, "dll-lock")
     assert [h.path.name for h in hits] == ["dll-lock.md"]
+
+
+def test_tag_route_and_combination(tmp_path):
+    """叠加标签 AND 组合路由：tags=[autocad, dll-lock] 只命中同时含两标签的卡。"""
+    root = bootstrap(tmp_path)
+    _seed(root)
+    # 只有 dll-lock.md 同时含 autocad + dll-lock；blunder.md 只有 autocad
+    hits = deterministic_retrieve(root, "dll", tags=["autocad", "dll-lock"])
+    assert [h.path.name for h in hits] == ["dll-lock.md"]
+
+
+def test_tag_route_no_tags_zero_regression(tmp_path):
+    """不传 tags == 原行为（0 回归）：query 命中 autocad 应命中两张卡。"""
+    root = bootstrap(tmp_path)
+    _seed(root)
+    hits = deterministic_retrieve(root, "autocad")
+    assert {h.path.name for h in hits} == {"dll-lock.md", "blunder.md"}
+
+
+def test_tag_route_empty_tags_returns_all(tmp_path):
+    """传空列表 tags == 不过滤：行为等价于不传（0 回归）。"""
+    root = bootstrap(tmp_path)
+    _seed(root)
+    a = deterministic_retrieve(root, "autocad")
+    b = deterministic_retrieve(root, "autocad", tags=[])
+    assert [h.path.name for h in a] == [h.path.name for h in b]
+    assert {h.path.name for h in b} == {"dll-lock.md", "blunder.md"}
+
+
+def test_tag_route_partial_match_excluded(tmp_path):
+    """AND 组合：缺任一标签的卡被排除。blunder.md 只有 autocad，缺 dll-lock → 排除。"""
+    root = bootstrap(tmp_path)
+    _seed(root)
+    hits = deterministic_retrieve(root, "dll", tags=["autocad", "dll-lock"])
+    assert "blunder.md" not in {h.path.name for h in hits}
+
+
+def test_tag_route_and_combination_through_retrieve(tmp_path):
+    """retrieve() 入口透传 tags：AND 组合命中（query 用真实词，走确定性而非空短路）。"""
+    root = bootstrap(tmp_path)
+    _seed(root)
+    hits = retrieve(root, "dll", tags=["autocad", "dll-lock"])
+    assert "dll-lock.md" in {h.path.name for h in hits}
+    assert "blunder.md" not in {h.path.name for h in hits}
 
 
 def test_semantic_recalls_similar(tmp_path):
@@ -188,7 +233,8 @@ def test_first_layer_index_invalidates_on_card_change(tmp_path):
     before = _index_cache_state(root)
     assert before[0] is not None
     # 新增一张含独特 tag 的卡 → 签名变化 → 下次检索重建
-    (root / "experience" / "newbie.md").write_text(
+    # 注意：必须放 _ACTIVE_DIRS 覆盖的目录（rules等），experience 已移出权威区不被扫描
+    (root / "rules" / "newbie.md").write_text(
         "---\ntype: exp\ntags: [zebra-finance]\nupdated: 2026-08-17\nstatus: active\nreuse_count: 0\n---\n量化回测要注意过拟合。\n",
         encoding="utf-8",
     )

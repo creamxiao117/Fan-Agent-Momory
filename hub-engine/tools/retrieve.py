@@ -20,13 +20,10 @@ from common.vector import build_idf, cosine, tokenize, vector
 # 参与检索的卡片目录（与历史 _walk_active_cards 枚举顺序一致，用于保持返回顺序）
 _ACTIVE_DIRS = (
     "rules",
+    "blueprints",
     "methodology",
     "longterm",
     "projects",
-    "experience",
-    "libs",
-    "retro",
-    "blueprints",
 )
 
 # 第二层向量融合（方案 A：bge-small-zh + SQLite）
@@ -224,12 +221,36 @@ def _clear_index_for(root: Path) -> None:
     _INDEX_CACHE.pop(str(Path(root).resolve()), None)
 
 
-def deterministic_retrieve(root: Path, query: str, mode: str = "word") -> list[Card]:
+def _filter_cards_by_tags(cards: list[Card], tags: list[str] | None) -> list[Card]:
+    """按标签 AND 组合路由：候选集 = 同时含所有 `tags`（小写）的卡。
+
+    tags 为空/None → 返回全部（0 回归）。
+    用途（2026-09-02）：把全库 138 张按「叠加标签」收窄为精确子集，
+    如 tags=[\"cad\", \"methodology\"] 只留「既是 CAD 经验又是方法论」的卡，
+    供后续排序时不被其他主题噪声淹没——次路由的知识导航层实现。
+    """
+    if not tags:
+        return cards
+    wanted = {t.lower().strip() for t in tags if t and t.strip()}
+    if not wanted:
+        return cards
+    out = []
+    for c in cards:
+        have = {t.lower().strip() for t in c.tags}
+        if wanted <= have:  # 所有指定标签都命中（AND）
+            out.append(c)
+    return out
+
+
+def deterministic_retrieve(
+    root: Path, query: str, mode: str = "word", tags: list[str] | None = None
+) -> list[Card]:
     """确定性通道：query 命中 type 或 tag 即返回（走倒排索引，O(命中)）。
 
     - char 模式：整句包含（原行为）
     - word 模式：额外支持词级匹配——query 任一分词与 tag 互相包含即命中
       （如查询含 "dll" 可命中 tag "dll-lock"，无需精确整句）
+    - tags：可选「叠加标签」AND 路由过滤——先收窄候选集，再命中排序
 
     返回按「命中信号分」降序排序：type 精确命中=3 分、tag 精确子串=2 分、word 命中 tag=1+hits 分；
     多 tag 命中的卡排前，避免调用方取 top_k 时被噪声淹没（2026-08-31 补排序）。
@@ -239,14 +260,16 @@ def deterministic_retrieve(root: Path, query: str, mode: str = "word") -> list[C
     # 过滤无意义的英文词（停用词 + 单字符），避免 word 分支 `w in t` 误命中几乎全部 tag
     q_words = [w for w in q_words if len(w) >= 2 and w not in _EN_STOP]
     idx = _index(root)
-    inv = _build_tag_index(idx.cards)
+    # 叠加标签 AND 路由：先按 tags 收窄候选集（0 回归），再在其内建索引/命中
+    cards = _filter_cards_by_tags(idx.cards, tags)
+    inv = _build_tag_index(cards)
     # id -> 命中信号分
     score: dict[int, int] = {}
 
     def _add(card_id: int, pts: int) -> None:
         score[card_id] = score.get(card_id, 0) + pts
 
-    for c in idx.cards:
+    for c in cards:
         if q in c.type:
             _add(id(c), 3)
     tkey = f"type:{q}"
@@ -284,9 +307,9 @@ def deterministic_retrieve(root: Path, query: str, mode: str = "word") -> list[C
                     _add(id(c), 1 + hits)  # 命中词越多分越高
 
     matched_ids = set(score.keys())
-    # 按命中分降序，同分保持 idx.cards 原始顺序（稳定）
+    # 按命中分降序，同分保持 cards（tag 过滤后）原始顺序（稳定）
     return sorted(
-        [c for c in idx.cards if id(c) in matched_ids],
+        [c for c in cards if id(c) in matched_ids],
         key=lambda card: score[id(card)],
         reverse=True,
     )
@@ -427,27 +450,39 @@ def _fused_semantic(
 
 
 def retrieve_with_meta(
-    root: Path, query: str, top_k: int = 5, n: int = 2, mode: str = "char"
+    root: Path,
+    query: str,
+    top_k: int = 5,
+    n: int = 2,
+    mode: str = "char",
+    tags: list[str] | None = None,
 ) -> tuple[str, list[tuple[Card, float | None]]]:
     """混合检索入口，带通道与分数：返回 (channel, [(card, score|None)])
 
     channel: "empty"（空查询）| "deterministic"（确定性命中，score=None）| "semantic"
+    tags: 可选「叠加标签」AND 路由过滤（次路由知识导航），透传给确定性通道
     """
     if not query.strip():
         return "empty", []
-    hits = deterministic_retrieve(root, query, mode)
+    hits = deterministic_retrieve(root, query, mode, tags=tags)
     if hits:
         return "deterministic", [(c, None) for c in hits]
     return "semantic", _fused_semantic(root, query, top_k, n, mode)
 
 
 def retrieve(
-    root: Path, query: str, top_k: int = 5, n: int = 2, mode: str = "char"
+    root: Path,
+    query: str,
+    top_k: int = 5,
+    n: int = 2,
+    mode: str = "char",
+    tags: list[str] | None = None,
 ) -> list[Card]:
     """混合检索入口（兼容旧接口，仅返回卡片列表）
 
     n: 字符 n-gram 长度（char 模式），默认 2
     mode: "word"（默认，jieba 分词 + IDF）或 "char"（字符 n-gram，零依赖回退）
+    tags: 可选「叠加标签」AND 路由过滤——多标签组合精确定位（次路由知识导航）
     """
-    _, scored = retrieve_with_meta(root, query, top_k, n, mode)
+    _, scored = retrieve_with_meta(root, query, top_k, n, mode, tags=tags)
     return [c for c, _ in scored]
