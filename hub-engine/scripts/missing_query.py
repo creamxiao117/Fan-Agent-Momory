@@ -21,8 +21,13 @@
 import argparse
 import json
 import re
+import sys
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
+
+# 脚本直跑引导：把 hub-engine 根加入 sys.path（与 session_preload 同惯例；
+# pytest 经 pyproject pythonpath 注入故单测不受影响）
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 LOG = Path(".sync") / "state" / "query.log.jsonl"
 LOW_HIT_DEFAULT = 3  # P1 判定：平均命中数低于该值视为低命中

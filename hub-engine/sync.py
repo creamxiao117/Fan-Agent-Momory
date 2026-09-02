@@ -29,8 +29,8 @@ TYPE_DIR = {
     "longterm": "longterm",
     "project": "projects",
 }
-# 非权威区卡类型（留经验层但不参与去重/向量）
-_NON_AUTH_TYPES = {"exp", "note", "retro"}
+# （2026-09-02 清理）原 _NON_AUTH_TYPES = {exp,note,retro} 为死常量：定义后无消费，
+# 跳过逻辑实际由 TYPE_DIR.get(card.type) is None 分支承担（sync.py ingest 内），已删除。
 # HIGH_RISK 已统一到 common/constants.py（含 rule + methodology）
 
 # 与 bootstrap_hub 一致：注入本地身份，保证未配置全局 user.name/email 也能提交（不污染全局配置）
