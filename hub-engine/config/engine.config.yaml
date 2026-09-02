@@ -1,8 +1,14 @@
-gateway_url: http://127.0.0.1:20128
-default_model: auto/offline
-timeout: 30
+# 中枢引擎配置 —— 统一走 LM Studio（端口 1234）
+# 模型命名规范：LM Studio 格式 provider/model-name，不用 Ollama 的 model:tag
+# 参考：AgentMemoryHub/experience/lmstudio-local-llm-migration.md
+
+gateway_url: http://127.0.0.1:1234
+default_model: qwen/qwen3.5-9b
+# 超时 60s：真实 dedup prompt(4.4k 字符)下 1.5b 实测 18.7s、9b 推理模型 38.3s，
+# 原 30s 对 9b 必然超时→降级 conflicts（2026-09-02 根因诊断）
+timeout: 60
 compress: llmlingua
-batch_model: qwen2.5-coder:1.5b
+batch_model: qwen/qwen3.5-9b
 embed:
   url: http://127.0.0.1:1234/v1/embeddings
   model: text-embedding-bge-m3
@@ -15,13 +21,16 @@ fallback_chat:
   max_tokens: 16384
 local_chat:
   url: http://127.0.0.1:1234/v1/chat/completions
-  model: qwen/qwen3.5-9b
+  # 去重/批量逻辑主判决通道：非推理小模型，秒级返回合法 JSON；
+  # 勿换回 qwen3.5-9b（推理模型先输出一大段 thinking，30~40s+ 且解析失败率高三连）
+  model: qwen2.5-coder-1.5b-instruct
   max_tokens: 2048
 escalation:
   enabled: true
+  # 1.5b 质量不达标时升级：9b 推理模型兜底（60s 内可完成）
   intermediate_model: qwen/qwen3.5-9b
   local_model: qwen/qwen3.5-9b
-  remote_model: auto/offline
+  remote_model: qwen/qwen3.5-9b
   min_score: 0.8
   min_confidence: 0.8
   require_human_for:
