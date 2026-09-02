@@ -4,9 +4,11 @@
 """
 
 import json
+from pathlib import Path
 
 import pytest
 
+from scripts.bootstrap_hub import bootstrap
 from scripts.missing_query import LOG, aggregate, to_markdown
 
 
@@ -43,6 +45,120 @@ def test_zero_hit_high_freq_is_p0(tmp_path):
     assert cands[0]["stage"] == "P0-新增卡片"
     assert cands[0]["count"] == 3
     assert cands[0]["zero_ratio"] == 1.0
+
+
+# ---------- auto_apply_p1_tags（P1 执行端，2026-09-02 Hermes 补全） ----------
+
+
+def _seed_card(root: Path, name: str, tags: list[str], body: str) -> Path:
+    """在权威区 rules/ 种一张可被检索命中的卡（含 git 跟踪基线）。"""
+    import subprocess
+
+    p = root / "rules" / name
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(
+        f"---\ntype: rule\ntags: {tags}\nupdated: '2026-08-17'\n"
+        f"status: active\nreuse_count: 0\n---\n{body}\n",
+        encoding="utf-8",
+    )
+    subprocess.run(["git", "-C", str(root), "add", "-A"], check=True)
+    subprocess.run(
+        [
+            "git", "-C", str(root),
+            "-c", "user.name=t", "-c", "user.email=t@t",
+            "commit", "-m", "seed",
+        ],
+        check=True,
+        capture_output=True,
+    )
+    return p
+
+
+def _p1_log(root: Path, query: str, hits: list[int]) -> None:
+    """按给定命中序列造 P1 日志（avg_hit<3 且非零命中主导）。"""
+    _write_log(
+        root,
+        [
+            _search(query, h, "deterministic" if i % 2 == 0 else "semantic")
+            for i, h in enumerate(hits)
+        ],
+    )
+
+
+def test_auto_apply_p1_tags_applies_and_is_idempotent(tmp_path):
+    """P1 查询 → 目标卡 tags 追加；二跑幂等（不重复加、卡不变）。"""
+    from common.frontmatter import read_card
+    from scripts.missing_query import auto_apply_p1_tags
+
+    root = bootstrap(tmp_path)
+    card = _seed_card(
+        root,
+        "fuzzy-search-lock.md",
+        ["检索"],
+        "做模糊检索时先锁词库；查询模糊检索要检查分词与停用词。",
+    )
+    _p1_log(root, "模糊检索 优化", [1, 2, 1])
+
+    r1 = auto_apply_p1_tags(root, root)
+    assert r1["status"] == "ok"
+    assert r1["applied_count"] == 1, r1
+    assert r1["applied"][0]["tags_added"], "应产出 tags_added 非空"
+    tags_after = read_card(card).tags
+    assert "检索" in tags_after  # 原 tag 保留（无损）
+
+    r2 = auto_apply_p1_tags(root, root)
+    assert r2["applied_count"] == 0
+    assert read_card(card).tags == tags_after  # 幂等：第二次不变更
+
+    # git 回滚点：最后一次 commit 是本功能的提交
+    import subprocess
+
+    head = subprocess.run(
+        ["git", "-C", str(root), "log", "--oneline", "-1"],
+        capture_output=True, text=True,
+    ).stdout
+    assert "chore(p1-autotag)" in head
+
+
+def test_auto_apply_p1_tags_respects_write_lock(tmp_path):
+    """写锁被占时全部降级为 skipped，不写任何卡（与 ingest 互斥纪律）。"""
+    from common.frontmatter import read_card
+    from scripts.missing_query import auto_apply_p1_tags
+
+    root = bootstrap(tmp_path)
+    card = _seed_card(
+        root,
+        "fuzzy-search-lock.md",
+        ["检索"],
+        "做模糊检索时先锁词库。",
+    )
+    _p1_log(root, "模糊检索 优化", [1, 2, 1])
+
+    lk = root / ".sync" / "locks" / "writer.lock"
+    lk.parent.mkdir(parents=True, exist_ok=True)
+    lk.write_text("")
+    try:
+        r = auto_apply_p1_tags(root, root)
+        assert r["applied_count"] == 0
+        assert r["skipped_count"] >= 1
+        assert "写锁" in r["status"]
+        assert read_card(card).tags == ["检索"]  # 卡未被触碰
+    finally:
+        lk.unlink()
+
+
+def test_auto_apply_p1_tags_filters_low_freq(tmp_path):
+    """不满足 count>=3 的 P1 候选不动手（保守门槛）。"""
+    from common.frontmatter import read_card
+    from scripts.missing_query import auto_apply_p1_tags
+
+    root = bootstrap(tmp_path)
+    card = _seed_card(root, "fuzzy-search-lock.md", ["检索"], "做模糊检索时先锁词库。")
+    _p1_log(root, "模糊检索 优化", [1, 2])  # 仅 2 次，低于阈值
+
+    r = auto_apply_p1_tags(root, root)
+    assert r["applied_count"] == 0
+    assert read_card(card).tags == ["检索"]
 
 
 def test_low_hit_is_p1(tmp_path):

@@ -165,6 +165,150 @@ def to_markdown(cands: list[dict]) -> str:
     return "\n".join(lines)
 
 
+def auto_apply_p1_tags(root: Path, hub_root: Path) -> dict:
+    """P1 自动补 tag：将低命中高频查询的关键词追加到最相关卡的 frontmatter tags。
+
+    执行端设计（2026-09-02 Hermes 补全，契约按调用点还原）：
+    - 候选：aggregate(root) 中 stage==P1-补tag别名，且 count>=P1_MIN_COUNT、
+      zero_ratio<=P1_MAX_ZERO_RATIO（对应 CLI help 的"查询次数≥3，零命中≤30%"）。
+    - 提词：_tag_suggestion_tokens(query) 取前 5。
+    - 目标卡：retrieve_with_meta(hub_root, query, top_k=2) 的前 2 张权威区卡
+      （只追加 tag，不改正文/status/其他字段；write_card 保 extra 无损）。
+    - 安全：全程持 _WriteLock（单写者锁，与 ingest 互斥）；validate_card 非空
+      错误列表的卡拒写；幂等（已含该 tag 跳过）；改后 git 精确提交回滚点。
+    - 审计：memory_diff 记录 + retro/log.md append-only。
+    - rule/methodology（HIGH_RISK）卡只补 tag 不改语义，与"新规则需人工确认"
+      不冲突；但为保守起见本函数只写 tag 字段，永不触碰 status/reuse_count。
+    """
+    from common.frontmatter import (
+        read_card,
+        today_iso,
+        validate_card,
+        write_card,
+    )
+    from sync import GIT_ID, _append_log, _git, _WriteLock
+    from tools.memory_diff import record as record_diff
+    from tools.retrieve import retrieve_with_meta
+
+    hub_root = Path(hub_root)
+    P1_MIN_COUNT = 3
+    P1_MAX_ZERO_RATIO = 0.30
+    MAX_TOKENS_PER_QUERY = 5
+    TARGET_CARDS = 2
+
+    cands = aggregate(root)
+    p1_items = [
+        c
+        for c in cands
+        if c["stage"].startswith("P1")
+        and c["count"] >= P1_MIN_COUNT
+        and c["zero_ratio"] <= P1_MAX_ZERO_RATIO
+    ]
+
+    applied: list[dict] = []
+    skipped: list[dict] = []
+    dirty: set[str] = set()  # 已改动卡的相对路径（git 精确提交用）
+
+    try:
+        lock_ctx = _WriteLock(hub_root)
+        lock_ctx.__enter__()
+    except RuntimeError as e:
+        return {
+            "applied_count": 0,
+            "skipped_count": len(p1_items),
+            "applied": [],
+            "skipped": [{"query": c["query"], "reason": str(e)} for c in p1_items],
+            "status": str(e),
+        }
+    try:
+        for item in p1_items:
+            query = item["query"]
+            tokens = _tag_suggestion_tokens(query)[:MAX_TOKENS_PER_QUERY]
+            if not tokens:
+                skipped.append({"query": query, "reason": "无有效关键词"})
+                continue
+            _, scored = retrieve_with_meta(hub_root, query, top_k=TARGET_CARDS)
+            targets = [c for c, _s in scored[:TARGET_CARDS] if c.path]
+            if not targets:
+                skipped.append({"query": query, "reason": "无可写入的目标卡"})
+                continue
+            added_total: list[str] = []
+            for card in targets:
+                try:
+                    fresh = read_card(card.path)
+                except (OSError, ValueError):
+                    skipped.append(
+                        {"query": query, "reason": f"目标卡读取失败 {card.path.name}"}
+                    )
+                    continue
+                have = {t.lower() for t in fresh.tags}
+                new_tags = [t for t in tokens if t.lower() not in have]
+                if not new_tags:
+                    continue  # 幂等：全部已含
+                fresh.tags = fresh.tags + new_tags
+                fresh.updated = today_iso()
+                errs = validate_card(fresh)
+                if errs:
+                    skipped.append(
+                        {
+                            "query": query,
+                            "reason": f"改后校验失败 {card.path.name}: {errs[0]}",
+                        }
+                    )
+                    continue
+                card.path.write_text(write_card(fresh), encoding="utf-8")
+                rel = card.path.relative_to(hub_root).as_posix()
+                dirty.add(rel)
+                added_total.extend(new_tags)
+                record_diff(
+                    hub_root,
+                    {
+                        "op": "update",
+                        "name": card.path.name,
+                        "type": fresh.type,
+                        "before": f"tags={sorted(have)}",
+                        "after": f"tags={sorted(t.lower() for t in fresh.tags)}",
+                        "deleted_content": None,
+                    },
+                )
+            if added_total:
+                applied.append(
+                    {
+                        "query": query,
+                        "count": item["count"],
+                        "tags_added": sorted(set(added_total)),
+                        "cards": len(targets),
+                    }
+                )
+            else:
+                skipped.append({"query": query, "reason": "目标卡已含全部候选 tag"})
+
+        if dirty:
+            _git(hub_root, "add", *sorted(dirty))
+            _git(
+                hub_root,
+                *GIT_ID,
+                "commit",
+                "-m",
+                f"chore(p1-autotag): 自动补 tag {len(dirty)} 张卡（missing_query P1 执行端，可由本提交回滚）",
+            )
+            _append_log(
+                hub_root,
+                "p1-autotag",
+                f"补 tag 应用 {len(applied)} 条查询 → {len(dirty)} 张卡",
+            )
+    finally:
+        lock_ctx.__exit__(None, None, None)
+
+    return {
+        "applied_count": len(applied),
+        "skipped_count": len(skipped),
+        "applied": applied,
+        "skipped": skipped,
+        "status": "ok",
+    }
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="missing-query", description=__doc__)
     ap.add_argument("--root", required=True, help="中枢根目录")
@@ -229,14 +373,26 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  ⏭️ {item['query'][:40]}... ({item['reason']})")
         return 0
 
-    # P1 自动补 tag 模式（⚠️ 2026-09-02 冲突合并：auto_apply_p1_tags 函数体在
-    # trae work 会话中未随冲突块落盘，全仓查无定义。此处显式占位防 NameError，
-    # 保留参数与分支意图，待 trae 侧补齐实现后替换回直接调用。）
+    # P1 自动补 tag 模式（2026-09-02 Hermes 补全 auto_apply_p1_tags 实现，
+    # 行为契约按调用点消费端还原：返回 applied_count/skipped_count/applied[]，
+    # 每项含 query 与 tags_added；目标卡写 frontmatter tags 并 git 提交回滚点）
     if args.auto_apply_p1:
-        raise NotImplementedError(
-            "--auto-apply-p1 未实现：auto_apply_p1_tags() 函数体缺失"
-            "（trae work 在制品，见 2026-09-02 冲突合并注释）"
-        )
+        hub_root = Path(args.hub_root) if args.hub_root else root
+        result = auto_apply_p1_tags(root, hub_root)
+        print("=== P1 自动补 tag 结果 ===")
+        print(f"已自动应用: {result['applied_count']} 条")
+        print(f"跳过: {result['skipped_count']} 条")
+        for item in result["applied"]:
+            print(f"  ✅ {item['query'][:60]}... → {len(item['tags_added'])} 张卡加了 tag")
+        for item in result["skipped"]:
+            print(f"  ⏭️ {item['query'][:40]}... ({item['reason']})")
+        # 同时输出候选清单供人工复核
+        cands = aggregate(root, since=since)
+        md = to_markdown(cands)
+        if args.output:
+            Path(args.output).parent.mkdir(parents=True, exist_ok=True)
+            Path(args.output).write_text(md, encoding="utf-8")
+        return 0
     cands = aggregate(root, since=since)
     if args.json:
         print(json.dumps(cands, ensure_ascii=False, indent=2))
