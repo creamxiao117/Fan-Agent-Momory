@@ -158,6 +158,27 @@ def ingest(root: Path, platform: str, chat_fn=None) -> dict:
                 if validate_card(card):
                     stat["invalid"] += 1
                     continue
+                # (2026-09-02) 非权威区类型（exp/note/retro）→ 不参与去重/向量/检索，直接改挪 experience/ 保留（用户指令：改挪而非删除）
+                if card.type not in TYPE_DIR:
+                    exp_dir = root / "experience"
+                    exp_dir.mkdir(parents=True, exist_ok=True)
+                    dst = exp_dir / p.name
+                    if dst.exists():
+                        dst = exp_dir / f"{p.stem}-{today_iso()}{p.suffix}"
+                    shutil.move(str(p), str(dst))
+                    stat["moved"] = stat.get("moved", 0) + 1
+                    _append_log(root, "ingest", f"非权威区 type={card.type}，改挪 experience/ 保留：{dst.name}")
+                    record_diff(
+                        root,
+                        {
+                            "op": "move",
+                            "name": p.name,
+                            "type": card.type,
+                            "before": str(p.relative_to(root)).replace(os.sep, "/"),
+                            "after": str(dst.relative_to(root)).replace(os.sep, "/"),
+                        },
+                    )
+                    continue
                 cands = dedup_candidates(root, card)
                 if cands:
                     stat["duplicate"] += 1
@@ -291,11 +312,6 @@ def ingest(root: Path, platform: str, chat_fn=None) -> dict:
                 else:
                     # 低风险内容 → 自动入区，仅记日志
                     dst_dir = TYPE_DIR.get(card.type)
-                    if dst_dir is None:
-                        # 非权威区 type（exp/note/retro）→ 不落权威目录，跳过
-                        _append_log(root, "ingest", f"非权威区 type={card.type}，跳过自动提升：{p.name}")
-                        p.unlink()
-                        continue
                     dst = root / dst_dir / p.name
                     if dst.exists():
                         # 同名不同内容（语义去重已在上方处理过）→ 不覆盖权威区，转冲突区

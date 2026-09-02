@@ -147,3 +147,39 @@ def test_ingest_writes_memory_diff(tmp_path):
         and r.get("after") == "longterm/exp-a.md"
         for r in recs
     )
+
+
+def test_ingest_exp_draft_moves_to_experience_not_deleted(tmp_path):
+    """2026-09-02 用户指令：非权威区 type(exp/note/retro) 草稿 ingest 时
+    改挪 experience/ 而非删除——经验层内容留档备查，不参与权威区检索。"""
+    from tools.memory_diff import read_records
+
+    root = bootstrap(tmp_path)
+    _make_draft(root, "trae", "exp-b.md", "这是一条待留档的经验记录", ctype="exp")
+    stat = ingest(root, "trae")
+    assert stat["moved"] == 1  # 计数：改挪 1 张
+    assert (root / "experience" / "exp-b.md").exists()  # 内容被保留
+    # 草稿已移走（不再出现在草稿区）
+    assert not (root / ".sync" / "drafts" / "trae_draft" / "exp-b.md").exists()
+    recs = read_records(root)
+    assert any(
+        r.get("op") == "move"
+        and r.get("name") == "exp-b.md"
+        and r.get("after") == "experience/exp-b.md"
+        for r in recs
+    )
+
+
+def test_ingest_exp_draft_same_name_keeps_both(tmp_path):
+    """同名词防覆盖：experience/ 已有同名卡时追加时间戳后缀，不互相覆盖"""
+    root = bootstrap(tmp_path)
+    (root / "experience").mkdir(parents=True, exist_ok=True)
+    (root / "experience" / "exp-b.md").write_text("旧经验\n", encoding="utf-8")
+    _make_draft(root, "trae", "exp-b.md", "新经验内容", ctype="exp")
+    stat = ingest(root, "trae")
+    assert stat["moved"] == 1
+    # 旧卡未被覆盖（内容仍为"旧经验"），新卡带后缀落盘
+    assert "旧经验" in (root / "experience" / "exp-b.md").read_text(encoding="utf-8")
+    preserved = [p for p in (root / "experience").glob("exp-b-*.md")]
+    assert len(preserved) == 1
+    assert "新经验内容" in preserved[0].read_text(encoding="utf-8")
