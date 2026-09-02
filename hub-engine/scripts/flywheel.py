@@ -1,4 +1,4 @@
-"""飞轮统一启动命令：auto-flywheel → skill-create → smoke-test → tag → runlog → iteration
+"""飞轮统一启动命令：auto-flywheel → skill-create → smoke-test → tag → runlog → iteration → session-preload → daily-report
 用法：
   python flywheel.py run --hub-root <中枢> --skillhub-root <SkillHub> [--auto] [--promote] [--tag] [--dry-run]
   python flywheel.py status --skillhub-root <SkillHub>          # 状态
@@ -8,6 +8,8 @@
   python flywheel.py record-usage --skill <技能名> --skillhub-root <SkillHub> [--grade strong|weak]
   python flywheel.py alert --hub-root <中枢> --skillhub-root <SkillHub>
   python flywheel.py runlog list|record|timeline ...            # runlog 三段子命令
+  python flywheel.py session-preload --hub-root <中枢> --query <用户问题>  # 会话预加载
+  python flywheel.py daily-report --hub-root <中枢> --skillhub-root <SkillHub> [--hermes-target <微信>]  # 日报推送
 """
 
 import argparse
@@ -391,6 +393,30 @@ def main(argv: list[str] | None = None) -> int:
     p_rs.add_argument("--classification", action="store_true", help="显示差异分类统计")
     p_rs.add_argument("--report", default="", help="JSON 报告输出路径")
     p_rs.set_defaults(func=_cmd_router_sync)
+
+    # flywheel session-preload：会话预加载（基于用户意图加载 Top-K 卡片摘要）
+    p_sp = sub.add_parser("session-preload", help="会话预加载：基于用户意图加载 Top-K 卡片摘要")
+    p_sp.add_argument("--hub-root", required=True, help="中枢根目录")
+    p_sp.add_argument("--query", required=True, help="用户初始查询/问题")
+    p_sp.add_argument("--top-k", type=int, default=3, help="加载的卡片数量")
+    p_sp.add_argument("--max-tokens", type=int, default=800, help="最大 token 数")
+    p_sp.add_argument("--json", action="store_true", help="输出 JSON 格式")
+    p_sp.add_argument("--brief-only", action="store_true", help="仅输出简报文本")
+    p_sp.set_defaults(func=_cmd_session_preload)
+
+    # flywheel daily-report：飞轮日报生成与推送
+    p_dr = sub.add_parser("daily-report", help="生成飞轮日报并推送到微信/企业微信/飞书")
+    p_dr.add_argument("--hub-root", required=True, help="中枢根目录")
+    p_dr.add_argument("--skillhub-root", required=True, help="SkillHub 根目录")
+    p_dr.add_argument("--date", default="", help="指定日期 (YYYY-MM-DD)，默认今天")
+    p_dr.add_argument("--output", default="", help="输出 Markdown 文件路径")
+    p_dr.add_argument("--hermes-target", default="", help="Hermes 推送到微信 (如 weixin:chat_id)")
+    p_dr.add_argument("--serverchan-key", default="", help="Server酱 SCKEY（推送到个人微信）")
+    p_dr.add_argument("--pushplus-token", default="", help="PushPlus Token（推送到个人微信）")
+    p_dr.add_argument("--wecom-webhook", default="", help="企业微信群机器人 Webhook")
+    p_dr.add_argument("--feishu-webhook", default="", help="飞书群机器人 Webhook")
+    p_dr.add_argument("--push-config", default="", help="推送配置文件（批量多渠道）")
+    p_dr.set_defaults(func=_cmd_daily_report)
 
     args = parser.parse_args(argv)
     return args.func(args)
@@ -802,6 +828,253 @@ def _cmd_router_sync(args) -> int:
         print(f"\n报告已写入: {args.report}")
 
     return exit_code
+
+
+def _cmd_session_preload(args) -> int:
+    """会话预加载（代理 session_preload.py）。"""
+    import session_preload
+
+    hub = Path(args.hub_root).resolve()
+    if not hub.is_dir():
+        print(f"错误: 中枢目录不存在: {hub}", file=sys.stderr)
+        return 1
+
+    print("=" * 60)
+    print("  📋 会话预加载（session-preload）")
+    print("=" * 60)
+
+    result = session_preload.preload_session(
+        hub_root=hub,
+        query=args.query,
+        top_k=args.top_k,
+        max_tokens=args.max_tokens,
+    )
+
+    if not result["success"]:
+        print(f"❌ 预加载失败: {result.get('error', '未知错误')}", file=sys.stderr)
+        return 1
+
+    if args.json:
+        output = {
+            "query": result["query"],
+            "keywords": result["keywords"],
+            "total_tokens": result["total_tokens"],
+            "cards_count": len(result["cards"]),
+            "cards": [
+                {
+                    "title": c["title"],
+                    "type": c["type"],
+                    "type_label": c["type_label"],
+                    "path": c["path"],
+                    "score": c["score"],
+                    "value_score": c["value_score"],
+                    "summary": c["summary"][:100] if c.get("summary") else "",
+                }
+                for c in result["cards"]
+            ],
+        }
+        import json as _json
+        print(_json.dumps(output, ensure_ascii=False, indent=2))
+    elif args.brief_only:
+        print(result["brief"])
+    else:
+        print(result["brief"])
+        print()
+        print("---")
+        print("📊 预加载统计:")
+        print(f"   命中卡片: {len(result['cards'])} 张")
+        print(f"   预估 tokens: ~{result['total_tokens']}")
+        print(f"   关键词: {', '.join(result['keywords'][:3])}")
+
+    return 0
+
+
+def _cmd_daily_report(args) -> int:
+    """生成飞轮日报并推送。
+
+    2026-09-02 Hermes 代办收尾断链修复：原代理 flywheel_daily_report.py
+    源码灭失（仅 .pyc，且早于现存 hub_daily_report.py），改 subprocess
+    走本目录 hub_daily_report.py（与 8:00 cron 日报同源）；
+    hermes 通道改走 `hermes send` CLI（push_channel 模块亦无源码）。
+    """
+    hub = Path(args.hub_root).resolve()
+    skillhub = Path(args.skillhub_root).resolve()
+
+    if not hub.is_dir():
+        print(f"错误: 中枢目录不存在: {hub}", file=sys.stderr)
+        return 1
+
+    print("=" * 60)
+    print("  📊 飞轮日报生成与推送")
+    print("=" * 60)
+
+    # 生成日报（hub_daily_report 基于 hub-health.json 最新快照，不支持历史回放）
+    if args.date:
+        from datetime import date as _date
+        try:
+            _date.fromisoformat(args.date)
+        except ValueError:
+            print(f"错误: 日期格式错误: {args.date}", file=sys.stderr)
+            return 1
+        print(
+            f"⚠️ --date={args.date} 已忽略：当前日报基于最新快照生成，无历史回放",
+            file=sys.stderr,
+        )
+
+    gen = subprocess.run(
+        [
+            sys.executable, "-u", str(_SCRIPT_DIR / "hub_daily_report.py"),
+            "--hub-root", str(hub), "--skillhub-root", str(skillhub),
+        ],
+        capture_output=True, text=True, encoding="utf-8", errors="replace",
+        timeout=300,
+    )
+    if gen.returncode != 0:
+        print(
+            f"❌ 日报生成失败: {(gen.stderr or gen.stdout).strip()[:300]}",
+            file=sys.stderr,
+        )
+        return 1
+    report = gen.stdout.strip()
+
+    # 输出
+    if args.output:
+        output_path = Path(args.output)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(report, encoding="utf-8")
+        print(f"📄 日报已保存: {output_path}")
+
+    # 构建推送参数
+    push_kwargs = {}
+    if args.hermes_target:
+        push_kwargs["hermes_target"] = args.hermes_target
+    if args.serverchan_key:
+        push_kwargs["serverchan_key"] = args.serverchan_key
+    if args.pushplus_token:
+        push_kwargs["pushplus_token"] = args.pushplus_token
+    if args.wecom_webhook:
+        push_kwargs["wecom_webhook"] = args.wecom_webhook
+    if args.feishu_webhook:
+        push_kwargs["feishu_webhook"] = args.feishu_webhook
+    if args.push_config:
+        push_kwargs["push_config"] = args.push_config
+
+    # 推送（2026-09-02 Hermes 代办断链修复：原依赖的 push_channel 模块无
+    # 源码可考，hermes 通道改走 `hermes send` CLI，webhook 通道用 urllib 直发）
+    if push_kwargs:
+        report_title = f"📊 飞轮日报 ({datetime.now().astimezone().strftime('%Y-%m-%d')})"
+        push_results = []
+
+        def _post(url: str, payload: dict) -> dict:
+            """POST JSON（wecom/feishu/pushplus 通道通用）。"""
+            import json as _json
+            import urllib.request
+
+            body = _json.dumps(payload, ensure_ascii=False).encode("utf-8")
+            req = urllib.request.Request(
+                url,
+                data=body,
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            try:
+                with urllib.request.urlopen(req, timeout=30) as resp:
+                    resp.read()
+                return {"success": True}
+            except Exception as exc:  # 网络/HTTP 错误统一转失败结果
+                return {"success": False, "error": str(exc)[:200]}
+
+        if push_kwargs.get("push_config"):
+            print(
+                "❌ --push-config 暂不可用：原 push_channel 配置文件格式无源码可考，"
+                "请改用显式通道参数（--hermes-target/--serverchan-key/...）",
+                file=sys.stderr,
+            )
+            push_kwargs.pop("push_config")
+
+        if push_kwargs.get("hermes_target"):
+            target = push_kwargs.pop("hermes_target")
+            print(f"📤 正在通过 Hermes 推送到微信 ({target})...")
+            try:
+                send = subprocess.run(
+                    ["hermes", "send", "-t", target, "-"],
+                    input=f"{report_title}\n\n{report}",
+                    capture_output=True, text=True,
+                    encoding="utf-8", errors="replace", timeout=120,
+                )
+                ok = send.returncode == 0
+                if ok:
+                    print("  ✅ 推送成功")
+                else:
+                    err = (send.stderr or send.stdout).strip()[:200]
+                    print(f"  ❌ 失败: {err}")
+                    if "session timeout" in err:
+                        print("  💡 微信会话已过期，请重新认证 Hermes 微信连接")
+                push_results.append({"success": ok, "channel": "hermes"})
+            except FileNotFoundError:
+                print("  ❌ hermes CLI 不在 PATH，跳过", file=sys.stderr)
+                push_results.append(
+                    {"success": False, "channel": "hermes", "error": "hermes 不可用"}
+                )
+
+        if push_kwargs.get("serverchan_key"):
+            key = push_kwargs.pop("serverchan_key")
+            print("📤 正在推送到 Server酱 (微信)...")
+            import urllib.parse
+            import urllib.request
+
+            data = urllib.parse.urlencode(
+                {"text": report_title, "desp": report}
+            ).encode("utf-8")
+            try:
+                req = urllib.request.Request(
+                    f"https://sctapi.ftqq.com/{key}.send", data=data
+                )
+                with urllib.request.urlopen(req, timeout=30) as resp:
+                    resp.read()
+                print("  ✅ 成功")
+                push_results.append({"success": True, "channel": "serverchan"})
+            except Exception as exc:
+                print(f"  ❌ 失败: {str(exc)[:200]}")
+                push_results.append(
+                    {"success": False, "channel": "serverchan", "error": str(exc)[:200]}
+                )
+
+        if push_kwargs.get("pushplus_token"):
+            token = push_kwargs.pop("pushplus_token")
+            print("📤 正在推送到 PushPlus (微信)...")
+            result = _post(
+                "http://www.pushplus.plus/send",
+                {"token": token, "title": report_title, "content": report},
+            )
+            result["channel"] = "pushplus"
+            print(f"  {'✅ 成功' if result.get('success') else '❌ 失败: ' + result.get('error', '未知')}")
+            push_results.append(result)
+
+        if push_kwargs.get("wecom_webhook"):
+            webhook = push_kwargs.pop("wecom_webhook")
+            print("📤 正在推送到企业微信...")
+            result = _post(webhook, {"msgtype": "text", "text": {"content": f"{report_title}\n{report}"}})
+            result["channel"] = "wecom"
+            print(f"  {'✅ 成功' if result.get('success') else '❌ 失败: ' + result.get('error', '未知')}")
+            push_results.append(result)
+
+        if push_kwargs.get("feishu_webhook"):
+            webhook = push_kwargs.pop("feishu_webhook")
+            print("📤 正在推送到飞书...")
+            result = _post(webhook, {"msg_type": "text", "content": {"text": f"{report_title}\n{report}"}})
+            result["channel"] = "feishu"
+            print(f"  {'✅ 成功' if result.get('success') else '❌ 失败: ' + result.get('error', '未知')}")
+            push_results.append(result)
+
+        if push_results:
+            success_count = sum(1 for r in push_results if r.get("success"))
+            print(f"\n📊 推送汇总: {success_count}/{len(push_results)} 成功")
+
+    if not args.output and not push_kwargs:
+        print(report)
+
+    return 0
 
 
 if __name__ == "__main__":
