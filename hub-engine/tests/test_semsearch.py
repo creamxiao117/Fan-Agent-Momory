@@ -35,8 +35,8 @@ def _seed(root: Path) -> None:
         "---\ntype: rule\ntags: [autocad, dll-lock]\nupdated: 2026-08-17\nstatus: active\nreuse_count: 0\n---\nDLL 修改后必须递增版本号避免被锁。\n",
         encoding="utf-8",
     )
-    (root / "experience" / "blunder.md").write_text(
-        "---\ntype: exp\ntags: [autocad]\nupdated: 2026-08-17\nstatus: active\nreuse_count: 0\n---\n上次没重命名导致 AutoCAD 占用文件无法覆盖。\n",
+    (root / "rules" / "blunder.md").write_text(
+        "---\ntype: rule\ntags: [autocad]\nupdated: 2026-08-17\nstatus: active\nreuse_count: 0\n---\n上次没重命名导致 AutoCAD 占用文件无法覆盖。\n",
         encoding="utf-8",
     )
 
@@ -104,7 +104,7 @@ def test_build_removes_orphan(tmp_path):
     _seed(root)
     _fake_embed()
     build(root)
-    blunder = root / "experience" / "blunder.md"
+    blunder = root / "rules" / "blunder.md"
     blunder.unlink()
     st = build(root)
     assert st["removed"] >= 1

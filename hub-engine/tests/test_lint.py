@@ -9,8 +9,9 @@ def _seed(root: Path) -> None:
         "---\ntype: rule\ntags: [x]\nupdated: 2026-08-17\nstatus: active\nreuse_count: 0\n---\n规则 A\n",
         encoding="utf-8",
     )
-    (root / "experience" / "orphan.md").write_text(
-        "---\ntype: exp\ntags: [y]\nupdated: 2026-08-17\nstatus: active\nreuse_count: 0\n---\n无人引用的孤立页\n",
+    # 2026-09-02 权威区收缩：孤儿检测只扫 5 权威区，孤立页须落在 rules 下
+    (root / "rules" / "orphan.md").write_text(
+        "---\ntype: rule\ntags: [y]\nupdated: 2026-08-17\nstatus: active\nreuse_count: 0\n---\n无人引用的孤立页\n",
         encoding="utf-8",
     )
     (root / "rules" / "stale.md").write_text(

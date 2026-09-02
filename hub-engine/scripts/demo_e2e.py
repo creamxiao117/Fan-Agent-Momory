@@ -52,7 +52,7 @@ def run_demo(root: str | Path) -> dict:
 
     # 6) 查询产物回写：好答案→新经验卡片（写入暂存区后自动入区）
     insight = parse_card("""---
-type: exp
+type: project
 tags:
   - autocad
   - dll-lock
@@ -63,10 +63,10 @@ reuse_count: 0
 ---
 查询"DLL 被锁"命中规则后确认：预防优于补救——开发期即采用递增版本命名，避免发布后被 AutoCAD 锁文件。
 """)
-    insight.type = "exp"
+    insight.type = "project"
     qwb = root / ".sync" / "drafts" / "trae_draft" / "query-writeback.md"
     qwb.write_text(write_card(insight), encoding="utf-8")
-    ingest(root, "trae")  # exp 属低风险 → 自动入区仅记日志
+    ingest(root, "trae")  # project 属权威区低风险 → 自动入区仅记日志（2026-09-02 口径：exp 已退出权威区）
 
     return {"confirmed": dst.name, "hits": [h.path.name for h in hits]}
 

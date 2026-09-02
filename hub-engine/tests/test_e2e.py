@@ -11,5 +11,5 @@ def test_demo_promotes_rule_and_retrieves(tmp_path):
     assert result["hits"]  # 复用检索能命中该规则
     log = (root / "retro" / "log.md").read_text(encoding="utf-8")
     assert "confirm" in log
-    # 查询产物回写：好答案→新经验卡片
-    assert (root / "experience" / "query-writeback.md").exists()
+    # 查询产物回写：好答案→新卡（2026-09-02 口径：权威区 project 自动入区）
+    assert (root / "projects" / "query-writeback.md").exists()

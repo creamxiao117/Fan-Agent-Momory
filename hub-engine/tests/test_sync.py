@@ -5,8 +5,9 @@ from scripts.bootstrap_hub import bootstrap
 from sync import append_log, confirm_rule, ingest
 
 
+# 2026-09-02 权威区收缩适配：低风险自动入区类型改用 longterm（exp 不再进权威区）
 def _make_draft(
-    root: Path, platform: str, name: str, body: str, ctype: str = "exp"
+    root: Path, platform: str, name: str, body: str, ctype: str = "longterm"
 ) -> Path:
     d = root / ".sync" / "drafts" / f"{platform}_draft"
     d.mkdir(parents=True, exist_ok=True)
@@ -27,10 +28,10 @@ reuse_count: 0
 
 def test_ingest_promotes_low_risk_to_authority(tmp_path):
     root = bootstrap(tmp_path)
-    _make_draft(root, "trae", "exp-a.md", "这是一条经验卡片内容", ctype="exp")
+    _make_draft(root, "trae", "exp-a.md", "这是一条经验卡片内容", ctype="longterm")
     stat = ingest(root, "trae")
     assert stat["promoted"] == 1
-    assert (root / "experience" / "exp-a.md").exists()
+    assert (root / "longterm" / "exp-a.md").exists()
     assert stat["status"] == "ok"
 
 
@@ -45,11 +46,11 @@ def test_ingest_rule_goes_to_pending_not_authority(tmp_path):
 
 def test_ingest_duplicate_goes_to_conflicts(tmp_path):
     root = bootstrap(tmp_path)
-    (root / "experience" / "exp-a.md").write_text(
-        "---\ntype: exp\ntags: [test]\nupdated: 2026-08-17\nstatus: active\nreuse_count: 0\n---\n这是一条经验卡片内容\n",
+    (root / "longterm" / "exp-a.md").write_text(
+        "---\ntype: longterm\ntags: [test]\nupdated: 2026-08-17\nstatus: active\nreuse_count: 0\n---\n这是一条经验卡片内容\n",
         encoding="utf-8",
     )
-    _make_draft(root, "trae", "exp-a.md", "这是一条经验卡片内容", ctype="exp")
+    _make_draft(root, "trae", "exp-a.md", "这是一条经验卡片内容", ctype="longterm")
     stat = ingest(root, "trae")
     assert stat["duplicate"] == 1
     assert list((root / ".sync" / "conflicts").glob("*.md"))
@@ -58,10 +59,10 @@ def test_ingest_duplicate_goes_to_conflicts(tmp_path):
 def test_ingest_duplicate_deletes_draft(tmp_path):
     """重复草稿处理后必须删除，避免下次同步重复处理并覆盖冲突区"""
     root = bootstrap(tmp_path)
-    _make_draft(root, "trae", "exp-a.md", "这是一条经验卡片内容", ctype="exp")
+    _make_draft(root, "trae", "exp-a.md", "这是一条经验卡片内容", ctype="longterm")
     ingest(root, "trae")
     # 再次写入完全一致的内容 → 判为重复进冲突区，且草稿被删除
-    _make_draft(root, "trae", "exp-a.md", "这是一条经验卡片内容", ctype="exp")
+    _make_draft(root, "trae", "exp-a.md", "这是一条经验卡片内容", ctype="longterm")
     stat = ingest(root, "trae")
     assert stat["duplicate"] == 1
     assert not (root / ".sync" / "drafts" / "trae_draft" / "exp-a.md").exists()
@@ -70,14 +71,14 @@ def test_ingest_duplicate_deletes_draft(tmp_path):
 def test_ingest_same_name_different_content_no_overwrite(tmp_path):
     """同名不同内容（语义不重复）→ 不得覆盖权威区，转冲突区且删除草稿"""
     root = bootstrap(tmp_path)
-    (root / "experience" / "exp-a.md").write_text(
-        "---\ntype: exp\ntags: [test]\nupdated: 2026-08-17\nstatus: active\nreuse_count: 0\n---\n记录一次排查 Windows 系统崩溃的经验\n",
+    (root / "longterm" / "exp-a.md").write_text(
+        "---\ntype: longterm\ntags: [test]\nupdated: 2026-08-17\nstatus: active\nreuse_count: 0\n---\n记录一次排查 Windows 系统崩溃的经验\n",
         encoding="utf-8",
     )
-    _make_draft(root, "trae", "exp-a.md", "如何制作拿铁咖啡的心得体会", ctype="exp")
+    _make_draft(root, "trae", "exp-a.md", "如何制作拿铁咖啡的心得体会", ctype="longterm")
     stat = ingest(root, "trae")
     # 权威区内容保持不变（未被草稿覆盖）
-    assert "排查 Windows 系统崩溃" in (root / "experience" / "exp-a.md").read_text(
+    assert "排查 Windows 系统崩溃" in (root / "longterm" / "exp-a.md").read_text(
         encoding="utf-8"
     )
     # 同名不同内容计入冲突，草稿被删除
@@ -137,12 +138,12 @@ def test_ingest_writes_memory_diff(tmp_path):
     from tools.memory_diff import read_records
 
     root = bootstrap(tmp_path)
-    _make_draft(root, "trae", "exp-a.md", "这是一条经验卡片内容", ctype="exp")
+    _make_draft(root, "trae", "exp-a.md", "这是一条经验卡片内容", ctype="longterm")
     ingest(root, "trae")
     recs = read_records(root)
     assert any(
         r.get("op") == "add"
         and r.get("name") == "exp-a.md"
-        and r.get("after") == "experience/exp-a.md"
+        and r.get("after") == "longterm/exp-a.md"
         for r in recs
     )

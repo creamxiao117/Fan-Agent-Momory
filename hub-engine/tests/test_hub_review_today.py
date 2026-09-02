@@ -16,8 +16,9 @@ def _mk_writer(root, sub, name, body, updated=None):
     p = root / sub / name
     p.parent.mkdir(parents=True, exist_ok=True)
     fm_updated = updated or _today_local().isoformat()
+    # 2026-09-02 权威区收缩：collect_new_updated 走 _all_cards（只扫 5 权威区）
     p.write_text(
-        f"---\ntype: exp\ntags:\n- t\nupdated: '{fm_updated}'\nstatus: active\n---\n\n{body}",
+        f"---\ntype: rule\ntags:\n- t\nupdated: '{fm_updated}'\nstatus: active\n---\n\n{body}",
         encoding="utf-8",
     )
     return p
@@ -44,11 +45,11 @@ def _as_posix(path: str) -> str:
 
 def test_collect_new_updated_today(tmp_path):
     """updated == 今日 的卡才列入；其它日期不入"""
-    _mk_writer(tmp_path, "experience", "today.md", "今日卡")
+    _mk_writer(tmp_path, "rules", "today.md", "今日卡")
     _mk_writer(tmp_path, "rules", "old.md", "旧卡", updated="2000-01-01")
     got = collect_new_updated(tmp_path)
     files = [_as_posix(c["file"]) for c in got]
-    assert "experience/today.md" in files
+    assert "rules/today.md" in files
     assert "rules/old.md" not in files
     assert got[0]["tags"] == ["t"]
 

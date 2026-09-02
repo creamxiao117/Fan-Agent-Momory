@@ -46,9 +46,11 @@ def _root_with_platform(
     return root
 
 
-def _hub_card(root: Path, name: str, body: str, ctype: str = "exp") -> None:
-    """在测试中枢权威区放一张卡片（rules 或 experience）"""
-    sub = "rules" if ctype == "rule" else "experience"
+# 2026-09-02 权威区收缩适配：默认卡必须落在 5 权威区目录（push/pull 只扫
+# _authority_cards），非 rule 用 longterm 承载（exp 已退出权威区）
+def _hub_card(root: Path, name: str, body: str, ctype: str = "longterm") -> None:
+    """在测试中枢权威区放一张卡片（rules 或 longterm）"""
+    sub = "rules" if ctype == "rule" else "longterm"
     card = parse_card(
         f"""---
 type: {ctype}
@@ -232,6 +234,7 @@ def test_push_dry_run_writes_nothing(tmp_path):
 
 
 def test_push_only_rules_skips_experience(tmp_path):
+    """only_rules 只推 rules 目录卡，权威区内其他类型（longterm）被过滤"""
     root = _root_with_platform(tmp_path, content="## 平台已有小节\n原有内容\n")
     _hub_card(root, "rule-a", "规则正文", ctype="rule")
     _hub_card(root, "exp-a", "经验正文")

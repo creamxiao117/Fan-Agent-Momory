@@ -14,9 +14,10 @@ def test_run_report_writes_file_and_log(tmp_path):
 
 
 def _seed_thin(root: Path) -> None:
-    """写入一张正文过短的薄卡，验证软汇报能统计到。"""
-    (root / "experience" / "thin.md").write_text(
-        "---\ntype: exp\ntags: [x]\nupdated: 2026-08-17\nstatus: active\nreuse_count: 0\n---\n太短\n",
+    """写入一张正文过短的薄卡，验证软汇报能统计到。
+    （2026-09-02 权威区收缩：lint 只扫 5 权威区，薄卡须落 rules/）"""
+    (root / "rules" / "thin.md").write_text(
+        "---\ntype: rule\ntags: [x]\nupdated: 2026-08-17\nstatus: active\nreuse_count: 0\n---\n太短\n",
         encoding="utf-8",
     )
 

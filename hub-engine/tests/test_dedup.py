@@ -7,10 +7,11 @@ from sync import ingest
 from tools.dedup import candidates, parse_decision
 
 
-def _seed_authority(root: Path, name: str, body: str, ctype: str = "exp") -> None:
+# 2026-09-02 权威区收缩适配：exp 类型不再入权威区，候选种子改用 longterm
+def _seed_authority(root: Path, name: str, body: str, ctype: str = "longterm") -> None:
     """在权威区预置一张同主题卡，作为去重候选"""
-    (root / "experience").mkdir(parents=True, exist_ok=True)
-    (root / "experience" / name).write_text(
+    (root / "longterm").mkdir(parents=True, exist_ok=True)
+    (root / "longterm" / name).write_text(
         f"---\ntype: {ctype}\ntags: [test]\nupdated: 2026-08-17\nstatus: active\n"
         f"reuse_count: 0\n---\n{body}\n",
         encoding="utf-8",
@@ -18,7 +19,7 @@ def _seed_authority(root: Path, name: str, body: str, ctype: str = "exp") -> Non
 
 
 def _make_draft(
-    root: Path, platform: str, name: str, body: str, ctype: str = "exp"
+    root: Path, platform: str, name: str, body: str, ctype: str = "longterm"
 ) -> Path:
     d = root / ".sync" / "drafts" / f"{platform}_draft"
     d.mkdir(parents=True, exist_ok=True)
@@ -130,7 +131,7 @@ def test_ingest_llm_merge_still_goes_to_conflicts(tmp_path):
     dec = json.loads(preds[0].read_text(encoding="utf-8"))["decision"]
     assert dec["action"] == "merge"
     # 权威区未被自动合并覆盖
-    assert (root / "experience" / "exp-a.md").exists()
+    assert (root / "longterm" / "exp-a.md").exists()
     # 审计留痕
     recs = read_records(root)
     assert any(r.get("op") == "delete" for r in recs)
@@ -148,7 +149,7 @@ def test_ingest_llm_invalid_decision_falls_back_to_conflicts(tmp_path):
     stat = ingest(root, "trae", chat_fn=_chat)
     assert stat["duplicate"] == 1
     # 权威区原卡仍在（未误删）
-    assert (root / "experience" / "exp-a.md").exists()
+    assert (root / "longterm" / "exp-a.md").exists()
     assert list((root / ".sync" / "conflicts").glob("trae_exp-b.md"))
 
 
@@ -159,7 +160,7 @@ def test_ingest_no_candidate_promotes(tmp_path):
     _make_draft(root, "trae", "exp-c.md", "PS5 手柄电池更换步骤")
     stat = ingest(root, "trae")
     assert stat["promoted"] == 1
-    assert (root / "experience" / "exp-c.md").exists()
+    assert (root / "longterm" / "exp-c.md").exists()
 
 
 def test_ingest_llm_create_highconf_auto_promotes(tmp_path):
@@ -173,7 +174,7 @@ def test_ingest_llm_create_highconf_auto_promotes(tmp_path):
     _make_draft(root, "trae", "exp-b.md", "这是一条治腰痛的经验卡片")
     stat = ingest(root, "trae", chat_fn=_chat)
     assert stat["promoted"] == 1, stat
-    assert (root / "experience" / "exp-b.md").exists()
+    assert (root / "longterm" / "exp-b.md").exists()
     assert not list((root / ".sync" / "conflicts").glob("*.md")), (
         "高置信 create 不应落冲突区"
     )
@@ -192,5 +193,5 @@ def test_ingest_llm_create_highconf_same_name_still_conflicts(tmp_path):
     assert stat["duplicate"] == 1, stat
     assert list((root / ".sync" / "conflicts").glob("trae_exp-a.md")), "同名应进冲突区"
     # 权威区原卡未被覆盖
-    body = (root / "experience" / "exp-a.md").read_text(encoding="utf-8")
+    body = (root / "longterm" / "exp-a.md").read_text(encoding="utf-8")
     assert "常规做法" in body

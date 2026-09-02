@@ -136,17 +136,18 @@ def test_build_vectors_warns_and_nonzero_when_no_vectors(tmp_path, capsys, monke
 
     root = bootstrap(tmp_path)
     # 建一张有效卡，确保 build 有卡片可处理（否则 touched=0 不触发告警）
-    exp = root / "experience"
+    # 2026-09-02 权威区收缩：build-vectors 只扫 5 权威区，样本卡须落 rules/
+    exp = root / "rules"
     exp.mkdir(parents=True, exist_ok=True)
     (exp / "sample.md").write_text(
         "---\n"
-        "type: exp\n"
+        "type: rule\n"
         "tags:\n- demo\n"
         "updated: '2026-08-19'\n"
         "status: active\n"
         "reuse_count: 0\n"
         "---\n\n"
-        "示例经验卡。\n",
+        "示例规则卡。\n",
         encoding="utf-8",
     )
     # 注入不可用后端：任何文本都返回 None，build 会全部空向量
@@ -166,7 +167,8 @@ def test_lint_nonzero_when_unhealthy(tmp_path, capsys, monkeypatch):
 
     root = bootstrap(tmp_path)
     # 注入一枚无效卡（缺 frontmatter）触发 invalid 告警
-    bad = root / "experience" / "broken.md"
+    # 2026-09-02 权威区收缩：lint 只扫 5 权威区，坏卡须落 rules/ 才会被检出
+    bad = root / "rules" / "broken.md"
     bad.write_text("# 无 frontmatter 的坏卡\n", encoding="utf-8")
     code = main(["lint", "--root", str(root)])
     out = capsys.readouterr().out
