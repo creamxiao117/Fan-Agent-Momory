@@ -20,16 +20,17 @@ from tools.dedup import candidates as dedup_candidates
 from tools.dedup import decide as dedup_decide
 from tools.memory_diff import record as record_diff
 
+# 权威区 type→目录映射（仅 5 个权威区）
+# exp/note/retro 类型卡不再自动提升进权威区
 TYPE_DIR = {
     "rule": "rules",
+    "blueprint": "blueprints",
     "methodology": "methodology",
     "longterm": "longterm",
-    "exp": "experience",
-    "note": "experience",
     "project": "projects",
-    "retro": "retro",
-    "blueprint": "blueprints",
 }
+# 非权威区卡类型（留经验层但不参与去重/向量）
+_NON_AUTH_TYPES = {"exp", "note", "retro"}
 # HIGH_RISK 已统一到 common/constants.py（含 rule + methodology）
 
 # 与 bootstrap_hub 一致：注入本地身份，保证未配置全局 user.name/email 也能提交（不污染全局配置）
@@ -63,15 +64,13 @@ def append_log(root: Path, op: str, title: str) -> None:
 
 def _authority_cards(root: Path) -> list[Card]:
     cards = []
+    # 仅扫 5 个权威区目录
     for sub in (
         "rules",
+        "blueprints",
         "methodology",
         "longterm",
         "projects",
-        "experience",
-        "libs",
-        "blueprints",
-        "retro",
     ):
         d = root / sub
         if not d.exists():
@@ -197,7 +196,7 @@ def ingest(root: Path, platform: str, chat_fn=None) -> dict:
                         and decision.get("confidence", 0) >= 0.8
                         and card.type not in HIGH_RISK
                     ):
-                        dst_c = root / TYPE_DIR.get(card.type, "experience") / p.name
+                        dst_c = root / TYPE_DIR.get(card.type) / p.name
                         if dst_c.exists():
                             cdir = root / ".sync" / "conflicts"
                             cdir.mkdir(parents=True, exist_ok=True)
@@ -291,7 +290,13 @@ def ingest(root: Path, platform: str, chat_fn=None) -> dict:
                     )
                 else:
                     # 低风险内容 → 自动入区，仅记日志
-                    dst = root / TYPE_DIR.get(card.type, "experience") / p.name
+                    dst_dir = TYPE_DIR.get(card.type)
+                    if dst_dir is None:
+                        # 非权威区 type（exp/note/retro）→ 不落权威目录，跳过
+                        _append_log(root, "ingest", f"非权威区 type={card.type}，跳过自动提升：{p.name}")
+                        p.unlink()
+                        continue
+                    dst = root / dst_dir / p.name
                     if dst.exists():
                         # 同名不同内容（语义去重已在上方处理过）→ 不覆盖权威区，转冲突区
                         cdir = root / ".sync" / "conflicts"
@@ -350,7 +355,7 @@ def confirm_rule(root: Path, name: str) -> Path:
         card.reuse_count = 0
         # 目标目录跟随卡片类型（复用 ingest 的 TYPE_DIR 映射；此前硬编码 rules/，
         # methodology/exp 等待确认卡无法经 CLI 提升）
-        dst = root / TYPE_DIR.get(card.type, "experience") / name
+        dst = root / TYPE_DIR.get(card.type) / name
         dst.parent.mkdir(parents=True, exist_ok=True)
         dst.write_text(write_card(card), encoding="utf-8")
         src.unlink()
