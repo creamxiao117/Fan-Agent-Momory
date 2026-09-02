@@ -24,6 +24,21 @@ VALID = ACTIONS | {"review"}
 # 向量预过滤阈值：低于此分不视为候选（与 OpenViking "预过滤找相似" 对齐）
 DEFAULT_MIN_SIM = 0.55
 
+# 去重 prompt 预算（2026-09-02 根因修复）：LM Studio 引擎窗口仅 8192 tokens，
+# 真实 ingest 场景 prompt(新卡+最多5候选全文)达 11~12k tokens → 400 超限 → 全链降级 conflicts。
+# 判"重不重复"只需主题信号，不需要全文：新卡留 1200 字符、每候选留 800 字符。
+_BUDGET_NEW = 1200
+_BUDGET_CAND = 800
+
+
+def _clip(text: str, limit: int) -> str:
+    """截断到 limit 字符，超长则保留开头并加省略标记（主题信息在开头）。"""
+    text = text.strip()
+    if len(text) <= limit:
+        return text
+    return text[:limit] + "\n…（已截断，完整内容见原卡）"
+
+
 
 def candidates(
     root: Path, card, min_sim: float = DEFAULT_MIN_SIM, top_k: int = 5
@@ -46,7 +61,11 @@ def candidates(
 
 
 def _build_prompt(new_card, cands: list[tuple]) -> str:
-    """构造去重决策提示词：给 LLM 新卡正文 + 候选卡正文，要求一律 JSON 输出"""
+    """构造去重决策提示词：新卡正文 + 候选卡正文摘要（截断在预算内），一律 JSON 输出。
+
+    2026-09-02：真实场景 prompt(全文) 达 11~12k tokens 超 LM Studio 8192 窗口 →
+    400 降级 conflicts；改为截断摘要后 ~5k tokens 内，判重主题信号不丢。
+    """
     lines = [
         "你是记忆库去重决策器。判断一张新记忆卡是否与下列候选卡重复。",
         "只输出一行 JSON（不要任何解释/包裹），格式：",
@@ -58,14 +77,15 @@ def _build_prompt(new_card, cands: list[tuple]) -> str:
         "- merge：新卡与候选高度同主题但互补，应并入候选（target 必填候选文件名）；",
         "- delete：候选已被新卡完全替代、无独立价值（target 必填候选文件名，**仅在确定性极高时**用）；",
         "不确定时优先 create/skip，绝不轻易 delete（误删代价高）。",
+        "注意：正文超长部分已截断（标有省略号），截断不影响重复性判断——请基于主题与要点判断。",
         "",
         "【新卡】",
-        new_card.body.strip(),
+        _clip(new_card.body, _BUDGET_NEW),
         "",
     ]
     for i, (c, score) in enumerate(cands, 1):
         lines.append(f"【候选{i}】{c.path.name}（相似度 {score:.2f}）")
-        lines.append(c.body.strip())
+        lines.append(_clip(c.body, _BUDGET_CAND))
         lines.append("")
     return "\n".join(lines)
 
