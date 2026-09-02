@@ -73,11 +73,9 @@ def chat(
     headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
     if compress:
         headers["X-OmniRoute-Compression"] = f"{compress};source=request"
-    extra = (
-        {"max_tokens": int(max_tokens)}
-        if max_tokens and model.startswith("ollama/")
-        else {}
-    )
+    # 原条件 model.startswith("ollama/") 已随 Ollama 退役恒 False（2026-09-02 残名清理）；
+    # 等价简化：仅当顶层配置显式给出 max_tokens 才透传（当前未配置 → 行为不变）。
+    extra = {"max_tokens": int(max_tokens)} if max_tokens else {}
 
     def _do_http() -> str:
         resp = requests.post(
@@ -158,9 +156,9 @@ def _local_fallback_chat(
         return ""
     import requests
 
-    # LLM 健康检测
-    ollama_base = url.rsplit("/v1/", 1)[0] if "/v1/" in url else url.rsplit("/", 1)[0]
-    health_checker = LLMHealthChecker.get_instance(ollama_base)
+    # LLM 健康检测（本地端点，现役 LM Studio）
+    llm_base = url.rsplit("/v1/", 1)[0] if "/v1/" in url else url.rsplit("/", 1)[0]
+    health_checker = LLMHealthChecker.get_instance(llm_base)
 
     if not health_checker.is_available():
         print("[llm_health] fallback_chat 本地 LLM 不可用，跳过本地兜底")
@@ -222,9 +220,9 @@ def _local_chat(prompt: str, hub_root: Path, model: str | None = None) -> str:
     }
     timeout = int(cfg.get("timeout", 30))
 
-    # LLM 健康检测
-    ollama_base = url.rsplit("/v1/", 1)[0] if "/v1/" in url else url.rsplit("/", 1)[0]
-    health_checker = LLMHealthChecker.get_instance(ollama_base)
+    # LLM 健康检测（本地端点，现役 LM Studio）
+    llm_base = url.rsplit("/v1/", 1)[0] if "/v1/" in url else url.rsplit("/", 1)[0]
+    health_checker = LLMHealthChecker.get_instance(llm_base)
 
     if not health_checker.is_available():
         print("[llm_health] 本地 LLM 不可用，降级到 OmniRoute 网关")
@@ -243,7 +241,7 @@ def _local_chat(prompt: str, hub_root: Path, model: str | None = None) -> str:
         max_attempts=2, base_delay=0.5, jitter=0.2,
         on_retry=lambda evt: print(f"[resilience/local_chat] retry #{evt.attempt}: {evt.detail}"),
     )
-    # 添加降级：Ollama 调用失败时降级到网关
+    # 添加降级：本地 LLM 调用失败时降级到网关
     pipeline.add_fallback(
         fallback_fn=lambda: chat(prompt, hub_root, fallback=True),
         on_fallback=lambda evt: print(f"[resilience/local_chat] fallback to gateway: {evt.detail}"),
@@ -274,7 +272,7 @@ def _decision_quality(text: str) -> tuple[float, dict]:
 def smart_chat(prompt: str, hub_root: str | Path) -> str:
     """本地优先 + 量化升级的统一逻辑任务入口。
 
-    接入 LLM 健康检测：Ollama 不可用时直接跳过本地通道，使用网关。
+    接入 LLM 健康检测：本地 LLM 不可用时直接跳过本地通道，使用网关。
     去重任务（包含记忆库去重决策器）按决策质量分 + 模型自报 confidence 双重门禁。
     达不到阈值时升级路径：本地模型 -> OmniRoute auto/offline。
     """
@@ -287,20 +285,20 @@ def smart_chat(prompt: str, hub_root: str | Path) -> str:
     min_score = float(escalation.get("min_score", 0.80))
     min_conf = float(escalation.get("min_confidence", 0.80))
 
-    # LM Studio / LLM 健康检测
-    ollama_url = str(local_cfg.get("url", "http://127.0.0.1:1234/v1/chat/completions"))
-    ollama_base = ollama_url.rsplit("/v1/", 1)[0] if "/v1/" in ollama_url else ollama_url.rsplit("/", 1)[0]
-    health_checker = LLMHealthChecker.get_instance(ollama_base)
+    # LM Studio / LLM 健康检测（现役本地端点；变量原名 ollama_* 属退役残名，2026-09-02 清理）
+    llm_url = str(local_cfg.get("url", "http://127.0.0.1:1234/v1/chat/completions"))
+    llm_base = llm_url.rsplit("/v1/", 1)[0] if "/v1/" in llm_url else llm_url.rsplit("/", 1)[0]
+    health_checker = LLMHealthChecker.get_instance(llm_base)
 
-    ollama_available = health_checker.is_available()
-    if not ollama_available:
+    llm_available = health_checker.is_available()
+    if not llm_available:
         print("[llm_health] 本地 LLM 不可用，直接使用 OmniRoute 网关")
         return chat(
             prompt, root, fallback=False,
             model=str(escalation.get("remote_model", "auto/offline")),
         )
 
-    # Ollama 可用，走本地通道
+    # 本地 LLM 可用，走本地通道
     last_text = ""
     try:
         last_text = _local_chat(prompt, root, local_model)
@@ -870,10 +868,11 @@ def _compare_snapshots(prev: dict, curr: dict) -> dict:
     if score_changes:
         changes["health_scores"] = score_changes
 
-    prev_ollama = prev.get("llm_health") or prev.get("ollama", {})
-    curr_ollama = curr.get("llm_health") or curr.get("ollama", {})
-    prev_avail = prev_ollama.get("available", True)
-    curr_avail = curr_ollama.get("available", True)
+    # 变量名去 ollama 残名；`prev.get("ollama")` 键读取保留（兼容历史快照字段名）
+    prev_llm = prev.get("llm_health") or prev.get("ollama", {})
+    curr_llm = curr.get("llm_health") or curr.get("ollama", {})
+    prev_avail = prev_llm.get("available", True)
+    curr_avail = curr_llm.get("available", True)
     if prev_avail != curr_avail:
         changes["llm_status"] = {
             "prev": "available" if prev_avail else "unavailable",
@@ -923,16 +922,17 @@ def _print_snapshot_report(data: dict, report: dict, pending: list):
         )
     print(f"📦 最近提交: {data['last_commit']}")
 
-    ollama = data.get("llm_health") or data.get("ollama", {})
-    if ollama.get("available"):
-        models_str = ", ".join(ollama.get("models", [])[:3])
+    # 变量去 ollama 残名；`data.get("ollama")` 键读取保留（兼容历史快照字段名）
+    llm_health = data.get("llm_health") or data.get("ollama", {})
+    if llm_health.get("available"):
+        models_str = ", ".join(llm_health.get("models", [])[:3])
         print(
-            f"🦙 本地 LLM 健康 (LM Studio): ✅ 可用 · {ollama.get('model_count', 0)} 模型"
-            f" · 响应 {ollama.get('response_time_ms', 0)}ms"
+            f"🦙 本地 LLM 健康 (LM Studio): ✅ 可用 · {llm_health.get('model_count', 0)} 模型"
+            f" · 响应 {llm_health.get('response_time_ms', 0)}ms"
             + (f" · 模型: {models_str}" if models_str else "")
         )
     else:
-        print(f"🦙 本地 LLM 健康 (LM Studio): ❌ 不可用 · 错误: {ollama.get('last_error', '未知')}")
+        print(f"🦙 本地 LLM 健康 (LM Studio): ❌ 不可用 · 错误: {llm_health.get('last_error', '未知')}")
 
     scores = data.get("health_scores", {})
     if scores:
