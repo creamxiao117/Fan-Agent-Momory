@@ -171,6 +171,21 @@ ector_bench --real --fail-below 0.8 融合命中率 **67%（4/6）< 80% 门禁�
     |:--|:--|:--|:--|
     | LLM 运行时自愈 ensure_llm_service() | 🟡中 | 1小时 | `tools/llm_health.py` 新增：探测 1234 离线→subprocess 执行现成 `start_lm_studio_api.vbs`（wscript）→轮询端口就绪（如 2s×15 次）→返回最终态；每进程生命周期只重试 1 次防死循环。接入点：`engine.py _collect_llm_status()`（538 行）判 critical 前调一次；`vector_bench --real` 等真语料基准前置同样调用。补单测：桩 vbs 执行+桩探测验证重试逻辑。**待用户确认**：是否需要"手动下线标记文件"（故意停服务时不被自愈救活） |
 
+21. **每周召回评测复核（2026-09-02，发现→修复闭环）**：真实回归 **67%（4/6）→ 100%（6/6）**；向量通道 0/6→5/6、词袋 4/6→5/6，6 张目标卡全命中（含 experience 两卡）。
+
+    | 项 | 状态 | 说明 |
+    |:--|:--|:--|
+    | 根因 | 🔴 已修复 | `tools/retrieve.py::_ACTIVE_DIRS` 今晨被 bf8f49b（Codex Local）移除 `experience`（clone含 libs/retro），与 INDEX.md 五类口径冲突 → 经验卡 84 张整体游离检索 |
+    | 修复1 | ✅ | 恢复 `experience` 入 `_ACTIVE_DIRS`（libs/retro 维持不纳入），改注释说明 |
+    | 修复2 | ✅ | `engine.py build-vectors` 全量重建：removed 148 / inserted **229**（experience 全部入索引） |
+    | 验证 | ✅ | 真实回归 100%；bench_recall char 混合top3 10/21→**18/21**；pytest **290 passed 4 skipped**；ruff 绿 |
+    | P1补tag | ✅ | `methodology/memory-hub-card-promotion` 补 `gate` tag（P1 查询「孤儿 INDEX 登记…」唯一缺词），复跑 missing_query 该查询退出 P0/P1 候选 |
+    | 口径 | ✅ 决议 | 周任务 `--fail-below 0.6` = 软检视（提示人工）；日巡检 0.8 = 硬门禁（退出码 3）。两者并存非冲突，不再视为漂移 |
+    | 经验卡 | ✅ | `experience/local-dense-retrieval-model-selection` 口径修正：现役 = LM Studio bge-m3（config + db_meta 实证），small 降为历史注记 |
+    | missing_daily | 🔶 部分 | 仅 1 份（09-01），已补归档 `missing_daily_2026-09-01.md`；生成侧 = 每日巡检 Schedule 步骤 10（覆盖写），按日归档属对方引擎流程，未代改，交人工评估 |
+
+    修复 commit：主仓 retrieve.py（本会话）；中枢仓 2 张卡（本会话）。后续候选：①把「每日 missing_daily 按日归档」纳入日巡检 prompt；②周评测门禁阈值 0.6 的 prompt 与 0.8 口径已记录，若希望统一可改任务定义。
+
 ## 本轮 R10（check-code-v1 规则门禁 + semgrep/codebase-memory 两仓内化 + vector.db 维度门禁落地）
 
 - **check-code-v1 路径A 注释契约规则回归门禁**（`c:\Users\Fan-SJSS\.trae-cn\skills\check-code-v1`，技能仓非本仓）：新 `scripts/rule_regression.py` + `tests/test_rule_regression.py`——为每类检查器（python/yaml/markdown/json/toml）维护【正样例=应 FAIL + 负样例=应 PASS】合成契约，跑门禁判定 True/False Positive/Negative；正样例遇 SKIP（工具缺失）记为通过不误报。`SKILL.md` 补「第8条」约束：改检查器规则必须先跑门禁，无可回归才交付，新增检查类型先补样例再实现规则。**已借语义检索挂接中枢 `blueprints/semgrep-rules-engine-blueprint`。**

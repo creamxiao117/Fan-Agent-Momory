@@ -17,13 +17,15 @@ from pathlib import Path
 from common.frontmatter import Card, try_read_card
 from common.vector import build_idf, cosine, tokenize, vector
 
-# 参与检索的卡片目录（与历史 _walk_active_cards 枚举顺序一致，用于保持返回顺序）
+# 参与检索的卡片目录（五大类型与 INDEX.md 一致；经验卡 experience 必须参与，
+# 2026-09-02 bf8f49b 误将其移出导致真实回归 67%→恢复；libs/retro 非五类不纳入主检索）
 _ACTIVE_DIRS = (
     "rules",
     "blueprints",
     "methodology",
     "longterm",
     "projects",
+    "experience",
 )
 
 # 第二层向量融合（方案 A：bge-small-zh + SQLite）
