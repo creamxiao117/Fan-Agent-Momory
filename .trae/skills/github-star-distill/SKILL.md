@@ -25,7 +25,8 @@ description: "内化 GitHub 项目：隔离克隆->评审判级->参考/首次�
 
 ### 1. 锁定与克隆（隔离）
 
-- 记录 canonical ID：`gh-<owner>-<repo>`（小写），同一 URL 永远解析到同一 ID。
+- 记录 canonical ID：`gh-<owner>-<repo>`（小写），同一 URL 永远解析到同一 ID。对照 `retro/log.md` 去重表，已内化仓库跳过。
+- **F1 文件数检查**：`du -sh <clone-dir>` 后再 `find <clone-dir> -type f | wc -l`，超过 8000 文件的 monorepo 超限（如 JuliaLang/julia 385MB 源码树），跳过。
 - 隔离克隆：`git clone --depth 1 <url> work/star/<owner>-<repo>`（不透支历史）。
 - 只读盘点仓库骨架：README、文档目录、核心模块/配置、测试入口。**不执行任何源码脚本。**
 
@@ -38,7 +39,8 @@ description: "内化 GitHub 项目：隔离克隆->评审判级->参考/首次�
 
 | 等级 | 判定 | 处置 |
 |---|---|---|
-| A | 高价值且已亲自验证 | retained，可直接沉淀为规则/方法论并挂语义引用 |
+| A | 高价值且已亲自验证（T1 通过） | retained，可直接沉淀为规则/方法论并挂语义引用 |
+| **B+** | 方法价值高且与中枢范式同构，静态 T0 通过 | 自动 ingest 入 blueprints/；T1 通过后转 active |
 | B | 有价值但未在本项目真跑过 | 方法维持 reference；可执行走 T0/T1 试用结算 |
 | C/D | 低价值/不适用 | 不入路由，记录后放弃 |
 
@@ -84,6 +86,14 @@ gh-<owner>-<repo>（一句话来源，不搬运机密/私数据）
 - **T0 通过 + T1 通过** → 卡转 `active`（rule/methodology），登记 `INDEX.md` 并挂语义引用；同步 `build-vectors` 补向量。
 - **T0 失败** → 保持 `reference`，记录 blocker（如缺 SDK、缺依赖），不尝试 T1。
 - **T0 通过 + T1 失败/结论不清** → 保持 `reference`，建议放弃，不转 active。
+
+#### T1 踩坑经验（实测）
+
+| 工具 | 常见坑 | 处置 |
+|------|--------|------|
+| Nuclei | v3 强制 YAML 模板必须有 `author` 字段，否则 `[ERR] no template author field provided`；`matchers.part` 必须对应协议类型（HTTP 用 `body`） | 模板加 `author: test`，HTTP 用 `part: body` |
+| Turso CLI | Releases 页 `.zip` 直接下载是 HTML 重定向页，须用完整文件名 `turso_cli-x86_64-pc-windows-msvc.zip` | 用 `gh api` 查 `browser_download_url` 或显式指定文件名 |
+| esphome | YAML 顶层 `esphome:` 后必须跟 `esp32:` / `esp8266:` 等 platform 声明，否则报 `Platform missing` | 配置加 `esp32: board: esp32dev` |
 
 ### 5. 登记与留痕
 
