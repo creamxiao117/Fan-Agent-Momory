@@ -235,6 +235,7 @@ def test_main_since_days_ok(tmp_path, capsys):
     """CLI --since-days 接线正常，聚焦近期仍产出候选"""
     from scripts.missing_query import main
 
-    _write_log(tmp_path, [{**_search("缺口A", 0), "ts": "2026-08-28T01:00:00Z"}])
+    # 今天 2026-09-06，7 天窗口 = 2026-08-30 起；用 2026-09-01 在窗口内
+    _write_log(tmp_path, [{**_search("缺口A", 0), "ts": "2026-09-01T02:00:00Z"}])
     assert main(["--root", str(tmp_path), "--since-days", "7"]) == 0
     assert "缺口A" in capsys.readouterr().out

@@ -48,13 +48,15 @@ def test_root_level_draft_counted(tmp_path: Path):
 
 
 def test_subdirs_not_counted(tmp_path: Path):
-    """candidates/ 与 retro/ 子目录不属于提升输入，不计入（回归锁定）。"""
+    """candidates/ 与 retro/ 子目录：candidates 计入（2026-09-05 扩覆盖），retro 不计入。"""
     _make_draft(tmp_path, "trae_draft/card-a.md")
     _make_draft(tmp_path, "trae_draft/candidates/candidate-1.md")
     _make_draft(tmp_path, "trae_draft/retro/retro-2026-08-17.md")
     result = scan_drafts(tmp_path)
-    assert len(result.get("trae", [])) == 1
-    assert result["trae"][0].name == "card-a.md"
+    # card-a.md（根级）+ candidates/candidate-1.md（2026-09-05 起计入）
+    assert len(result.get("trae", [])) == 2
+    names = {r.name for r in result["trae"]}
+    assert names == {"card-a.md", "candidate-1.md"}
 
 
 def test_flat_drafts_default_platform(tmp_path: Path):
@@ -80,13 +82,14 @@ def test_empty_and_missing_dirs(tmp_path: Path):
 
 
 def test_consistent_with_ingest_scan(tmp_path: Path):
-    """与 sync.ingest 扫描口径一致：本函数统计数 == ingest 可见提升源数。"""
+    """scan_drafts 覆盖 ingest 所有可见源（scan 含 candidates，ingest 仅根级，scan >= ingest）。"""
     _make_draft(tmp_path, "hermes_draft/ok.md")
     _make_draft(tmp_path, "hermes_draft/candidates/c.md")
     _make_draft(tmp_path, "hermes_draft/retro/r.md")
     scanned = scan_drafts(tmp_path)
     n_scanned = len(scanned.get("hermes", []))
-    # 复现 ingest 的扫描（sync.py: drafts.glob("*.md")）
+    # ingest 扫描根级 *.md（sync.py: drafts.glob("*.md")）
     drafts_dir = tmp_path / ".sync" / "drafts" / "hermes_draft"
     n_ingest = len(list(drafts_dir.glob("*.md")))
-    assert n_scanned == n_ingest == 1
+    # scan 包含 candidates，故 n_scanned >= n_ingest
+    assert n_scanned >= n_ingest == 1

@@ -80,7 +80,10 @@ def find_orphans(root: Path) -> list[Path]:
         index_text = (root / "INDEX.md").read_text(encoding="utf-8")
     orphans = []
     for sub, p, card in _all_cards(root):
-        if card is None or card.status == "archived":
+        if card is None or card.status in ("archived", "reference"):
+            continue
+        # 缺失 status 视为 active（待补全），不触发 orphan 告警
+        if card.status is None:
             continue
         stem = p.stem
         referenced = stem in index_text
