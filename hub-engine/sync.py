@@ -148,9 +148,7 @@ class _WriteLock:
         if self._pid_alive(pid):
             return False
         import time as _t
-        if _t.time() - mtime > self.LOCK_TIMEOUT:
-            return True
-        return False
+        return _t.time() - mtime > self.LOCK_TIMEOUT
 
     def __enter__(self):
         import time as _t
