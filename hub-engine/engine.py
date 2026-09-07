@@ -14,6 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 # === P1 拆分：从 commands 子包导入各子命令处理函数 ===
 from commands import (  # noqa: I001  (must precede common.config — needs sys.path insert)
+    cmd_audit,
     cmd_build_vectors,
     cmd_confirm,
     cmd_distill,
@@ -459,6 +460,15 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("lint", help="库健康检查")
     p.add_argument("--root", required=True)
     p.set_defaults(func=cmd_lint)
+
+    # T7 (2026-09-07): L2 INDEX 审核
+    p = sub.add_parser("audit", help="INDEX 自动审核（orphan/ghost/格式/重复）")
+    p.add_argument("--root", required=True)
+    p.add_argument("--report", action="store_true",
+                   help="写 retro/lint-report-YYYYMMDD.md")
+    p.add_argument("--no-fail", action="store_true",
+                   help="发现问题也返回 0（cron 模式）")
+    p.set_defaults(func=cmd_audit)
 
     p = sub.add_parser("status", help="一键健康快照")
     p.add_argument("--root", required=True)

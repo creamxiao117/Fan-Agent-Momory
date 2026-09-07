@@ -7,6 +7,7 @@ V1.0 (2026-09-07): engine.py 拆分——从 44KB 单文件按子命令拆出。
       单文件分拆破坏性大，留 engine.py。
 """
 
+from commands.audit import cmd_audit
 from commands.build_vectors import cmd_build_vectors
 from commands.confirm import cmd_confirm
 from commands.distill import cmd_distill
@@ -19,6 +20,7 @@ from commands.sync import cmd_sync
 from commands.tidy import cmd_tidy
 
 __all__ = [
+    "cmd_audit",
     "cmd_build_vectors",
     "cmd_confirm",
     "cmd_distill",
