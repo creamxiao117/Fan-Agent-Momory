@@ -21,7 +21,8 @@ from datetime import date
 from pathlib import Path
 
 # INDEX 登记行格式：- slug  描述
-INDEX_ENTRY_RE = re.compile(r"^- ([a-z0-9][a-z0-9\-]{0,80})(?:\s{2,}|\s+)(.+)$")
+INDEX_ENTRY_RE = re.compile(r"^- ([a-zA-Z0-9][a-zA-Z0-9_\-\.]{0,80})(?:\s{2,}|\s+)(.+)$")
+NESTED_ENTRY_RE = re.compile(r"^\|- ([a-zA-Z0-9][a-zA-Z0-9_\-\.]{0,80})(?:\s{2,}|\s+)(.+)$")
 
 # 权威区（与 sync.py TYPE_DIR 对齐）
 AUTHORITY_DIRS = (
@@ -34,8 +35,8 @@ AUTHORITY_DIRS = (
     "notes",
 )
 
-# slug 格式：仅允许小写字母、数字、连字符；2~80 字符
-SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9\-]{1,79}$")
+# slug 格式：允许小写/大写字母、数字、连字符、下划线、点号；2~80 字符
+SLUG_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_\-\.]{1,79}$")
 
 
 def _parse_index(index_path: Path) -> tuple[dict[str, list[str]], list[dict]]:
@@ -48,6 +49,9 @@ def _parse_index(index_path: Path) -> tuple[dict[str, list[str]], list[dict]]:
     entries: list[dict] = []
     for line_no, line in enumerate(text.splitlines(), start=1):
         m = INDEX_ENTRY_RE.match(line)
+        if not m:
+            # 也接受 |- 嵌套列表项（INDEX.md 实际有大量嵌套登记）
+            m = NESTED_ENTRY_RE.match(line)
         if not m:
             continue
         slug, desc = m.group(1), m.group(2).strip()
