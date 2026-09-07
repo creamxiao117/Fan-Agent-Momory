@@ -60,19 +60,30 @@ def _local_date_of(ts_utc: str | None) -> date:
 
 
 def load_records(root: Path) -> list[dict]:
-    """复用 missing_query 的解析层：容忍残行，不抛异常。"""
-    log = Path(root) / LOG
-    if not log.exists():
-        return []
+    """复用 missing_query 的解析层：容忍残行，不抛异常。
+
+    读取全部 query.log 文件：
+    - query.log.jsonl（旧版单一文件）
+    - query.log-YYYY-MM-DD.jsonl（按日切分）
+    """
+    try:
+        from tools.mcp_audit import query_log_files
+        files = query_log_files(root)
+    except ImportError:
+        files = [Path(root) / LOG]
+
     out = []
-    for line in log.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if not line:
+    for log in files:
+        if not log.exists():
             continue
-        try:
-            out.append(json.loads(line))
-        except json.JSONDecodeError:
-            continue
+        for line in log.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                out.append(json.loads(line))
+            except json.JSONDecodeError:
+                continue
     return out
 
 

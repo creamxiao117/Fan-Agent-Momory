@@ -283,18 +283,26 @@ def check_alerts(
         except (json.JSONDecodeError, ValueError, OSError):
             pass
 
-    # 规则 2: 命中率低
-    query_log = hub_root / ".sync" / "state" / "query.log.jsonl"
-    if query_log.is_file():
+    # 规则 2: 命中率低（读全部按日切分 + 旧版单一文件，向后兼容）
+    try:
+        from tools.mcp_audit import query_log_files
+        log_files = query_log_files(hub_root)
+    except ImportError:
+        log_files = [hub_root / ".sync" / "state" / "query.log.jsonl"]
+
+    records = []
+    if log_files:
         try:
-            records = []
-            for line in query_log.read_text(encoding="utf-8").splitlines()[-100:]:
-                line = line.strip()
-                if line:
-                    try:
-                        records.append(json.loads(line))
-                    except json.JSONDecodeError:
-                        continue
+            for log_file in log_files:
+                if not log_file.is_file():
+                    continue
+                for line in log_file.read_text(encoding="utf-8").splitlines():
+                    line = line.strip()
+                    if line:
+                        try:
+                            records.append(json.loads(line))
+                        except json.JSONDecodeError:
+                            continue
             if records:
                 searches = [r for r in records if r.get("action") == "search"]
                 if searches:

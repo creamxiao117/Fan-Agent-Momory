@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from scripts.bootstrap_hub import bootstrap
+from tools.mcp_audit import query_log_files
 from tools.mcp_handlers import (
     REUSE_STATE,
     hub_bootstrap,
@@ -59,9 +60,10 @@ def test_search_writes_audit(tmp_path):
     root = bootstrap(tmp_path)
     _seed(root)
     hub_search(root, "dll-lock", platform="trae")
-    log = root / ".sync" / "state" / "query.log.jsonl"
-    assert log.exists()
-    assert "search" in log.read_text(encoding="utf-8")
+    files = query_log_files(root)
+    assert files, "应至少有一个 query.log 文件（按日切分或旧版单一文件）"
+    content = "".join(f.read_text(encoding="utf-8") for f in files)
+    assert "search" in content
 
 
 def test_get_by_slug(tmp_path):

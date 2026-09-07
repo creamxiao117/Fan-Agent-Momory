@@ -62,7 +62,7 @@ def test_status_prints_snapshot(tmp_path, capsys, monkeypatch):
     # 状态快照检测本地 LLM 健康度；真实网络探测会让测试随 1234 在线与否随机红
     # （WORK.md 第19条）。解耦方案：桩注入健康状态，断言收紧到 (0, 2)——warning 仍可能
     # 来自飞轮历史缺失等软告警，属正常路径。
-    monkeypatch.setattr("engine._collect_llm_status", _fake_llm_ok)
+    monkeypatch.setattr("commands.status.collect_llm_status", _fake_llm_ok)
     code = main(["status", "--root", str(root)])
     out = capsys.readouterr().out
     assert code in (0, 2)
@@ -77,7 +77,7 @@ def test_status_json_output(tmp_path, capsys, monkeypatch):
     from scripts.bootstrap_hub import bootstrap
 
     root = bootstrap(tmp_path)
-    monkeypatch.setattr("engine._collect_llm_status", _fake_llm_ok)
+    monkeypatch.setattr("commands.status.collect_llm_status", _fake_llm_ok)
     code = main(["status", "--root", str(root), "--json"])
     data = json.loads(capsys.readouterr().out)
     assert code in (0, 2)
@@ -96,7 +96,7 @@ def test_status_returns_3_when_llm_unavailable(tmp_path, capsys, monkeypatch):
 
     root = bootstrap(tmp_path)
     monkeypatch.setattr(
-        "engine._collect_llm_status",
+        "commands.status.collect_llm_status",
         lambda *a, **k: {
             "available": False,
             "url": "http://localhost:1234",
