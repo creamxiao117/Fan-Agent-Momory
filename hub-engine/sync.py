@@ -100,20 +100,82 @@ def _commit(root: Path, message: str) -> None:
 
 
 class _WriteLock:
-    """写前锁：同一时刻只允许一个写入者（.sync/locks/writer.lock）"""
+    """写前锁：单写者 + 僵尸检测 + 指数退避（双平台协调方法论 Phase 1.1）
+
+    锁文件 = .sync/locks/writer.lock，内容 = <pid>
+    - 检测僵尸：PID 不存活 + mtime > LOCK_TIMEOUT（5 分钟）→ 自动清
+    - 撞锁：退避 1s/2s/4s 重试，最多 3 次
+    - 仍失败：raise RuntimeError 提示走 schedule.toml 错峰
+
+    V1.0 (2026-09-08): user 选 C 实施完整 3 阶段。
+    """
+    LOCK_TIMEOUT = 300
+    LOCK_MAX_RETRY = 3
+    LOCK_BACKOFF_BASE = 1.0
 
     def __init__(self, root: Path):
         self.lock = root / ".sync" / "locks" / "writer.lock"
 
+    @staticmethod
+    def _pid_alive(pid: int) -> bool:
+        try:
+            if os.name == "nt":
+                import subprocess
+                r = subprocess.run(
+                    ["tasklist", "/FI", f"PID eq {pid}", "/NH"],
+                    capture_output=True, text=True, encoding="utf-8", timeout=2,
+                )
+                return str(pid) in r.stdout
+            os.kill(pid, 0)
+            return True
+        except (OSError, subprocess.TimeoutExpired):
+            return False
+
+    def _read_lock(self):
+        try:
+            text = self.lock.read_text(encoding="utf-8").strip()
+            lines = text.splitlines()
+            pid = int(lines[0]) if lines and lines[0].isdigit() else None
+            mtime = self.lock.stat().st_mtime
+            return pid, mtime
+        except (FileNotFoundError, ValueError, IndexError):
+            return None, None
+
+    def _is_zombie(self) -> bool:
+        pid, mtime = self._read_lock()
+        if pid is None or mtime is None:
+            return False
+        if self._pid_alive(pid):
+            return False
+        import time as _t
+        if _t.time() - mtime > self.LOCK_TIMEOUT:
+            return True
+        return False
+
     def __enter__(self):
-        if self.lock.exists():
-            raise RuntimeError("写锁已存在，同步器正在运行中")
-        self.lock.parent.mkdir(parents=True, exist_ok=True)
-        self.lock.write_text("", encoding="utf-8")
-        return self
+        import time as _t
+        for attempt in range(self.LOCK_MAX_RETRY):
+            if not self.lock.exists():
+                self.lock.parent.mkdir(parents=True, exist_ok=True)
+                pid_payload = str(os.getpid()) + chr(10)
+                self.lock.write_text(pid_payload, encoding="utf-8")
+                return self
+            if self._is_zombie():
+                self.lock.unlink(missing_ok=True)
+                continue
+            if attempt < self.LOCK_MAX_RETRY - 1:
+                _t.sleep(self.LOCK_BACKOFF_BASE * (2 ** attempt))
+                continue
+            break
+        raise RuntimeError(
+            f"写锁被持续占用（重试 {self.LOCK_MAX_RETRY} 次失败）。"
+            "请检查 .sync/locks/writer.lock 持锁进程，或走 schedule.toml 错峰。"
+        )
 
     def __exit__(self, *exc):
-        self.lock.unlink(missing_ok=True)
+        pid, _ = self._read_lock()
+        if pid == os.getpid():
+            self.lock.unlink(missing_ok=True)
 
 
 def _write_dedup_prediction(
