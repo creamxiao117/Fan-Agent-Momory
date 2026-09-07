@@ -436,6 +436,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--platform", required=True)
     p.add_argument("--no-index", action="store_true",
                    help="跳过 INDEX.md 自动同步（默认 ingest 成功后会自动追加 INDEX 条目）")
+    p.add_argument("--strict-lint", action="store_true",
+                   help="L1 门禁：草稿 frontmatter 不合规直接 return 阻断（默认软门禁，只标红）")
     p.set_defaults(func=cmd_ingest)
 
     p = sub.add_parser("confirm", help="确认待人工审核的卡片（按 card.type 路由入权威区）")

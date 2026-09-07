@@ -135,19 +135,30 @@ def _write_dedup_prediction(
         pass  # 决策留痕失败不阻断同步主流程
 
 
-def ingest(root: Path, platform: str, chat_fn=None) -> dict:
+def ingest(root: Path, platform: str, chat_fn=None, strict_lint: bool = False) -> dict:
     """把 .sync/drafts/<platform>_draft/ 下的内容提升到中枢；返回统计。
 
     chat_fn（可选）：去重 LLM 注入入口（OpenViking 路径 B）。缺省为 None →
     走 legacy 纯向量去重（离线/离线环境 = 冲突区人工，不误删）。传入时对相似
     候选产 LLM 路由建议：高置信 skip 丢弃草稿，其余（merge/delete/review）仍进
     冲突区交人工，绝不自动覆盖权威区。
+
+    strict_lint（T2, 2026-09-07）：True = 草稿 frontmatter 不合规直接 return 阻断；
+    False（默认）= 软门禁，只把 errors 写进 stat["lint_errors"], 继续 ingest。
     """
+    from tools.lint import lint_drafts  # lazy import 避免循环依赖
     root = Path(root)
     stat = {"promoted": 0, "pending": 0, "duplicate": 0, "invalid": 0, "status": "ok",
-             "moved_names": [], "promoted_names": []}  # T1 (2026-09-07): 给 post_ingest_hook 精确清单
+             "moved_names": [], "promoted_names": [],
+             "lint_errors": []}  # T1 (2026-09-07): 给 post_ingest_hook 精确清单
     drafts = root / ".sync" / "drafts" / f"{platform}_draft"
     if not drafts.is_dir():
+        return stat
+    # T2 (2026-09-07): L1 门禁——只扫本平台草稿，不扫全库
+    _lint = lint_drafts(root, platform)
+    stat["lint_errors"] = _lint["errors"]
+    if strict_lint and _lint["errors"]:
+        stat["status"] = "lint_blocked"
         return stat
     try:
         with _WriteLock(root):

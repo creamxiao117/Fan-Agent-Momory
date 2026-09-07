@@ -25,7 +25,20 @@ def cmd_ingest(args) -> int:
         if batch_model
         else chat
     )
-    stat = ingest(Path(args.root), args.platform, chat_fn=chat_fn)
+    stat = ingest(
+        Path(args.root),
+        args.platform,
+        chat_fn=chat_fn,
+        strict_lint=getattr(args, "strict_lint", False),
+    )
+    # T2 (2026-09-07): 把 L1 lint 软门禁的 errors 直接打印（标红）
+    lint_errs = stat.get("lint_errors") or []
+    if lint_errs:
+        print(f"  [L1 门禁] {len(lint_errs)} 张草稿不合规（软告警，{'-strict' if stat.get('status') == 'lint_blocked' else '继续 ingest'}）:")
+        for e in lint_errs[:5]:
+            print(f"    - {e['name']}: {e['errors'][:2]}")
+        if len(lint_errs) > 5:
+            print(f"    ... 还有 {len(lint_errs) - 5} 张（省略）")
     print(stat)
 
     # T1 (2026-09-07): ingest 成功后自动跑 post_ingest_hook 同步 INDEX.md

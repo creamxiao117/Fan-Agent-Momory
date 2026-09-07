@@ -126,3 +126,39 @@ def lint(root: Path) -> dict:
         "invalid": invalid,
         "notes": f"共检查 {total} 张卡片",
     }
+"""为 T2 (2026-09-07) L1 门禁添加：仅扫描草稿箱、产出每卡错误清单的 lint 函数。"""
+from pathlib import Path
+from common.frontmatter import try_read_card, validate_card
+
+
+def lint_drafts(root: Path, platform: str) -> dict:
+    """L1 门禁专用：只扫 .sync/drafts/<platform>_draft/（含 candidates/）的草稿卡。
+
+    返回 dict 格式：
+      - checked: int  (扫了几张草稿)
+      - errors: list  (每张不合规卡 = {name, errors: list[str]})
+      - notes: str
+    - errors 为空 = 该卡通过门禁，可晋升
+    - errors 非空 = 该卡 frontmatter 不合规，sync.ingest 应阻断（hard）或标红（soft）
+    """
+    drafts = root / ".sync" / "drafts" / f"{platform}_draft"
+    out = {"checked": 0, "errors": [], "notes": ""}
+    if not drafts.is_dir():
+        out["notes"] = f"草稿目录不存在: {drafts}"
+        return out
+    candidates = []
+    candidates.extend(sorted(drafts.glob("*.md")))
+    cands = drafts / "candidates"
+    if cands.is_dir():
+        candidates.extend(sorted(cands.glob("*.md")))
+    for p in candidates:
+        out["checked"] += 1
+        card = try_read_card(p)
+        if card is None:
+            out["errors"].append({"name": p.name, "errors": ["frontmatter 无法解析"]})
+            continue
+        errs = validate_card(card)
+        if errs:
+            out["errors"].append({"name": p.name, "errors": errs})
+    out["notes"] = f"扫 {out['checked']} 张草稿，{len(out['errors'])} 张不合规"
+    return out
