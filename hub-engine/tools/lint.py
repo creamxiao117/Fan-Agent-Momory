@@ -126,11 +126,9 @@ def lint(root: Path) -> dict:
         "invalid": invalid,
         "notes": f"共检查 {total} 张卡片",
     }
-"""为 T2 (2026-09-07) L1 门禁添加：仅扫描草稿箱、产出每卡错误清单的 lint 函数。"""
-from pathlib import Path
-from common.frontmatter import try_read_card, validate_card
-
-
+"""为 T2 (2026-09-07) L1 门禁添加：仅扫描草稿箱、产出每卡错误清单的 lint 函数。
+依赖顶部已 import 的 try_read_card + validate_card（lint.py 行 7）—— 此函数直接复用即可。
+"""
 def lint_drafts(root: Path, platform: str) -> dict:
     """L1 门禁专用：只扫 .sync/drafts/<platform>_draft/（含 candidates/）的草稿卡。
 
