@@ -92,11 +92,52 @@ def _find_duplicate(root: Path, card: Card, threshold: float = 0.7) -> Card | No
 
 
 def _commit(root: Path, message: str) -> None:
-    """提交变更：无变更可提交时直接跳过；真实 Git 失败透传 stderr"""
+    """提交变更：无变更可提交时直接跳过；真实 Git 失败透传 stderr
+
+    V1.1 (2026-09-08): T10 Phase 2 —— commit_ledger 双平台协调。
+    每次 commit 前在 .sync/state/commit_ledger.jsonl 写一行：
+      {ts, who, intent, parent_sha, new_sha, branch}
+    - who = env HERMES_PLATFORM（hermes/trae/code/workbuddy/dsh）
+    - parent_sha = commit 前 HEAD
+    - new_sha = commit 后 HEAD（commit 后再回填）
+    这样 reset --hard 必须先写 ledger 一行说明理由。
+    """
     if not _git(root, "status", "--porcelain").strip():
         return
+    parent_sha = _git(root, "rev-parse", "HEAD").strip()
     _git(root, "add", "-A")
     _git(root, *GIT_ID, "commit", "-m", message)
+    new_sha = _git(root, "rev-parse", "HEAD").strip()
+    _record_commit(root, parent_sha, new_sha, message)
+
+
+def _record_commit(root: Path, parent_sha: str, new_sha: str, intent: str) -> None:
+    """记一行到 .sync/state/commit_ledger.jsonl。失败仅 warning 不阻断。
+
+    V1.0 (2026-09-08): T10 Phase 2 —— 双平台协调 commit ledger。
+    """
+    import json
+    import os
+    import time
+    ledger = root / ".sync" / "state" / "commit_ledger.jsonl"
+    ledger.parent.mkdir(parents=True, exist_ok=True)
+    who = os.environ.get("HERMES_PLATFORM", "unknown")
+    branch = _git(root, "rev-parse", "--abbrev-ref", "HEAD").strip() or "unknown"
+    rec = {
+        "ts": int(time.time()),
+        "who": who,
+        "intent": intent[:200],  # 截断超长 commit message
+        "parent_sha": parent_sha,
+        "new_sha": new_sha,
+        "branch": branch,
+        "action": "commit",
+    }
+    try:
+        with ledger.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+    except OSError as e:
+        import warnings
+        warnings.warn(f"commit_ledger 写入失败：{e}")
 
 
 class _WriteLock:
