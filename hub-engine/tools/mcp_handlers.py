@@ -456,3 +456,50 @@ def hub_ingest_candidate(
         "deduped": False,
         "audit_id": aid,
     }
+
+
+def hub_announce(
+    root: Path,
+    platform: str,
+    action: str,
+    payload: dict | None = None,
+) -> dict:
+    """跨平台公告：把事件写到 .sync/announcements.jsonl，供对端启动时读取。
+
+    V1.0 (2026-09-08): T11 Phase 3 —— 双平台协调跨平台通知。
+    用法：
+        hub_announce(root, "hermes", "ingest_done", {"moved": ["a.md"], "commit": "abc123"})
+        hub_announce(root, "trae", "reset_warning", {"reason": "conflict", "sha": "abc"})
+
+    返回：{"ok": bool, "rel_path": ..., "ts": int, "audit_id": str}
+    """
+    import time
+    allow = allowed_platforms(root)
+    if platform not in allow:
+        raise PolicyError(f"platform {platform!r} not allowed; allowed: {sorted(allow)}")
+
+    aid = audit_id()
+    rec = {
+        "ts": int(time.time()),
+        "platform": platform,
+        "action": action[:80],
+        "payload": payload or {},
+        "audit_id": aid,
+    }
+    rel = ".sync/announcements.jsonl"
+    p_path = root / rel
+    p_path.parent.mkdir(parents=True, exist_ok=True)
+    with p_path.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(rec, ensure_ascii=False) + chr(10))
+
+    append_query_log(
+        root,
+        {
+            "audit_id": aid,
+            "action": "announce",
+            "platform": platform,
+            "ok": True,
+            "announce_action": action,
+        },
+    )
+    return {"ok": True, "rel_path": rel, "ts": rec["ts"], "audit_id": aid}

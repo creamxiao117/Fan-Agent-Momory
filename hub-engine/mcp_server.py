@@ -70,6 +70,7 @@ HANDLERS = {
     "hub_index": H.hub_index,
     "hub_bootstrap": H.hub_bootstrap,
     "hub_ingest_candidate": H.hub_ingest_candidate,
+    "hub_announce": H.hub_announce,
 }
 
 SEARCH_SCHEMA = {
@@ -125,6 +126,16 @@ INGEST_SCHEMA = {
         "slug": {"type": "string"},
     },
     "required": ["platform", "title", "body"],
+}
+
+ANNOUNCE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "platform": {"type": "string", "description": "hermes/trae/code/workbuddy/dsh"},
+        "action": {"type": "string", "description": "ingest_done / reset_warning / reconcile_done / ..."},
+        "payload": {"type": "object", "description": "任意附加数据"},
+    },
+    "required": ["platform", "action"],
 }
 
 # WorkBuddy MCP Apps 要求工具声明 UI 资源（_meta.ui.resourceUri）方可进入可用目录（liveApps）。
@@ -183,6 +194,11 @@ def build_server(root: Path) -> Server:
                     description="候选回写（仅写 draft，不直写权威区）",
                     inputSchema=INGEST_SCHEMA,
                     _meta={"ui": {"resourceUri": _UI_META["hub_ingest_candidate"]}},
+                ),
+                Tool(
+                    name="hub_announce",
+                    description="跨平台公告：写一行到 .sync/announcements.jsonl（Phase 3 跨平台协调）",
+                    inputSchema=ANNOUNCE_SCHEMA,
                 ),
             ]
         )
