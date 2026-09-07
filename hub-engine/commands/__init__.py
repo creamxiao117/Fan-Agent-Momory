@@ -1,3 +1,4 @@
+# @version V1.0 / 2026-09-07 / Hermes / hub CLI 子命令包索引（commands/ 子包，按 engine.py 子命令拆分）
 """CLI 子命令包：每个模块对应 engine.py 的一个子命令。
 
 V1.0 (2026-09-07): engine.py 拆分——从 44KB 单文件按子命令拆出。

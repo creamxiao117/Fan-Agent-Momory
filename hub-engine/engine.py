@@ -4,12 +4,16 @@ V1.1 (2026-09-07): P1 拆分 — 10 个 _cmd_* 子命令搬到 commands/ 子包�
 本文件仅保留 chat + main() 路由表。子命令处理函数从 commands 包导入。
 """
 
-
-# 让 engine.py 能 import commands/ 子包（同级目录）\nsys.path.insert(0, str(Path(__file__).resolve().parent))\nfrom datetime import datetime, timedelta, timezone
+import json  # noqa: F401  (chat helpers 复用)
+import sys
+from datetime import datetime, timedelta, timezone  # noqa: F401  (chat helpers 复用)
 from pathlib import Path
 
+# 让 engine.py 能 import commands/ 子包（同级目录）
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
 # === P1 拆分：从 commands 子包导入各子命令处理函数 ===
-from commands import (
+from commands import (  # noqa: I001  (must precede common.config — needs sys.path insert)
     cmd_build_vectors,
     cmd_confirm,
     cmd_distill,
@@ -21,12 +25,36 @@ from commands import (
     cmd_sync,
     cmd_tidy,
 )
-from common.config import load_engine_config, load_provider_keys
+
+# === P1 兼容 shim：保留旧 helper 名供测试 monkeypatch.setattr("engine._<name>", ...) ===
+
+from commands.status import (
+    collect_llm_status as _collect_llm_status,  # noqa: F401,
+    collect_snapshot_alerts as _collect_snapshot_alerts,  # noqa: F401,
+    collect_today_metrics as _collect_today_metrics,  # noqa: F401,
+    compare_snapshots as _compare_snapshots,  # noqa: F401,
+    compute_snapshot_health_scores as _compute_snapshot_health_scores,  # noqa: F401,
+    estimate_hub_tool_capacity as _estimate_hub_tool_capacity,  # noqa: F401,
+    load_previous_snapshot as _load_previous_snapshot,  # noqa: F401,
+    print_snapshot_report as _print_snapshot_report,  # noqa: F401,
+)
+
+
+
+
+
+
+
+
+from common.config import (  # noqa: F401  (HubConfig 供 future shim 用)
+    HubConfig,
+    load_engine_config,
+    load_provider_keys,
+)
+from tools.lint import _all_cards, lint  # noqa: F401  (供 monkeypatch 兼容)
 from tools.llm_health import LLMHealthChecker
 from tools.resilience import ResiliencePipelineBuilder
 from tools.retrieve import retrieve
-
-# === P1 兼容 shim：保留旧 helper 名供测试 monkeypatch.setattr("engine._<name>", ...) ===
 
 
 def _gateway_kwargs(
