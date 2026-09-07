@@ -431,9 +431,11 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--root", required=True)
     p.set_defaults(func=cmd_build_vectors)
 
-    p = sub.add_parser("ingest", help="导入暂存区")
+    p = sub.add_parser("ingest", help="导入暂存区（默认自动跑 post_ingest_hook 同步 INDEX）")
     p.add_argument("--root", required=True)
     p.add_argument("--platform", required=True)
+    p.add_argument("--no-index", action="store_true",
+                   help="跳过 INDEX.md 自动同步（默认 ingest 成功后会自动追加 INDEX 条目）")
     p.set_defaults(func=cmd_ingest)
 
     p = sub.add_parser("confirm", help="确认待人工审核的卡片（按 card.type 路由入权威区）")

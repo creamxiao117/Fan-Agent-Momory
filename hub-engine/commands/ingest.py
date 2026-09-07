@@ -12,6 +12,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 
 def cmd_ingest(args) -> int:
+    import subprocess
+
     from common.config import load_engine_config
     from engine import chat, smart_chat  # lazy: 避免循环导入
     from sync import ingest
@@ -25,5 +27,31 @@ def cmd_ingest(args) -> int:
     )
     stat = ingest(Path(args.root), args.platform, chat_fn=chat_fn)
     print(stat)
+
+    # T1 (2026-09-07): ingest 成功后自动跑 post_ingest_hook 同步 INDEX.md
+    # 解耦设计：hook 失败不阻塞 ingest（独立 commit/独立回退），可通过 --no-index 跳过
+    if stat.get("status") == "ok" and not getattr(args, "no_index", False):
+        moved = stat.get("moved", 0)
+        promoted = stat.get("promoted", 0)
+        if (moved + promoted) > 0:
+            moved_names = stat.get("moved_names", []) + stat.get("promoted_names", [])
+            if moved_names:
+                hook_py = Path(__file__).resolve().parent.parent / "scripts" / "post_ingest_hook.py"
+                python_exe = sys.executable
+                try:
+                    r = subprocess.run(
+                        [python_exe, str(hook_py), "--root", str(args.root),
+                         "--names", ",".join(moved_names)],
+                        capture_output=True, text=True, encoding="utf-8", timeout=60,
+                    )
+                    if r.returncode == 0:
+                        for line in r.stdout.splitlines():
+                            print(f"  [hook] {line}")
+                    else:
+                        print(f"  [hook WARN] exit={r.returncode}: {r.stderr.strip()[:200]}",
+                              file=sys.stderr)
+                except Exception as e:
+                    print(f"  [hook WARN] {type(e).__name__}: {e}", file=sys.stderr)
+
     return 0 if stat["status"] == "ok" else 1
 

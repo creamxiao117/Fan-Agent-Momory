@@ -144,7 +144,8 @@ def ingest(root: Path, platform: str, chat_fn=None) -> dict:
     冲突区交人工，绝不自动覆盖权威区。
     """
     root = Path(root)
-    stat = {"promoted": 0, "pending": 0, "duplicate": 0, "invalid": 0, "status": "ok"}
+    stat = {"promoted": 0, "pending": 0, "duplicate": 0, "invalid": 0, "status": "ok",
+             "moved_names": [], "promoted_names": []}  # T1 (2026-09-07): 给 post_ingest_hook 精确清单
     drafts = root / ".sync" / "drafts" / f"{platform}_draft"
     if not drafts.is_dir():
         return stat
@@ -167,6 +168,7 @@ def ingest(root: Path, platform: str, chat_fn=None) -> dict:
                         dst = exp_dir / f"{p.stem}-{today_iso()}{p.suffix}"
                     shutil.move(str(p), str(dst))
                     stat["moved"] = stat.get("moved", 0) + 1
+                    stat["moved_names"].append(p.name)
                     _append_log(root, "ingest", f"非权威区 type={card.type}，改挪 experience/ 保留：{dst.name}")
                     record_diff(
                         root,
@@ -245,6 +247,7 @@ def ingest(root: Path, platform: str, chat_fn=None) -> dict:
                             dst_c.parent.mkdir(parents=True, exist_ok=True)
                             dst_c.write_text(write_card(card), encoding="utf-8")
                             stat["promoted"] += 1
+                            stat["promoted_names"].append(p.name)
                             _append_log(
                                 root,
                                 "ingest",
@@ -336,6 +339,7 @@ def ingest(root: Path, platform: str, chat_fn=None) -> dict:
                         dst.parent.mkdir(parents=True, exist_ok=True)
                         dst.write_text(write_card(card), encoding="utf-8")
                         stat["promoted"] += 1
+                        stat["promoted_names"].append(p.name)
                         _append_log(root, "ingest", f"自动入区：{p.name}")
                         record_diff(
                             root,
