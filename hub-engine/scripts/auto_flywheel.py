@@ -31,14 +31,12 @@ def write_text_utf8(path: Path, text: str) -> None:
 
 
 def scan_drafts(root: Path) -> dict[str, list[Path]]:
-    """扫描 .sync/drafts/<platform>_draft/ 根目录下的 .md 草稿，按平台分组。
+    """扫描 .sync/drafts/<platform>_draft/ 下的 .md 草稿，按平台分组。
 
-    与 sync.ingest 的扫描口径**严格一致**（只扫根目录 `*.md`，不递归）：
-    - candidates/ 子目录 = 候选草稿区（status: candidate），由人工审核后移入根
-      目录再提升，**不属于自动飞轮的输入**。
+    扫描范围（2026-09-05 扩覆盖 candidates/）：
+    - 根目录 *.md（与 ingest 对齐）
+    - candidates/*.md（审核暂存区，ingest 自动提升或pending，取决于 status 字段）
     - retro/ 子目录 = 复盘归档区，ingest 提升时自动追加，**不作为提升源**。
-    - 旧版用 rglob 递归统计，导致「扫描到 N 张但提升 0 张」的口径错位假象
-      （2026-09-01 健康度检查发现并修复）。
 
     平台判定规则：
     - 若草稿在 .sync/drafts/<platform>_draft/ 下 → 该平台
@@ -49,13 +47,16 @@ def scan_drafts(root: Path) -> dict[str, list[Path]]:
         return {}
 
     platform_drafts: dict[str, list[Path]] = {}
-    # 与 ingest 对齐：只扫根目录 *.md，不递归子目录
     for p in sorted(drafts_dir.glob("*")):
         if p.is_dir():
             platform = p.name.replace("_draft", "") if p.name.endswith("_draft") else None
             if platform is None:
                 continue
+            # 根目录 + candidates/（双路径，与 ingest pending 区对齐）
             mds = sorted(p.glob("*.md"))
+            candidates_dir = p / "candidates"
+            if candidates_dir.is_dir():
+                mds.extend(sorted(candidates_dir.glob("*.md")))
         elif p.suffix == ".md":
             platform = "default"
             mds = [p]
