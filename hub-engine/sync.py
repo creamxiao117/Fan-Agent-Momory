@@ -119,6 +119,7 @@ def _record_commit(root: Path, parent_sha: str, new_sha: str, intent: str) -> No
     import json
     import os
     import time
+
     ledger = root / ".sync" / "state" / "commit_ledger.jsonl"
     ledger.parent.mkdir(parents=True, exist_ok=True)
     who = os.environ.get("HERMES_PLATFORM", "unknown")
@@ -137,6 +138,7 @@ def _record_commit(root: Path, parent_sha: str, new_sha: str, intent: str) -> No
             f.write(json.dumps(rec, ensure_ascii=False) + "\n")
     except OSError as e:
         import warnings
+
         warnings.warn(f"commit_ledger 写入失败：{e}")
 
 
@@ -150,6 +152,7 @@ class _WriteLock:
 
     V1.0 (2026-09-08): user 选 C 实施完整 3 阶段。
     """
+
     LOCK_TIMEOUT = 300
     LOCK_MAX_RETRY = 3
     LOCK_BACKOFF_BASE = 1.0
@@ -162,14 +165,19 @@ class _WriteLock:
         try:
             if os.name == "nt":
                 import subprocess
+
                 r = subprocess.run(
                     ["tasklist", "/FI", f"PID eq {pid}", "/NH"],
-                    capture_output=True, text=True, encoding="utf-8", timeout=2,
+                    capture_output=True,
+                    text=True,
+                    encoding="utf-8",
+                    errors="replace",
+                    timeout=2,
                 )
-                return str(pid) in r.stdout
+                return bool(r.stdout) and str(pid) in r.stdout
             os.kill(pid, 0)
             return True
-        except (OSError, subprocess.TimeoutExpired):
+        except (OSError, subprocess.TimeoutExpired, UnicodeDecodeError):
             return False
 
     def _read_lock(self):
@@ -189,10 +197,12 @@ class _WriteLock:
         if self._pid_alive(pid):
             return False
         import time as _t
+
         return _t.time() - mtime > self.LOCK_TIMEOUT
 
     def __enter__(self):
         import time as _t
+
         for attempt in range(self.LOCK_MAX_RETRY):
             if not self.lock.exists():
                 self.lock.parent.mkdir(parents=True, exist_ok=True)
@@ -203,7 +213,7 @@ class _WriteLock:
                 self.lock.unlink(missing_ok=True)
                 continue
             if attempt < self.LOCK_MAX_RETRY - 1:
-                _t.sleep(self.LOCK_BACKOFF_BASE * (2 ** attempt))
+                _t.sleep(self.LOCK_BACKOFF_BASE * (2**attempt))
                 continue
             break
         raise RuntimeError(
@@ -248,10 +258,18 @@ def ingest(root: Path, platform: str, chat_fn=None, strict_lint: bool = False) -
     False（默认）= 软门禁，只把 errors 写进 stat["lint_errors"], 继续 ingest。
     """
     from tools.lint import lint_drafts  # lazy import 避免循环依赖
+
     root = Path(root)
-    stat = {"promoted": 0, "pending": 0, "duplicate": 0, "invalid": 0, "status": "ok",
-             "moved_names": [], "promoted_names": [],
-             "lint_errors": []}  # T1 (2026-09-07): 给 post_ingest_hook 精确清单
+    stat = {
+        "promoted": 0,
+        "pending": 0,
+        "duplicate": 0,
+        "invalid": 0,
+        "status": "ok",
+        "moved_names": [],
+        "promoted_names": [],
+        "lint_errors": [],
+    }  # T1 (2026-09-07): 给 post_ingest_hook 精确清单
     drafts = root / ".sync" / "drafts" / f"{platform}_draft"
     if not drafts.is_dir():
         return stat
@@ -281,7 +299,11 @@ def ingest(root: Path, platform: str, chat_fn=None, strict_lint: bool = False) -
                     shutil.move(str(p), str(dst))
                     stat["moved"] = stat.get("moved", 0) + 1
                     stat["moved_names"].append(p.name)
-                    _append_log(root, "ingest", f"非权威区 type={card.type}，改挪 experience/ 保留：{dst.name}")
+                    _append_log(
+                        root,
+                        "ingest",
+                        f"非权威区 type={card.type}，改挪 experience/ 保留：{dst.name}",
+                    )
                     record_diff(
                         root,
                         {
