@@ -39,12 +39,10 @@ echo "  - 端口: ${1:-$DEFAULT_PORT}"
 echo "  - 绑定地址: ${2:-$DEFAULT_BIND}"
 echo ""
 
-"$LMS_EXE" server start \
+# 验证启动结果（直接用 if 取代 $?，消 SC2181）
+if "$LMS_EXE" server start \
     --port "${1:-$DEFAULT_PORT}" \
-    --bind "${2:-$DEFAULT_BIND}"
-
-# 验证启动结果
-if [ $? -eq 0 ]; then
+    --bind "${2:-$DEFAULT_BIND}"; then
     echo ""
     echo "✓ 服务器启动成功！"
     echo ""

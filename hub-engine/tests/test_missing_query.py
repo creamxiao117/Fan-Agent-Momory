@@ -64,9 +64,16 @@ def _seed_card(root: Path, name: str, tags: list[str], body: str) -> Path:
     subprocess.run(["git", "-C", str(root), "add", "-A"], check=True)
     subprocess.run(
         [
-            "git", "-C", str(root),
-            "-c", "user.name=t", "-c", "user.email=t@t",
-            "commit", "-m", "seed",
+            "git",
+            "-C",
+            str(root),
+            "-c",
+            "user.name=t",
+            "-c",
+            "user.email=t@t",
+            "commit",
+            "-m",
+            "seed",
         ],
         check=True,
         capture_output=True,
@@ -115,7 +122,8 @@ def test_auto_apply_p1_tags_applies_and_is_idempotent(tmp_path):
 
     head = subprocess.run(
         ["git", "-C", str(root), "log", "--oneline", "-1"],
-        capture_output=True, text=True,
+        capture_output=True,
+        text=True,
     ).stdout
     assert "chore(p1-autotag)" in head
 
@@ -233,9 +241,14 @@ def test_aggregate_since_filters_outdated(tmp_path):
 
 def test_main_since_days_ok(tmp_path, capsys):
     """CLI --since-days 接线正常，聚焦近期仍产出候选"""
+    from datetime import datetime, timedelta, timezone
+
     from scripts.missing_query import main
 
-    # 今天 2026-09-06，7 天窗口 = 2026-08-30 起；用 2026-09-01 在窗口内
-    _write_log(tmp_path, [{**_search("缺口A", 0), "ts": "2026-09-01T02:00:00Z"}])
+    # 用「今天-1」确保 7 天窗口内永远能命中
+    yesterday = (datetime.now(timezone.utc) - timedelta(days=1)).strftime(
+        "%Y-%m-%dT02:00:00Z"
+    )
+    _write_log(tmp_path, [{**_search("缺口A", 0), "ts": yesterday}])
     assert main(["--root", str(tmp_path), "--since-days", "7"]) == 0
     assert "缺口A" in capsys.readouterr().out

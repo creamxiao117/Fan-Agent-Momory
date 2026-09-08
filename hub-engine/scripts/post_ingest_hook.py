@@ -11,31 +11,36 @@
 - 失败不阻塞 ingest：独立进程 + 独立 try/except
 - INDEX.md 用 section 标题锚定（与 INDEX.md 现行结构完全一致）
 """
+
 from __future__ import annotations
 
 # bootstrap：让此脚本可独立从任何 cwd 调用（不依赖外部 sys.path 设置）
 import sys
 from pathlib import Path as _P
+
 _THIS = _P(__file__).resolve().parent
 sys.path.insert(0, str(_THIS.parent))  # hub-engine/
 
 import argparse
 import json
+import logging
 import os
 import re
 import subprocess
 from pathlib import Path
 
+_LOG = logging.getLogger(__name__)
+
 # 镜像 sync.py / INDEX.md 的 section 标题表
 SECTION_TITLES = {
-    "rules":       "## 规则（rules/）",
+    "rules": "## 规则（rules/）",
     "methodology": "## 方法论（methodology/）",
-    "blueprints":  "## 技术路径蓝图（blueprints/）",
-    "longterm":    "## 长期记忆（longterm/）",
-    "projects":    "## 项目记忆（projects/）",
-    "exp":         "## 经验（experience/）",    # T1 (2026-09-07): 非权威区 type 也登记 INDEX
-    "note":        "## 经验（experience/）",    # 注释类合并入经验区
-    "retro":       "## 沉淀通道",                # retro 是 append-only 留痕，不入主索引
+    "blueprints": "## 技术路径蓝图（blueprints/）",
+    "longterm": "## 长期记忆（longterm/）",
+    "projects": "## 项目记忆（projects/）",
+    "exp": "## 经验（experience/）",  # T1 (2026-09-07): 非权威区 type 也登记 INDEX
+    "note": "## 经验（experience/）",  # 注释类合并入经验区
+    "retro": "## 沉淀通道",  # retro 是 append-only 留痕，不入主索引
 }
 
 
@@ -47,7 +52,9 @@ def git(repo: Path, *args: str, env: dict | None = None) -> str:
     return r.stdout or ""
 
 
-def read_diff_since(root: Path, since_ts: float | None, max_records: int = 200) -> list[dict]:
+def read_diff_since(
+    root: Path, since_ts: float | None, max_records: int = 200
+) -> list[dict]:
     """读 memory_diff.jsonl，过滤本轮新增（before is None）的 add/move 记录。
 
     安全保护：不传 since_ts 时只取最近 max_records 条，防止历史污染 INDEX。
@@ -82,7 +89,6 @@ def extract_summary(card_path: Path) -> str:
         return ""
     text = card_path.read_text(encoding="utf-8", errors="ignore")
     lines = text.splitlines()
-    seen_fm_end = False
     fm_end_count = 0
     for line in lines:
         s = line.strip()
@@ -100,7 +106,9 @@ def extract_summary(card_path: Path) -> str:
     return ""
 
 
-def append_to_index(index_path: Path, section_title: str, slug: str, summary: str) -> bool:
+def append_to_index(
+    index_path: Path, section_title: str, slug: str, summary: str
+) -> bool:
     """在指定 section 末尾（下一个 ## 之前）追加一行；幂等：已存在则跳过。"""
     text = index_path.read_text(encoding="utf-8")
     if f"- {slug}    " in text or f"- {slug}  " in text:
@@ -157,8 +165,15 @@ def main() -> int:
         for name in target_names:
             # 找文件位置：先查权威区，再查 experience，再查 .sync
             found = None
-            for sub in ["rules", "methodology", "blueprints", "longterm", "projects",
-                         "experience", "notes"]:
+            for sub in [
+                "rules",
+                "methodology",
+                "blueprints",
+                "longterm",
+                "projects",
+                "experience",
+                "notes",
+            ]:
                 p2 = root / sub / name
                 if p2.exists():
                     found = p2
@@ -168,13 +183,17 @@ def main() -> int:
             # 解析 type：从 frontmatter 读取
             try:
                 from common.frontmatter import read_card
+
                 card = read_card(found)
-                diffs.append({
-                    "name": name,
-                    "type": card.type,
-                    "after": str(found.relative_to(root)).replace(os.sep, "/"),
-                })
-            except Exception:
+                diffs.append(
+                    {
+                        "name": name,
+                        "type": card.type,
+                        "after": str(found.relative_to(root)).replace(os.sep, "/"),
+                    }
+                )
+            except Exception as e:
+                _LOG.warning("post_ingest_hook: 跳过卡片 %s 解析失败: %s", name, e)
                 continue
     else:
         diffs = read_diff_since(root, args.since_ts)
@@ -206,7 +225,10 @@ def main() -> int:
         if append_to_index(index_path, section_title, slug, summary):
             added.append(slug)
     if not added:
-        print("post_ingest_hook: 无 INDEX 变更（可能已存在或无匹配 section）", file=sys.stderr)
+        print(
+            "post_ingest_hook: 无 INDEX 变更（可能已存在或无匹配 section）",
+            file=sys.stderr,
+        )
         return 0
     env = os.environ.copy()
     env["GIT_AUTHOR_NAME"] = "AgentMemoryHub"

@@ -10,19 +10,25 @@
 - 纯只读，不修改任何源文件（不删除 orphan/ghost 文件、不改 INDEX.md）
 - 报告给人和自动告警系统各一份
 """
+
 import sys
 from pathlib import Path as _P
+
 _THIS = _P(__file__).resolve().parent
 sys.path.insert(0, str(_THIS.parent))  # hub-engine/
 
 import argparse
 import re
-from datetime import date
+from datetime import datetime, timezone
 from pathlib import Path
 
 # INDEX 登记行格式：- slug  描述
-INDEX_ENTRY_RE = re.compile(r"^- ([a-zA-Z0-9][a-zA-Z0-9_\-\.]{0,80})(?:\s{2,}|\s+)(.+)$")
-NESTED_ENTRY_RE = re.compile(r"^\|- ([a-zA-Z0-9][a-zA-Z0-9_\-\.]{0,80})(?:\s{2,}|\s+)(.+)$")
+INDEX_ENTRY_RE = re.compile(
+    r"^- ([a-zA-Z0-9][a-zA-Z0-9_\-\.]{0,80})(?:\s{2,}|\s+)(.+)$"
+)
+NESTED_ENTRY_RE = re.compile(
+    r"^\|- ([a-zA-Z0-9][a-zA-Z0-9_\-\.]{0,80})(?:\s{2,}|\s+)(.+)$"
+)
 
 # 权威区（与 sync.py TYPE_DIR 对齐）
 AUTHORITY_DIRS = (
@@ -82,7 +88,9 @@ def audit(root: Path) -> dict:
 
     index_path = root / "INDEX.md"
     if not index_path.exists():
-        issues.append({"type": "missing_index", "msg": f"INDEX.md 不存在: {index_path}"})
+        issues.append(
+            {"type": "missing_index", "msg": f"INDEX.md 不存在: {index_path}"}
+        )
         return {"issues": issues, "stats": stats}
 
     by_slug, entries = _parse_index(index_path)
@@ -94,67 +102,79 @@ def audit(root: Path) -> dict:
     # 1) ghost：INDEX 登记了但权威区无文件
     for slug in by_slug:
         if slug not in files_by_slug:
-            issues.append({
-                "type": "ghost_index",
-                "msg": f"INDEX 登记了 '{slug}' 但权威区找不到对应文件",
-                "slug": slug,
-                "severity": "high",
-            })
+            issues.append(
+                {
+                    "type": "ghost_index",
+                    "msg": f"INDEX 登记了 '{slug}' 但权威区找不到对应文件",
+                    "slug": slug,
+                    "severity": "high",
+                }
+            )
 
     # 2) orphan：权威区有文件但 INDEX 未登记
     for slug, rel in files_by_slug.items():
         if slug not in by_slug:
-            issues.append({
-                "type": "orphan_file",
-                "msg": f"权威区有 '{rel}' 但 INDEX 未登记",
-                "slug": slug,
-                "path": str(rel),
-                "severity": "high",
-            })
+            issues.append(
+                {
+                    "type": "orphan_file",
+                    "msg": f"权威区有 '{rel}' 但 INDEX 未登记",
+                    "slug": slug,
+                    "path": str(rel),
+                    "severity": "high",
+                }
+            )
 
     # 3) 重复 slug（多次登记）
     for slug, descs in by_slug.items():
         if len(descs) > 1:
-            issues.append({
-                "type": "duplicate_slug",
-                "msg": f"INDEX 中 '{slug}' 登记了 {len(descs)} 次",
-                "slug": slug,
-                "count": len(descs),
-                "severity": "medium",
-            })
+            issues.append(
+                {
+                    "type": "duplicate_slug",
+                    "msg": f"INDEX 中 '{slug}' 登记了 {len(descs)} 次",
+                    "slug": slug,
+                    "count": len(descs),
+                    "severity": "medium",
+                }
+            )
 
     # 4) slug 格式校验
     for entry in entries:
         if not SLUG_RE.match(entry["slug"]):
-            issues.append({
-                "type": "invalid_slug",
-                "msg": f"行 {entry['line_no']}: slug '{entry['slug']}' 不符合 slug 格式（小写字母/数字/连字符）",
-                "slug": entry["slug"],
-                "line_no": entry["line_no"],
-                "severity": "low",
-            })
+            issues.append(
+                {
+                    "type": "invalid_slug",
+                    "msg": f"行 {entry['line_no']}: slug '{entry['slug']}' 不符合 slug 格式（小写字母/数字/连字符）",
+                    "slug": entry["slug"],
+                    "line_no": entry["line_no"],
+                    "severity": "low",
+                }
+            )
 
     # 5) 描述长度校验
     for entry in entries:
         desc = entry["desc"]
         if len(desc) < 10:
-            issues.append({
-                "type": "short_desc",
-                "msg": f"行 {entry['line_no']}: slug '{entry['slug']}' 描述过短（{len(desc)} 字符 < 10）",
-                "slug": entry["slug"],
-                "desc_len": len(desc),
-                "line_no": entry["line_no"],
-                "severity": "low",
-            })
+            issues.append(
+                {
+                    "type": "short_desc",
+                    "msg": f"行 {entry['line_no']}: slug '{entry['slug']}' 描述过短（{len(desc)} 字符 < 10）",
+                    "slug": entry["slug"],
+                    "desc_len": len(desc),
+                    "line_no": entry["line_no"],
+                    "severity": "low",
+                }
+            )
         elif len(desc) > 250:
-            issues.append({
-                "type": "long_desc",
-                "msg": f"行 {entry['line_no']}: slug '{entry['slug']}' 描述过长（{len(desc)} 字符 > 250）",
-                "slug": entry["slug"],
-                "desc_len": len(desc),
-                "line_no": entry["line_no"],
-                "severity": "low",
-            })
+            issues.append(
+                {
+                    "type": "long_desc",
+                    "msg": f"行 {entry['line_no']}: slug '{entry['slug']}' 描述过长（{len(desc)} 字符 > 250）",
+                    "slug": entry["slug"],
+                    "desc_len": len(desc),
+                    "line_no": entry["line_no"],
+                    "severity": "low",
+                }
+            )
 
     return {"issues": issues, "stats": stats}
 
@@ -164,7 +184,7 @@ def render_report(audit_result: dict, root: Path) -> str:
     issues = audit_result["issues"]
     stats = audit_result["stats"]
     lines = [
-        f"# L2 巡检报告 - {date.today().isoformat()}",
+        f"# L2 巡检报告 - {datetime.now(timezone.utc).date().isoformat()}",
         "",
         f"- INDEX 条目总数: {stats['total_index_entries']}",
         f"- 权威区文件总数: {stats['total_files']}",
@@ -214,14 +234,18 @@ def main() -> int:
     stats = result["stats"]
 
     # 控制台报告
-    print(f"[L2] INDEX 条目 {stats['total_index_entries']} / 权威区文件 {stats['total_files']}")
+    print(
+        f"[L2] INDEX 条目 {stats['total_index_entries']} / 权威区文件 {stats['total_files']}"
+    )
     if not issues:
         print("[L2] ✅ 健康")
     else:
         print(f"[L2] ⚠️ {len(issues)} 项问题：")
         # 按 severity 高→低
         sev_order = {"high": 0, "medium": 1, "low": 2, "?": 3}
-        issues_sorted = sorted(issues, key=lambda x: sev_order.get(x.get("severity", "?"), 9))
+        issues_sorted = sorted(
+            issues, key=lambda x: sev_order.get(x.get("severity", "?"), 9)
+        )
         for it in issues_sorted[:30]:  # 控制台最多列 30
             print(f"  [{it.get('severity', '?')}] {it['msg']}")
         if len(issues_sorted) > 30:
@@ -231,7 +255,10 @@ def main() -> int:
     if args.report:
         report_dir = root / "retro"
         report_dir.mkdir(parents=True, exist_ok=True)
-        report_path = report_dir / f"lint-report-{date.today().isoformat()}.md"
+        report_path = (
+            report_dir
+            / f"lint-report-{datetime.now(timezone.utc).date().isoformat()}.md"
+        )
         report_path.write_text(render_report(result, root), encoding="utf-8")
         print(f"[L2] 报告已写: {report_path}")
 
