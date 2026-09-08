@@ -22,6 +22,79 @@ from pathlib import Path
 # 微信平台每行长度有限，日报控制行宽
 CST = timezone(timedelta(hours=8))
 
+# ---------------------------------------------------------------------------
+# 知识缺口检测（改进三）
+# ---------------------------------------------------------------------------
+
+def detect_knowledge_gaps(query_log_path: Path, *, window_hours: int = 24) -> dict:
+    """分析 query.log.jsonl，统计当日未命中卡片的查询，识别知识缺口。"""
+    if not query_log_path.exists():
+        return {"total": 0, "miss": 0, "miss_rate": 0.0, "top_misses": [], "error": "log not found"}
+
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=window_hours)
+    total = 0
+    miss = 0
+    miss_queries: dict[str, int] = {}
+
+    try:
+        with open(query_log_path, encoding="utf-8") as fh:
+            for line in fh:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    entry = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                ts = entry.get("ts", 0)
+                if isinstance(ts, (int, float)):
+                    entry_time = datetime.fromtimestamp(ts, tz=timezone.utc)
+                else:
+                    continue
+                if entry_time < cutoff:
+                    continue
+                action = entry.get("action", "")
+                if action not in ("search", "retrieve"):
+                    continue
+                total += 1
+                hit_count = entry.get("hit_count", 0)
+                if hit_count == 0:
+                    miss += 1
+                    q = (entry.get("query") or "").strip()
+                    if q:
+                        miss_queries[q] = miss_queries.get(q, 0) + 1
+    except Exception as exc:
+        return {"total": total, "miss": miss, "miss_rate": 0.0, "top_misses": [], "error": str(exc)}
+
+    miss_rate = miss / total if total > 0 else 0.0
+    top_misses = sorted(miss_queries.items(), key=lambda x: -x[1])[:5]
+    return {"total": total, "miss": miss, "miss_rate": round(miss_rate * 100, 1), "top_misses": top_misses}
+
+
+def _format_gap_section(gap: dict) -> list[str]:
+    """把知识缺口数据格式化为微信友好的文本段落。"""
+    if "error" in gap:
+        return []
+    total = gap["total"]
+    miss = gap["miss"]
+    miss_rate = gap["miss_rate"]
+    top = gap["top_misses"]
+    if total == 0:
+        return []
+    lines = []
+    if miss_rate > 20:
+        lines.append(f"  🔴 缺口率 {miss_rate}%（{miss}/{total} 条查询未命中）")
+    elif miss_rate > 10:
+        lines.append(f"  🟡 缺口率 {miss_rate}%（{miss}/{total} 条未命中）")
+    else:
+        lines.append(f"  🟢 缺口率 {miss_rate}%（{miss}/{total} 条未命中）")
+    if top and miss_rate > 10:
+        lines.append("  未命中高频主题：")
+        for q, cnt in top[:3]:
+            display = q[:40] + ("…" if len(q) > 40 else "")
+            lines.append(f"    · {display}（{cnt}次）")
+    return lines
+
 # 飞轮五档中文名
 FLYWHEEL_STAGES_ZH = {
     "ingest": "卡片摄取",
@@ -219,6 +292,14 @@ def format_report(data: dict) -> str:
         lines.append(f"【LLM 服务】{state_line}")
         lines.append("")
 
+    # 知识缺口
+    gap = data.get("_gap", {})
+    gap_lines = _format_gap_section(gap)
+    if gap_lines:
+        lines.append("【知识缺口】")
+        lines.extend(gap_lines)
+        lines.append("")
+
     # 告警
     if alerts:
         lines.append("【告警提醒】")
@@ -255,6 +336,10 @@ def main() -> int:
     except Exception as exc:
         print(f"❌ 飞轮日报生成失败：{exc}", file=sys.stderr)
         return 1
+
+    # 知识缺口检测（改进三）
+    gap = detect_knowledge_gaps(hub_root / ".sync/state/query.log.jsonl")
+    data["_gap"] = gap  # 注入到 data 供 format_report 使用
 
     if args.json_lines:
         print(json.dumps(data, ensure_ascii=False, indent=2), file=sys.stderr)

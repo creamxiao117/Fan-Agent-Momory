@@ -17,6 +17,7 @@ from tools.mcp_policy import (
 )
 from tools.retrieve import retrieve_with_meta
 from tools.snippet import extract_snippet
+from tools.safe_patch_handler import hub_safe_patch
 
 DEFAULT_EXCERPT = 200
 SUBDIR_BY_TYPE = {
@@ -474,9 +475,12 @@ def hub_announce(
     返回：{"ok": bool, "rel_path": ..., "ts": int, "audit_id": str}
     """
     import time
+
     allow = allowed_platforms(root)
     if platform not in allow:
-        raise PolicyError(f"platform {platform!r} not allowed; allowed: {sorted(allow)}")
+        raise PolicyError(
+            f"platform {platform!r} not allowed; allowed: {sorted(allow)}"
+        )
 
     aid = audit_id()
     rec = {

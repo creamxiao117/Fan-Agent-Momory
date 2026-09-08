@@ -30,32 +30,44 @@ from mcp.types import (
 )
 
 import tools.mcp_handlers as H
+
+
 # === T3 (2026-09-07): 内置 v2 兼容垫片（替代独立 v2 文件）
 # MCP SDK 1.29.0 不再提供 add_request_handler API，
 # trae work 写的新增 patch 又用 add_request_handler 风格，
 # 此处 monkey-patch 把旧 API 转译到新版装饰器 API。
 def _patched_add_request_handler(self, method_name, params_type, func):
     if method_name == "tools/list":
+
         async def new_func():
             result = await func(None, None)
             return result.tools if isinstance(result, ListToolsResult) else result
+
         return self.list_tools()(new_func)
     if method_name == "tools/call":
+
         async def new_func(name, arguments):
             old_params = CallToolRequestParams(name=name, arguments=arguments or {})
             result = await func(None, old_params)
             return result.content if isinstance(result, CallToolResult) else result
+
         return self.call_tool()(new_func)
     if method_name == "resources/list":
+
         async def new_func():
             result = await func(None, None)
-            return result.resources if isinstance(result, ListResourcesResult) else result
+            return (
+                result.resources if isinstance(result, ListResourcesResult) else result
+            )
+
         return self.list_resources()(new_func)
     if method_name == "resources/read":
+
         async def new_func(uri):
             old_params = ReadResourceRequestParams(uri=uri)
             result = await func(None, old_params)
             return result.contents if isinstance(result, ReadResourceResult) else result
+
         return self.read_resource()(new_func)
     raise ValueError(f"unsupported method: {method_name}")
 
@@ -71,6 +83,7 @@ HANDLERS = {
     "hub_bootstrap": H.hub_bootstrap,
     "hub_ingest_candidate": H.hub_ingest_candidate,
     "hub_announce": H.hub_announce,
+    "hub_safe_patch": H.hub_safe_patch,
 }
 
 SEARCH_SCHEMA = {
@@ -132,10 +145,25 @@ ANNOUNCE_SCHEMA = {
     "type": "object",
     "properties": {
         "platform": {"type": "string", "description": "hermes/trae/code/workbuddy/dsh"},
-        "action": {"type": "string", "description": "ingest_done / reset_warning / reconcile_done / ..."},
+        "action": {
+            "type": "string",
+            "description": "ingest_done / reset_warning / reconcile_done / ...",
+        },
         "payload": {"type": "object", "description": "任意附加数据"},
     },
     "required": ["platform", "action"],
+}
+
+SAFE_PATCH_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "path": {"type": "string"},
+        "old_string": {"type": "string"},
+        "new_string": {"type": "string"},
+        "replace_all": {"type": "boolean"},
+        "dry_run": {"type": "boolean"},
+    },
+    "required": ["path", "old_string", "new_string"],
 }
 
 # WorkBuddy MCP Apps 要求工具声明 UI 资源（_meta.ui.resourceUri）方可进入可用目录（liveApps）。
@@ -200,6 +228,11 @@ def build_server(root: Path) -> Server:
                     description="跨平台公告：写一行到 .sync/announcements.jsonl（Phase 3 跨平台协调）",
                     inputSchema=ANNOUNCE_SCHEMA,
                 ),
+                Tool(
+                    name="hub_safe_patch",
+                    description="智能文件编辑：自动评估 patch 风险（≤3行走patch，≥4行走write_file），内置 ruff lint + 自动回滚",
+                    inputSchema=SAFE_PATCH_SCHEMA,
+                ),
             ]
         )
 
@@ -211,17 +244,14 @@ def build_server(root: Path) -> Server:
             raise ValueError(f"未知工具: {name}")
         res = handler(root, **_normalize(name, arguments))
         return CallToolResult(
-            content=[
-                TextContent(type="text", text=json.dumps(res, ensure_ascii=False))
-            ]
+            content=[TextContent(type="text", text=json.dumps(res, ensure_ascii=False))]
         )
 
     async def _list_resources(context, params) -> ListResourcesResult:
         """WorkBuddy MCP Apps 要求 ui:// 资源可枚举（工具目录校验用）"""
         return ListResourcesResult(
             resources=[
-                Resource(uri=uri, name=f"{name} 卡片")
-                for name, uri in _UI_META.items()
+                Resource(uri=uri, name=f"{name} 卡片") for name, uri in _UI_META.items()
             ]
         )
 
@@ -240,8 +270,12 @@ def build_server(root: Path) -> Server:
 
     server.add_request_handler("tools/list", PaginatedRequestParams, _list_tools)
     server.add_request_handler("tools/call", CallToolRequestParams, _call_tool)
-    server.add_request_handler("resources/list", PaginatedRequestParams, _list_resources)
-    server.add_request_handler("resources/read", ReadResourceRequestParams, _read_resource)
+    server.add_request_handler(
+        "resources/list", PaginatedRequestParams, _list_resources
+    )
+    server.add_request_handler(
+        "resources/read", ReadResourceRequestParams, _read_resource
+    )
     return server
 
 

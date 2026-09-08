@@ -31,6 +31,7 @@ def test_build_server_exposes_tools(tmp_path):
         "hub_bootstrap",
         "hub_ingest_candidate",
         "hub_announce",
+        "hub_safe_patch",
     }
 
 
