@@ -19,7 +19,6 @@ V1.0 (2026-09-08): T13.4 用户授权下实施 —— 规避 Hermes patch 工具
     3 = ruff lint 失败
 """
 import argparse
-import ast
 import re
 import shutil
 import subprocess
@@ -102,12 +101,12 @@ def do_patch(file_path: Path, old: str, new: str) -> bool:
     return True
 
 
-def do_write(file_path: Path, old: str, new: str) -> None:
+def do_write(file_path: Path, old: str, new: str, replace_all: bool = False) -> None:
     """通过 write_file 模拟 patch 行为（先 read，再 replace，再 write）"""
     text = file_path.read_text(encoding="utf-8")
     if old not in text:
         raise ValueError("old string not found")
-    new_text = text.replace(old, new, 1)
+    new_text = text.replace(old, new, -1 if replace_all else 1)
     file_path.write_text(new_text, encoding="utf-8")
 
 
@@ -128,10 +127,24 @@ def lint_file(file_path: Path) -> tuple[int, str]:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="safe_patch: 智能 patch/write_file 工具")
-    parser.add_argument("--file", required=True, help="目标文件路径")
-    parser.add_argument("--old", required=True, help="原内容（支持多行）")
-    parser.add_argument("--new", required=True, help="新内容")
+    parser = argparse.ArgumentParser(
+        description="safe_patch: 智能 patch/write_file 工具（兼容 Hermes patch 接口）"
+    )
+    parser.add_argument(
+        "--file", "--path", dest="file", required=True, help="目标文件路径",
+    )
+    parser.add_argument(
+        "--old", "--old_string", dest="old", required=True,
+        help="原内容（支持多行）",
+    )
+    parser.add_argument(
+        "--new", "--new_string", "--new-text", dest="new", required=True,
+        help="新内容",
+    )
+    parser.add_argument(
+        "--replace_all", action="store_true",
+        help="全部替换（与原生 patch 一致）",
+    )
     parser.add_argument("--dry-run", action="store_true", help="仅评估风险不执行")
     args = parser.parse_args()
 
@@ -166,7 +179,7 @@ def main():
                 return 2
         else:
             print("[EXEC] write_file 路径（规避 patch bug）...")
-            do_write(file_path, args.old, args.new)
+            do_write(file_path, args.old, args.new, replace_all=args.replace_all)
         print(f"[OK] 文件已更新：{file_path}")
 
         # 自动 lint
