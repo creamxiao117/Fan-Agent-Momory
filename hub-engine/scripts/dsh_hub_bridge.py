@@ -3,6 +3,7 @@
 
 V1.0 (2026-09-09): 用范式接入 DSH。
 """
+
 import argparse
 import json
 import subprocess
@@ -64,9 +65,7 @@ def cmd_sign(hub_root: Path, intent: str, sha: str) -> int:
     if not key_path.exists():
         print("dsh.key 未初始化，先跑 init")
         return 1
-    sign_script = (
-        hub_root.parent / "hub-engine" / "scripts" / "platform_sign.py"
-    )
+    sign_script = hub_root.parent / "hub-engine" / "scripts" / "platform_sign.py"
     sig_proc = subprocess.run(
         [
             sys.executable,
