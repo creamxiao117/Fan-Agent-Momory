@@ -4,6 +4,7 @@ import json
 import os
 import shutil
 import subprocess
+import time as _t
 from pathlib import Path
 
 from common.constants import HIGH_RISK  # 高风险类型：rule + methodology
@@ -159,6 +160,18 @@ class _WriteLock:
 
     def __init__(self, root: Path):
         self.lock = root / ".sync" / "locks" / "writer.lock"
+        import uuid
+
+        self._signature = f"{os.getpid()}|{uuid.uuid4().hex[:12]}|{self._hostname()}|{int(_t.time())}"  # noqa: E501
+
+    @staticmethod
+    def _hostname() -> str:
+        import socket
+
+        try:
+            return socket.gethostname()
+        except OSError:
+            return "unknown"
 
     @staticmethod
     def _pid_alive(pid: int) -> bool:
@@ -184,7 +197,9 @@ class _WriteLock:
         try:
             text = self.lock.read_text(encoding="utf-8").strip()
             lines = text.splitlines()
-            pid = int(lines[0]) if lines and lines[0].isdigit() else None
+            first = lines[0] if lines else ""
+            parts = first.split("|") if "|" in first else (first, "", "", "")
+            pid = int(parts[0]) if parts[0].isdigit() else None
             mtime = self.lock.stat().st_mtime
             return pid, mtime
         except (FileNotFoundError, ValueError, IndexError):
@@ -201,13 +216,10 @@ class _WriteLock:
         return _t.time() - mtime > self.LOCK_TIMEOUT
 
     def __enter__(self):
-        import time as _t
-
         for attempt in range(self.LOCK_MAX_RETRY):
             if not self.lock.exists():
                 self.lock.parent.mkdir(parents=True, exist_ok=True)
-                pid_payload = str(os.getpid()) + chr(10)
-                self.lock.write_text(pid_payload, encoding="utf-8")
+                self.lock.write_text(self._signature + chr(10), encoding="utf-8")
                 return self
             if self._is_zombie():
                 self.lock.unlink(missing_ok=True)
@@ -222,9 +234,14 @@ class _WriteLock:
         )
 
     def __exit__(self, *exc):
-        pid, _ = self._read_lock()
-        if pid == os.getpid():
-            self.lock.unlink(missing_ok=True)
+        try:
+            text = self.lock.read_text(encoding="utf-8").strip()
+            sig_uuid = self._signature.split("|")[1] if "|" in self._signature else ""
+            file_uuid = text.split("|")[1] if "|" in text else ""
+            if file_uuid and file_uuid == sig_uuid:
+                self.lock.unlink(missing_ok=True)
+        except (FileNotFoundError, OSError):
+            pass
 
 
 def _write_dedup_prediction(

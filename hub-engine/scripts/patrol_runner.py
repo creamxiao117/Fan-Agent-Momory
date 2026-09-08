@@ -48,9 +48,11 @@ _LOCAL_TZ = timezone(timedelta(hours=+8))
 # 数据结构
 # ============================================================================
 
+
 @dataclass
 class StepResult:
     """单步执行结果。"""
+
     name: str
     stage: str
     status: str  # pass / fail / skip / warn
@@ -66,6 +68,7 @@ class StepResult:
 @dataclass
 class StageResult:
     """阶段执行结果。"""
+
     name: str
     steps: list[StepResult] = field(default_factory=list)
     skipped: bool = False
@@ -82,10 +85,11 @@ class StageResult:
 @dataclass
 class PatrolReport:
     """完整巡检报告。"""
+
     hub_root: str = ""
     generated_at: str = ""
     stages: list[StageResult] = field(default_factory=list)
-    llm_available: bool = True        # v3: 原 ollama_available
+    llm_available: bool = True  # v3: 原 ollama_available
     overall_exit_code: int = 0
     snapshot: dict = field(default_factory=dict)
     alerts: list[dict] = field(default_factory=list)
@@ -128,6 +132,7 @@ class PatrolReport:
 # 工具函数
 # ============================================================================
 
+
 def _run_step(
     name: str,
     stage: str,
@@ -138,7 +143,9 @@ def _run_step(
     """执行单个步骤，带前置检查。"""
     if pre_check and not pre_check():
         return StepResult(
-            name=name, stage=stage, status="skip",
+            name=name,
+            stage=stage,
+            status="skip",
             output="前置检查未通过，跳过",
         )
     try:
@@ -150,7 +157,9 @@ def _run_step(
         return result
     except Exception as e:
         return StepResult(
-            name=name, stage=stage, status="fail",
+            name=name,
+            stage=stage,
+            status="fail",
             exit_code=999,
             error=str(e),
         )
@@ -182,6 +191,7 @@ def _llm_pre_check() -> StepResult:
     """阶段 1-1: 本地 LLM 服务前置检测（LM Studio）。"""
     try:
         from tools.llm_health import LLMHealthChecker
+
         # 默认本地 LM Studio 端口 1234
         checker = LLMHealthChecker.get_instance("http://localhost:1234")
         status = checker.get_status()
@@ -202,8 +212,8 @@ def _llm_pre_check() -> StepResult:
         return StepResult(
             name="llm_check",
             stage="基础设施",
-            status="warn",     # v3: 基础设施不可用降为 warn，不阻塞其他步骤
-            exit_code=0,       # v3: 不再返回 exit_code=3 影响总体
+            status="warn",  # v3: 基础设施不可用降为 warn，不阻塞其他步骤
+            exit_code=0,  # v3: 不再返回 exit_code=3 影响总体
             error=str(e),
             output=f"⚠️ 本地 LLM (LM Studio) 不可用: {e}",
         )
@@ -241,8 +251,15 @@ def _check_config_integrity(root: Path) -> StepResult:
 def _check_file_integrity(root: Path) -> StepResult:
     """检查中枢目录结构完整性。"""
     required_dirs = [
-        "rules", "methodology", "longterm", "experience", "notes",
-        ".sync", ".sync/state", ".sync/drafts", "retro",
+        "rules",
+        "methodology",
+        "longterm",
+        "experience",
+        "notes",
+        ".sync",
+        ".sync/state",
+        ".sync/drafts",
+        "retro",
     ]
     missing = [d for d in required_dirs if not (root / d).is_dir()]
     if missing:
@@ -250,7 +267,7 @@ def _check_file_integrity(root: Path) -> StepResult:
             name="file_integrity",
             stage="基础设施",
             status="warn",
-            exit_code=0,       # v3: 不再设为阻塞
+            exit_code=0,  # v3: 不再设为阻塞
             output=f"⚠️ 缺失目录: {', '.join(missing)}",
         )
     return StepResult(
@@ -263,12 +280,16 @@ def _check_file_integrity(root: Path) -> StepResult:
 
 # ----- 阶段 2: 代码质量门禁 -----
 
+
 def _step_lint(root: Path) -> StepResult:
     """Lint 检查。"""
     from tools.lint import lint
+
     report = lint(root)
     unhealthy = (
-        len(report["orphans"]) + len(report["ghosts"]) + len(report["stale"])
+        len(report["orphans"])
+        + len(report["ghosts"])
+        + len(report["stale"])
         + report["invalid"]
     )
     output = (
@@ -277,14 +298,24 @@ def _step_lint(root: Path) -> StepResult:
     )
     if unhealthy > 0:
         return StepResult(
-            name="lint", stage="质量门禁",
-            status="warn", exit_code=2, output=f"⚠️ {output}",
-            meta={"orphans": len(report["orphans"]), "ghosts": len(report["ghosts"]),
-                  "stale": len(report["stale"]), "invalid": report["invalid"]},
+            name="lint",
+            stage="质量门禁",
+            status="warn",
+            exit_code=2,
+            output=f"⚠️ {output}",
+            meta={
+                "orphans": len(report["orphans"]),
+                "ghosts": len(report["ghosts"]),
+                "stale": len(report["stale"]),
+                "invalid": report["invalid"],
+            },
         )
     return StepResult(
-        name="lint", stage="质量门禁",
-        status="pass", exit_code=0, output=f"✅ {output}",
+        name="lint",
+        stage="质量门禁",
+        status="pass",
+        exit_code=0,
+        output=f"✅ {output}",
         meta={"orphans": 0, "ghosts": 0, "stale": 0, "invalid": 0},
     )
 
@@ -293,24 +324,41 @@ def _step_pytest(engine_dir: Path) -> StepResult:
     """运行 pytest。始终执行，不依赖 LLM。"""
     exit_code, stdout, stderr = _run_cmd(
         [sys.executable, "-m", "pytest", "-q"],
-        cwd=engine_dir, timeout=120,
+        cwd=engine_dir,
+        timeout=120,
     )
-    last_line = (stdout or stderr or "(无输出)").strip().splitlines()[-1] if (stdout or stderr) else "(无输出)"
+    last_line = (
+        (stdout or stderr or "(无输出)").strip().splitlines()[-1]
+        if (stdout or stderr)
+        else "(无输出)"
+    )
     if exit_code == 0:
         return StepResult(
-            name="pytest", stage="质量门禁",
-            status="pass", exit_code=0, output=f"✅ pytest 通过: {last_line}",
+            name="pytest",
+            stage="质量门禁",
+            status="pass",
+            exit_code=0,
+            output=f"✅ pytest 通过: {last_line}",
         )
     elif exit_code == 127:
         return StepResult(
-            name="pytest", stage="质量门禁",
-            status="skip", exit_code=127, output="⏭️ pytest 未安装 (127)",
+            name="pytest",
+            stage="质量门禁",
+            status="skip",
+            exit_code=127,
+            output="⏭️ pytest 未安装 (127)",
         )
     else:
         return StepResult(
-            name="pytest", stage="质量门禁",
-            status="fail", exit_code=exit_code, output=f"❌ pytest 失败: {last_line}",
-            meta={"has_import_error": "ModuleNotFoundError" in (stderr or stdout) or "ImportError" in (stderr or stdout)},
+            name="pytest",
+            stage="质量门禁",
+            status="fail",
+            exit_code=exit_code,
+            output=f"❌ pytest 失败: {last_line}",
+            meta={
+                "has_import_error": "ModuleNotFoundError" in (stderr or stdout)
+                or "ImportError" in (stderr or stdout)
+            },
         )
 
 
@@ -318,49 +366,84 @@ def _step_ruff(engine_dir: Path) -> StepResult:
     """运行 ruff check。始终执行，不依赖 LLM。"""
     exit_code, stdout, stderr = _run_cmd(
         [sys.executable, "-m", "ruff", "check", "."],
-        cwd=engine_dir, timeout=60,
+        cwd=engine_dir,
+        timeout=60,
     )
-    last_line = (stdout or stderr or "(无输出)").strip().splitlines()[-1] if (stdout or stderr) else "(无输出)"
+    last_line = (
+        (stdout or stderr or "(无输出)").strip().splitlines()[-1]
+        if (stdout or stderr)
+        else "(无输出)"
+    )
     if exit_code == 0:
         return StepResult(
-            name="ruff", stage="质量门禁",
-            status="pass", exit_code=0, output="✅ ruff 通过",
+            name="ruff",
+            stage="质量门禁",
+            status="pass",
+            exit_code=0,
+            output="✅ ruff 通过",
         )
     elif exit_code == 127:
         return StepResult(
-            name="ruff", stage="质量门禁",
-            status="skip", exit_code=127, output="⏭️ ruff 未安装 (127)",
+            name="ruff",
+            stage="质量门禁",
+            status="skip",
+            exit_code=127,
+            output="⏭️ ruff 未安装 (127)",
         )
     else:
         return StepResult(
-            name="ruff", stage="质量门禁",
-            status="warn", exit_code=exit_code, output=f"⚠️ ruff 告警: {last_line}",
+            name="ruff",
+            stage="质量门禁",
+            status="warn",
+            exit_code=exit_code,
+            output=f"⚠️ ruff 告警: {last_line}",
         )
 
 
 # ----- 阶段 3: 飞轮活跃度 -----
 
+
 def _step_build_vectors(root: Path, engine_dir: Path) -> StepResult:
     """向量增量更新。依赖本地 LLM 可用性。"""
     exit_code, stdout, stderr = _run_cmd(
-        [sys.executable, str(engine_dir / "engine.py"), "build-vectors", "--root", str(root)],
-        cwd=engine_dir, timeout=300,
+        [
+            sys.executable,
+            str(engine_dir / "engine.py"),
+            "build-vectors",
+            "--root",
+            str(root),
+        ],
+        cwd=engine_dir,
+        timeout=300,
     )
-    last_line = (stdout or stderr or "(无输出)").strip().splitlines()[-1] if (stdout or stderr) else "(无输出)"
+    last_line = (
+        (stdout or stderr or "(无输出)").strip().splitlines()[-1]
+        if (stdout or stderr)
+        else "(无输出)"
+    )
     if exit_code == 0:
         return StepResult(
-            name="build_vectors", stage="飞轮活跃度",
-            status="pass", exit_code=0, output=f"✅ 向量构建: {last_line}",
+            name="build_vectors",
+            stage="飞轮活跃度",
+            status="pass",
+            exit_code=0,
+            output=f"✅ 向量构建: {last_line}",
         )
     elif exit_code == 2:
         return StepResult(
-            name="build_vectors", stage="飞轮活跃度",
-            status="warn", exit_code=2, output=f"⚠️ 向量通道退化: {last_line}",
+            name="build_vectors",
+            stage="飞轮活跃度",
+            status="warn",
+            exit_code=2,
+            output=f"⚠️ 向量通道退化: {last_line}",
         )
     else:
         return StepResult(
-            name="build_vectors", stage="飞轮活跃度",
-            status="fail", exit_code=exit_code, output=f"❌ 向量构建失败: {last_line}",
+            name="build_vectors",
+            stage="飞轮活跃度",
+            status="fail",
+            exit_code=exit_code,
+            output=f"❌ 向量构建失败: {last_line}",
         )
 
 
@@ -369,49 +452,73 @@ def _step_router_sync(root: Path, engine_dir: Path) -> StepResult:
     sync_script = engine_dir / "scripts" / "router_sync.py"
     if not sync_script.is_file():
         return StepResult(
-            name="router_sync", stage="飞轮活跃度",
-            status="skip", exit_code=0, output="⏭️ router_sync.py 不存在，跳过",
+            name="router_sync",
+            stage="飞轮活跃度",
+            status="skip",
+            exit_code=0,
+            output="⏭️ router_sync.py 不存在，跳过",
         )
     exit_code, stdout, stderr = _run_cmd(
         [sys.executable, str(sync_script), "--root", str(root)],
-        cwd=engine_dir, timeout=60,
+        cwd=engine_dir,
+        timeout=60,
     )
     if exit_code == 0:
         return StepResult(
-            name="router_sync", stage="飞轮活跃度",
-            status="pass", exit_code=0, output="✅ 路由表同步检查通过",
+            name="router_sync",
+            stage="飞轮活跃度",
+            status="pass",
+            exit_code=0,
+            output="✅ 路由表同步检查通过",
         )
     return StepResult(
-        name="router_sync", stage="飞轮活跃度",
-        status="warn", exit_code=exit_code,
+        name="router_sync",
+        stage="飞轮活跃度",
+        status="warn",
+        exit_code=exit_code,
         output=f"⚠️ 路由表同步异常: {(stderr or stdout).strip()[:200]}",
     )
 
 
 # ----- 阶段 4: 数据质量 -----
 
+
 def _step_vector_regression(root: Path, engine_dir: Path) -> StepResult:
     """固定查询集回归测试。"""
     bench_script = engine_dir / "scripts" / "vector_bench.py"
     if not bench_script.is_file():
         return StepResult(
-            name="vector_regression", stage="数据质量",
-            status="skip", exit_code=0, output="⏭️ vector_bench.py 不存在，跳过",
+            name="vector_regression",
+            stage="数据质量",
+            status="skip",
+            exit_code=0,
+            output="⏭️ vector_bench.py 不存在，跳过",
         )
     exit_code, stdout, stderr = _run_cmd(
         [sys.executable, str(bench_script), "--real", str(root)],
-        cwd=engine_dir, timeout=120,
+        cwd=engine_dir,
+        timeout=120,
     )
-    last_line = (stdout or stderr or "(无输出)").strip().splitlines()[-1] if (stdout or stderr) else "(无输出)"
+    last_line = (
+        (stdout or stderr or "(无输出)").strip().splitlines()[-1]
+        if (stdout or stderr)
+        else "(无输出)"
+    )
     if exit_code == 0:
         return StepResult(
-            name="vector_regression", stage="数据质量",
-            status="pass", exit_code=0, output=f"✅ 向量回归: {last_line}",
+            name="vector_regression",
+            stage="数据质量",
+            status="pass",
+            exit_code=0,
+            output=f"✅ 向量回归: {last_line}",
         )
     else:
         return StepResult(
-            name="vector_regression", stage="数据质量",
-            status="warn", exit_code=exit_code, output=f"⚠️ 向量回归: {last_line}",
+            name="vector_regression",
+            stage="数据质量",
+            status="warn",
+            exit_code=exit_code,
+            output=f"⚠️ 向量回归: {last_line}",
         )
 
 
@@ -420,22 +527,30 @@ def _step_metrics_daily(root: Path, engine_dir: Path) -> StepResult:
     metrics_script = engine_dir / "scripts" / "metrics_daily.py"
     if not metrics_script.is_file():
         return StepResult(
-            name="metrics_daily", stage="数据质量",
-            status="skip", exit_code=0, output="⏭️ metrics_daily.py 不存在，跳过",
+            name="metrics_daily",
+            stage="数据质量",
+            status="skip",
+            exit_code=0,
+            output="⏭️ metrics_daily.py 不存在，跳过",
         )
     exit_code, stdout, stderr = _run_cmd(
         [sys.executable, str(metrics_script), "--root", str(root)],
-        cwd=engine_dir, timeout=30,
+        cwd=engine_dir,
+        timeout=30,
     )
     if exit_code == 0:
         return StepResult(
-            name="metrics_daily", stage="数据质量",
-            status="pass", exit_code=0,
+            name="metrics_daily",
+            stage="数据质量",
+            status="pass",
+            exit_code=0,
             output=f"✅ 指标聚合: {(stdout or '').strip()[:200]}",
         )
     return StepResult(
-        name="metrics_daily", stage="数据质量",
-        status="warn", exit_code=exit_code,
+        name="metrics_daily",
+        stage="数据质量",
+        status="warn",
+        exit_code=exit_code,
         output=f"⚠️ 指标聚合: {(stderr or stdout).strip()[:200]}",
     )
 
@@ -445,47 +560,68 @@ def _step_hub_review(root: Path, engine_dir: Path) -> StepResult:
     review_script = engine_dir / "scripts" / "hub_review_today.py"
     if not review_script.is_file():
         return StepResult(
-            name="hub_review", stage="数据质量",
-            status="skip", exit_code=0, output="⏭️ hub_review_today.py 不存在，跳过",
+            name="hub_review",
+            stage="数据质量",
+            status="skip",
+            exit_code=0,
+            output="⏭️ hub_review_today.py 不存在，跳过",
         )
     exit_code, stdout, stderr = _run_cmd(
         [sys.executable, str(review_script), "--root", str(root)],
-        cwd=engine_dir, timeout=30,
+        cwd=engine_dir,
+        timeout=30,
     )
     if exit_code == 0:
         return StepResult(
-            name="hub_review", stage="数据质量",
-            status="pass", exit_code=0,
+            name="hub_review",
+            stage="数据质量",
+            status="pass",
+            exit_code=0,
             output=f"✅ 今日审核: {(stdout or '').strip()[:300]}",
         )
     return StepResult(
-        name="hub_review", stage="数据质量",
-        status="warn", exit_code=exit_code,
+        name="hub_review",
+        stage="数据质量",
+        status="warn",
+        exit_code=exit_code,
         output=f"⚠️ 今日审核: {(stderr or stdout).strip()[:300]}",
     )
 
 
 # ----- 阶段 5: 报告生成与归档 -----
 
+
 def _step_status_snapshot(root: Path, engine_dir: Path) -> StepResult:
     """生成健康快照（调用升级后的 _cmd_status）。"""
     exit_code, stdout, stderr = _run_cmd(
-        [sys.executable, str(engine_dir / "engine.py"), "status", "--root", str(root), "--json"],
-        cwd=engine_dir, timeout=60,
+        [
+            sys.executable,
+            str(engine_dir / "engine.py"),
+            "status",
+            "--root",
+            str(root),
+            "--json",
+        ],
+        cwd=engine_dir,
+        timeout=60,
     )
     if exit_code in (0, 2):
         try:
             json.loads(stdout)
             return StepResult(
-                name="status_snapshot", stage="报告归档",
-                status="pass", exit_code=exit_code,
+                name="status_snapshot",
+                stage="报告归档",
+                status="pass",
+                exit_code=exit_code,
                 output=f"✅ 快照生成 (exit={exit_code})",
             )
         except json.JSONDecodeError:
             pass
     return StepResult(
-        name="status_snapshot", stage="报告归档",
-        status="fail", exit_code=exit_code,
+        name="status_snapshot",
+        stage="报告归档",
+        status="fail",
+        exit_code=exit_code,
         output=f"❌ 快照生成失败: {(stderr or stdout).strip()[:200]}",
     )
 
@@ -505,8 +641,10 @@ def _save_snapshot_archive(
             existing = json.loads(snap_path.read_text(encoding="utf-8"))
             if existing.get("generated_at", "") and today in existing["generated_at"]:
                 return StepResult(
-                    name="archive_snapshot", stage="报告归档",
-                    status="pass", exit_code=0,
+                    name="archive_snapshot",
+                    stage="报告归档",
+                    status="pass",
+                    exit_code=0,
                     output=f"⏭️ 今日快照已存在，跳过归档 (幂等保护): {snap_path}",
                 )
         except (json.JSONDecodeError, KeyError, OSError):
@@ -514,27 +652,44 @@ def _save_snapshot_archive(
 
     # 生成一次 JSON 快照并写入
     exit_code, stdout, stderr = _run_cmd(
-        [sys.executable, str(engine_dir / "engine.py"), "status", "--root", str(root), "--json"],
-        cwd=engine_dir, timeout=60,
+        [
+            sys.executable,
+            str(engine_dir / "engine.py"),
+            "status",
+            "--root",
+            str(root),
+            "--json",
+        ],
+        cwd=engine_dir,
+        timeout=60,
     )
     if exit_code in (0, 2):
         try:
             data = json.loads(stdout)
-            snap_path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+            snap_path.write_text(
+                json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
+            )
             return StepResult(
-                name="archive_snapshot", stage="报告归档",
-                status="pass", exit_code=0,
+                name="archive_snapshot",
+                stage="报告归档",
+                status="pass",
+                exit_code=0,
                 output=f"✅ 快照已归档: {snap_path}",
             )
         except (json.JSONDecodeError, OSError) as e:
             return StepResult(
-                name="archive_snapshot", stage="报告归档",
-                status="fail", exit_code=1,
-                error=str(e), output=f"❌ 归档失败: {e}",
+                name="archive_snapshot",
+                stage="报告归档",
+                status="fail",
+                exit_code=1,
+                error=str(e),
+                output=f"❌ 归档失败: {e}",
             )
     return StepResult(
-        name="archive_snapshot", stage="报告归档",
-        status="fail", exit_code=exit_code,
+        name="archive_snapshot",
+        stage="报告归档",
+        status="fail",
+        exit_code=exit_code,
         output=f"❌ 快照生成失败: {(stderr or stdout).strip()[:200]}",
     )
 
@@ -543,22 +698,121 @@ def _save_snapshot_archive(
 # 阶段 6: 自动修复层（v3 新增）
 # ============================================================================
 
+
+def _step_freshness_check(root: Path, engine_dir: Path) -> StepResult:
+    """任务8：知识新鲜度检测。
+
+    调用 stale_detect.py 标记 reuse_count=0 且 N 天未更新的卡/技能。
+    严重陈旧时产生 alert；不自动删除（只标记）。
+    """
+    import subprocess
+
+    skillhub_root_str = os.environ.get("SKILLHUB_ROOT", "D:/AIwork/20260821-Fan-SkillHub")
+    script = engine_dir / "scripts" / "stale_detect.py"
+    if not script.exists():
+        return StepResult(
+            name="freshness_check",
+            status="skipped",
+            output="stale_detect.py 缺失",
+            exit_code=0,
+        )
+    try:
+        r = subprocess.run(
+            [
+                sys.executable,
+                str(script),
+                "--hub-root",
+                str(root),
+                "--skillhub-root",
+                skillhub_root_str,
+                "--days",
+                "60",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        return StepResult(
+            name="freshness_check",
+            status="passed" if r.returncode == 0 else "failed",
+            output=r.stdout[-300:] + r.stderr[-200:],
+            exit_code=r.returncode,
+        )
+    except subprocess.TimeoutExpired:
+        return StepResult(
+            name="freshness_check",
+            status="failed",
+            output="timeout",
+            exit_code=1,
+        )
+
+
+def _step_verify_after_fix(engine_dir: Path, fix_results: dict) -> StepResult:
+    """任务4：自动修复后验证（pytest + ruff）。
+
+    跑最小验证：pytest 增量 + ruff check。
+    任一失败则产生 critical 告警，避免静默通过。
+    """
+    import subprocess
+    cmds = [
+        ("pytest_smoke", [sys.executable, "-m", "pytest", "tests/", "-q", "--tb=no", "-x"]),
+        ("ruff_check", [sys.executable, "-m", "ruff", "check", "."]),
+    ]
+    failed: list[str] = []
+    outputs: list[str] = []
+    for name, cmd in cmds:
+        try:
+            r = subprocess.run(
+                cmd, capture_output=True, text=True, timeout=120, cwd=str(engine_dir)
+            )
+            outputs.append(f"[{name}] exit={r.returncode}")
+            if r.returncode != 0:
+                failed.append(f"{name}(exit={r.returncode})")
+                outputs.append(r.stdout[-200:] + r.stderr[-200:])
+        except subprocess.TimeoutExpired:
+            failed.append(f"{name}(timeout)")
+        except FileNotFoundError as exc:
+            outputs.append(f"[{name}] missing: {exc}")
+
+    if failed:
+        return StepResult(
+            name="verify_after_fix",
+            status="failed",
+            output="\n".join(outputs),
+            exit_code=1,
+        )
+    return StepResult(
+        name="verify_after_fix",
+        status="passed",
+        output="\n".join(outputs),
+        exit_code=0,
+    )
+
+
 def _step_auto_fix_lint(root: Path, engine_dir: Path) -> StepResult:
     """auto_fix_lint: lint invalid 卡自动补 frontmatter。"""
     fix_script = engine_dir / "scripts" / "auto_fix_lint.py"
     if not fix_script.is_file():
         return StepResult(
-            name="auto_fix_lint", stage="自动修复",
-            status="skip", output="⏭️ auto_fix_lint.py 不存在，跳过",
+            name="auto_fix_lint",
+            stage="自动修复",
+            status="skip",
+            output="⏭️ auto_fix_lint.py 不存在，跳过",
         )
     exit_code, stdout, stderr = _run_cmd(
         [sys.executable, str(fix_script), "--root", str(root)],
-        cwd=engine_dir, timeout=60,
+        cwd=engine_dir,
+        timeout=60,
     )
     text = (stdout or stderr or "").strip()
-    fixed = "修复" in text and "0" not in text.split("修复")[1].split("张")[0] if "修复" in text else False
+    fixed = (
+        "修复" in text and "0" not in text.split("修复")[1].split("张")[0]
+        if "修复" in text
+        else False
+    )
     return StepResult(
-        name="auto_fix_lint", stage="自动修复",
+        name="auto_fix_lint",
+        stage="自动修复",
         status="pass" if fixed or exit_code == 0 else "warn",
         exit_code=0,
         output=f"✅ {text[:200]}" if exit_code == 0 else f"⚠️ {text[:200]}",
@@ -570,16 +824,20 @@ def _step_auto_pytest_fix(root: Path, engine_dir: Path) -> StepResult:
     fix_script = engine_dir / "scripts" / "auto_pytest_env_fix.py"
     if not fix_script.is_file():
         return StepResult(
-            name="auto_pytest_env_fix", stage="自动修复",
-            status="skip", output="⏭️ auto_pytest_env_fix.py 不存在，跳过",
+            name="auto_pytest_env_fix",
+            stage="自动修复",
+            status="skip",
+            output="⏭️ auto_pytest_env_fix.py 不存在，跳过",
         )
     exit_code, stdout, stderr = _run_cmd(
         [sys.executable, str(fix_script), "--root", str(root)],
-        cwd=engine_dir, timeout=120,
+        cwd=engine_dir,
+        timeout=120,
     )
     text = (stdout or stderr or "").strip()
     return StepResult(
-        name="auto_pytest_env_fix", stage="自动修复",
+        name="auto_pytest_env_fix",
+        stage="自动修复",
         status="pass" if exit_code == 0 else "warn",
         exit_code=0,
         output=f"✅ {text[:200]}" if exit_code == 0 else f"⚠️ {text[:200]}",
@@ -591,17 +849,22 @@ def _step_auto_sleep_filter(root: Path, engine_dir: Path) -> StepResult:
     fix_script = engine_dir / "scripts" / "auto_sleep_filter.py"
     if not fix_script.is_file():
         return StepResult(
-            name="auto_sleep_filter", stage="自动修复",
-            status="skip", output="⏭️ auto_sleep_filter.py 不存在，跳过",
+            name="auto_sleep_filter",
+            stage="自动修复",
+            status="skip",
+            output="⏭️ auto_sleep_filter.py 不存在，跳过",
         )
     _exit_code, stdout, stderr = _run_cmd(
         [sys.executable, str(fix_script), "--root", str(root), "--since-days", "3"],
-        cwd=engine_dir, timeout=60,
+        cwd=engine_dir,
+        timeout=60,
     )
     text = (stdout or stderr or "").strip()
     return StepResult(
-        name="auto_sleep_filter", stage="自动修复",
-        status="pass", exit_code=0,
+        name="auto_sleep_filter",
+        stage="自动修复",
+        status="pass",
+        exit_code=0,
         output=f"✅ {text[:200]}",
     )
 
@@ -611,17 +874,22 @@ def _step_auto_process_sleep(root: Path, engine_dir: Path) -> StepResult:
     fix_script = engine_dir / "scripts" / "auto_process_sleep.py"
     if not fix_script.is_file():
         return StepResult(
-            name="auto_process_sleep", stage="自动修复",
-            status="skip", output="⏭️ auto_process_sleep.py 不存在，跳过",
+            name="auto_process_sleep",
+            stage="自动修复",
+            status="skip",
+            output="⏭️ auto_process_sleep.py 不存在，跳过",
         )
     _exit_code, stdout, stderr = _run_cmd(
         [sys.executable, str(fix_script), "--root", str(root), "--since-days", "3"],
-        cwd=engine_dir, timeout=60,
+        cwd=engine_dir,
+        timeout=60,
     )
     text = (stdout or stderr or "").strip()
     return StepResult(
-        name="auto_process_sleep", stage="自动修复",
-        status="pass", exit_code=0,
+        name="auto_process_sleep",
+        stage="自动修复",
+        status="pass",
+        exit_code=0,
         output=f"✅ {text[:200]}",
     )
 
@@ -631,17 +899,22 @@ def _step_auto_review_today(root: Path, engine_dir: Path) -> StepResult:
     fix_script = engine_dir / "scripts" / "auto_review_today.py"
     if not fix_script.is_file():
         return StepResult(
-            name="auto_review_today", stage="自动修复",
-            status="skip", output="⏭️ auto_review_today.py 不存在，跳过",
+            name="auto_review_today",
+            stage="自动修复",
+            status="skip",
+            output="⏭️ auto_review_today.py 不存在，跳过",
         )
     _exit_code, stdout, stderr = _run_cmd(
         [sys.executable, str(fix_script), "--root", str(root)],
-        cwd=engine_dir, timeout=30,
+        cwd=engine_dir,
+        timeout=30,
     )
     text = (stdout or stderr or "").strip()
     return StepResult(
-        name="auto_review_today", stage="自动修复",
-        status="pass", exit_code=0,
+        name="auto_review_today",
+        stage="自动修复",
+        status="pass",
+        exit_code=0,
         output=f"✅ {text[:200]}",
     )
 
@@ -649,6 +922,7 @@ def _step_auto_review_today(root: Path, engine_dir: Path) -> StepResult:
 # ============================================================================
 # 建议生成
 # ============================================================================
+
 
 def _generate_suggestions(report: PatrolReport) -> list[str]:
     """基于告警结果生成改进建议。"""
@@ -697,6 +971,7 @@ def _generate_suggestions(report: PatrolReport) -> list[str]:
 # 主巡检编排
 # ============================================================================
 
+
 def run_patrol(
     root: Path,
     *,
@@ -728,23 +1003,34 @@ def run_patrol(
         if existing_snap.is_file():
             try:
                 existing_data = json.loads(existing_snap.read_text(encoding="utf-8"))
-                if existing_data.get("generated_at", "") and today in existing_data["generated_at"]:
+                if (
+                    existing_data.get("generated_at", "")
+                    and today in existing_data["generated_at"]
+                ):
                     # 兼容旧快照字段名 ollama → llm
-                    llm_field = existing_data.get("llm_health") or existing_data.get("ollama", {})
+                    llm_field = existing_data.get("llm_health") or existing_data.get(
+                        "ollama", {}
+                    )
                     report = PatrolReport(
                         hub_root=str(root),
                         generated_at=datetime.now(_LOCAL_TZ).isoformat(),
-                        llm_available=llm_field.get("available", True) if isinstance(llm_field, dict) else True,
+                        llm_available=llm_field.get("available", True)
+                        if isinstance(llm_field, dict)
+                        else True,
                         overall_exit_code=0,
                         snapshot=existing_data,
                         alerts=existing_data.get("alerts", []),
                         suggestions=["今日快照已存在，跳过巡检（幂等保护）"],
                     )
                     skipped_stage = StageResult(name="幂等保护")
-                    skipped_stage.steps.append(StepResult(
-                        name="check_existing_snapshot", stage="幂等保护", status="skip",
-                        output=f"⏭️ 今日快照已存在: {existing_snap}",
-                    ))
+                    skipped_stage.steps.append(
+                        StepResult(
+                            name="check_existing_snapshot",
+                            stage="幂等保护",
+                            status="skip",
+                            output=f"⏭️ 今日快照已存在: {existing_snap}",
+                        )
+                    )
                     report.stages.append(skipped_stage)
                     return report
             except (json.JSONDecodeError, KeyError, OSError):
@@ -760,8 +1046,12 @@ def run_patrol(
     stage1.steps.append(_run_step("llm_check", "基础设施", lambda: _llm_pre_check()))
     llm_ok = stage1.steps[-1].status == "pass"
     report.llm_available = llm_ok
-    stage1.steps.append(_run_step("config_integrity", "基础设施", lambda: _check_config_integrity(root)))
-    stage1.steps.append(_run_step("file_integrity", "基础设施", lambda: _check_file_integrity(root)))
+    stage1.steps.append(
+        _run_step("config_integrity", "基础设施", lambda: _check_config_integrity(root))
+    )
+    stage1.steps.append(
+        _run_step("file_integrity", "基础设施", lambda: _check_file_integrity(root))
+    )
     report.stages.append(stage1)
 
     if dry_run:
@@ -770,14 +1060,18 @@ def run_patrol(
         print("  阶段 3: build-vectors → router-sync")
         print("  阶段 4: vector-regression → metrics-daily → hub-review")
         print("  阶段 5: status-snapshot → archive-snapshot")
-        print("  阶段 6: auto_fix_lint → auto_pytest_env_fix → auto_sleep_filter → auto_process_sleep → auto_review_today")
+        print(
+            "  阶段 6: auto_fix_lint → auto_pytest_env_fix → auto_sleep_filter → auto_process_sleep → auto_review_today"
+        )
         print("  阶段 7: 分级输出")
         return report
 
     # ===== 阶段 2: 代码质量门禁（始终执行，不依赖 LLM） =====
     stage2 = StageResult(name="代码质量门禁")
     stage2.steps.append(_run_step("lint", "质量门禁", lambda: _step_lint(root)))
-    stage2.steps.append(_run_step("pytest", "质量门禁", lambda: _step_pytest(engine_dir)))
+    stage2.steps.append(
+        _run_step("pytest", "质量门禁", lambda: _step_pytest(engine_dir))
+    )
     stage2.steps.append(_run_step("ruff", "质量门禁", lambda: _step_ruff(engine_dir)))
     report.stages.append(stage2)
 
@@ -785,47 +1079,84 @@ def run_patrol(
     stage3 = StageResult(name="飞轮活跃度")
     if skip_flywheel:
         stage3.skipped = True
-        stage3.steps.append(StepResult(
-            name="flywheel", stage="飞轮活跃度", status="skip",
-            output="已指定 --skip-flywheel，跳过飞轮步骤",
-        ))
+        stage3.steps.append(
+            StepResult(
+                name="flywheel",
+                stage="飞轮活跃度",
+                status="skip",
+                output="已指定 --skip-flywheel，跳过飞轮步骤",
+            )
+        )
     else:
         if llm_ok:
-            stage3.steps.append(_run_step("build_vectors", "飞轮活跃度",
-                                          lambda: _step_build_vectors(root, engine_dir)))
+            stage3.steps.append(
+                _run_step(
+                    "build_vectors",
+                    "飞轮活跃度",
+                    lambda: _step_build_vectors(root, engine_dir),
+                )
+            )
         else:
-            stage3.steps.append(StepResult(
-                name="build_vectors", stage="飞轮活跃度", status="skip",
-                output="本地 LLM 不可用，跳过向量构建",
-            ))
-        stage3.steps.append(_run_step("router_sync", "飞轮活跃度",
-                                      lambda: _step_router_sync(root, engine_dir)))
+            stage3.steps.append(
+                StepResult(
+                    name="build_vectors",
+                    stage="飞轮活跃度",
+                    status="skip",
+                    output="本地 LLM 不可用，跳过向量构建",
+                )
+            )
+        stage3.steps.append(
+            _run_step(
+                "router_sync", "飞轮活跃度", lambda: _step_router_sync(root, engine_dir)
+            )
+        )
     report.stages.append(stage3)
 
     # ===== 阶段 4: 数据质量 =====
     stage4 = StageResult(name="数据质量")
-    stage4.steps.append(_run_step("vector_regression", "数据质量",
-                                   lambda: _step_vector_regression(root, engine_dir)))
-    stage4.steps.append(_run_step("metrics_daily", "数据质量",
-                                   lambda: _step_metrics_daily(root, engine_dir)))
-    stage4.steps.append(_run_step("hub_review", "数据质量",
-                                   lambda: _step_hub_review(root, engine_dir)))
+    stage4.steps.append(
+        _run_step(
+            "vector_regression",
+            "数据质量",
+            lambda: _step_vector_regression(root, engine_dir),
+        )
+    )
+    stage4.steps.append(
+        _run_step(
+            "metrics_daily", "数据质量", lambda: _step_metrics_daily(root, engine_dir)
+        )
+    )
+    stage4.steps.append(
+        _run_step("hub_review", "数据质量", lambda: _step_hub_review(root, engine_dir))
+    )
     report.stages.append(stage4)
 
     # ===== 阶段 5: 报告生成与归档 =====
     stage5 = StageResult(name="报告生成与归档")
-    snap_result = _run_step("status_snapshot", "报告归档",
-                            lambda: _step_status_snapshot(root, engine_dir))
+    snap_result = _run_step(
+        "status_snapshot", "报告归档", lambda: _step_status_snapshot(root, engine_dir)
+    )
     stage5.steps.append(snap_result)
-    archive_result = _run_step("archive_snapshot", "报告归档",
-                               lambda: _save_snapshot_archive(root, engine_dir, no_overwrite=skip_if_exists))
+    archive_result = _run_step(
+        "archive_snapshot",
+        "报告归档",
+        lambda: _save_snapshot_archive(root, engine_dir, no_overwrite=skip_if_exists),
+    )
     stage5.steps.append(archive_result)
 
     # 解析快照
     if snap_result.status == "pass":
         _exit_code, stdout, _ = _run_cmd(
-            [sys.executable, str(engine_dir / "engine.py"), "status", "--root", str(root), "--json"],
-            cwd=engine_dir, timeout=60,
+            [
+                sys.executable,
+                str(engine_dir / "engine.py"),
+                "status",
+                "--root",
+                str(root),
+                "--json",
+            ],
+            cwd=engine_dir,
+            timeout=60,
         )
         try:
             report.snapshot = json.loads(stdout)
@@ -843,20 +1174,45 @@ def run_patrol(
     else:
         stage6 = StageResult(name="自动修复层")
         # 6-1: lint invalid 卡自动修复（不依赖其他步骤）
-        stage6.steps.append(_run_step("auto_fix_lint", "自动修复",
-                                      lambda: _step_auto_fix_lint(root, engine_dir)))
+        stage6.steps.append(
+            _run_step(
+                "auto_fix_lint",
+                "自动修复",
+                lambda: _step_auto_fix_lint(root, engine_dir),
+            )
+        )
         # 6-2: pytest 环境类修复（pip install 缺的包）
-        stage6.steps.append(_run_step("auto_pytest_env_fix", "自动修复",
-                                      lambda: _step_auto_pytest_fix(root, engine_dir)))
+        stage6.steps.append(
+            _run_step(
+                "auto_pytest_env_fix",
+                "自动修复",
+                lambda: _step_auto_pytest_fix(root, engine_dir),
+            )
+        )
         # 6-3: sleep 候选假信号过滤
-        stage6.steps.append(_run_step("auto_sleep_filter", "自动修复",
-                                      lambda: _step_auto_sleep_filter(root, engine_dir)))
+        stage6.steps.append(
+            _run_step(
+                "auto_sleep_filter",
+                "自动修复",
+                lambda: _step_auto_sleep_filter(root, engine_dir),
+            )
+        )
         # 6-4: sleep 候选补 tag / 生成草稿
-        stage6.steps.append(_run_step("auto_process_sleep", "自动修复",
-                                      lambda: _step_auto_process_sleep(root, engine_dir)))
+        stage6.steps.append(
+            _run_step(
+                "auto_process_sleep",
+                "自动修复",
+                lambda: _step_auto_process_sleep(root, engine_dir),
+            )
+        )
         # 6-5: review_today 自动分类过审
-        stage6.steps.append(_run_step("auto_review_today", "自动修复",
-                                      lambda: _step_auto_review_today(root, engine_dir)))
+        stage6.steps.append(
+            _run_step(
+                "auto_review_today",
+                "自动修复",
+                lambda: _step_auto_review_today(root, engine_dir),
+            )
+        )
         report.stages.append(stage6)
 
         # 收集自动修复层结果到 report.auto_fix_results
@@ -864,6 +1220,32 @@ def run_patrol(
             st.name: {"status": st.status, "output": st.output[:300]}
             for st in stage6.steps
         }
+
+        # ===== 阶段 6b: 修复验证（任务 4）=====
+        # 修复后必须再跑 pytest/ruff 验证，否则静默通过有风险
+        stage6b = StageResult(name="修复验证（阶段 6b）")
+        if any(s.status == "fixed" for s in stage6.steps):
+            stage6b.steps.append(
+                _run_step(
+                    "verify_after_fix",
+                    "验证",
+                    lambda: _step_verify_after_fix(engine_dir, report.auto_fix_results),
+                )
+            )
+        else:
+            stage6b.skipped = True
+        report.stages.append(stage6b)
+
+        # ===== 阶段 6c: 知识新鲜度检测（任务 8）=====
+        stage6c = StageResult(name="知识新鲜度（阶段 6c）")
+        stage6c.steps.append(
+            _run_step(
+                "freshness_check",
+                "新鲜度",
+                lambda: _step_freshness_check(root, engine_dir),
+            )
+        )
+        report.stages.append(stage6c)
 
     # ===== 计算总体退出码 =====
     has_critical = any(a.get("level") == "critical" for a in report.alerts)
@@ -889,6 +1271,7 @@ def run_patrol(
 # ============================================================================
 # 阶段 7: 分级输出
 # ============================================================================
+
 
 def print_report(report: PatrolReport):
     """打印巡检报告（人类可读）。"""
@@ -940,7 +1323,7 @@ def print_report(report: PatrolReport):
             "card_health": "卡片",
             "skill_health": "技能",
             "flywheel_activity": "飞轮",
-            "llm_health": "本地 LLM",   # v3: Ollama → 本地 LLM
+            "llm_health": "本地 LLM",  # v3: Ollama → 本地 LLM
             "overall": "📈 总分",
         }
         for k, v in scores.items():
@@ -953,7 +1336,13 @@ def print_report(report: PatrolReport):
     if report.auto_fix_results:
         print("\n🔧 自动修复层结果:")
         for name, info in report.auto_fix_results.items():
-            icon = "✅" if info["status"] == "pass" else "⚠️" if info["status"] == "warn" else "⏭️"
+            icon = (
+                "✅"
+                if info["status"] == "pass"
+                else "⚠️"
+                if info["status"] == "warn"
+                else "⏭️"
+            )
             print(f"  {icon} {name}: {info['output'][:150]}")
 
     # 建议
@@ -964,14 +1353,17 @@ def print_report(report: PatrolReport):
 
     # 总体退出码
     print(f"\n{'=' * 72}")
-    print(f"  总体退出码: {report.overall_exit_code} "
-          f"({'全绿' if report.overall_exit_code == 0 else '需关注'})")
+    print(
+        f"  总体退出码: {report.overall_exit_code} "
+        f"({'全绿' if report.overall_exit_code == 0 else '需关注'})"
+    )
     print(f"{'=' * 72}")
 
 
 # ============================================================================
 # CLI 入口
 # ============================================================================
+
 
 def main() -> int:
     import argparse
@@ -981,18 +1373,22 @@ def main() -> int:
         description="中枢每日健康巡检编排 v3 (7 阶段流水线)",
     )
     parser.add_argument("--root", required=True, help="中枢根目录")
-    parser.add_argument("--skip-flywheel", action="store_true",
-                        help="跳过飞轮相关步骤 (向量构建/路由同步)")
-    parser.add_argument("--skip-autofix", action="store_true",
-                        help="跳过阶段 6 自动修复层 (调试用)")
-    parser.add_argument("--dry-run", action="store_true",
-                        help="仅打印计划，不实际执行")
-    parser.add_argument("--skip-if-exists", action="store_true",
-                        help="幂等保护：若今日快照已存在则直接跳过巡检")
-    parser.add_argument("--json", action="store_true",
-                        help="以 JSON 格式输出报告")
-    parser.add_argument("--output", default=None,
-                        help="将报告写入指定 JSON 文件")
+    parser.add_argument(
+        "--skip-flywheel",
+        action="store_true",
+        help="跳过飞轮相关步骤 (向量构建/路由同步)",
+    )
+    parser.add_argument(
+        "--skip-autofix", action="store_true", help="跳过阶段 6 自动修复层 (调试用)"
+    )
+    parser.add_argument("--dry-run", action="store_true", help="仅打印计划，不实际执行")
+    parser.add_argument(
+        "--skip-if-exists",
+        action="store_true",
+        help="幂等保护：若今日快照已存在则直接跳过巡检",
+    )
+    parser.add_argument("--json", action="store_true", help="以 JSON 格式输出报告")
+    parser.add_argument("--output", default=None, help="将报告写入指定 JSON 文件")
 
     args = parser.parse_args()
     root = Path(args.root).resolve()
