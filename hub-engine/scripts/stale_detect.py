@@ -5,6 +5,7 @@ V1.0 (2026-09-09): 扫描中枢卡 + SkillHub 技能，
 根据 reuse_count + updated_at 判断是否 stale。
 不删除任何文件，仅生成 stale 报告供人审核。
 """
+
 from __future__ import annotations
 
 import datetime as dt
@@ -31,8 +32,15 @@ def _parse_updated(value) -> dt.date | None:
 def detect_stale_cards(hub_root: Path, *, days: int = DEFAULT_DAYS_STALE) -> list[dict]:
     """扫描中枢权威区，标记 stale 卡。"""
     out: list[dict] = []
-    cutoff = dt.date.today() - dt.timedelta(days=days)
-    for sub in ("rules", "methodology", "blueprints", "experience", "longterm", "projects"):
+    cutoff = dt.datetime.now(tz=dt.timezone.utc).date() - dt.timedelta(days=days)
+    for sub in (
+        "rules",
+        "methodology",
+        "blueprints",
+        "experience",
+        "longterm",
+        "projects",
+    ):
         d = hub_root / sub
         if not d.exists():
             continue
@@ -51,22 +59,28 @@ def detect_stale_cards(hub_root: Path, *, days: int = DEFAULT_DAYS_STALE) -> lis
             rc = fm.get("reuse_count", 0) or 0
             upd = _parse_updated(fm.get("updated"))
             if rc == 0 and upd and upd < cutoff:
-                out.append({
-                    "kind": "card",
-                    "path": str(f.relative_to(hub_root)),
-                    "name": f.stem,
-                    "type": fm.get("type", sub),
-                    "updated": str(upd),
-                    "age_days": (dt.date.today() - upd).days,
-                    "reuse_count": rc,
-                })
+                out.append(
+                    {
+                        "kind": "card",
+                        "path": str(f.relative_to(hub_root)),
+                        "name": f.stem,
+                        "type": fm.get("type", sub),
+                        "updated": str(upd),
+                        "age_days": (
+                            dt.datetime.now(tz=dt.timezone.utc).date() - upd
+                        ).days,
+                        "reuse_count": rc,
+                    }
+                )
     return out
 
 
-def detect_stale_skills(skillhub_root: Path, *, days: int = DEFAULT_DAYS_STALE) -> list[dict]:
+def detect_stale_skills(
+    skillhub_root: Path, *, days: int = DEFAULT_DAYS_STALE
+) -> list[dict]:
     """扫描 SkillHub，标记 stale 技能。"""
     out: list[dict] = []
-    cutoff = dt.date.today() - dt.timedelta(days=days)
+    cutoff = dt.datetime.now(tz=dt.timezone.utc).date() - dt.timedelta(days=days)
     for slot in ("shared", "dedicated"):
         d = skillhub_root / "skills" / slot
         if not d.exists():
@@ -79,14 +93,18 @@ def detect_stale_skills(skillhub_root: Path, *, days: int = DEFAULT_DAYS_STALE) 
             rc = data.get("reuse_count", 0) or 0
             upd = _parse_updated(data.get("updated"))
             if rc == 0 and upd and upd < cutoff:
-                out.append({
-                    "kind": "skill",
-                    "path": str(f.relative_to(skillhub_root)),
-                    "name": data.get("name", f.parent.name),
-                    "updated": str(upd),
-                    "age_days": (dt.date.today() - upd).days,
-                    "reuse_count": rc,
-                })
+                out.append(
+                    {
+                        "kind": "skill",
+                        "path": str(f.relative_to(skillhub_root)),
+                        "name": data.get("name", f.parent.name),
+                        "updated": str(upd),
+                        "age_days": (
+                            dt.datetime.now(tz=dt.timezone.utc).date() - upd
+                        ).days,
+                        "reuse_count": rc,
+                    }
+                )
     return out
 
 

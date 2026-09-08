@@ -705,9 +705,12 @@ def _step_freshness_check(root: Path, engine_dir: Path) -> StepResult:
     调用 stale_detect.py 标记 reuse_count=0 且 N 天未更新的卡/技能。
     严重陈旧时产生 alert；不自动删除（只标记）。
     """
+    import os
     import subprocess
 
-    skillhub_root_str = os.environ.get("SKILLHUB_ROOT", "D:/AIwork/20260821-Fan-SkillHub")
+    skillhub_root_str = os.environ.get(
+        "SKILLHUB_ROOT", "D:/AIwork/20260821-Fan-SkillHub"
+    )
     script = engine_dir / "scripts" / "stale_detect.py"
     if not script.exists():
         return StepResult(
@@ -754,8 +757,12 @@ def _step_verify_after_fix(engine_dir: Path, fix_results: dict) -> StepResult:
     任一失败则产生 critical 告警，避免静默通过。
     """
     import subprocess
+
     cmds = [
-        ("pytest_smoke", [sys.executable, "-m", "pytest", "tests/", "-q", "--tb=no", "-x"]),
+        (
+            "pytest_smoke",
+            [sys.executable, "-m", "pytest", "tests/", "-q", "--tb=no", "-x"],
+        ),
         ("ruff_check", [sys.executable, "-m", "ruff", "check", "."]),
     ]
     failed: list[str] = []

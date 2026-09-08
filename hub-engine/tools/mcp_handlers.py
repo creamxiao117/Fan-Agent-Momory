@@ -16,8 +16,10 @@ from tools.mcp_policy import (
     resolve_slug,
 )
 from tools.retrieve import retrieve_with_meta
+from tools.safe_patch_handler import (
+    hub_safe_patch,  # noqa: F401  转发供 H.hub_safe_patch
+)
 from tools.snippet import extract_snippet
-from tools.safe_patch_handler import hub_safe_patch
 
 DEFAULT_EXCERPT = 200
 SUBDIR_BY_TYPE = {

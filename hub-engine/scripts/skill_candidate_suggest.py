@@ -43,14 +43,16 @@ def find_hot_cards(hub_root: Path, threshold: int = 3) -> list[dict]:
             continue
         rc = fm.get("reuse_count", 0) or 0
         if rc >= threshold:
-            hot.append({
-                "path": str(f.relative_to(hub_root)),
-                "name": f.stem,
-                "type": fm.get("type", "exp"),
-                "title": fm.get("title", f.stem),
-                "reuse_count": rc,
-                "tags": fm.get("tags", []),
-            })
+            hot.append(
+                {
+                    "path": str(f.relative_to(hub_root)),
+                    "name": f.stem,
+                    "type": fm.get("type", "exp"),
+                    "title": fm.get("title", f.stem),
+                    "reuse_count": rc,
+                    "tags": fm.get("tags", []),
+                }
+            )
     return hot
 
 
@@ -58,24 +60,24 @@ def write_suggestion_card(card: dict, skillhub_root: Path, threshold: int = 3) -
     """在 SkillHub cards/skill-candidates/ 生成一张建议卡。"""
     out_dir = skillhub_root / "cards" / OUTPUT_DIR
     out_dir.mkdir(parents=True, exist_ok=True)
-    today = dt.date.today().isoformat()
+    today = dt.datetime.now(tz=dt.timezone.utc).date().isoformat()
     out = out_dir / f"{card['name']}.md"
     body = f"""---
 type: skill-candidate
 status: pending-review
-source: {card['path']}
-reuse_count: {card['reuse_count']}
+source: {card["path"]}
+reuse_count: {card["reuse_count"]}
 detected_at: '{today}'
 ---
 
-# 技能建议：{card['title']}
+# 技能建议：{card["title"]}
 
 ## 建议依据
 
-- 源卡：`{card['path']}`
-- 复用次数：{card['reuse_count']}（阈值 {threshold}）
-- 类型：{card['type']}
-- 标签：{', '.join(card.get('tags', []))}
+- 源卡：`{card["path"]}`
+- 复用次数：{card["reuse_count"]}（阈值 {threshold}）
+- 类型：{card["type"]}
+- 标签：{", ".join(card.get("tags", []))}
 
 ## 下一步
 
@@ -105,7 +107,9 @@ def main() -> int:
 
     written = []
     for card in hot:
-        p = write_suggestion_card(card, Path(args.skillhub_root), threshold=args.threshold)
+        p = write_suggestion_card(
+            card, Path(args.skillhub_root), threshold=args.threshold
+        )
         written.append(str(p.relative_to(args.skillhub_root)))
     print(f"生成 {len(written)} 张建议卡：")
     for w in written:

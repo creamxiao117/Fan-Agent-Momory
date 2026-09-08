@@ -26,10 +26,17 @@ CST = timezone(timedelta(hours=8))
 # 知识缺口检测（改进三）
 # ---------------------------------------------------------------------------
 
+
 def detect_knowledge_gaps(query_log_path: Path, *, window_hours: int = 24) -> dict:
     """分析 query.log.jsonl，统计当日未命中卡片的查询，识别知识缺口。"""
     if not query_log_path.exists():
-        return {"total": 0, "miss": 0, "miss_rate": 0.0, "top_misses": [], "error": "log not found"}
+        return {
+            "total": 0,
+            "miss": 0,
+            "miss_rate": 0.0,
+            "top_misses": [],
+            "error": "log not found",
+        }
 
     cutoff = datetime.now(timezone.utc) - timedelta(hours=window_hours)
     total = 0
@@ -64,11 +71,22 @@ def detect_knowledge_gaps(query_log_path: Path, *, window_hours: int = 24) -> di
                     if q:
                         miss_queries[q] = miss_queries.get(q, 0) + 1
     except Exception as exc:
-        return {"total": total, "miss": miss, "miss_rate": 0.0, "top_misses": [], "error": str(exc)}
+        return {
+            "total": total,
+            "miss": miss,
+            "miss_rate": 0.0,
+            "top_misses": [],
+            "error": str(exc),
+        }
 
     miss_rate = miss / total if total > 0 else 0.0
     top_misses = sorted(miss_queries.items(), key=lambda x: -x[1])[:5]
-    return {"total": total, "miss": miss, "miss_rate": round(miss_rate * 100, 1), "top_misses": top_misses}
+    return {
+        "total": total,
+        "miss": miss,
+        "miss_rate": round(miss_rate * 100, 1),
+        "top_misses": top_misses,
+    }
 
 
 def _format_gap_section(gap: dict) -> list[str]:
@@ -94,6 +112,7 @@ def _format_gap_section(gap: dict) -> list[str]:
             display = q[:40] + ("…" if len(q) > 40 else "")
             lines.append(f"    · {display}（{cnt}次）")
     return lines
+
 
 # 飞轮五档中文名
 FLYWHEEL_STAGES_ZH = {

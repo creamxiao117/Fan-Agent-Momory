@@ -21,14 +21,17 @@
 ## 已完成能力（Phase 1-3）
 
 ### Phase 1：并发安全
+
 - `_WriteLock` PID+mtime 僵尸检测 + 指数退避 3 次（commit `da23db7` + `f1661f9`）
 - `schedule.toml` 双平台写时段错峰（commit `ace7acd`）
 
 ### Phase 2：审计追溯
+
 - `commit_ledger.jsonl` 每次 git commit 前登记 who/intent/sha/parent（commit `9866d0c`）
 - `reconcile.py` 孤儿 commit 检测（E2E 验证：orphans: 0）
 
 ### Phase 3：跨平台通信
+
 - `hub_announce` MCP 工具 → `announcements.jsonl`（commit `9763c39`）
 - `flywheel_daily_report.py` 每日 8:00 推送微信（cron 已配置）
 

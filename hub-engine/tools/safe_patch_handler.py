@@ -14,9 +14,7 @@ Hermes Agent 可直接调用 hub_safe_patch 而非原生 patch。
 
 from __future__ import annotations
 
-import json
 import subprocess
-import sys
 from pathlib import Path
 
 # safe_patch.py 核心逻辑（内联，避免 subprocess 依赖）
@@ -46,7 +44,10 @@ def _assess_risk(old: str, new: str) -> tuple[int, str]:
     old_lines = old.split("\n")
     new_lines = new.split("\n")
     if len(old_lines) > MAX_PATCH_LINES or len(new_lines) > MAX_PATCH_LINES:
-        return 2, f"行数超限（old={len(old_lines)}, new={len(new_lines)}，max={MAX_PATCH_LINES}）"
+        return (
+            2,
+            f"行数超限（old={len(old_lines)}, new={len(new_lines)}，max={MAX_PATCH_LINES}）",
+        )
     for line in old_lines + new_lines:
         for marker in RISK_MARKERS:
             import re as _re
@@ -59,7 +60,10 @@ def _assess_risk(old: str, new: str) -> tuple[int, str]:
     old_indents = [_detect_indent(l) for l in old_lines if l.strip()]
     new_indents = [_detect_indent(l) for l in new_lines if l.strip()]
     if old_indents and new_indents and max(new_indents) > max(old_indents):
-        return 1, f"缩进层数增加（old_max={max(old_indents)}, new_max={max(new_indents)}）"
+        return (
+            1,
+            f"缩进层数增加（old_max={max(old_indents)}, new_max={max(new_indents)}）",
+        )
     if len(old_lines) == 1 and len(new_lines) == 1:
         return 0, "single-line"
     return 1, "multi-line simple"
@@ -70,11 +74,15 @@ def _lint(path: Path) -> tuple[int, str]:
     try:
         r1 = subprocess.run(
             ["ruff", "check", "--fix", str(path)],
-            capture_output=True, text=True, timeout=30,
+            capture_output=True,
+            text=True,
+            timeout=30,
         )
         subprocess.run(
             ["ruff", "format", str(path)],
-            capture_output=True, text=True, timeout=30,
+            capture_output=True,
+            text=True,
+            timeout=30,
         )
         return r1.returncode, r1.stdout + r1.stderr
     except FileNotFoundError:

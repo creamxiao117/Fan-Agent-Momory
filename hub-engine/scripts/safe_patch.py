@@ -18,6 +18,7 @@ V1.0 (2026-09-08): T13.4 用户授权下实施 —— 规避 Hermes patch 工具
     2 = patch 实际执行失败
     3 = ruff lint 失败
 """
+
 import argparse
 import re
 import shutil
@@ -30,18 +31,18 @@ MAX_PATCH_CHARS = 200  # 单行 max 字符数
 
 # @version V1.0 / 2026-09-08 / Hermes / 安全的 patch/write_file 混合工具
 RISK_MARKERS = [
-    r"^\s*def\s+\w+\(",                # 函数定义
-    r"^\s*async\s+def\s+\w+\(",       # 异步函数定义
-    r"^\s*class\s+\w+",                # 类定义
-    r"^\s*@[\w.]+",                    # 装饰器
-    r"^\s*import\s+",                  # import 块
-    r"^\s*from\s+\w+\s+import\s+",     # from import
+    r"^\s*def\s+\w+\(",  # 函数定义
+    r"^\s*async\s+def\s+\w+\(",  # 异步函数定义
+    r"^\s*class\s+\w+",  # 类定义
+    r"^\s*@[\w.]+",  # 装饰器
+    r"^\s*import\s+",  # import 块
+    r"^\s*from\s+\w+\s+import\s+",  # from import
     r"^\s*if\s+__name__\s*==\s*['\"]__main__['\"]",  # main 块
-    r"^\s*try\s*:",                    # try 块
-    r"^\s*except\s+",                  # except
-    r"^\s*with\s+",                    # with 块
-    r"^\s*for\s+",                     # for 块
-    r"^\s*while\s+",                   # while 块
+    r"^\s*try\s*:",  # try 块
+    r"^\s*except\s+",  # except
+    r"^\s*with\s+",  # with 块
+    r"^\s*for\s+",  # for 块
+    r"^\s*while\s+",  # while 块
 ]
 
 
@@ -65,7 +66,10 @@ def assess_risk(old: str, new: str) -> tuple[int, str]:
 
     # 1. 行数过多
     if len(old_lines) > MAX_PATCH_LINES or len(new_lines) > MAX_PATCH_LINES:
-        return 2, f"行数过多（old={len(old_lines)}, new={len(new_lines)}, max={MAX_PATCH_LINES}）"
+        return (
+            2,
+            f"行数过多（old={len(old_lines)}, new={len(new_lines)}, max={MAX_PATCH_LINES}）",
+        )
 
     # 2. 含敏感关键词（函数定义/import/类）
     for line in old_lines + new_lines:
@@ -82,7 +86,10 @@ def assess_risk(old: str, new: str) -> tuple[int, str]:
     old_indents = [detect_indent_level(l) for l in old_lines if l.strip()]
     new_indents = [detect_indent_level(l) for l in new_lines if l.strip()]
     if old_indents and new_indents and max(new_indents) > max(old_indents):
-        return 1, f"缩进层数变化：old_max={max(old_indents)}, new_max={max(new_indents)}"
+        return (
+            1,
+            f"缩进层数变化：old_max={max(old_indents)}, new_max={max(new_indents)}",
+        )
 
     # 5. 仅一行修改且非敏感 → low risk
     if len(old_lines) == 1 and len(new_lines) == 1:
@@ -115,11 +122,15 @@ def lint_file(file_path: Path) -> tuple[int, str]:
     try:
         r1 = subprocess.run(
             ["ruff", "check", "--fix", str(file_path)],
-            capture_output=True, text=True, timeout=30,
+            capture_output=True,
+            text=True,
+            timeout=30,
         )
         subprocess.run(
             ["ruff", "format", str(file_path)],
-            capture_output=True, text=True, timeout=30,
+            capture_output=True,
+            text=True,
+            timeout=30,
         )
         return r1.returncode, r1.stdout + r1.stderr
     except FileNotFoundError:
@@ -131,18 +142,30 @@ def main():
         description="safe_patch: 智能 patch/write_file 工具（兼容 Hermes patch 接口）"
     )
     parser.add_argument(
-        "--file", "--path", dest="file", required=True, help="目标文件路径",
+        "--file",
+        "--path",
+        dest="file",
+        required=True,
+        help="目标文件路径",
     )
     parser.add_argument(
-        "--old", "--old_string", dest="old", required=True,
+        "--old",
+        "--old_string",
+        dest="old",
+        required=True,
         help="原内容（支持多行）",
     )
     parser.add_argument(
-        "--new", "--new_string", "--new-text", dest="new", required=True,
+        "--new",
+        "--new_string",
+        "--new-text",
+        dest="new",
+        required=True,
         help="新内容",
     )
     parser.add_argument(
-        "--replace_all", action="store_true",
+        "--replace_all",
+        action="store_true",
         help="全部替换（与原生 patch 一致）",
     )
     parser.add_argument("--dry-run", action="store_true", help="仅评估风险不执行")

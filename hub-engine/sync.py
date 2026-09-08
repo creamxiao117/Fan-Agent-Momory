@@ -162,7 +162,9 @@ class _WriteLock:
         self.lock = root / ".sync" / "locks" / "writer.lock"
         import uuid
 
-        self._signature = f"{os.getpid()}|{uuid.uuid4().hex[:12]}|{self._hostname()}|{int(_t.time())}"  # noqa: E501
+        self._signature = (
+            f"{os.getpid()}|{uuid.uuid4().hex[:12]}|{self._hostname()}|{int(_t.time())}"
+        )
 
     @staticmethod
     def _hostname() -> str:
