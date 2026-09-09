@@ -44,11 +44,11 @@ TASKS = [
         "stale_detect",
         [
             "python",
-            "scripts/stale_detect.py",
+            "hub-engine/scripts/stale_detect.py",
             "--hub-root",
-            "..",
-            "--skillhub-root",
             ".",
+            "--skillhub-root",
+            "D:/AIwork/20260821-Fan-SkillHub",
             "--days",
             "60",
         ],
@@ -58,21 +58,11 @@ TASKS = [
         "knowledge_gap",
         [
             "python",
-            "-c",
-            (
-                "import json; "
-                "from pathlib import Path; "
-                "p = Path('..') / '.sync' / 'state' / 'query.log.jsonl'; "
-                "from datetime import datetime, timedelta, timezone; "
-                "cutoff = datetime.now(timezone.utc) - timedelta(hours=24); "
-                "total = miss = 0; "
-                "if p.exists(): "
-                "    [total := total + 1 or (miss := miss + 1) for line in p.open() "
-                "       if (lambda e: (e.get('ts', 0) > cutoff.timestamp()) and "
-                "           (e.get('hit_count', 0) == 0) and (miss := miss + 1))(json.loads(line)) "
-                "       if line.strip()]; "
-                "print(f'gap: {miss}/{total}')"
-            ),
+            "hub-engine/scripts/knowledge_gap.py",
+            "--hub-root",
+            ".",
+            "--hours",
+            "24",
         ],
         30,
     ),
@@ -80,11 +70,11 @@ TASKS = [
         "skill_candidate",
         [
             "python",
-            "scripts/skill_candidate_suggest.py",
+            "hub-engine/scripts/skill_candidate_suggest.py",
             "--hub-root",
-            "..",
-            "--skillhub-root",
             ".",
+            "--skillhub-root",
+            "D:/AIwork/20260821-Fan-SkillHub",
             "--threshold",
             "3",
         ],
@@ -94,11 +84,11 @@ TASKS = [
         "freshness",
         [
             "python",
-            "scripts/stale_detect.py",
+            "hub-engine/scripts/stale_detect.py",
             "--hub-root",
-            "..",
-            "--skillhub-root",
             ".",
+            "--skillhub-root",
+            "D:/AIwork/20260821-Fan-SkillHub",
             "--days",
             "90",
         ],
@@ -109,7 +99,9 @@ TASKS = [
 
 def run_task(task_name, args, timeout, hub_root, skillhub_root):
     print(f"[1/6] {task_name}")
-    cwd = skillhub_root if "router/" in str(args) or "tools/" in str(args) else hub_root
+    args_str = str(args)
+    use_skillhub = "tools." in args_str or "tools/" in args_str or "router/" in args_str
+    cwd = skillhub_root if use_skillhub else hub_root
     try:
         r = subprocess.run(
             args, capture_output=True, text=True, timeout=timeout, cwd=cwd
@@ -130,14 +122,35 @@ def main():
     ap = argparse.ArgumentParser(description="hub_orchestrator")
     ap.add_argument("--hub-root", required=True)
     ap.add_argument("--skillhub-root", required=True)
+    ap.add_argument(
+        "--fan-root", required=True, help="Fan-Agent-Momory 根（含 hub-engine/）"
+    )
     ap.add_argument("--task", help="单任务运行（默认全部）")
     args = ap.parse_args()
 
     hub_root = str(Path(args.hub_root).resolve())
     skillhub_root = str(Path(args.skillhub_root).resolve())
+    fan_root = str(Path(args.fan_root).resolve())
+
+    # 把所有命令中的 hub-engine/scripts/xxx.py 替换为 fan_root/hub-engine/scripts/xxx.py
+    # --hub-root 从 . 替换为 hub_root 绝对路径
+    resolved_tasks = []
+    for name, cmd_args, timeout in TASKS:
+        new_args = []
+        for a in cmd_args:
+            if isinstance(a, str) and a.startswith("hub-engine/scripts/"):
+                new_args.append(str(Path(fan_root) / a))
+            elif a == "..":
+                # 把 ".." 替换为 hub_root 的父目录
+                new_args.append(str(Path(hub_root).parent))
+            elif a == ".":
+                new_args.append(hub_root)
+            else:
+                new_args.append(a)
+        resolved_tasks.append((name, new_args, timeout))
 
     failed = 0
-    for task_name, cmd_args, timeout in TASKS:
+    for task_name, cmd_args, timeout in resolved_tasks:
         if args.task and args.task != task_name:
             continue
         rc = run_task(task_name, cmd_args, timeout, hub_root, skillhub_root)
