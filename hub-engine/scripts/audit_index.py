@@ -30,16 +30,18 @@ NESTED_ENTRY_RE = re.compile(
     r"^\|- ([a-zA-Z0-9][a-zA-Z0-9_\-\.]{0,80})(?:\s{2,}|\s+)(.+)$"
 )
 
-# 权威区（与 sync.py TYPE_DIR 对齐）
+# 权威区（与 engine.config.yaml authority_dirs 对齐，2026-09-02 调整为 5 目录）
+# 注意：experience/notes/retro 是非权威区，仅参与 INDEX 登记，不参与权威文件扫描
 AUTHORITY_DIRS = (
     "rules",
     "methodology",
     "longterm",
     "projects",
     "blueprints",
-    "experience",  # 非权威但参与登记
-    "notes",
 )
+
+# _ghost_index 检查时额外纳入非权威区（experience/notes/retro）避免误报
+_ALL_SCAN_DIRS = AUTHORITY_DIRS + ("experience", "notes", "retro")
 
 # slug 格式：允许小写/大写字母、数字、连字符、下划线、点号；2~80 字符
 SLUG_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_\-\.]{1,79}$")
@@ -66,10 +68,11 @@ def _parse_index(index_path: Path) -> tuple[dict[str, list[str]], list[dict]]:
     return by_slug, entries
 
 
-def _authority_files(root: Path) -> dict[str, Path]:
-    """权威区文件 → 相对路径。"""
+def _authority_files(root: Path, dirs: tuple[str, ...] | None = None) -> dict[str, Path]:
+    """权威区文件 → 相对路径。dirs=None 时用 AUTHORITY_DIRS。"""
     out: dict[str, Path] = {}
-    for d in AUTHORITY_DIRS:
+    scan_dirs = dirs if dirs is not None else AUTHORITY_DIRS
+    for d in scan_dirs:
         sub = root / d
         if not sub.exists():
             continue
@@ -99,13 +102,14 @@ def audit(root: Path) -> dict:
     files_by_slug = _authority_files(root)
     stats["total_files"] = len(files_by_slug)
 
-    # 1) ghost：INDEX 登记了但权威区无文件
+    # 1) ghost：INDEX 登记了但任何目录（含 experience/notes/retro）都找不到文件
+    all_files_by_slug = _authority_files(root, dirs=_ALL_SCAN_DIRS)
     for slug in by_slug:
-        if slug not in files_by_slug:
+        if slug not in all_files_by_slug:
             issues.append(
                 {
                     "type": "ghost_index",
-                    "msg": f"INDEX 登记了 '{slug}' 但权威区找不到对应文件",
+                    "msg": f"INDEX 登记了 '{slug}' 但所有目录都找不到对应文件",
                     "slug": slug,
                     "severity": "high",
                 }
