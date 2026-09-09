@@ -5,6 +5,14 @@
 
 gateway_url: http://127.0.0.1:1234
 default_model: qwen/qwen3.5-9b
+
+# Embedding 后端：直连 LM Studio（不用 OmniRoute，因为 OmniRoute /v1/embeddings 要求 provider/model 格式，
+# 而 bge-m3 模型名不带前缀，直连 LM Studio 1234 用短格式可通）
+embed:
+  url: http://127.0.0.1:1234/v1/embeddings
+  model: text-embedding-bge-small-zh-v1.5
+  api_key: lm-studio
+  timeout: 30
 # 超时 60s：真实 dedup prompt(4.4k 字符)下 1.5b 实测 18.7s、9b 推理模型 38.3s，
 # 原 30s 对 9b 必然超时→降级 conflicts（2026-09-02 根因诊断）
 timeout: 60
