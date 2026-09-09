@@ -1,0 +1,1 @@
+M3 主 Agent 自己写 schema.json（6 顶层 key 对应 6 大区，JSON Schema 2020-12 草案）。subagent 30s 不够写 6 个 key 详写，我接手。

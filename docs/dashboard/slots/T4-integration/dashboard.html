@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>中枢总控台 · AgentMemoryHub</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --bg: #08090a;
+    --panel: #0f1011;
+    --elevated: #191a1b;
+    --border: rgba(255,255,255,0.08);
+    --text-1: #f7f8f8;
+    --text-2: rgba(247,248,248,0.65);
+    --text-3: rgba(247,248,248,0.4);
+    --accent: #5e6ad2;
+    --accent-hover: #7170ff;
+    --green: #4cb782;
+    --yellow: #f2c94c;
+    --red: #f87171;
+  }
+  body { background: var(--bg); color: var(--text-1); font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; font-size: 14px; line-height: 1.5; padding: 24px; min-height: 100vh; }
+  .header { display: flex; justify-content: space-between; align-items: center; padding: 20px 24px; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; margin-bottom: 24px; }
+  .header h1 { font-size: 24px; font-weight: 600; letter-spacing: -0.5px; }
+  .header .sub { font-size: 12px; color: var(--text-3); margin-top: 4px; }
+  .header .actions { display: flex; gap: 8px; }
+  .btn { background: var(--elevated); border: 1px solid var(--border); color: var(--text-1); padding: 8px 14px; border-radius: 6px; font-size: 12px; cursor: pointer; transition: all 0.15s; }
+  .btn:hover { background: var(--accent); border-color: var(--accent-hover); }
+  .btn.primary { background: var(--accent); border-color: var(--accent-hover); }
+  .status-pill { background: rgba(76,183,130,0.15); color: var(--green); padding: 4px 12px; border-radius: 100px; font-size: 12px; font-weight: 500; }
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 24px; }
+  .grid-2 { grid-template-columns: repeat(2, 1fr); }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 24px; min-height: 180px; }
+  .card h3 { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 1.2px; color: var(--text-3); margin-bottom: 16px; }
+  .big-value { font-size: 56px; font-weight: 600; letter-spacing: -2px; line-height: 1; margin-bottom: 8px; }
+  .big-value .small { font-size: 22px; color: var(--text-2); font-weight: 500; letter-spacing: -0.5px; }
+  .unit { font-size: 13px; color: var(--text-2); }
+  .bar { height: 4px; background: rgba(255,255,255,0.06); border-radius: 2px; margin-top: 16px; overflow: hidden; }
+  .bar-fill { height: 100%; background: var(--accent); transition: width 0.5s; }
+  .platform-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; font-size: 14px; }
+  .platform-row + .platform-row { border-top: 1px solid var(--border); }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 8px; }
+  .dot.green { background: var(--green); }
+  .dot.yellow { background: var(--yellow); }
+  .dot.red { background: var(--red); }
+  .status-green { color: var(--green); font-size: 11px; font-weight: 600; }
+  .status-yellow { color: var(--yellow); font-size: 11px; font-weight: 600; }
+  .status-red { color: var(--red); font-size: 11px; font-weight: 600; }
+  .stage { flex: 1; text-align: center; padding: 14px 8px; background: var(--elevated); border-radius: 6px; font-size: 11px; }
+  .stage.active { background: rgba(94,106,210,0.15); border: 1px solid rgba(94,106,210,0.3); }
+  .stage-row { display: flex; gap: 6px; margin-top: 8px; }
+  .stage-name { font-size: 13px; font-weight: 600; color: var(--text-1); margin-bottom: 4px; }
+  .stage-val { font-size: 10px; color: var(--text-3); word-break: break-all; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th, td { padding: 8px 10px; text-align: left; border-bottom: 1px solid var(--border); }
+  th { color: var(--text-3); font-size: 10px; text-transform: uppercase; letter-spacing: 1px; font-weight: 600; }
+  .alert { padding: 10px 14px; border-radius: 6px; margin-bottom: 8px; font-size: 13px; }
+  .alert.red { background: rgba(248,113,113,0.1); color: var(--red); border-left: 3px solid var(--red); }
+  .alert.yellow { background: rgba(242,201,76,0.1); color: var(--yellow); border-left: 3px solid var(--yellow); }
+  .alert.green { background: rgba(76,183,130,0.1); color: var(--green); border-left: 3px solid var(--green); }
+  .footer { text-align: center; margin-top: 32px; padding-top: 16px; border-top: 1px solid var(--border); color: var(--text-3); font-size: 11px; }
+  .empty { color: var(--text-3); font-style: italic; font-size: 12px; padding: 12px 0; }
+  .type-stat { padding: 10px 16px; background: var(--elevated); border-radius: 6px; font-size: 13px; min-width: 100px; }
+  .type-stat .num { font-size: 28px; font-weight: 600; line-height: 1; margin-bottom: 4px; }
+  .type-stat .lbl { color: var(--text-3); font-size: 10px; text-transform: uppercase; letter-spacing: 1px; }
+  .types-wrap { display: flex; flex-wrap: wrap; gap: 10px; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <h1>中枢总控台</h1>
+    <div class="sub">AgentMemoryHub · 实时多源数据 · <span id="gen-time">--</span></div>
+  </div>
+  <div class="actions">
+    <span class="status-pill" id="status-pill">● 加载中</span>
+    <button class="btn" onclick="location.reload()">🔄 刷新页面</button>
+    <button class="btn primary" onclick="regenerate()">⚡ 手动同步数据</button>
+  </div>
+</div>
+
+<div class="grid">
+  <div class="card">
+    <h3>总体健康</h3>
+    <div class="big-value" id="health-overall">--<span class="small">/100</span></div>
+    <div class="unit" id="health-panels">-- 面板 OK</div>
+    <div class="bar"><div class="bar-fill" id="health-bar" style="width:0%"></div></div>
+  </div>
+  <div class="card">
+    <h3>5 平台连接状态</h3>
+    <div id="platforms-list"><div class="empty">加载中...</div></div>
+  </div>
+  <div class="card">
+    <h3>6 面板自检 · 06:00 巡检</h3>
+    <div id="flywheel-stages" class="stage-row"></div>
+  </div>
+</div>
+
+<div class="grid grid-2">
+  <div class="card">
+    <h3>知识缺口 · 24h</h3>
+    <div class="big-value" id="gap-value">--<span class="small">/--</span></div>
+    <div class="unit" id="gap-rate">-- miss rate</div>
+    <div class="bar"><div class="bar-fill" id="gap-bar" style="width:0%"></div></div>
+  </div>
+  <div class="card">
+    <h3>待人工处理</h3>
+    <div class="big-value" id="todos-value">--</div>
+    <div class="unit" id="todos-unit">-- 规则 pending</div>
+  </div>
+  <div class="card" style="grid-column: span 2;">
+    <h3>关键告警</h3>
+    <div id="alerts-list"></div>
+  </div>
+</div>
+
+<div class="grid grid-2">
+  <div class="card" style="grid-column: span 2;">
+    <h3>Cron 任务状态 · <span id="cron-count">-- 个任务</span></h3>
+    <table>
+      <thead><tr><th>ID</th><th>名称</th><th>Schedule</th><th>状态</th><th>最近运行</th></tr></thead>
+      <tbody id="cron-tbody"></tbody>
+    </table>
+  </div>
+</div>
+
+<div class="grid grid-2">
+  <div class="card">
+    <h3>中枢卡片 · 按类型</h3>
+    <div id="card-types" class="types-wrap"></div>
+  </div>
+  <div class="card">
+    <h3>三仓 Git 同步状态</h3>
+    <div id="sync-list"></div>
+  </div>
+</div>
+
+<div class="grid grid-2">
+  <div class="card">
+    <h3>最近 commit_ledger · commit_ledger.jsonl</h3>
+    <table>
+      <thead><tr><th>时间</th><th>谁</th><th>意图</th><th>sha</th></tr></thead>
+      <tbody id="ledger-tbody"></tbody>
+    </table>
+  </div>
+  <div class="card">
+    <h3>最近 ingest · 经验/方法论/规则</h3>
+    <table>
+      <thead><tr><th>日期</th><th>标题</th><th>类型</th><th>状态</th></tr></thead>
+      <tbody id="ingest-tbody"></tbody>
+    </table>
+  </div>
+</div>
+
+<div class="footer">
+  AgentMemoryHub · M3 主 Agent 设计 · 13 大区实时数据 · Linear 风格
+  <br>
+  <span id="footer-meta"></span>
+</div>
+
+<script>
+const DATA_URL = './dashboard-data.json';
+
+function esc(s) { return String(s).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'})[c]); }
+
+function regenerate() {
+  const pill = document.getElementById('status-pill');
+  pill.textContent = '⏳ 同步中...';
+  pill.style.background = 'rgba(242,201,76,0.15)';
+  pill.style.color = '#f2c94c';
+  setTimeout(() => location.reload(), 1200);
+}
+
+async function loadDashboard() {
+  try {
+    const r = await fetch(DATA_URL, {cache: 'no-store'});
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const d = await r.json();
+    render(d);
+  } catch (e) {
+    document.getElementById('status-pill').textContent = '✗ 数据加载失败（file:// 限制）';
+    document.getElementById('status-pill').style.background = 'rgba(248,113,113,0.15)';
+    document.getElementById('status-pill').style.color = '#f87171';
+    document.getElementById('alerts-list').innerHTML = '<div class="alert red">⚠ 数据加载失败：' + esc(e.message) + ' · 请用 HTTP server 打开</div>';
+  }
+}
+
+function render(d) {
+  const $ = id => document.getElementById(id);
+  $('gen-time').textContent = (d.generated_at || '').slice(0, 19).replace('T', ' ');
+  $('footer-meta').textContent = 'data: ' + (d.hub_root || 'n/a');
+
+  const h = d.health || {};
+  $('health-overall').innerHTML = Math.round(h.overall || 0) + '<span class="small">/100</span>';
+  $('health-panels').textContent = (h.panels_ok || 0) + '/' + (h.panels_total || 0) + ' 面板 OK';
+  $('health-bar').style.width = (h.overall || 0) + '%';
+
+  const plist = $('platforms-list');
+  plist.innerHTML = '';
+  const platforms = (d.platforms && d.platforms.platforms) || {};
+  for (const [name, info] of Object.entries(platforms)) {
+    const cls = (info.status || 'yellow').toLowerCase();
+    const row = document.createElement('div');
+    row.className = 'platform-row';
+    row.innerHTML = '<span><span class="dot ' + cls + '"></span><strong>' + name + '</strong> <span style="color:var(--text-3);font-size:11px;margin-left:6px">' + (info.type || '') + '</span></span>' +
+                    '<span class="status-' + cls + '">' + (info.status || '?') + '</span>';
+    plist.appendChild(row);
+  }
+
+  const stageMap = {
+    skill_health: '健康', llm_route: 'LLM 路由', stale_detect: '陈旧检测',
+    knowledge_gap: '知识缺口', skill_candidate: '技能建议', freshness: '新鲜度'
+  };
+  const stages = $('flywheel-stages');
+  stages.innerHTML = '';
+  for (const [k, label] of Object.entries(stageMap)) {
+    const r = (d.flywheel || {})[k] || {};
+    const ok = r.ok;
+    const val = ok ? (r.stdout || '').split(/[\n:]/)[0].slice(0, 24) : 'off';
+    const div = document.createElement('div');
+    div.className = 'stage' + (ok ? ' active' : '');
+    div.innerHTML = '<div class="stage-name">' + label + '</div><div class="stage-val">' + esc(val) + '</div>';
+    stages.appendChild(div);
+  }
+
+  const g = d.knowledge_gap || {};
+  $('gap-value').innerHTML = (g.miss || 0) + '<span class="small">/' + (g.total || 0) + '</span>';
+  $('gap-rate').textContent = (g.miss_rate || 0).toFixed(1) + '% miss rate';
+  $('gap-bar').style.width = Math.min(g.miss_rate || 0, 100) + '%';
+
+  const todos = d.todos || {};
+  $('todos-value').textContent = (todos.projects || []).length || 0;
+  $('todos-unit').textContent = (todos.pending_rules || 0) + ' 规则 pending';
+
+  const al = $('alerts-list');
+  al.innerHTML = '';
+  const critical = (d.alerts && d.alerts.critical) || [];
+  const ann = (d.alerts && d.alerts.announcements) || [];
+  if (critical.length === 0 && ann.length === 0) {
+    al.innerHTML = '<div class="alert green">✓ 无告警 · 系统正常</div>';
+  } else {
+    critical.forEach(m => {
+      const a = document.createElement('div');
+      a.className = 'alert red';
+      a.innerHTML = '⚠ <strong>CRITICAL</strong> · ' + esc(m);
+      al.appendChild(a);
+    });
+    ann.slice(0, 5).forEach(m => {
+      const a = document.createElement('div');
+      a.className = 'alert yellow';
+      a.innerHTML = '📢 <strong>' + esc((m.action || '').slice(0, 30)) + '</strong> · ' + esc((m.who || ''));
+      al.appendChild(a);
+    });
+  }
+
+  const cj = d.cron_jobs || {};
+  $('cron-count').textContent = (cj.total || 0) + ' 个任务 / ' + (cj.active || 0) + ' active';
+  const ctbody = $('cron-tbody');
+  ctbody.innerHTML = '';
+  (cj.schedule || []).forEach(c => {
+    const cls = (c.status === 'active') ? 'green' : 'yellow';
+    const tr = document.createElement('tr');
+    tr.innerHTML = '<td style="font-family:monospace;font-size:11px">' + esc(c.id.slice(0, 12)) + '</td>' +
+                   '<td>' + esc(c.name) + '</td>' +
+                   '<td style="font-family:monospace;font-size:11px">' + esc(c.schedule) + '</td>' +
+                   '<td><span class="status-' + cls + '">' + esc(c.status) + '</span></td>' +
+                   '<td style="color:var(--text-2);font-size:11px">' + esc(c.last) + '</td>';
+    ctbody.appendChild(tr);
+  });
+
+  const ctypes = $('card-types');
+  ctypes.innerHTML = '';
+  const colors = {exp: 'var(--accent)', rule: 'var(--red)', methodology: 'var(--green)', blueprints: 'var(--yellow)', longterm: 'var(--text-3)', projects: '#5e6ad2'};
+  for (const [t, cnt] of Object.entries(d.card_stats_by_type || {})) {
+    const div = document.createElement('div');
+    div.className = 'type-stat';
+    div.innerHTML = '<div class="num" style="color:' + (colors[t] || 'var(--text-1)') + '">' + cnt + '</div>' +
+                    '<div class="lbl">' + t + '</div>';
+    ctypes.appendChild(div);
+  }
+
+  const slist = $('sync-list');
+  slist.innerHTML = '';
+  for (const [repo, info] of Object.entries(d.sync_status || {})) {
+    const row = document.createElement('div');
+    row.className = 'platform-row';
+    row.innerHTML = '<span><span class="dot green"></span><strong>' + repo + '</strong></span>' +
+                    '<span style="font-family:monospace;font-size:11px;color:var(--text-2)">' + esc(info.last_commit || '') + ' · ' + esc(info.branch || '') + '</span>';
+    slist.appendChild(row);
+  }
+
+  const lbody = $('ledger-tbody');
+  lbody.innerHTML = '';
+  (d.ledger_recent || []).forEach(e => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = '<td style="font-family:monospace;font-size:11px">' + esc((e.ts || '').slice(5, 16)) + '</td>' +
+                   '<td>' + esc(e.who) + '</td>' +
+                   '<td style="color:var(--text-2)">' + esc((e.intent || '').slice(0, 50)) + '</td>' +
+                   '<td style="font-family:monospace;font-size:11px">' + esc((e.sha || '').slice(0, 7)) + '</td>';
+    lbody.appendChild(tr);
+  });
+
+  const ibody = $('ingest-tbody');
+  ibody.innerHTML = '';
+  (d.ingest_recent || []).forEach(e => {
+    const tr = document.createElement('tr');
+    const cls = (e.status === 'promoted') ? 'green' : 'yellow';
+    tr.innerHTML = '<td style="font-family:monospace;font-size:11px">' + esc(e.ts) + '</td>' +
+                   '<td>' + esc((e.title || '').slice(0, 40)) + '</td>' +
+                   '<td>' + esc(e.type) + '</td>' +
+                   '<td><span class="status-' + cls + '">' + esc(e.status) + '</span></td>';
+    ibody.appendChild(tr);
+  });
+
+  const total = Object.values(platforms).length;
+  const green = Object.values(platforms).filter(p => p.status === 'GREEN').length;
+  const pill = $('status-pill');
+  if (green === total) { pill.textContent = '● 系统正常'; }
+  else if (green >= total - 1) { pill.textContent = '● 1 平台异常'; pill.style.background = 'rgba(242,201,76,0.15)'; pill.style.color = '#f2c94c'; }
+  else { pill.textContent = '● 异常'; pill.style.background = 'rgba(248,113,113,0.15)'; pill.style.color = '#f87171'; }
+}
+
+loadDashboard();
+setInterval(() => location.reload(), 30000);
+</script>
+
+</body>
+</html>

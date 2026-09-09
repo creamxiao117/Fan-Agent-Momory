@@ -1,0 +1,1 @@
+M3 主 Agent 自己写 mockup.html（5815 字符，180 行，Linear 风格：黑底+indigo 强调，6 大区布局）。subagent 30s timeout 不足以写完，我接手。

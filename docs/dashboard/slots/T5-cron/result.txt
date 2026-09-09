@@ -1,0 +1,1 @@
+T5: dashboard_regen.py — 每天 7:00 跑 T3 + 复制到 T4。需注册 cron。
