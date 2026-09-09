@@ -89,6 +89,83 @@ def detect_knowledge_gaps(query_log_path: Path, *, window_hours: int = 24) -> di
     }
 
 
+def _load_6panel(hub_root: Path) -> dict | None:
+    """读取 hub_orchestrator.py 写的 6 面板 JSON 供飞轮日报消费。
+
+    返回 None 表示今日还没跑（如 07:50 时 06:00 还没跑过，理论上不会发生）。
+    """
+    p = hub_root / "system" / "run" / "daily-6panel.json"
+    if not p.exists():
+        return None
+    try:
+        return json.loads(p.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        return {"_error": str(exc)}
+
+
+def _format_6panel_section(panel: dict | None) -> list[str]:
+    """把 6 面板结果格式化为微信友好段落。"""
+    if not panel:
+        return []
+    if "_error" in panel:
+        return [f"  ⚠️ 6 面板结果不可读: {panel['_error']}"]
+    results = panel.get("results", {})
+    if not results:
+        return []
+
+    lines: list[str] = []
+
+    # 1. 技能健康
+    sh = results.get("skill_health", {})
+    if sh.get("ok"):
+        stdout = sh.get("info", {}).get("stdout", "")
+        lines.append(f"  {stdout}")
+    else:
+        lines.append("  ❌ skill_health 失败")
+
+    # 2. LLM 路由
+    lr = results.get("llm_route", {})
+    if lr.get("ok"):
+        stdout = lr.get("info", {}).get("stdout", "")
+        if "hits: []" in stdout:
+            lines.append("  🟡 LLM 路由：fallback 可用但 LLM 决策无命中（可能是离线或无可用模型）")
+        else:
+            lines.append(f"  ✅ LLM 路由：{stdout[:60]}")
+
+    # 3. 陈旧检测（60 天）
+    sd = results.get("stale_detect", {})
+    if sd.get("ok"):
+        stdout = sd.get("info", {}).get("stdout", "")
+        for line in stdout.split("\n"):
+            if "Stale" in line:
+                lines.append(f"  📦 {line.strip()}")
+
+    # 4. 知识缺口
+    kg = results.get("knowledge_gap", {})
+    if kg.get("ok"):
+        stdout = kg.get("info", {}).get("stdout", "")
+        lines.append(f"  {stdout}")
+
+    # 5. 技能建议
+    sc = results.get("skill_candidate", {})
+    if sc.get("ok"):
+        stdout = sc.get("info", {}).get("stdout", "")
+        # 提取数字 "生成 N 张"
+        for line in stdout.split("\n"):
+            if "生成" in line and "建议" in line:
+                lines.append(f"  💡 {line.strip()}")
+
+    # 6. 90 天 freshness
+    fr = results.get("freshness", {})
+    if fr.get("ok"):
+        stdout = fr.get("info", {}).get("stdout", "")
+        for line in stdout.split("\n"):
+            if "Stale" in line and "60" not in line:
+                lines.append(f"  📅 90 天: {line.strip()}")
+
+    return lines
+
+
 def _format_gap_section(gap: dict) -> list[str]:
     """把知识缺口数据格式化为微信友好的文本段落。"""
     if "error" in gap:
@@ -294,6 +371,14 @@ def format_report(data: dict) -> str:
             mark = "✅" if count > 0 else "⏸"
             lines.append(f"  {mark} {zh}：{count} 次")
 
+    # 6 面板融合（06:00 orchestrator 结果）
+    panel6 = data.get("_6panel")
+    panel6_lines = _format_6panel_section(panel6)
+    if panel6_lines:
+        lines.append("【6 面板自检 · 06:00 巡检】")
+        lines.extend(panel6_lines)
+        lines.append("")
+
     # LLM 状态
     if llm_status:
         available = llm_status.get("available", False)
@@ -355,6 +440,9 @@ def main() -> int:
     except Exception as exc:
         print(f"❌ 飞轮日报生成失败：{exc}", file=sys.stderr)
         return 1
+
+    # 6 面板融合（改进 1+2 落地）
+    data["_6panel"] = _load_6panel(hub_root)
 
     # 知识缺口检测（改进三）
     gap = detect_knowledge_gaps(hub_root / ".sync/state/query.log.jsonl")

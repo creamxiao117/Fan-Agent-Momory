@@ -5,6 +5,7 @@ V1.0 (2026-09-09): 6 项 cron 任务统一调度。
 """
 
 import argparse
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -98,6 +99,7 @@ TASKS = [
 
 
 def run_task(task_name, args, timeout, hub_root, skillhub_root):
+    """执行 1 个子任务。返回 (returncode, info_dict)。"""
     print(f"[1/6] {task_name}")
     args_str = str(args)
     use_skillhub = "tools." in args_str or "tools/" in args_str or "router/" in args_str
@@ -112,10 +114,11 @@ def run_task(task_name, args, timeout, hub_root, skillhub_root):
             print(f"  OK: {out}")
         else:
             print(f"  FAIL({r.returncode}): {out} {err}")
-        return r.returncode
+        info = {"stdout": out, "stderr": err, "returncode": r.returncode}
+        return r.returncode, info
     except subprocess.TimeoutExpired:
         print(f"  TIMEOUT after {timeout}s")
-        return 1
+        return 1, {"stdout": "", "stderr": f"timeout after {timeout}s", "returncode": 1}
 
 
 def main():
@@ -150,14 +153,38 @@ def main():
         resolved_tasks.append((name, new_args, timeout))
 
     failed = 0
+    results: dict = {}
     for task_name, cmd_args, timeout in resolved_tasks:
         if args.task and args.task != task_name:
             continue
-        rc = run_task(task_name, cmd_args, timeout, hub_root, skillhub_root)
+        rc, info = run_task(task_name, cmd_args, timeout, hub_root, skillhub_root)
         failed += rc
+        results[task_name] = {"ok": rc == 0, "info": info}
+
+    # 写 6 面板结果 JSON 供飞轮日报消费（叠加不删，可观测）
+    out_dir = Path(hub_root) / "system" / "run"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out_path = out_dir / "daily-6panel.json"
+    try:
+        out_path.write_text(
+            json.dumps(
+                {"generated_at": _iso_now(), "hub_root": hub_root,
+                 "skillhub_root": skillhub_root, "results": results},
+                ensure_ascii=False, indent=2,
+            ),
+            encoding="utf-8",
+        )
+        print(f"\n[orchestrator] 6 面板结果已写: {out_path}")
+    except OSError as exc:
+        print(f"\n[orchestrator] 写 JSON 失败: {exc}", file=sys.stderr)
 
     print(f"\n=== 汇总: {len(TASKS)} 任务, 失败 {failed} ===")
     return 0 if failed == 0 else 1
+
+
+def _iso_now() -> str:
+    from datetime import datetime, timezone
+    return datetime.now(timezone.utc).isoformat()
 
 
 if __name__ == "__main__":
