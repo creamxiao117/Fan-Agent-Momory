@@ -1,0 +1,1 @@
+M3 主 Agent 自己写 T3（5 数据源 → 6 大区 dashboard-data.json，328 行 Python，stdout 6 大区齐全，code 平台 RED 真实发现）。

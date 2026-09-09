@@ -1,0 +1,210 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "中枢总控台 Dashboard Data Schema",
+  "version": "1.0.0",
+  "description": "V1.0 (2026-09-09): 6 大区数据 schema 草案",
+  "type": "object",
+  "required": [
+    "generated_at",
+    "hub_root",
+    "health",
+    "platforms",
+    "flywheel",
+    "knowledge_gap",
+    "todos",
+    "alerts"
+  ],
+  "properties": {
+    "generated_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "生成时间 (CST ISO)"
+    },
+    "hub_root": {
+      "type": "string",
+      "description": "中枢根绝对路径"
+    },
+    "health": {
+      "type": "object",
+      "description": "1. 总体健康",
+      "properties": {
+        "overall": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "综合评分 0-100"
+        },
+        "panels_ok": {
+          "type": "integer",
+          "description": "6 面板 OK 数"
+        },
+        "panels_total": {
+          "type": "integer",
+          "description": "面板总数"
+        },
+        "card_health": {
+          "type": "number",
+          "description": "卡片健康分（hub_health）"
+        },
+        "skill_health": {
+          "type": "number",
+          "description": "技能健康分"
+        },
+        "flywheel_activity": {
+          "type": "number",
+          "description": "飞轮活跃度"
+        },
+        "llm_health": {
+          "type": "number",
+          "description": "LLM 健康分"
+        }
+      }
+    },
+    "platforms": {
+      "type": "object",
+      "description": "2. 5 平台连接状态",
+      "properties": {
+        "summary": {
+          "type": "object",
+          "properties": {
+            "green": {
+              "type": "integer"
+            },
+            "yellow": {
+              "type": "integer"
+            },
+            "red": {
+              "type": "integer"
+            }
+          }
+        },
+        "platforms": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "mcp",
+                  "file",
+                  "hook+file"
+                ]
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "GREEN",
+                  "YELLOW",
+                  "RED"
+                ]
+              },
+              "issues": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": [
+              "status"
+            ]
+          }
+        }
+      }
+    },
+    "flywheel": {
+      "type": "object",
+      "description": "3. 飞轮运转 · 6 面板",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          },
+          "stdout": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "stderr": {
+            "type": "string",
+            "maxLength": 300
+          }
+        }
+      }
+    },
+    "knowledge_gap": {
+      "type": "object",
+      "description": "4. 知识缺口 · 24h",
+      "properties": {
+        "total": {
+          "type": "integer"
+        },
+        "miss": {
+          "type": "integer"
+        },
+        "miss_rate": {
+          "type": "number",
+          "description": "百分比 0-100"
+        },
+        "top_misses": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "maxItems": 5
+        }
+      }
+    },
+    "todos": {
+      "type": "object",
+      "description": "5. 待人工处理",
+      "properties": {
+        "projects": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "pending_rules": {
+          "type": "integer"
+        }
+      }
+    },
+    "alerts": {
+      "type": "object",
+      "description": "6. 关键告警",
+      "properties": {
+        "critical": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "announcements": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        }
+      }
+    }
+  }
+}

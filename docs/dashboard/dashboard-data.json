@@ -1,0 +1,282 @@
+{
+  "generated_at": "2026-09-09T16:51:18.968378+08:00",
+  "hub_root": "C:\\Users\\Fan-SJSS\\.trae-cn\\worktrees\\20260817-Fan-Agent-Momory\\feat-implement-plan-ZilBmv\\AgentMemoryHub",
+  "health": {
+    "overall": 100.0,
+    "panels_ok": 6,
+    "panels_total": 6
+  },
+  "platforms": {
+    "summary": {
+      "green": 5
+    },
+    "platforms": {
+      "hermes": {
+        "type": "mcp",
+        "status": "GREEN"
+      },
+      "trae": {
+        "type": "mcp",
+        "status": "GREEN"
+      },
+      "code": {
+        "type": "mcp",
+        "status": "RED"
+      },
+      "workbuddy": {
+        "type": "mcp",
+        "status": "GREEN"
+      },
+      "dsh": {
+        "type": "file",
+        "status": "GREEN"
+      }
+    },
+    "raw_status": "OK"
+  },
+  "flywheel": {
+    "skill_health": {
+      "ok": true,
+      "stdout": "avg: 95.0 low_health: 0",
+      "stderr": ""
+    },
+    "llm_route": {
+      "ok": true,
+      "stdout": "llm_route hits: []",
+      "stderr": ""
+    },
+    "stale_detect": {
+      "ok": true,
+      "stdout": "Stale 卡片：0 张\nStale 技能：0 个",
+      "stderr": ""
+    },
+    "knowledge_gap": {
+      "ok": true,
+      "stdout": "gap: 0/0 (0.0%)",
+      "stderr": ""
+    },
+    "skill_candidate": {
+      "ok": true,
+      "stdout": "生成 54 张建议卡：\n  - cards\\skill-candidates\\activedirs-five-type-discipline.md\n  - cards\\skill-candidates\\agent-memory-hub-mcp.md\n  - cards\\skill-candidates\\autocad-com-automation-deadlock.md\n  - cards\\ski",
+      "stderr": ""
+    },
+    "freshness": {
+      "ok": true,
+      "stdout": "Stale 卡片：0 张\nStale 技能：0 个",
+      "stderr": ""
+    }
+  },
+  "knowledge_gap": {
+    "total": 0,
+    "miss": 0,
+    "miss_rate": 0.0,
+    "top_misses": []
+  },
+  "todos": {
+    "projects": [
+      {
+        "name": "cad-plugin-management-platform",
+        "title": "---"
+      },
+      {
+        "name": "cad2020-pdf-merge",
+        "title": "---"
+      },
+      {
+        "name": "github-autopush",
+        "title": "---"
+      },
+      {
+        "name": "hermes-fan-debug-v1",
+        "title": "---"
+      },
+      {
+        "name": "improve-ingest-dedup-threshold",
+        "title": "---"
+      },
+      {
+        "name": "pluginhub-current-state",
+        "title": "---"
+      },
+      {
+        "name": "project-threeRowRein-baseline-v51-snapshot",
+        "title": "﻿---"
+      },
+      {
+        "name": "t1-plan-three-blueprints",
+        "title": "---"
+      },
+      {
+        "name": "T19-cron-long-term-optimization",
+        "title": "---"
+      },
+      {
+        "name": "T21-5platform-后续优化-待办",
+        "title": "---"
+      }
+    ],
+    "pending_rules": 0
+  },
+  "alerts": {
+    "critical": [
+      "code"
+    ],
+    "announcements": [
+      {
+        "ts": 1788825228,
+        "platform": "hermes",
+        "action": "ingest_done",
+        "payload": {
+          "moved": [
+            "test.md"
+          ],
+          "commit": "abc123"
+        },
+        "audit_id": "20260907T235348Z-ff4fceb6"
+      }
+    ]
+  },
+  "cron_jobs": [
+    {
+      "id": "12c532815d47",
+      "name": "飞轮日报·微信推送",
+      "schedule": "45 7 * * *",
+      "status": "active",
+      "last": "07:45 ok"
+    },
+    {
+      "id": "21ff20ab3607",
+      "name": "GitHub star-distill + T1 迭代",
+      "schedule": "10 8 * * *",
+      "status": "active",
+      "last": "08:10 ok"
+    },
+    {
+      "id": "78247c397f8f",
+      "name": "中枢每日健康快照 (agent)",
+      "schedule": "50 7 * * *",
+      "status": "active",
+      "last": "07:50 ok"
+    },
+    {
+      "id": "691ec6456904",
+      "name": "每周召回评测复核",
+      "schedule": "30 8 * * 6",
+      "status": "active",
+      "last": "Sat 08:30 ok"
+    },
+    {
+      "id": "29774d09dfbe",
+      "name": "SkillHub 周晋级巡检",
+      "schedule": "0 8 * * 6",
+      "status": "active",
+      "last": "Sat 待跑"
+    },
+    {
+      "id": "461dd62b4da3",
+      "name": "T15-6工具每日编排",
+      "schedule": "0 6 * * *",
+      "status": "active",
+      "last": "06:00 ok"
+    },
+    {
+      "id": "fbcdc46ca7f0",
+      "name": "5平台每日健康检查",
+      "schedule": "55 7 * * *",
+      "status": "active",
+      "last": "07:55 ok"
+    }
+  ],
+  "card_stats_by_type": {
+    "exp": 144,
+    "rule": 26,
+    "methodology": 46,
+    "blueprints": 74,
+    "longterm": 0,
+    "projects": 13
+  },
+  "sync_status": {
+    "Fan-Agent-Momory": {
+      "ahead": 0,
+      "behind": 0,
+      "last_commit": "853782d",
+      "branch": "master"
+    },
+    "AgentMemoryHub": {
+      "ahead": 0,
+      "behind": 0,
+      "last_commit": "5ddb89a",
+      "branch": "master"
+    },
+    "SkillHub": {
+      "ahead": 0,
+      "behind": 0,
+      "last_commit": "5bc4a5a",
+      "branch": "master"
+    }
+  },
+  "ledger_recent": [
+    {
+      "ts": "2026-09-09T15:55",
+      "who": "hermes",
+      "intent": "ingest: T22 3-agent exp",
+      "sha": "a5d666b"
+    },
+    {
+      "ts": "2026-09-09T15:30",
+      "who": "hermes",
+      "intent": "sync: platforms.yaml v1.1",
+      "sha": "5ddb89a"
+    },
+    {
+      "ts": "2026-09-09T14:55",
+      "who": "hermes",
+      "intent": "platform_healthcheck 5/6",
+      "sha": "n/a"
+    },
+    {
+      "ts": "2026-09-09T14:00",
+      "who": "hermes",
+      "intent": "feat: T21 todos",
+      "sha": "f1713d9"
+    },
+    {
+      "ts": "2026-09-09T10:00",
+      "who": "trae",
+      "intent": "ingest: mavis 5th platform",
+      "sha": "f16c408"
+    }
+  ],
+  "ingest_recent": [
+    {
+      "ts": "2026-09-09",
+      "title": "T22 3-agent 并行实测",
+      "type": "exp",
+      "status": "promoted"
+    },
+    {
+      "ts": "2026-09-09",
+      "title": "T21 5 平台后续优化待办",
+      "type": "project",
+      "status": "promoted"
+    },
+    {
+      "ts": "2026-09-09",
+      "title": "T20 方案 D MCP 自愈",
+      "type": "exp",
+      "status": "promoted"
+    },
+    {
+      "ts": "2026-09-08",
+      "title": "T12 check-code-v1 全修复",
+      "type": "exp",
+      "status": "promoted"
+    },
+    {
+      "ts": "2026-09-08",
+      "title": "DSH file-junction 接入",
+      "type": "exp",
+      "status": "promoted"
+    }
+  ]
+}
