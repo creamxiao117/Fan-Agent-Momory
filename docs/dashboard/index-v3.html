@@ -262,6 +262,43 @@ tr:last-child td{border-bottom:none}
 <div class='card'><div class='card-title'>RECOMMENDED ACTIONS</div><div id='h-actions' style='margin-top:10px'></div></div>
 <div style='font-size:11px;color:var(--text-3);text-align:right;margin-top:8px'>数据源：hub-engine/scripts/hub_health.py --dashboard-format</div>
 </div>
+<div class='panel' id='panel-flywheel'>
+<div class='grid hero'>
+<div class='card' style='background:rgba(94,106,210,0.08);border-color:var(--accent)'>
+<div class='card-title' style='color:var(--accent)'>OVERALL SCORE</div>
+<div class='hero-score'><span id='h-overall'>--</span><span class='pct'>/100</span></div>
+<div style='height:11px;background:var(--bg-3);border-radius:4px;overflow:hidden;margin-top:12px'><div id='h-overall-bar' style='height:100%;width:0%;background:var(--accent);transition:width .6s ease'></div></div>
+<div class='card-sub' id='h-overall-sub'>--</div>
+</div>
+<div class='card'><div class='card-title'>CARD HEALTH</div><div class='card-value' id='h-card'>--</div><div style='height:11px;background:var(--bg-3);border-radius:4px;overflow:hidden;margin-top:12px'><div id='h-card-bar' style='height:100%;width:0%;background:var(--green)'></div></div><div class='card-sub' id='h-card-sub'>--</div></div>
+<div class='card'><div class='card-title'>SKILL HEALTH</div><div class='card-value' id='h-skill'>--</div><div style='height:11px;background:var(--bg-3);border-radius:4px;overflow:hidden;margin-top:12px'><div id='h-skill-bar' style='height:100%;width:0%;background:var(--yellow)'></div></div><div class='card-sub' id='h-skill-sub'>--</div></div>
+<div class='card'><div class='card-title'>FLYWHEEL ACTIVITY</div><div class='card-value' id='h-fly'>--</div><div style='height:11px;background:var(--bg-3);border-radius:4px;overflow:hidden;margin-top:12px'><div id='h-fly-bar' style='height:100%;width:0%;background:var(--accent)'></div></div><div class='card-sub' id='h-fly-sub'>--</div></div>
+</div>
+<div class='grid cols2'>
+<div class='card'><div class='card-title'>FLYWHEEL STATUS</div><div class='card-sub'>自驱成长飞轮 · 6 阶段</div>
+<svg class='flywheel-svg' viewBox='0 0 500 420' xmlns='http://www.w3.org/2000/svg'><defs><marker id='arrow' markerWidth='10' markerHeight='10' refX='8' refY='3' orient='auto'><path d='M0,0 L0,6 L9,3 z' fill='var(--accent)'/></marker></defs><!-- 6 arcs --><path d='M 250 90 Q 380 60 400 140' stroke='var(--accent)' stroke-width='2' fill='none' marker-end='url(#arrow)' opacity='0.7'/><path d='M 420 170 Q 430 240 400 280' stroke='var(--accent)' stroke-width='2' fill='none' marker-end='url(#arrow)' opacity='0.7'/><path d='M 380 320 Q 320 360 260 370' stroke='var(--accent)' stroke-width='2' fill='none' marker-end='url(#arrow)' opacity='0.7'/><path d='M 230 370 Q 170 360 110 320' stroke='var(--accent)' stroke-width='2' fill='none' marker-end='url(#arrow)' opacity='0.7'/><path d='M 90 280 Q 70 240 90 180' stroke='var(--accent)' stroke-width='2' fill='none' marker-end='url(#arrow)' opacity='0.7'/><path d='M 110 140 Q 140 70 220 80' stroke='var(--accent)' stroke-width='2' fill='none' marker-end='url(#arrow)' opacity='0.7'/><!-- center node --><circle cx='250' cy='220' r='68' fill='var(--accent)' opacity='0.15'/><circle cx='250' cy='220' r='62' fill='var(--bg-1)' stroke='var(--accent)' stroke-width='2.5'/><text x='250' y='216' text-anchor='middle' fill='var(--accent)' font-size='18' font-weight='700'>中枢</text><text x='250' y='238' text-anchor='middle' fill='var(--text-3)' font-size='13' id='fw-center-count'>-- 卡</text><!-- 6 outer nodes (radius 38) --><circle cx='250' cy='90' r='42' fill='var(--bg-1)' stroke='var(--accent)' stroke-width='2'/><text x='250' y='86' text-anchor='middle' fill='var(--accent)' font-size='15' font-weight='700'>实践</text><text x='250' y='104' text-anchor='middle' fill='var(--text-3)' font-size='11'>A 引擎</text><circle cx='420' cy='155' r='42' fill='var(--bg-1)' stroke='var(--accent)' stroke-width='2'/><text x='420' y='151' text-anchor='middle' fill='var(--accent)' font-size='15' font-weight='700'>沉淀</text><text x='420' y='169' text-anchor='middle' fill='var(--text-3)' font-size='11'>B 维护站</text><circle cx='420' cy='285' r='42' fill='var(--bg-1)' stroke='var(--accent)' stroke-width='2'/><text x='420' y='281' text-anchor='middle' fill='var(--accent)' font-size='15' font-weight='700'>提炼</text><text x='420' y='299' text-anchor='middle' fill='var(--text-3)' font-size='11'>C 维护站</text><circle cx='250' cy='350' r='42' fill='var(--bg-1)' stroke='var(--accent)' stroke-width='2'/><text x='250' y='346' text-anchor='middle' fill='var(--accent)' font-size='15' font-weight='700'>萃取</text><text x='250' y='364' text-anchor='middle' fill='var(--text-3)' font-size='11'>D 维护站</text><circle cx='80' cy='285' r='42' fill='var(--bg-1)' stroke='var(--accent)' stroke-width='2'/><text x='80' y='281' text-anchor='middle' fill='var(--accent)' font-size='15' font-weight='700'>淬炼</text><text x='80' y='299' text-anchor='middle' fill='var(--text-3)' font-size='11'>E 引擎</text><circle cx='80' cy='155' r='42' fill='var(--bg-1)' stroke='var(--accent)' stroke-width='2'/><text x='80' y='151' text-anchor='middle' fill='var(--accent)' font-size='15' font-weight='700'>反馈</text><text x='80' y='169' text-anchor='middle' fill='var(--text-3)' font-size='11'>A 引擎</text></svg>
+</div>
+<div class='card'><div class='card-title'>CARD DISTRIBUTION</div><div class='card-sub'>卡片类型分布</div>
+<div class='donut-wrap'>
+<svg class='donut' viewBox='0 0 42 42'>
+<circle cx='21' cy='21' r='15.9155' fill='transparent' stroke='var(--bg-3)' stroke-width='6'/>
+<circle id='donut-exp' cx='21' cy='21' r='15.9155' fill='transparent' stroke='var(--accent)' stroke-width='6' stroke-dasharray='0 100' transform='rotate(-90 21 21)'/>
+<circle id='donut-method' cx='21' cy='21' r='15.9155' fill='transparent' stroke='#4cb782' stroke-width='6' stroke-dasharray='0 100' transform='rotate(-90 21 21)'/>
+<circle id='donut-blueprint' cx='21' cy='21' r='15.9155' fill='transparent' stroke='#f2c94c' stroke-width='6' stroke-dasharray='0 100' transform='rotate(-90 21 21)'/>
+<circle id='donut-rule' cx='21' cy='21' r='15.9155' fill='transparent' stroke='var(--red)' stroke-width='6' stroke-dasharray='0 100' transform='rotate(-90 21 21)'/>
+</svg>
+<div class='donut-legend' id='donut-legend'></div>
+</div>
+</div>
+</div>
+<div class='grid cols2'>
+<div class='card'><div class='card-title'>CARD STATUS</div><div class='card-sub'>卡片健康度</div><div id='h-card-bars' style='margin-top:10px'></div></div>
+<div class='card'><div class='card-title'>SKILL STATUS · <span id='h-skill-count'>--</span> 个</div><div id='h-skill-table' style='margin-top:10px'></div></div>
+</div>
+<div class='card'><div class='card-title'>RECOMMENDED ACTIONS</div><div id='h-actions' style='margin-top:10px'></div></div>
+<div style='font-size:11px;color:var(--text-3);text-align:right;margin-top:8px'>数据源：hub-engine/scripts/hub_health.py --dashboard-format</div>
+</div>
+
 <div class='panel' id='panel-skillhub'>
 <div id='skillhub-list'></div>
 </div>
