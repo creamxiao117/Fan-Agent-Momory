@@ -242,6 +242,190 @@ def _local_fallback_chat(
         return ""
 
 
+def _endpoint_base(url: str) -> str:
+    """从 chat/completions URL 取健康检查基址（http://h:p/v1/chat/completions → http://h:p）"""
+    return url.rsplit("/v1/", 1)[0] if "/v1/" in url else url.rsplit("/", 1)[0]
+
+
+def _local_endpoint_chain(cfg: dict) -> list[tuple[str, str, int]]:
+    """本地 LLM 端点链：① LM Studio（local_chat）② local_chat_fallbacks（SGLang 等）。
+
+    返回 [(url, model, max_tokens)]；model 为空串 = 调用前动态解析 served model。
+    """
+    primary = cfg.get("local_chat") or {}
+    chain = [
+        (
+            str(primary.get("url", "http://127.0.0.1:1234/v1/chat/completions")),
+            str(primary.get("model", cfg.get("default_model", "qwen/qwen3.5-9b"))),
+            int(primary.get("max_tokens", 2048)),
+        )
+    ]
+    for extra in cfg.get("local_chat_fallbacks") or []:
+        if not isinstance(extra, dict) or not extra.get("url"):
+            continue
+        chain.append(
+            (
+                str(extra["url"]),
+                str(extra.get("model") or ""),
+                int(extra.get("max_tokens", 2048)),
+            )
+        )
+    return chain
+
+
+def _resolve_served_model(url: str, timeout: int) -> str:
+    """OpenAI 兼容端点的模型名：GET {base}/v1/models 取首个 id。
+
+    SGLang 的 served_model_name 随看板切换模型而变（Qwen3.5-9B-AWQ /
+    Qwen2.5-3B-Instruct-AWQ），故不硬编码，调用前动态解析。
+    """
+    import requests
+
+    try:
+        resp = requests.get(
+            f"{_endpoint_base(url)}/v1/models", timeout=min(timeout, 10)
+        )
+        resp.raise_for_status()
+        data = resp.json().get("data") or []
+        if data and data[0].get("id"):
+            return str(data[0]["id"])
+    except Exception as e:
+        print(f"[llm_chain] 解析模型名失败: {e}")
+    return ""
+
+
+def _local_chain_fallback(prompt: str, hub_root: Path) -> str:
+    """本地模型降级链：LM Studio(1234) → SGLang(30000) → OmniRoute 网关（最后兜底）。
+
+    逐环尝试「健康 + 调用成功」；只有全链失败才落到 chat()（gateway_url = OmniRoute）。
+    """
+    import requests
+
+    cfg = load_engine_config()
+    timeout = int(cfg.get("timeout", 30))
+    for url, model_name, max_tokens in _local_endpoint_chain(cfg):
+        base = _endpoint_base(url)
+        if not LLMHealthChecker.get_instance(base).is_available():
+            print(f"[llm_chain] 跳过未就绪本地端点: {base}")
+            continue
+        use_model = model_name or _resolve_served_model(url, timeout)
+        if not use_model:
+            print(f"[llm_chain] 端点模型名解析失败，跳过: {url}")
+            continue
+        try:
+            resp = requests.post(
+                url,
+                json={
+                    "model": use_model,
+                    "messages": [{"role": "user", "content": prompt}],
+                    "temperature": 0,
+                    "stream": False,
+                    "max_tokens": max_tokens,
+                },
+                timeout=timeout,
+            )
+            resp.raise_for_status()
+            text = resp.json()["choices"][0]["message"]["content"].strip()
+            print(f"[llm_chain] 命中本地端点: {base} (model={use_model})")
+            return text
+        except Exception as e:
+            print(f"[llm_chain] 本地端点失败，继续降级: {base}: {e}")
+    print("[llm_chain] 本地链全部不可用，降级到 OmniRoute 网关")
+    return chat(prompt, hub_root, fallback=True)
+
+
+def _endpoint_base(url: str) -> str:
+    """从 chat/completions URL 取健康检查基址（http://h:p/v1/chat/completions → http://h:p）"""
+    return url.rsplit("/v1/", 1)[0] if "/v1/" in url else url.rsplit("/", 1)[0]
+
+
+def _local_endpoint_chain(cfg: dict) -> list[tuple[str, str, int]]:
+    """本地 LLM 端点链：① LM Studio（local_chat）② local_chat_fallbacks（SGLang 等）。
+
+    返回 [(url, model, max_tokens)]；model 为空串 = 调用前动态解析 served model。
+    """
+    primary = cfg.get("local_chat") or {}
+    chain = [
+        (
+            str(primary.get("url", "http://127.0.0.1:1234/v1/chat/completions")),
+            str(primary.get("model", cfg.get("default_model", "qwen/qwen3.5-9b"))),
+            int(primary.get("max_tokens", 2048)),
+        )
+    ]
+    for extra in cfg.get("local_chat_fallbacks") or []:
+        if not isinstance(extra, dict) or not extra.get("url"):
+            continue
+        chain.append(
+            (
+                str(extra["url"]),
+                str(extra.get("model") or ""),
+                int(extra.get("max_tokens", 2048)),
+            )
+        )
+    return chain
+
+
+def _resolve_served_model(url: str, timeout: int) -> str:
+    """OpenAI 兼容端点的模型名：GET {base}/v1/models 取首个 id。
+
+    SGLang 的 served_model_name 随看板切换模型而变（Qwen3.5-9B-AWQ /
+    Qwen2.5-3B-Instruct-AWQ），故不硬编码，调用前动态解析。
+    """
+    import requests
+
+    try:
+        resp = requests.get(
+            f"{_endpoint_base(url)}/v1/models", timeout=min(timeout, 10)
+        )
+        resp.raise_for_status()
+        data = resp.json().get("data") or []
+        if data and data[0].get("id"):
+            return str(data[0]["id"])
+    except Exception as e:
+        print(f"[llm_chain] 解析模型名失败: {e}")
+    return ""
+
+
+def _local_chain_fallback(prompt: str, hub_root: Path) -> str:
+    """本地模型降级链：LM Studio(1234) → SGLang(30000) → OmniRoute 网关（最后兜底）。
+
+    逐环尝试「健康 + 调用成功」；只有全链失败才落到 chat()（gateway_url = OmniRoute）。
+    """
+    import requests
+
+    cfg = load_engine_config()
+    timeout = int(cfg.get("timeout", 30))
+    for url, model_name, max_tokens in _local_endpoint_chain(cfg):
+        base = _endpoint_base(url)
+        if not LLMHealthChecker.get_instance(base).is_available():
+            print(f"[llm_chain] 跳过未就绪本地端点: {base}")
+            continue
+        use_model = model_name or _resolve_served_model(url, timeout)
+        if not use_model:
+            print(f"[llm_chain] 端点模型名解析失败，跳过: {url}")
+            continue
+        try:
+            resp = requests.post(
+                url,
+                json={
+                    "model": use_model,
+                    "messages": [{"role": "user", "content": prompt}],
+                    "temperature": 0,
+                    "stream": False,
+                    "max_tokens": max_tokens,
+                },
+                timeout=timeout,
+            )
+            resp.raise_for_status()
+            text = resp.json()["choices"][0]["message"]["content"].strip()
+            print(f"[llm_chain] 命中本地端点: {base} (model={use_model})")
+            return text
+        except Exception as e:
+            print(f"[llm_chain] 本地端点失败，继续降级: {base}: {e}")
+    print("[llm_chain] 本地链全部不可用，降级到 OmniRoute 网关")
+    return chat(prompt, hub_root, fallback=True)
+
+
 def _local_chat(prompt: str, hub_root: Path, model: str | None = None) -> str:
     """直连本地 LLM 的统一入口 (LM Studio)，供本地默认逻辑任务使用。
     接入 LLM 健康检测 + 弹性管道：本地 LLM 不可用时自动降级到网关。"""
@@ -268,9 +452,8 @@ def _local_chat(prompt: str, hub_root: Path, model: str | None = None) -> str:
     health_checker = LLMHealthChecker.get_instance(llm_base)
 
     if not health_checker.is_available():
-        print("[llm_health] 本地 LLM 不可用，降级到 OmniRoute 网关")
-        # 降级到网关
-        return chat(prompt, hub_root, fallback=True)
+        print("[llm_health] LM Studio 不可用，走本地降级链（SGLang → OmniRoute）")
+        return _local_chain_fallback(prompt, hub_root)
 
     def _do_local_http() -> str:
         resp = requests.post(url, json=payload, timeout=timeout)
@@ -290,9 +473,9 @@ def _local_chat(prompt: str, hub_root: Path, model: str | None = None) -> str:
     )
     # 添加降级：本地 LLM 调用失败时降级到网关
     pipeline.add_fallback(
-        fallback_fn=lambda: chat(prompt, hub_root, fallback=True),
+        fallback_fn=lambda: _local_chain_fallback(prompt, hub_root),
         on_fallback=lambda evt: print(
-            f"[resilience/local_chat] fallback to gateway: {evt.detail}"
+            f"[resilience/local_chat] 本地失败 → 降级链: {evt.detail}"
         ),
     )
     return pipeline.build().execute(_do_local_http)
@@ -341,7 +524,11 @@ def smart_chat(prompt: str, hub_root: str | Path) -> str:
     )
     health_checker = LLMHealthChecker.get_instance(llm_base)
 
-    llm_available = health_checker.is_available()
+    # 本地可用性 = 主端点或降级链上任一本地端点健康（2026-09-11：LM Studio → SGLang）
+    llm_available = health_checker.is_available() or any(
+        LLMHealthChecker.get_instance(_endpoint_base(u)).is_available()
+        for u, _m, _t in _local_endpoint_chain(cfg)[1:]
+    )
     if not llm_available:
         print("[llm_health] 本地 LLM 不可用，直接使用 OmniRoute 网关")
         return chat(

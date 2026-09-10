@@ -32,3 +32,31 @@ def test_load_engine_config_default_path_exists():
     # 默认路径指向仓库内 config/engine.config.yaml，必须存在
     p = Path(__file__).resolve().parents[1] / "config" / "engine.config.yaml"
     assert p.exists()
+
+
+def test_nested_gateway_is_flattened(tmp_path):
+    """system/config.yaml 用嵌套 gateway:，引擎读扁平键 → 必须补齐（否则真配置不生效）"""
+    from common.config import load_engine_config
+
+    p = tmp_path / "c.yaml"
+    p.write_text(
+        "gateway:\n  url: http://x:1\n  default_model: m1\n"
+        "  timeout_seconds: 9\n  compress: llmlingua\n",
+        encoding="utf-8",
+    )
+    cfg = load_engine_config(p)
+    assert cfg["gateway_url"] == "http://x:1"
+    assert cfg["default_model"] == "m1"
+    assert cfg["timeout"] == 9
+    assert cfg["compress"] == "llmlingua"
+
+
+def test_flat_key_wins_over_nested(tmp_path):
+    """显式扁平键优先，嵌套值不覆盖（向后兼容）"""
+    from common.config import load_engine_config
+
+    p = tmp_path / "c.yaml"
+    p.write_text(
+        "gateway:\n  url: http://x:1\ngateway_url: http://y:2\n", encoding="utf-8"
+    )
+    assert load_engine_config(p)["gateway_url"] == "http://y:2"

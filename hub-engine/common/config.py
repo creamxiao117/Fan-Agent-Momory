@@ -38,7 +38,37 @@ class HubConfig:
         return self.root / self.data.get("sync", {}).get("draft_dir", ".sync/drafts")
 
 
+def _normalize_gateway(cfg: dict) -> dict:
+    """嵌套 → 扁平补齐（2026-09-11）。
+
+    `system/config.yaml` 声明为「运行时配置唯一事实源」，但它用的是**嵌套** schema
+    `gateway: {url, default_model, timeout_seconds, compress}`，而引擎读的是**扁平**键
+    `gateway_url / default_model / timeout / compress` —— 结果真配置从未生效，
+    引擎静默回退硬编码默认（OmniRoute `127.0.0.1:20128` + 模型 `auto/offline`），
+    这正是 dedup 打到 OmniRoute 并 401 的根因。
+
+    这里做**单向补齐**：仅当扁平键缺失时由嵌套键派生，绝不覆盖显式扁平值（向后兼容）。
+    """
+    gw = cfg.get("gateway")
+    if isinstance(gw, dict):
+        derived = {
+            "gateway_url": gw.get("url"),
+            "default_model": gw.get("default_model"),
+            "timeout": gw.get("timeout_seconds"),
+            "compress": gw.get("compress"),
+        }
+        for flat, value in derived.items():
+            if value is not None and not cfg.get(flat):
+                cfg[flat] = value
+    return cfg
+
+
 def load_engine_config(config_path: str | Path | None = None) -> dict:
+    """读取运行配置（对外入口；结果经「嵌套 → 扁平」补齐）"""
+    return _normalize_gateway(_load_engine_config_raw(config_path))
+
+
+def _load_engine_config_raw(config_path: str | Path | None = None) -> dict:
     """读取运行配置（V1.1 兼容 system/）。
 
     优先级：

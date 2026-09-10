@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+# @version V1.0 / 2026-09-11 / Hermes / AgentMemoryHub 提交前卡片 frontmatter 门禁
+#
+# 作用：commit 前校验 staged 的卡片 .md frontmatter，不合规则**阻断提交**。
+# 触发原因：2026-09-11 实测 11 张 type: experience 漂移卡经「Agent 直接写文件进
+#           experience/」进入中枢并静默存活数周（不走 ingest ⇒ 不经过 validate_card，
+#           而 lint 只扫 5 个权威区）。本钩子把校验关口前移到 commit ——
+#           这是唯一能覆盖「直接写入路径」的拦截点。
+#
+# 安装：cp hub-engine/scripts/pre-commit-hub-cards AgentMemoryHub/.git/hooks/pre-commit
+#       chmod +x AgentMemoryHub/.git/hooks/pre-commit
+#
+# 退出码：
+#   0 = 通过（无卡片 staged，或全部合规）
+#   1 = 阻断（有卡 frontmatter 不合规）
+#   3 = 跳过（找不到 python，不阻断以免误伤 CI）
+#
+# 兼容：Windows(Git Bash) / Linux / macOS
+
+set -e
+
+HUB_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+ENGINE="$(dirname "$HUB_ROOT")/hub-engine"
+
+STAGED_MD=$(git diff --cached --name-only --diff-filter=ACM \
+    | grep -E '^(rules|blueprints|methodology|longterm|projects|experience|notes)/.*\.md$' || true)
+
+if [ -z "$STAGED_MD" ]; then
+    echo "[hub-cards] 无卡片 .md staged，跳过 frontmatter 门禁"
+    exit 0
+fi
+
+if [ ! -f "$ENGINE/scripts/check_card_frontmatter.py" ]; then
+    echo "[hub-cards] ⚠️ 找不到校验器 $ENGINE/scripts/check_card_frontmatter.py，跳过"
+    exit 3
+fi
+
+PY=""
+if command -v python >/dev/null 2>&1; then
+    PY="python"
+elif command -v python3 >/dev/null 2>&1; then
+    PY="python3"
+else
+    echo "[hub-cards] ⚠️ 找不到 python，跳过前端校验（不阻断）"
+    exit 3
+fi
+
+echo "[hub-cards] 卡片 frontmatter 门禁："
+echo "$STAGED_MD" | sed 's/^/  /'
+
+# shellcheck disable=SC2086
+if ! $PY "$ENGINE/scripts/check_card_frontmatter.py" --root "$HUB_ROOT" $STAGED_MD; then
+    echo "[hub-cards] ❌ frontmatter 不合规，commit 阻断（确需绕过用 git commit --no-verify）"
+    exit 1
+fi
+
+echo "[hub-cards] ✅ 门禁通过，commit 允许"
+exit 0

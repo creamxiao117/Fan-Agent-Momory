@@ -17,6 +17,7 @@ import urllib.request
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import ClassVar
 
 # 健康检测阈值配置
 RESPONSE_TIME_WARNING_THRESHOLD = 3000  # 响应时间警告阈值（毫秒）
@@ -45,8 +46,11 @@ class LLMHealthChecker:
     - 兼容 LM Studio 和 LLM 的 API 端点
     """
 
-    # 单例缓存
-    _instance: LLMHealthChecker | None = None
+    # 单例缓存（按 base_url 分键；2026-09-11 修）
+    # 原实现只缓存一个实例：1234 先建实例后，get_instance("...:30000") 会**直接返回 1234 的检查器**，
+    # 于是多端点降级链上所有端点的健康判定都等于第一个端点的结论
+    # （LM Studio 掉线时 SGLang 也会被判不可用 → 本地降级链永远到不了 SGLang）。
+    _instances: ClassVar[dict[str, LLMHealthChecker]] = {}
 
     def __init__(
         self,
@@ -62,46 +66,61 @@ class LLMHealthChecker:
 
     @classmethod
     def get_instance(cls, base_url: str = "http://localhost:1234") -> LLMHealthChecker:
-        """获取单例实例。"""
-        if cls._instance is None:
-            cls._instance = cls(base_url=base_url)
-        return cls._instance
+        """获取单例实例（按 base_url 分键，多端点链互不串味）。"""
+        key = base_url.rstrip("/")
+        if key not in cls._instances:
+            cls._instances[key] = cls(base_url=key)
+        return cls._instances[key]
 
     @classmethod
     def reset_instance(cls) -> None:
-        """重置单例（用于测试）。"""
-        cls._instance = None
+        """重置全部单例（用于测试）。"""
+        cls._instances.clear()
+
+    # ── 端点风格判定（2026-09-11 修）──────────────────────────────
+    # 原实现写死「base_url 含 1234 才探 /v1/models，否则探 /api/tags」，
+    # 导致任何非 LM Studio 的 OpenAI 兼容端点（SGLang :30000 / vLLM / 网关）
+    # 被恒判「不可用」。现改为：只有明确 Ollama 端口才走 Ollama 协议。
+    _OLLAMA_HINT = "11434"
+
+    def _is_openai_style(self) -> bool:
+        """是否按 OpenAI 兼容协议探测（LM Studio / SGLang / vLLM / 网关均属此类）"""
+        return self._OLLAMA_HINT not in self.base_url
+
+    def _probe_paths(self) -> list[str]:
+        """健康探测候选路径（按序，任一 200 即视为可用）"""
+        if self._is_openai_style():
+            return ["/v1/models", "/health"]
+        return ["/api/tags"]
 
     def is_available(self) -> bool:
-        """快速检测 LM Studio / LLM 是否在线。"""
+        """快速检测 LLM 端点是否在线（OpenAI 兼容优先，Ollama 兼容保留）。"""
         # 冷却期内直接返回不可用
         if time.time() - self._last_fail_time < self.cooldown_after_fail:
             return False
 
-        try:
-            # LM Studio /v1/models 作为健康检测端点
-            endpoint = (
-                f"{self.base_url}/v1/models"
-                if "1234" in self.base_url
-                else f"{self.base_url}/api/tags"
-            )
-            req = urllib.request.Request(
-                endpoint,
-                headers={"Content-Type": "application/json"},
-            )
-            with urllib.request.urlopen(req, timeout=self.check_timeout) as resp:
-                resp.read()
+        last_err: Exception | None = None
+        for path in self._probe_paths():
+            try:
+                req = urllib.request.Request(
+                    f"{self.base_url}{path}",
+                    headers={"Content-Type": "application/json"},
+                )
+                with urllib.request.urlopen(req, timeout=self.check_timeout) as resp:
+                    resp.read()
                 self._last_fail_time = 0.0  # 重置失败时间
                 return True
-        except Exception as e:
-            self._last_fail_time = time.time()
-            self._cached_status = LLMStatus(
-                available=False,
-                url=self.base_url,
-                last_check=time.time(),
-                last_error=str(e),
-            )
-            return False
+            except Exception as e:
+                last_err = e
+
+        self._last_fail_time = time.time()
+        self._cached_status = LLMStatus(
+            available=False,
+            url=self.base_url,
+            last_check=time.time(),
+            last_error=str(last_err),
+        )
+        return False
 
     def check_model(self, model: str) -> bool:
         """检测指定模型是否可用。"""
@@ -109,8 +128,8 @@ class LLMHealthChecker:
             return False
 
         try:
-            if "1234" in self.base_url:
-                # LM Studio: 获取模型列表进行匹配
+            if self._is_openai_style():
+                # OpenAI 兼容端点: 获取模型列表进行匹配
                 status = self.get_status()
                 return model in status.models
 
@@ -131,8 +150,8 @@ class LLMHealthChecker:
         """获取完整状态（含模型列表）。"""
         start = time.time()
         try:
-            if "1234" in self.base_url:
-                # LM Studio 模型列表获取
+            if self._is_openai_style():
+                # OpenAI 兼容端点模型列表获取
                 req = urllib.request.Request(
                     f"{self.base_url}/v1/models",
                     headers={"Content-Type": "application/json"},
