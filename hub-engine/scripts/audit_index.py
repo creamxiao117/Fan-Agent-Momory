@@ -23,12 +23,27 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 # INDEX 登记行格式：- slug  描述
+# slug 字符集含 CJK（2026-09-11 用户裁定）：中文 slug 卡（如 projects/T21-5platform-后续优化-待办.md）
+# 此前无法被解析 → 恒被误判为「INDEX 未登记」。slug 类仍不含空格，故加 CJK 不会引入贪婪越界。
+_CJK = "\u4e00-\u9fff"
 INDEX_ENTRY_RE = re.compile(
-    r"^- ([a-zA-Z0-9][a-zA-Z0-9_\-\.]{0,80})(?:\s{2,}|\s+)(.+)$"
+    rf"^- ([a-zA-Z0-9{_CJK}][a-zA-Z0-9_\-\.{_CJK}]{{0,80}})(?:\s{{2,}}|\s+)(.+)$"
 )
 NESTED_ENTRY_RE = re.compile(
-    r"^\|- ([a-zA-Z0-9][a-zA-Z0-9_\-\.]{0,80})(?:\s{2,}|\s+)(.+)$"
+    rf"^\|- ([a-zA-Z0-9{_CJK}][a-zA-Z0-9_\-\.{_CJK}]{{0,80}})(?:\s{{2,}}|\s+)(.+)$"
 )
+
+# 描述长度上限：按分区差异化（2026-09-11 用户裁定）
+# 蓝图描述承载「技术路径 A/B/C + 判级 + 状态」，250 字符必然截断决策信息 → 单独放宽到 800；
+# 其他分区维持 250（防摘要退化为正文）。
+DESC_LIMIT_DEFAULT = 250
+DESC_LIMIT_BLUEPRINTS = 800
+
+
+def _desc_limit(section: str) -> int:
+    """分区标题 → 描述长度上限（按标题内目录名判定，避免中文标题改写后失效）。"""
+    return DESC_LIMIT_BLUEPRINTS if "blueprints" in section else DESC_LIMIT_DEFAULT
+
 
 # 权威区（与 engine.config.yaml authority_dirs 对齐，2026-09-02 调整为 5 目录）
 # 注意：experience/notes/retro 是非权威区，仅参与 INDEX 登记，不参与权威文件扫描
@@ -44,7 +59,7 @@ AUTHORITY_DIRS = (
 _ALL_SCAN_DIRS = AUTHORITY_DIRS + ("experience", "notes", "retro")
 
 # slug 格式：允许小写/大写字母、数字、连字符、下划线、点号；2~80 字符
-SLUG_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_\-\.]{1,79}$")
+SLUG_RE = re.compile(rf"^[a-zA-Z0-9{_CJK}][a-zA-Z0-9_\-\.{_CJK}]{{1,79}}$")
 
 
 def _parse_index(index_path: Path) -> tuple[dict[str, list[str]], list[dict]]:
@@ -55,7 +70,11 @@ def _parse_index(index_path: Path) -> tuple[dict[str, list[str]], list[dict]]:
     text = index_path.read_text(encoding="utf-8", errors="ignore")
     by_slug: dict[str, list[str]] = {}
     entries: list[dict] = []
+    section = ""  # 当前 `## ` 分区标题，供描述长度按分区差异化
     for line_no, line in enumerate(text.splitlines(), start=1):
+        if line.startswith("## "):
+            section = line.strip()
+            continue
         m = INDEX_ENTRY_RE.match(line)
         if not m:
             # 也接受 |- 嵌套列表项（INDEX.md 实际有大量嵌套登记）
@@ -64,7 +83,9 @@ def _parse_index(index_path: Path) -> tuple[dict[str, list[str]], list[dict]]:
             continue
         slug, desc = m.group(1), m.group(2).strip()
         by_slug.setdefault(slug, []).append(desc)
-        entries.append({"slug": slug, "desc": desc, "line_no": line_no})
+        entries.append(
+            {"slug": slug, "desc": desc, "line_no": line_no, "section": section}
+        )
     return by_slug, entries
 
 
@@ -156,9 +177,10 @@ def audit(root: Path) -> dict:
                 }
             )
 
-    # 5) 描述长度校验
+    # 5) 描述长度校验（上限按分区差异化：blueprints 800 / 其他 250）
     for entry in entries:
         desc = entry["desc"]
+        limit = _desc_limit(entry.get("section", ""))
         if len(desc) < 10:
             issues.append(
                 {
@@ -170,11 +192,11 @@ def audit(root: Path) -> dict:
                     "severity": "low",
                 }
             )
-        elif len(desc) > 250:
+        elif len(desc) > limit:
             issues.append(
                 {
                     "type": "long_desc",
-                    "msg": f"行 {entry['line_no']}: slug '{entry['slug']}' 描述过长（{len(desc)} 字符 > 250）",
+                    "msg": f"行 {entry['line_no']}: slug '{entry['slug']}' 描述过长（{len(desc)} 字符 > {limit}）",
                     "slug": entry["slug"],
                     "desc_len": len(desc),
                     "line_no": entry["line_no"],
