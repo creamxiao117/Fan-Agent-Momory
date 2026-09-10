@@ -7,8 +7,13 @@ T1 每日: 动态挑 3 张卡 (reference 至少 1 + active 至少 1)
 
 用法: python daily_growth.py [--dry-run] [--skip-t1]
 """
-import argparse, json, os, re, socket, subprocess, sys, time
-from datetime import datetime, date
+
+import argparse
+import re
+import socket
+import subprocess
+import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 WORKSPACE = Path(r"D:\AIwork\20260817-Fan-Agent-Momory")
@@ -16,13 +21,17 @@ HUB = WORKSPACE / "AgentMemoryHub"
 ENGINE = WORKSPACE / "hub-engine" / "engine.py"
 SANDBOX_ROOT = Path(r"F:\AgentMemoryT1")
 AUTHORITY_DIRS = ["rules", "blueprints", "methodology", "longterm", "projects"]
-DATE_STR = date.today().isoformat()
+DATE_STR = datetime.now(tz=timezone.utc).date().isoformat()
 
 
 def run_engine(*args):
     result = subprocess.run(
         [sys.executable, str(ENGINE), *args],
-        capture_output=True, text=True, cwd=str(WORKSPACE), timeout=120
+        capture_output=True,
+        text=True,
+        cwd=str(WORKSPACE),
+        timeout=120,
+        check=False,
     )
     return result.stdout.strip()
 
@@ -92,8 +101,9 @@ def pick_t1_cards(all_cards, n=3):
     if len(actives_sorted) > 1:
         picks.append(actives_sorted[0])
     used = {c["path"] for c in picks}
-    remaining = sorted([c for c in all_cards if c["path"] not in used and c["status"] != "archived"],
-                       key=t1_score, reverse=True)
+    remaining = sorted(
+        [c for c in all_cards if c["path"] not in used and c["status"] != "archived"], key=t1_score, reverse=True
+    )
     picks.extend(remaining[: n - len(picks)])
     return picks[:n]
 
@@ -130,8 +140,8 @@ def part_b_t1(dry_run=False, skip_t1=False):
         return
     all_cards = scan_all_cards()
     print(f"权威区卡总数: {len(all_cards)}")
-    print(f"  reference: {sum(1 for c in all_cards if c['status']=='reference')}")
-    print(f"  active:    {sum(1 for c in all_cards if c['status']=='active')}")
+    print(f"  reference: {sum(1 for c in all_cards if c['status'] == 'reference')}")
+    print(f"  active:    {sum(1 for c in all_cards if c['status'] == 'active')}")
     picks = pick_t1_cards(all_cards, n=3)
     print(f"\nT1 挑中 {len(picks)} 张:")
     for c in picks:
@@ -161,7 +171,7 @@ def execute_t1(card):
     elif "dagger" in tags_str:
         return "❌", "Dagger Windows 环境需 CLI socket，下次修复重试"
     else:
-        return "⏭️", f"[框架未覆盖] 需手动写 T1 脚本，当前只做骨架分发"
+        return "⏭️", "[框架未覆盖] 需手动写 T1 脚本，当前只做骨架分发"
 
 
 def write_t1_result(card, result, note):
@@ -182,13 +192,13 @@ def write_t1_result(card, result, note):
     new_text = text + new_entry
     if "✅" in result and card["status"] == "reference":
         new_text = re.sub(r"^status:\s*reference", "status: active", new_text, re.MULTILINE)
-        new_text = re.sub(r"^reuse_count:\s*(\d+)",
-                          lambda m: f"reuse_count: {int(m.group(1)) + 1}",
-                          new_text, re.MULTILINE)
+        new_text = re.sub(
+            r"^reuse_count:\s*(\d+)", lambda m: f"reuse_count: {int(m.group(1)) + 1}", new_text, re.MULTILINE
+        )
     elif card["status"] == "active":
-        new_text = re.sub(r"^reuse_count:\s*(\d+)",
-                          lambda m: f"reuse_count: {int(m.group(1)) + 1}",
-                          new_text, re.MULTILINE)
+        new_text = re.sub(
+            r"^reuse_count:\s*(\d+)", lambda m: f"reuse_count: {int(m.group(1)) + 1}", new_text, re.MULTILINE
+        )
     card["path"].write_text(new_text, encoding="utf-8", newline="\n")
     print(f"  ✅ 回写: {card['name']}")
 
