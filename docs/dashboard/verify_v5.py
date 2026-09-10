@@ -14,6 +14,7 @@
 from __future__ import annotations
 
 import argparse
+import pathlib
 import sys
 
 from playwright.sync_api import sync_playwright
@@ -204,7 +205,9 @@ def main() -> int:
             (pg.locator(".delta").first.inner_text() or "").strip(),
         )
 
-        pg.screenshot(path=str(__import__("pathlib").Path(__file__).parent / "shot-v5-overview.png"), full_page=False)
+        import os
+
+        pg.screenshot(path=str(pathlib.Path(os.environ.get("LOCALAPPDATA", ".")) / "Temp" / "shot-v5-overview.png"))
         b.close()
     print("\n" + "=" * 62)
 
