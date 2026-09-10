@@ -383,6 +383,7 @@ def main():
     parser.add_argument("--days", type=int, default=7, help="统计天数")
     parser.add_argument("--alert", action="store_true", help="运行自监控告警检查")
     parser.add_argument("--alert-days", type=int, default=2, help="告警检查的天数窗口")
+    parser.add_argument("--dashboard-format", action="store_true", help="输出 dashboard 专用格式（hub_health 顶层结构）")
     args = parser.parse_args()
 
     hub_root = Path(args.hub_root).resolve()
@@ -434,8 +435,57 @@ def main():
         else:
             print("=== ✅ 飞轮健康度良好，无告警 ===")
 
-    # 输出
-    output_text = json.dumps(report, ensure_ascii=False, indent=2)
+    # 输出格式
+    if args.dashboard_format:
+        # 构建 dashboard 专用顶层 hub_health 结构
+        scores = report.get("health_scores", {})
+        card_by_status = card_stats.get("by_status", {})
+        skill_by_status = skill_stats.get("by_status", {})
+
+        hub_health = {
+            "overall_score": scores.get("overall", 0),
+            "overall_verdict": (
+                "✅ 健康" if scores.get("overall", 0) >= 80
+                else "⚠️ 需关注" if scores.get("overall", 0) >= 60
+                else "🚨 需修复"
+            ),
+            "card_health": {
+                "score": scores.get("card_health", 0),
+                "active": card_by_status.get("active", 0),
+                "candidate": card_by_status.get("candidate", 0),
+                "reference": card_by_status.get("reference", 0),
+                "archived": card_by_status.get("archived", 0),
+                "total": card_stats.get("total", 0),
+            },
+            "skill_health": {
+                "score": scores.get("skill_health", 0),
+                "active": skill_by_status.get("active", 0),
+                "candidate": skill_by_status.get("candidate", 0),
+                "reference": skill_by_status.get("reference", 0),
+                "deprecated": skill_by_status.get("deprecated", 0),
+                "total": skill_stats.get("total", 0),
+                "skills": [
+                    {"name": s["name"], "status": s["status"], "reuse_count": s.get("reuse_count", 0)}
+                    for s in skill_stats.get("skills", [])[:20]
+                ],
+            },
+            "flywheel_activity": {
+                "score": scores.get("flywheel_activity", 0),
+                "active_runs": sum(1 for v in flywheel_stats.values() if v > 0),
+                "total": sum(flywheel_stats.values()),
+                "by_stage": flywheel_stats,
+            },
+            "actions": [
+                a.get("suggestion", "") or a.get("message", "")
+                for a in report.get("alerts", [])
+                if a.get("suggestion") or a.get("message")
+            ],
+        }
+        output_obj = {"hub_health": hub_health, "generated_at": report["generated_at"]}
+        output_text = json.dumps(output_obj, ensure_ascii=False, indent=2)
+    else:
+        output_text = json.dumps(report, ensure_ascii=False, indent=2)
+
     print(output_text)
 
     if args.output:

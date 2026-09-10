@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-09T16:51:18.968378+08:00",
+  "generated_at": "2026-09-10T09:53:16.447364+08:00",
   "hub_root": "C:\\Users\\Fan-SJSS\\.trae-cn\\worktrees\\20260817-Fan-Agent-Momory\\feat-implement-plan-ZilBmv\\AgentMemoryHub",
   "health": {
     "overall": 100.0,
@@ -8,7 +8,7 @@
   },
   "platforms": {
     "summary": {
-      "green": 5
+      "green": 4
     },
     "platforms": {
       "hermes": {
@@ -17,7 +17,7 @@
       },
       "trae": {
         "type": "mcp",
-        "status": "GREEN"
+        "status": "YELLOW"
       },
       "code": {
         "type": "mcp",
@@ -103,6 +103,10 @@
         "title": "﻿---"
       },
       {
+        "name": "sglang-dashboard-pluginhub-registration",
+        "title": "---"
+      },
+      {
         "name": "t1-plan-three-blueprints",
         "title": "---"
       },
@@ -135,6 +139,40 @@
         "audit_id": "20260907T235348Z-ff4fceb6"
       }
     ]
+  },
+  "hub_health": {
+    "overall_score": 29.0,
+    "overall_verdict": "🚨 需修复",
+    "card_health": {
+      "score": 67.9,
+      "active": 241,
+      "candidate": 39,
+      "reference": 71,
+      "archived": 4,
+      "total": 355
+    },
+    "skill_health": {
+      "score": 0.0,
+      "active": 0,
+      "candidate": 0,
+      "reference": 0,
+      "deprecated": 0,
+      "total": 0,
+      "skills": []
+    },
+    "flywheel_activity": {
+      "score": 0.0,
+      "active_runs": 0,
+      "total": 0,
+      "by_stage": {
+        "ingest": 0,
+        "build-vectors": 0,
+        "dedup": 0,
+        "consolidate": 0,
+        "lint": 0
+      }
+    },
+    "actions": []
   },
   "cron_jobs": [
     {

@@ -191,6 +191,26 @@ def collect_all(hub_root: Path, skillhub_root: Path | None = None) -> dict:
     }
 
     # ===== 增强大区（任务 2-3）=====
+    # hub_health（hub_health.py --dashboard-format）
+    _hub_health = {"hub_health": None}
+    try:
+        import subprocess
+        skillhub = skillhub_root or Path("C:/Users/Fan-SJSS/AppData/Local/hermes/skills")
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(hub_root.parent / "hub-engine" / "scripts" / "hub_health.py"),
+                "--hub-root", str(hub_root),
+                "--skillhub-root", str(skillhub),
+                "--dashboard-format",
+            ],
+            capture_output=True, text=True, timeout=30,
+        )
+        if result.returncode == 0:
+            _hub_health = json.loads(result.stdout)
+    except Exception:
+        pass
+    out["hub_health"] = _hub_health.get("hub_health") or {}
     out["cron_jobs"] = [
         {"id": "12c532815d47", "name": "飞轮日报·微信推送", "schedule": "45 7 * * *", "status": "active", "last": "07:45 ok"},
         {"id": "21ff20ab3607", "name": "GitHub star-distill + T1 迭代", "schedule": "10 8 * * *", "status": "active", "last": "08:10 ok"},
