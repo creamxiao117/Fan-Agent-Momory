@@ -4,7 +4,7 @@
 <style>
 :root{--bg-0:#08090a;--bg-1:#0f1011;--bg-2:#191a1b;--bg-3:#222428;--border:rgba(255,255,255,0.08);--border-h:rgba(255,255,255,0.18);--text-1:#f7f8f8;--text-2:#b4b8be;--text-3:#62666d;--accent:#5e6ad2;--accent-h:#7170ff;--green:#4cb782;--yellow:#f2c94c;--red:#f87171}
 *{margin:0;padding:0;box-sizing:border-box}
-html,body{font-family:'Inter',system-ui,-apple-system,sans-serif;font-size:14px;background:var(--bg-0);color:var(--text-1);height:100vh;overflow:hidden}
+html,body{font-family:'Inter','PingFang SC','Microsoft YaHei','Hiragino Sans GB','Source Han Sans CN','WenQuanYi Micro Hei',system-ui,-apple-system,sans-serif;font-size:14px;background:var(--bg-0);color:var(--text-1);height:100vh;overflow:hidden}
 .app{display:grid;grid-template-columns:200px 1fr;height:100vh}
 nav{background:var(--bg-1);border-right:1px solid var(--border);padding:16px 0;overflow:auto}
 main{overflow:auto;padding:16px}
@@ -187,15 +187,22 @@ function render() {
     }).join("");
   }
 
-  var cards = d.card_stats_by_type || [];
+  var cards = d.card_stats_by_type || {};
   var cg = document.getElementById("cards-grid");
   if (cg) {
-    cg.innerHTML = cards.map(function(c) {
+    var cardsArr = Array.isArray(cards) ? cards : Object.keys(cards).map(function(k) {
+      return {label: k, count: cards[k]};
+    });
+    cg.innerHTML = cardsArr.map(function(c) {
       return "<div class='card'><div class='card-title'>" + c.label + "</div><div class='card-value'>" + c.count + "</div></div>";
     }).join("");
   }
 
-  var repos = d.sync_status || [];
+  var reposRaw = d.sync_status || {};
+  var repos = Array.isArray(reposRaw) ? reposRaw : Object.keys(reposRaw).map(function(repo) {
+    var v = reposRaw[repo] || {};
+    return {repo: repo, local: v.last_commit, remote: v.last_commit, ahead: v.ahead, behind: v.behind};
+  });
   var ts = document.getElementById("tbl-sync");
   if (ts) {
     ts.innerHTML = repos.map(function(r) {
@@ -269,8 +276,11 @@ function renderFlywheel(d) {
   setText("h-hub-count", cardH.total || 0);
   setText("h-total-cards", cardH.total || 0);
 
-  // donut: exp / method / blueprint / rule 比例（按 card_stats_by_type）
-  var cstats = d.card_stats_by_type || [];
+  // donut: exp / method / blueprint / rule 比例（按 card_stats_by_type，支持 list/dict 两种）
+  var cstatsRaw = d.card_stats_by_type || {};
+  var cstats = Array.isArray(cstatsRaw) ? cstatsRaw : Object.keys(cstatsRaw).map(function(k) {
+    return {type: k, count: cstatsRaw[k] || 0};
+  });
   var totalCards = cstats.reduce(function(s, x) { return s + x.count; }, 0) || 1;
   function pctOf(name) {
     var x = cstats.find(function(c) { return c.type === name; });
