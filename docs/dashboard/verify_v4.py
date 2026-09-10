@@ -111,6 +111,11 @@ def main() -> int:
         pg.wait_for_timeout(300)
         vis_default = pg.eval_on_selector_all("#tb-skill tr", "els=>els.length")
         checked = pg.eval_on_selector("#c-cited", "e=>e.checked") if pg.query_selector("#c-cited") else None
+        # 分页后：第 1 页行数 <= 每页条数；真实筛选总数看计数文案「筛出 N / M 条」
+        page_size = (
+            pg.eval_on_selector("#ps-skill", "e=>parseInt(e.value,10)") if pg.query_selector("#ps-skill") else None
+        )
+        count_txt = pg.eval_on_selector("#c-skill", "e=>e.innerText") if pg.query_selector("#c-skill") else ""
         # 真值来自 /api/snapshot 的 skills.cited_any，不能硬编码阈值
         cited_any = pg.evaluate(
             """async () => {
@@ -118,14 +123,66 @@ def main() -> int:
                   return (j.skills || {}).cited_any; } catch(e) { return null; }
         }"""
         )
-        ok_rows = (vis_default == cited_any) if cited_any else vis_default > 0
+        import re as _re
+
+        _m = _re.search(r"(\d+)", count_txt or "")
+        shown_total = int(_m.group(1)) if _m else None
+        ok_rows = vis_default > 0 and (page_size is None or vis_default <= page_size)
+        ok_total = (shown_total == cited_any) if (cited_any and shown_total is not None) else vis_default > 0
         ck(
-            checked is True and ok_rows,
-            "技能表默认只显示有引用的",
-            f"rows={vis_default} 后端 cited_any={cited_any} 筛选框={checked}",
+            checked is True and ok_rows and ok_total,
+            "技能表默认只显示有引用的（分页）",
+            f"本页{vis_default}行 / 每页{page_size} / 计数「{count_txt}」 后端 cited_any={cited_any}",
+        )
+
+        # 翻页真交互：点「下页」后首行应变化 + 页码文案前进
+        first_before = pg.eval_on_selector("#tb-skill tr b", "e=>e.innerText") if vis_default else None
+        pg.eval_on_selector_all(
+            "#pg-skill button[data-pg]",
+            "els=>{var b=els.find(x=>x.innerText.indexOf('下页')>=0);if(b)b.click();}",
+        )
+        pg.wait_for_timeout(250)
+        rows_p2 = pg.eval_on_selector_all("#tb-skill tr", "els=>els.length")
+        first_after = pg.eval_on_selector("#tb-skill tr b", "e=>e.innerText") if rows_p2 else None
+        page_txt = pg.eval_on_selector("#pg-skill", "e=>e.innerText") if pg.query_selector("#pg-skill") else ""
+        ck(
+            rows_p2 > 0 and first_after != first_before and "第2/" in page_txt.replace(" ", ""),
+            "技能表分页可翻页（点下页首行变化）",
+            f"p1首行={first_before!r} → p2首行={first_after!r} / {page_txt.strip()[:40]}",
+        )
+
+        # 高度体检：技能视图应压到 1~1.4 屏内（修复前 5395px≈6 屏）
+        vh = pg.evaluate("()=>window.innerHeight")
+        sh = pg.evaluate("()=>document.querySelector('.view[data-view=skills]').scrollHeight")
+        scr = sh / vh if vh else 0
+        ck(
+            scr <= 1.4,
+            "技能视图高度 <= 1.4 屏（修复前 6 屏）",
+            f"{sh}px / {vh}px = {scr:.2f} 屏",
         )
         if shots:
             pg.screenshot(path=str(shots / "view-skills.png"), full_page=True)
+
+        # 飞轮三项：修复前 3/4 张卡是 "—"（空）；现在应全部有真实值
+        pg.eval_on_selector_all(
+            "button[data-view]", "els=>{var b=els.find(x=>x.getAttribute('data-view')==='flywheel');if(b)b.click();}"
+        )
+        pg.wait_for_timeout(300)
+        fly_vals = pg.evaluate(
+            """() => Array.from(document.querySelectorAll('#kpis-fly .card.kpi')).map(e => {
+                 var a = e.querySelector('.v') || e.querySelector('strong') || e;
+                 return (a.innerText || '').replace(/\\s+/g, ' ').trim();
+               })"""
+        )
+        empty = [v for v in fly_vals if "—" in v]
+        card_ok = any("68" in v for v in fly_vals)
+        ck(
+            len(fly_vals) >= 4 and not empty and card_ok,
+            "飞轮 KPI 无空卡（卡片健康应显示 68.0 而非 —）",
+            f"取值={fly_vals}",
+        )
+        if shots:
+            pg.screenshot(path=str(shots / "view-flywheel.png"), full_page=True)
 
         # Chat 真实回复
         pg.eval_on_selector_all(

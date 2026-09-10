@@ -492,13 +492,87 @@ def collect_skills(hub: Path) -> dict:
             }
         )
     rows.sort(key=lambda x: (-x["cited"], x["name"]))
+    total = len(rows)
+    cited_any = sum(1 for r in rows if r["cited"] > 0)
     return {
         "exists": True,
-        "total": len(rows),
+        "total": total,
         "groups": len({r["group"] for r in rows}),
-        "cited_any": sum(1 for r in rows if r["cited"] > 0),
+        "cited_any": cited_any,
+        "never_cited": total - cited_any,
+        # 技能健康度口径：被中枢引用过的技能占比。
+        # 不能用 hub_health.skill_health —— 它读 skill.yaml（SkillHub 格式），
+        # 本机 158 个技能全是 SKILL.md，该口径恒为 0（格式不兼容，非数据缺失）。
+        "cited_rate": round(cited_any / total * 100, 1) if total else 0.0,
         "rows": rows,
     }
+
+
+def collect_flywheel_real(hub: Path) -> dict:
+    """飞轮活动真实来源：.sync/state/flywheel-log.json。
+
+    注意：hub_health.py 统计的是 .sync/logs/ 目录，而本机**该目录不存在**，
+    因此它把 flywheel_activity 恒判为 0.0（路径错位，非真的没活动）。
+    真实飞轮运行记录在 .sync/state/flywheel-log.json。
+    """
+    log = hub / ".sync" / "state" / "flywheel-log.json"
+    out: dict = {
+        "exists": log.is_file(),
+        "source": ".sync/state/flywheel-log.json",
+        "runs_total": 0,
+        "runs_7d": 0,
+        "last_run": None,
+        "hours_ago": None,
+        "score": 0.0,
+        "stages": {},
+    }
+    if not log.is_file():
+        return out
+    try:
+        entries = json.loads(log.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return out
+    if not isinstance(entries, list):
+        return out
+
+    now = datetime.now(tz=CST)
+    cutoff = now - timedelta(days=7)
+    last_dt: datetime | None = None
+    for e in entries:
+        if not isinstance(e, dict):
+            continue
+        raw = e.get("timestamp")
+        if not raw:
+            continue
+        try:
+            dt = datetime.fromisoformat(raw)
+        except ValueError:
+            continue
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=CST)
+        out["runs_total"] += 1
+        if dt >= cutoff:
+            out["runs_7d"] += 1
+        if last_dt is None or dt > last_dt:
+            last_dt = dt
+
+    if last_dt is not None:
+        hours = (now - last_dt).total_seconds() / 3600
+        out["last_run"] = last_dt.isoformat()[:19]
+        out["hours_ago"] = round(hours, 1)
+        days = hours / 24.0
+        # 越近分越高：≤1天 100 / ≤3天 80 / ≤7天 60 / ≤14天 30 / 更久 0
+        if days <= 1:
+            out["score"] = 100.0
+        elif days <= 3:
+            out["score"] = 80.0
+        elif days <= 7:
+            out["score"] = 60.0
+        elif days <= 14:
+            out["score"] = 30.0
+        else:
+            out["score"] = 0.0
+    return out
 
 
 def collect_activity(hub: Path, root: Path) -> dict:
@@ -653,6 +727,8 @@ def collect_all(hub: Path, root: Path) -> dict:
     }
     data["hub"]["_vector_age_min"] = data["hub"]["vector"].get("stale_min", 0)
     data["hub"]["health"] = collect_hub_health(root, hub)
+    # 飞轮活动真实来源（hub_health 的 .sync/logs 口径在本机不成立，见函数 docstring）
+    data["hub"]["flywheel_real"] = collect_flywheel_real(hub)
 
     data["runtime"] = {
         "backends": collect_backends(),
