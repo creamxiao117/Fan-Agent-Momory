@@ -1,745 +1,286 @@
-<!DOCTYPE html>
-<html lang='zh'>
-<head><meta charset='utf-8'><title>中枢总控台 v3</title>
-<style>
-
+<!DOCTYPE html>\n<html lang='zh'>\n<head><meta charset='utf-8'><title>中枢总控台 v3</title>\n<style>
 :root{--bg-0:#08090a;--bg-1:#0f1011;--bg-2:#191a1b;--bg-3:#222428;--border:rgba(255,255,255,0.08);--border-h:rgba(255,255,255,0.18);--text-1:#f7f8f8;--text-2:#b4b8be;--text-3:#62666d;--accent:#5e6ad2;--accent-h:#7170ff;--green:#4cb782;--yellow:#f2c94c;--red:#f87171}
 *{margin:0;padding:0;box-sizing:border-box}
 html,body{font-family:'Inter',system-ui,-apple-system,sans-serif;font-size:14px;background:var(--bg-0);color:var(--text-1);height:100vh;overflow:hidden}
 .app{display:grid;grid-template-columns:200px 1fr;height:100vh}
 nav{background:var(--bg-1);border-right:1px solid var(--border);padding:16px 0;overflow:auto}
-.brand{padding:0 16px 16px;border-bottom:1px solid var(--border);margin-bottom:8px}
-.brand h1{font-size:14px;font-weight:600;color:var(--text-1);margin:0}
-.brand .sub{font-size:11px;color:var(--text-3);margin-top:2px}
-.nav-item{display:flex;align-items:center;gap:8px;padding:10px 16px;cursor:pointer;color:var(--text-2);border-left:2px solid transparent;font-size:13px}
-.nav-item:hover{background:var(--bg-2);color:var(--text-1)}
-.nav-item.active{background:var(--bg-2);color:var(--accent-h);border-left-color:var(--accent)}
-main{overflow:auto;padding:20px 24px}
-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px}
-header h2{font-size:16px;font-weight:500}
-header .actions{display:flex;gap:8px}
-.btn{padding:6px 12px;background:var(--bg-2);border:1px solid var(--border);color:var(--text-1);border-radius:6px;cursor:pointer;font-size:12px}
-.btn:hover{border-color:var(--accent)}
-.btn-primary{background:var(--accent);border-color:var(--accent)}
-.btn-primary:hover{background:var(--accent-h);border-color:var(--accent-h)}
+main{overflow:auto;padding:16px}
+header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+h1{font-size:20px;font-weight:600}
 .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px}
 .grid-2{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
-.card{background:var(--bg-1);border:1px solid var(--border);border-radius:8px;padding:14px 16px;transition:all 0.15s}
-.card:hover{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
-.card-title{font-size:11px;color:var(--text-3);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px}
-.metric-big{font-size:48px;font-weight:500;line-height:1}
-.metric-sub{font-size:11px;color:var(--text-3);margin-top:4px}
+.card{background:var(--bg-1);border:1px solid var(--border);border-radius:8px;padding:14px;transition:border-color .2s}
+.card:hover{border-color:var(--border-h)}
+.card-title{font-size:11px;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px}
+.card-value{font-size:24px;font-weight:600;line-height:1.2}
+.card-sub{font-size:11px;color:var(--text-3);margin-top:4px}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th{text-align:left;font-weight:500;color:var(--text-3);padding:6px 0;border-bottom:1px solid var(--border)}
+td{padding:6px 0;border-bottom:1px solid var(--border)}
+.mono{font-family:'JetBrains Mono',Consolas,monospace;font-size:11px}
+.btn{background:var(--bg-2);border:1px solid var(--border);color:var(--text-1);padding:6px 12px;border-radius:6px;font-size:12px;cursor:pointer;transition:.15s}
+.btn:hover{border-color:var(--accent)}
+.btn-primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn-primary:hover{background:var(--accent-h);border-color:var(--accent-h)}
 .status-pill{display:inline-block;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600}
-.s-green{background:rgba(76,183,130,0.15);color:var(--green)}
-.s-red{background:rgba(248,113,113,0.15);color:var(--red)}
-.s-yellow{background:rgba(242,201,76,0.15);color:var(--yellow)}
+.s-green{background:rgba(76,183,130,.15);color:var(--green)}
+.s-yellow{background:rgba(242,201,76,.15);color:var(--yellow)}
+.s-red{background:rgba(248,113,113,.15);color:var(--red)}
 .dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:6px}
 .d-green{background:var(--green)}
-.d-red{background:var(--red)}
 .d-yellow{background:var(--yellow)}
-.d-gray{background:var(--text-3)}
-table{width:100%;border-collapse:collapse;font-size:12px}
-th{text-align:left;padding:8px 6px;color:var(--text-3);font-weight:500;border-bottom:1px solid var(--border)}
-td{padding:8px 6px;border-bottom:1px solid rgba(255,255,255,0.04)}
-tr:hover td{background:var(--bg-2)}
-.mono{font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;color:var(--text-2)}
-.alert{padding:10px 12px;border-radius:6px;margin-bottom:8px;font-size:12px}
-.alert.red{background:rgba(248,113,113,0.1);border-left:3px solid var(--red)}
-.alert.yellow{background:rgba(242,201,76,0.1);border-left:3px solid var(--yellow)}
-iframe{width:100%;border:0;background:var(--bg-1);border-radius:6px;min-height:600px}
-.iframe-wrap{background:var(--bg-1);border:1px solid var(--border);border-radius:8px;overflow:hidden}
-.empty{color:var(--text-3);font-size:12px;padding:12px;text-align:center}
-.stat-block{background:var(--bg-2);border-radius:6px;padding:10px 12px;cursor:pointer}
-.stat-block:hover{background:var(--bg-3)}
-.stat-block .num{font-size:24px;font-weight:500}
-.stat-block .label{font-size:10px;color:var(--text-3);text-transform:uppercase}
-.chat-input{display:flex;gap:8px;margin-top:12px}
-.chat-input input{flex:1;padding:8px 12px;background:var(--bg-2);border:1px solid var(--border);color:var(--text-1);border-radius:6px}
-.chat-log{background:var(--bg-0);border-radius:6px;padding:12px;min-height:300px;max-height:500px;overflow:auto}
-.chat-msg{padding:6px 0;font-size:13px}
-.chat-msg .who{color:var(--accent);font-weight:500;margin-right:6px}
+.d-red{background:var(--red)}
+.empty{color:var(--text-3);font-size:12px;padding:8px 0;text-align:center}
+.chat-log{height:300px;overflow:auto;background:var(--bg-0);border-radius:6px;padding:10px;margin-bottom:8px}
+.chat-input{display:flex;gap:6px}
+.chat-input input{flex:1;background:var(--bg-0);border:1px solid var(--border);color:var(--text-1);padding:6px 10px;border-radius:6px;font-size:13px}
+.chat-msg{margin-bottom:6px;font-size:12px}
+.chat-msg .who{color:var(--accent);margin-right:6px}
 .panel{display:none}
 .panel.active{display:block}
-
-</style>
-</head>
-<body>
-<div class='app'>
-<nav>
-<div class='brand'><h1>中枢总控台</h1><div class='sub'>AgentMemoryHub</div></div>
-<div class='nav-item active' data-tab='main' onclick='showTab("main")'>▦ 总控台</div>
-<div class='nav-item' data-tab='flywheel' onclick='showTab("flywheel")'>⚙ 飞轮详情</div>
-<div class='nav-item' data-tab='skillhub' onclick='showTab("skillhub")'>⚡ SkillHub</div>
-<div class='nav-item' data-tab='platforms' onclick='showTab("platforms")'>▥ 平台健康</div>
-<div class='nav-item' data-tab='hermes' onclick='showTab("hermes")'>💬 Hermes Chat</div>
-</nav>
-<main>
-<header><h2 id='page-title'>总控台</h2>
-<div class='actions'>
-<button class='btn' onclick='location.reload()'>🔄 刷新</button>
-<button class='btn btn-primary' onclick='setStatus("yellow","需要后端 trigger")'>⚡ 立即收集</button>
-</div></header>
-<div class='panel active' id='panel-main'>
-<div class='grid'>
-<div class='card' id='c-health'><span class='dot d-gray'></span><div class='card-title'>总体健康</div><div class='metric-big' id='m-health'>--</div><div class='metric-sub' id='m-health-sub'>--</div></div>
-<div class='card' id='c-gap'><div class='card-title'>知识缺口 · 24h</div><div class='metric-big' id='m-gap'>--</div><div class='metric-sub' id='m-gap-sub'>--</div></div>
-<div class='card' id='c-todos'><div class='card-title'>待人工处理</div><div class='metric-big' id='m-todos'>--</div><div class='metric-sub' id='m-todos-sub'>--</div></div>
-</div>
-<div class='card' style='margin-bottom:12px'><div class='card-title'>5 平台连接</div>
-<table><thead><tr><th>状态</th><th>名称</th><th>类型</th></tr></thead><tbody id='tbl-platforms'></tbody></table></div>
-<div class='card' style='margin-bottom:12px'><div class='card-title'>6 面板自检 · 06:00 巡检</div>
-<table><thead><tr><th>面板</th><th>状态</th><th>详情</th></tr></thead><tbody id='tbl-panels'></tbody></table></div>
-<div class='card' style='margin-bottom:12px'><div class='card-title'>Cron 任务 · 点击「立即跑」</div>
-<table><thead><tr><th>ID</th><th>名称</th><th>调度</th><th>状态</th><th>最近</th><th>动作</th></tr></thead><tbody id='tbl-cron'></tbody></table></div>
-<div class='card' style='margin-bottom:12px'><div class='card-title'>中枢卡片 · 按类型</div>
-<div id='cards-grid' style='display:grid;grid-template-columns:repeat(6,1fr);gap:8px'></div></div>
-<div class='grid-2'>
-<div class='card'><div class='card-title'>三仓 Git 同步</div><table><tbody id='tbl-sync'></tbody></table></div>
-<div class='card'><div class='card-title'>最近 commit_ledger</div><table><tbody id='tbl-ledger'></tbody></table></div>
-</div>
-<div class='card' style='margin-top:12px'><div class='card-title'>最近 ingest</div><table><tbody id='tbl-ingest'></tbody></table></div>
-<div class='card' style='margin-top:12px'><div class='card-title'>关键告警</div><div id='alerts'></div></div>
-</div>
-<div class='panel' id='panel-flywheel'>
-<!-- 飞轮健康度 hero row -->
-<div style='display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr;gap:12px;margin-bottom:12px'>
-<div class='card' style='background:rgba(94,106,210,0.08);border-color:var(--accent)'>
-<div class='card-title' style='color:var(--accent)'>OVERALL SCORE</div>
-<div id='h-overall' style='font-size:48px;font-weight:500;line-height:1'>--</div>
-<div style='height:6px;background:var(--bg-3);border-radius:3px;overflow:hidden;margin-top:8px'><div id='h-overall-bar' style='height:100%;border-radius:3px;transition:width .6s;width:0%'></div></div>
-<div id='h-overall-sub' style='font-size:11px;color:var(--text-3);margin-top:6px'>--</div>
-</div>
-<div class='card'>
-<div class='card-title'>CARD HEALTH</div>
-<div id='h-card' style='font-size:36px;font-weight:500'>--</div>
-<div style='height:6px;background:var(--bg-3);border-radius:3px;overflow:hidden;margin-top:8px'><div id='h-card-bar' style='height:100%;background:var(--green);border-radius:3px;transition:width .6s;width:0%'></div></div>
-<div id='h-card-sub' style='font-size:11px;color:var(--text-3);margin-top:6px'>--</div>
-</div>
-<div class='card'>
-<div class='card-title'>SKILL HEALTH</div>
-<div id='h-skill' style='font-size:36px;font-weight:500'>--</div>
-<div style='height:6px;background:var(--bg-3);border-radius:3px;overflow:hidden;margin-top:8px'><div id='h-skill-bar' style='height:100%;background:var(--yellow);border-radius:3px;transition:width .6s;width:0%'></div></div>
-<div id='h-skill-sub' style='font-size:11px;color:var(--text-3);margin-top:6px'>--</div>
-</div>
-<div class='card'>
-<div class='card-title'>FLYWHEEL ACTIVITY</div>
-<div id='h-fly' style='font-size:36px;font-weight:500'>--</div>
-<div style='height:6px;background:var(--bg-3);border-radius:3px;overflow:hidden;margin-top:8px'><div id='h-fly-bar' style='height:100%;background:var(--red);border-radius:3px;transition:width .6s;width:0%'></div></div>
-<div id='h-fly-sub' style='font-size:11px;color:var(--text-3);margin-top:6px'>--</div>
-</div>
-</div>
-<!-- 飞轮图+卡片分布 -->
-<div style='display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px'>
-<div class='card'>
-<div class='card-title'>飞轮状态图</div>
-<div style='display:flex;justify-content:center;margin-top:8px'>
-<svg viewBox='0 0 400 300' xmlns='http://www.w3.org/2000/svg' style='max-width:360px'>
-<circle cx='200' cy='150' r='52' fill='rgba(94,106,210,0.06)'/>
-<circle cx='200' cy='150' r='40' fill='rgba(94,106,210,0.04)'/>
-<text x='200' y='146' text-anchor='middle' fill='var(--text-1)' font-size='13' font-weight='600'>中枢</text>
-<text x='200' y='164' text-anchor='middle' fill='var(--text-3)' font-size='10' font-family='monospace' id='h-hub-count'>-- 卡</text>
-<!-- 6 阶段节点 -->
-<g><circle cx='200' cy='48' r='22' fill='var(--bg-2)' stroke='var(--text-1)' stroke-width='1'/><text x='200' y='45' text-anchor='middle' fill='var(--text-1)' font-size='10' font-weight='600'>实践</text><text x='200' y='58' text-anchor='middle' fill='var(--text-3)' font-size='8' font-family='monospace'>A 引擎</text></g>
-<g><circle cx='310' cy='92' r='22' fill='var(--bg-2)' stroke='var(--text-3)' stroke-width='1' stroke-dasharray='4,3'/><text x='310' y='89' text-anchor='middle' fill='var(--text-3)' font-size='10' font-weight='600'>沉淀</text><text x='310' y='102' text-anchor='middle' fill='var(--text-3)' font-size='8' font-family='monospace'>B 维护站</text></g>
-<g><circle cx='310' cy='208' r='22' fill='var(--bg-2)' stroke='var(--text-3)' stroke-width='1' stroke-dasharray='4,3'/><text x='310' y='205' text-anchor='middle' fill='var(--text-3)' font-size='10' font-weight='600'>提炼</text><text x='310' y='218' text-anchor='middle' fill='var(--text-3)' font-size='8' font-family='monospace'>C 维护站</text></g>
-<g><circle cx='200' cy='252' r='22' fill='var(--bg-2)' stroke='var(--text-3)' stroke-width='1' stroke-dasharray='4,3'/><text x='200' y='249' text-anchor='middle' fill='var(--text-3)' font-size='10' font-weight='600'>萃取</text><text x='200' y='262' text-anchor='middle' fill='var(--text-3)' font-size='8' font-family='monospace'>D 维护站</text></g>
-<g><circle cx='90' cy='208' r='22' fill='rgba(94,106,210,0.12)' stroke='var(--accent)' stroke-width='1.2'/><text x='90' y='205' text-anchor='middle' fill='var(--text-1)' font-size='10' font-weight='600'>淬炼</text><text x='90' y='218' text-anchor='middle' fill='var(--accent)' font-size='8' font-family='monospace'>E 引擎</text></g>
-<g><circle cx='90' cy='92' r='22' fill='var(--bg-2)' stroke='var(--text-1)' stroke-width='1'/><text x='90' y='89' text-anchor='middle' fill='var(--text-1)' font-size='10' font-weight='600'>反馈</text><text x='90' y='102' text-anchor='middle' fill='var(--text-3)' font-size='8' font-family='monospace'>A 引擎</text></g>
-<!-- 连接线 -->
-<marker id='arrow' markerWidth='8' markerHeight='6' refX='7' refY='3' orient='auto'><polygon points='0 0,8 3,0 6' fill='var(--text-3)'/></marker>
-<path d='M200,70 L288,100' fill='none' stroke='var(--text-3)' stroke-width='1' marker-end='url(#arrow)'/>
-<path d='M300,112 L300,188' fill='none' stroke='var(--text-3)' stroke-width='1' marker-end='url(#arrow)'/>
-<path d='M288,225 L222,252' fill='none' stroke='var(--text-3)' stroke-width='1' marker-end='url(#arrow)'/>
-<path d='M178,252 L112,225' fill='none' stroke='var(--text-3)' stroke-width='1' marker-end='url(#arrow)'/>
-<path d='M100,188 L100,112' fill='none' stroke='var(--text-3)' stroke-width='1' marker-end='url(#arrow)'/>
-<path d='M112,92 L178,65' fill='none' stroke='var(--text-3)' stroke-width='1' marker-end='url(#arrow)'/>
-<text x='200' y='20' text-anchor='middle' fill='var(--text-3)' font-size='9' font-family='monospace'>● 主动运行 ○ 待触发</text>
-</svg></div>
-<div style='margin-top:12px'>
-<div style='display:flex;align-items:center;gap:8px;margin-bottom:6px'><span class='dot d-green'></span><span style='font-size:12px'>反馈 / 实践</span><span class='status-pill s-green'>active</span></div>
-<div style='display:flex;align-items:center;gap:8px;margin-bottom:6px'><span class='dot d-gray'></span><span style='font-size:12px'>淬炼（T1 验证）</span><span class='status-pill s-yellow'>需关注</span></div>
-<div style='display:flex;align-items:center;gap:8px'><span class='dot d-gray'></span><span style='font-size:12px'>沉淀 / 提炼 / 萃取</span><span class='status-pill s-yellow'>待触发</span></div>
-</div>
-</div>
-<div class='card'>
-<div class='card-title'>卡片类型分布 · <span id='h-total-cards'>--</span> 张</div>
-<div style='display:flex;align-items:center;gap:20px;margin-top:8px'>
-<svg width='100' height='100' viewBox='0 0 42 42' style='flex-shrink:0'>
-<circle cx='21' cy='21' r='15.9' fill='transparent' stroke='var(--bg-3)' stroke-width='6'/>
-<circle id='donut-exp' cx='21' cy='21' r='15.9' fill='transparent' stroke='var(--accent)' stroke-width='6' stroke-dasharray='0 100' transform='rotate(-90 21 21)'/>
-<circle id='donut-method' cx='21' cy='21' r='15.9' fill='transparent' stroke='#4cb782' stroke-width='6' stroke-dasharray='0 100' transform='rotate(-90 21 21)'/>
-<circle id='donut-blueprint' cx='21' cy='21' r='15.9' fill='transparent' stroke='var(--yellow)' stroke-width='6' stroke-dasharray='0 100' transform='rotate(-90 21 21)'/>
-<circle id='donut-rule' cx='21' cy='21' r='15.9' fill='transparent' stroke='var(--red)' stroke-width='6' stroke-dasharray='0 100' transform='rotate(-90 21 21)'/>
-</svg>
-<div id='donut-legend' style='flex:1'></div>
-</div>
-</div>
-</div>
-<!-- 卡片状态+技能状态 -->
-<div style='display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px'>
-<div class='card'>
-<div class='card-title'>卡片健康度</div>
-<div id='h-card-bars' style='margin-top:8px'></div>
-</div>
-<div class='card'>
-<div class='card-title'>SkillHub 技能状态 · <span id='h-skill-count'>--</span> 个</div>
-<div id='h-skill-table' style='margin-top:8px'></div>
-</div>
-</div>
-<!-- 行动建议 -->
-<div class='card'>
-<div class='card-title'>建议操作</div>
-<div id='h-actions' style='margin-top:8px'></div>
-</div>
-<div style='font-size:10px;color:var(--text-3);text-align:right;margin-top:4px'>数据源：hub-engine/scripts/hub_health.py</div>
-</div>
-<div class='panel' id='panel-skillhub'><div class='card'><div class='card-title'>SkillHub（占位）</div><div class='empty'>该 tab 后续接入 SkillHub 技能浏览/路由详情</div></div></div>
-<div class='panel' id='panel-platforms'>
-<div class='panel' id='panel-skillhub'><div class='card'><div class='card-title'>SkillHub（占位）</div><div class='empty'>该 tab 后续接入 SkillHub 技能浏览/路由详情</div></div></div>
-<div class='panel' id='panel-platforms'><div class='card'><div class='card-title'>平台健康（占位）</div><div class='empty'>该 tab 后续接入「platform_healthcheck」详细页</div></div></div>
-<div class='panel' id='panel-hermes'>
-<div class='card'><div class='card-title'>Hermes Chat（占位 UI）</div>
-<div class='chat-log' id='chat-log'><div class='empty'>在下方输入问题，按 Enter 发送<br>（注：当前为占位 UI，后端 trigger 待接入）</div></div>
-<div class='chat-input'>
-<input type='text' id='chat-msg' placeholder='问 Hermes...（按 Enter 发送）'>
-<button class='btn btn-primary' onclick='sendChat()'>发送</button>
-</div></div>
-</div>
-</main></div>
-<script>
-
+</style>\n</head>\n<body>\n<div class='app'>\n<nav>\n<div class='nav-item active' data-tab='main'>▦ 总控台</div>\n<div class='nav-item' data-tab='flywheel'>⚙ 飞轮详情</div>\n<div class='nav-item' data-tab='skillhub'>⚡ SkillHub</div>\n<div class='nav-item' data-tab='platforms'>▥ 平台健康</div>\n<div class='nav-item' data-tab='hermes'>💬 Hermes Chat</div>\n</nav>\n<main>\n<header>\n<h1 id='page-title'>总控台</h1>\n<div style='display:flex;gap:6px'>\n<button class='btn' data-action='refresh'>🔄 刷新</button>\n<button class='btn btn-primary' data-action='collect'>⚡ 立即收集</button>\n</div>\n</header>\n<div class='panel active' id='panel-main'>\n<div class='grid'>\n<div class='card' id='c-health'><div class='card-title'>健康度</div><div class='card-value' id='m-health'>--</div><div class='card-sub' id='m-health-sub'>加载中…</div></div>\n<div class='card'><div class='card-title'>平台数</div><div class='card-value' id='m-platforms'>--</div><div class='card-sub'>Agent 平台接入</div></div>\n<div class='card'><div class='card-title'>Cron 数</div><div class='card-value' id='m-cron'>--</div><div class='card-sub'>定时任务</div></div>\n</div>\n<div class='grid-2'>\n<div class='card'><div class='card-title'>平台状态</div><table><tbody id='tbl-platforms'></tbody></table></div>\n<div class='card'><div class='card-title'>飞轮面板</div><table><tbody id='tbl-panels'></tbody></table></div>\n</div>\n<div class='card'><div class='card-title'>Cron 任务</div><table><thead><tr><th>ID</th><th>名称</th><th>调度</th><th>最后</th><th></th></tr></thead><tbody id='tbl-cron'></tbody></table></div>\n<div class='grid' id='cards-grid' style='margin-top:12px'></div>\n<div class='grid-2' style='margin-top:12px'>\n<div class='card'><div class='card-title'>仓库同步</div><table><tbody id='tbl-sync'></tbody></table></div>\n<div class='card'><div class='card-title'>最近 ledger</div><table><tbody id='tbl-ledger'></tbody></table></div>\n</div>\n<div class='card' style='margin-top:12px'><div class='card-title'>最近 ingest</div><table><tbody id='tbl-ingest'></tbody></table></div>\n<div class='card' style='margin-top:12px'><div class='card-title'>关键告警</div><div id='alerts'></div></div>\n</div>\n<div class='panel' id='panel-flywheel'>\n<div style='display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr;gap:12px;margin-bottom:12px'>\n<div class='card' style='background:rgba(94,106,210,0.08);border-color:var(--accent)'><div class='card-title' style='color:var(--accent)'>OVERALL SCORE</div><div id='h-overall' style='font-size:48px;font-weight:500;line-height:1'>--</div><div style='height:6px;background:var(--bg-3);border-radius:3px;overflow:hidden;margin-top:8px'><div id='h-overall-bar' style='height:100%;width:0%'></div></div><div class='card-sub' id='h-overall-sub'>--</div></div>\n<div class='card'><div class='card-title'>卡片健康度</div><div id='h-card' style='font-size:32px;font-weight:500;line-height:1'>--</div><div style='height:6px;background:var(--bg-3);border-radius:3px;overflow:hidden;margin-top:8px'><div id='h-card-bar' style='height:100%;width:0%'></div></div><div class='card-sub' id='h-card-sub'>--</div></div>\n<div class='card'><div class='card-title'>技能健康度</div><div id='h-skill' style='font-size:32px;font-weight:500;line-height:1'>--</div><div style='height:6px;background:var(--bg-3);border-radius:3px;overflow:hidden;margin-top:8px'><div id='h-skill-bar' style='height:100%;width:0%'></div></div><div class='card-sub' id='h-skill-sub'>--</div></div>\n<div class='card'><div class='card-title'>飞轮活跃度</div><div id='h-fly' style='font-size:32px;font-weight:500;line-height:1'>--</div><div style='height:6px;background:var(--bg-3);border-radius:3px;overflow:hidden;margin-top:8px'><div id='h-fly-bar' style='height:100%;width:0%'></div></div><div class='card-sub' id='h-fly-sub'>--</div></div>\n</div>\n<div style='display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px'>\n<div class='card'><div class='card-title'>中枢卡片 · <span id='h-hub-count'>--</span> 张（按状态）</div><div id='h-card-bars' style='margin-top:8px'></div></div>\n<div class='card'><div class='card-title'>卡片类型分布（donut）</div><div style='display:flex;align-items:center;gap:20px;margin-top:8px'>\n<svg width='100' height='100' viewBox='0 0 42 42' style='flex-shrink:0'>\n<circle cx='21' cy='21' r='15.9' fill='transparent' stroke='var(--bg-3)' stroke-width='6'/>\n<circle id='donut-exp' cx='21' cy='21' r='15.9' fill='transparent' stroke='var(--accent)' stroke-width='6' stroke-dasharray='0 100' transform='rotate(-90 21 21)'/>\n<circle id='donut-method' cx='21' cy='21' r='15.9' fill='transparent' stroke='var(--green)' stroke-width='6' stroke-dasharray='0 100' transform='rotate(-90 21 21)'/>\n<circle id='donut-blueprint' cx='21' cy='21' r='15.9' fill='transparent' stroke='var(--yellow)' stroke-width='6' stroke-dasharray='0 100' transform='rotate(-90 21 21)'/>\n<circle id='donut-rule' cx='21' cy='21' r='15.9' fill='transparent' stroke='var(--red)' stroke-width='6' stroke-dasharray='0 100' transform='rotate(-90 21 21)'/>\n</svg>\n<div id='donut-legend' style='flex:1;font-size:12px;line-height:1.6'></div>\n</div></div>\n</div>\n<div style='display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px'>\n<div class='card'><div class='card-title'>SkillHub 技能状态 · <span id='h-skill-count'>--</span> 个</div><div id='h-skill-table' style='margin-top:8px'></div></div>\n<div class='card'><div class='card-title'>建议操作</div><div id='h-actions' style='margin-top:8px'></div></div>\n</div>\n<div style='font-size:10px;color:var(--text-3);text-align:right;margin-top:4px'>数据源：hub-engine/scripts/hub_health.py --dashboard-format</div>\n</div>\n<div class='panel' id='panel-skillhub'>\n<div class='card'><div class='card-title'>SkillHub（占位）</div><div class='empty'>该 tab 后续接入 SkillHub 技能浏览/路由详情</div></div>\n</div>\n<div class='panel' id='panel-platforms'>\n<div class='card'><div class='card-title'>平台健康（占位）</div><div class='empty'>该 tab 后续接入「platform_healthcheck」详细页</div></div>\n</div>\n<div class='panel' id='panel-hermes'>\n<div class='card'><div class='card-title'>Hermes Chat（占位 UI）</div>\n<div class='chat-log' id='chat-log'><div class='empty'>在下方输入问题，按 Enter 发送<br>（注：当前为占位 UI，后端 trigger 待接入）</div></div>\n<div class='chat-input'>\n<input type='text' id='chat-msg' placeholder='问 Hermes...（按 Enter 发送）'>\n<button class='btn btn-primary'>发送</button>\n</div>\n</div>\n</div>\n</main></div>\n<script>\n
 let DATA = null;
 let ACTIVE_TAB = "main";
 
 function showTab(name) {
   ACTIVE_TAB = name;
-  document.querySelectorAll(".nav-item").forEach(el => {
+  document.querySelectorAll(".nav-item").forEach(function(el) {
     el.classList.toggle("active", el.dataset.tab === name);
   });
-  document.querySelectorAll(".panel").forEach(el => {
+  document.querySelectorAll(".panel").forEach(function(el) {
     el.classList.toggle("active", el.id === "panel-" + name);
   });
-  const titles = {main: "总控台", flywheel: "飞轮详情", skillhub: "SkillHub", platforms: "平台健康", hermes: "Hermes Chat"};
-  document.getElementById("page-title").textContent = titles[name] || name;
+  var titles = {main:"总控台", flywheel:"飞轮详情", skillhub:"SkillHub", platforms:"平台健康", hermes:"Hermes Chat"};
+  var pt = document.getElementById("page-title");
+  if (pt) pt.textContent = titles[name] || name;
 }
 
 function setStatus(level, text) {
-  const dot = document.querySelector("#c-health .dot");
-  if (dot) { dot.className = "dot d-" + (level === "green" ? "green" : level === "red" ? "red" : "yellow"); }
+  var dot = document.querySelector("#c-health .dot");
+  if (dot) dot.className = "dot d-" + (level === "green" ? "green" : level === "red" ? "red" : "yellow");
   if (text) {
-    const sub = document.getElementById("m-health-sub");
+    var sub = document.getElementById("m-health-sub");
     if (sub) sub.textContent = text;
   }
 }
 
 function render() {
   if (!DATA) return;
-  const d = DATA;
-  document.getElementById("m-health").textContent = (d.health && d.health.overall) + "/100";
-  document.getElementById("m-health-sub").textContent = (d.health && d.health.panels_ok) + "/" + (d.health && d.health.panels_total) + " 面板 OK";
-  const gap = d.knowledge_gap || {};
-  document.getElementById("m-gap").textContent = (gap.miss || 0) + "/" + (gap.total || 0);
-  document.getElementById("m-gap-sub").textContent = (gap.miss_rate || 0) + "% miss rate";
-  const td = d.todos || {};
-  const projCount = Array.isArray(td.projects) ? td.projects.length : (td.project_count || 0);
-  document.getElementById("m-todos").textContent = projCount;
-  document.getElementById("m-todos-sub").textContent = (td.rule_pending || 0) + " 规则 pending";
-  const plats = (d.platforms && d.platforms.platforms) || {};
-  const tblP = document.getElementById("tbl-platforms");
-  tblP.innerHTML = Object.entries(plats).map(([n, p]) =>
-    '<tr><td><span class="status-pill s-' + (p.status === "GREEN" ? "green" : p.status === "RED" ? "red" : "yellow") + '">' + p.status + '</span></td><td><strong>' + n + '</strong></td><td class="mono">' + p.type + '</td></tr>'
-  ).join("") || '<tr><td colspan=3 class=empty>无</td></tr>';
-  const fw = d.flywheel || {};
-  const tblPanels = document.getElementById("tbl-panels");
-  tblPanels.innerHTML = Object.entries(fw).map(([k, v]) =>
-    '<tr><td class=mono>' + k + '</td><td><span class="status-pill s-' + (v.ok ? "green" : "red") + '">' + (v.ok ? "✓" : "✗") + '</span></td><td>' + ((v.info && v.info.stdout) || "").slice(0, 80) + '</td></tr>'
-  ).join("") || '<tr><td colspan=3 class=empty>无</td></tr>';
-  const cron = d.cron_jobs || [];
-  const tblC = document.getElementById("tbl-cron");
-  tblC.innerHTML = cron.map(c =>
-    '<tr><td class=mono>' + c.id.slice(0,8) + '</td><td>' + c.name + '</td><td class=mono>' + c.schedule + '</td><td><span class="status-pill s-green">' + c.status + '</span></td><td class=mono>' + (c.last || "—") + '</td>' +
-    '<td><button class=btn data-cid=' + c.id + ' onclick="runCron(\'' + c.id + '\',\'' + c.name + '\')">立即跑</button></td></tr>'
-  ).join("") || '<tr><td colspan=6 class=empty>无</td></tr>';
-  const cr = d.card_stats_by_type || {};
-  const cards = Array.isArray(cr) ? cr : Object.entries(cr).map(([t, n]) => ({type: t, label: t.toUpperCase().slice(0,12), count: n}));
-  document.getElementById("cards-grid").innerHTML = cards.map(c =>
-    '<div class=stat-block><div class=num>' + c.count + '</div><div class=label>' + (c.label || c.type) + '</div></div>'
-  ).join("") || '<div class=empty>无</div>';
-  const ss = d.sync_status || {};
-  const repos = Array.isArray(ss) ? ss : (ss.repos || Object.entries(ss).map(([n, info]) => ({name: n, ...(info || {})})));
-  document.getElementById("tbl-sync").innerHTML = repos.map(r =>
-    '<tr><td><strong>' + r.name + '</strong></td><td class=mono>' + (r.last_commit || r.commit || "—") + '</td><td>' + (r.branch || "—") + '</td></tr>'
-  ).join("") || '<tr><td colspan=3 class=empty>无</td></tr>';
-  const led = d.ledger_recent || [];
-  document.getElementById("tbl-ledger").innerHTML = led.map(l =>
-    '<tr><td class=mono>' + (l.ts || "") + '</td><td>' + (l.who || "") + '</td><td class=mono>' + (l.sha || "").slice(0,8) + '</td><td>' + (l.intent || "") + '</td></tr>'
-  ).join("") || '<tr><td colspan=4 class=empty>无</td></tr>';
-  const ing = d.ingest_recent || [];
-  document.getElementById("tbl-ingest").innerHTML = ing.map(i =>
-    '<tr><td class=mono>' + (i.ts || "") + '</td><td>' + (i.title || "") + '</td><td class=mono>' + (i.type || "") + '</td><td><span class=status-pill s-green>' + (i.status || "—") + '</span></td></tr>'
-  ).join("") || '<tr><td colspan=4 class=empty>无</td></tr>';
-  const alerts = d.alerts || {};
-  const alertDiv = document.getElementById("alerts");
-  let alertHtml = "";
-  (alerts.critical || []).forEach(a => { alertHtml += '<div class=alert.red>⚠ CRITICAL · ' + a + '</div>'; });
-  (alerts.announcements || []).forEach(a => { alertHtml += '<div class=alert.yellow>📢 ' + (a.action || "ingest_done") + ' · ' + (a.who || "hermes") + '</div>'; });
-  alertDiv.innerHTML = alertHtml || '<div class=empty>无告警</div>';
+  var d = DATA;
+  var h = d.health || {};
+  document.getElementById("m-health").textContent = (h.overall || 0) + "/100";
+  var sub = document.getElementById("m-health-sub");
+  if (sub) sub.textContent = (h.panels_ok || 0) + "/" + (h.panels_total || 0) + " 面板 OK";
+
+  var plats = d.platforms && d.platforms.platforms || {};
+  var pc = document.getElementById("m-platforms");
+  if (pc) pc.textContent = Object.keys(plats).length + " 平台";
+  var tblP = document.getElementById("tbl-platforms");
+  if (tblP) {
+    tblP.innerHTML = Object.entries(plats).map(function(e) {
+      var n = e[0], p = e[1];
+      var st = p.status === "GREEN" ? "green" : p.status === "RED" ? "red" : "yellow";
+      return "<tr><td class=mono>" + n + "</td><td><span class='status-pill s-" + st + "'>" + (p.status || "?") + "</span></td><td>" + (p.detail || "") + "</td></tr>";
+    }).join("");
+  }
+
+  var fw = d.flywheel || {};
+  var tblPanels = document.getElementById("tbl-panels");
+  if (tblPanels) {
+    tblPanels.innerHTML = Object.entries(fw).map(function(e) {
+      var k = e[0], v = e[1];
+      return "<tr><td class=mono>" + k + "</td><td><span class='status-pill s-" + (v.ok ? "green" : "red") + "'>" + (v.ok ? "✓" : "✗") + "</span></td><td>" + ((v.detail || "").replace(/</g, "<")) + "</td></tr>";
+    }).join("");
+  }
+
+  var cron = d.cron_jobs || [];
+  var cc = document.getElementById("m-cron");
+  if (cc) cc.textContent = cron.length + " cron";
+  var tblC = document.getElementById("tbl-cron");
+  if (tblC) {
+    tblC.innerHTML = cron.map(function(c) {
+      return "<tr><td class=mono>" + c.id + "</td><td>" + c.name + "</td><td class=mono>" + c.schedule + "</td><td>" + c.last + "</td><td><button class=btn data-cid='" + c.id + "' data-cname='" + c.name + "'>立即跑</button></td></tr>";
+    }).join("");
+  }
+
+  var cards = d.card_stats_by_type || [];
+  var cg = document.getElementById("cards-grid");
+  if (cg) {
+    cg.innerHTML = cards.map(function(c) {
+      return "<div class='card'><div class='card-title'>" + c.label + "</div><div class='card-value'>" + c.count + "</div></div>";
+    }).join("");
+  }
+
+  var repos = d.sync_status || [];
+  var ts = document.getElementById("tbl-sync");
+  if (ts) {
+    ts.innerHTML = repos.map(function(r) {
+      return "<tr><td>" + r.repo + "</td><td class=mono>" + (r.local || "?") + "</td><td class=mono>" + (r.remote || "?") + "</td><td>" + (r.ahead + "/" + r.behind) + "</td></tr>";
+    }).join("");
+  }
+
+  var led = d.ledger_recent || [];
+  var tl = document.getElementById("tbl-ledger");
+  if (tl) {
+    tl.innerHTML = led.map(function(l) {
+      return "<tr><td class=mono>" + l.ts + "</td><td>" + l.title + "</td><td>" + l.type + "</td><td>" + l.status + "</td></tr>";
+    }).join("");
+  }
+
+  var ing = d.ingest_recent || [];
+  var ti = document.getElementById("tbl-ingest");
+  if (ti) {
+    ti.innerHTML = ing.map(function(x) {
+      return "<tr><td class=mono>" + x.ts + "</td><td>" + x.title + "</td><td>" + x.type + "</td></tr>";
+    }).join("");
+  }
+
+  var al = d.alerts || {};
+  var alertsEl = document.getElementById("alerts");
+  if (alertsEl) {
+    var html = "";
+    (al.critical || []).forEach(function(c) { html += "<div class='card' style='border-color:var(--red);margin-bottom:6px'>⚠ " + c + " (RED)</div>"; });
+    (al.announcements || []).slice(0,5).forEach(function(a) {
+      html += "<div style='font-size:11px;color:var(--text-3);padding:4px 0;border-bottom:1px solid var(--border)'>[" + a.ts + "] " + a.from + " → " + a.text + "</div>";
+    });
+    if (!html) html = "<div class='empty'>暂无告警</div>";
+    alertsEl.innerHTML = html;
+  }
+
   setStatus("green", "已渲染 " + Object.keys(plats).length + " 平台 · " + cron.length + " cron");
   renderFlywheel(d);
 }
 
-
 function renderFlywheel(d) {
-  // 4 hero metrics
-  const hh = d.hub_health || {};
-  const overall = hh.overall_score || 0;
-  const cardH = hh.card_health || {};
-  const skillH = hh.skill_health || {};
-  const flyA = hh.flywheel_activity || {};
+  var hh = d.hub_health || {};
+  var overall = hh.overall_score || 0;
+  var cardH = hh.card_health || {};
+  var skillH = hh.skill_health || {};
+  var flyA = hh.flywheel_activity || {};
 
-  document.getElementById("h-overall").textContent = overall.toFixed(0);
-  const ob = document.getElementById("h-overall-bar");
-  if (ob) { ob.style.width = overall + "%"; ob.style.background = overall >= 80 ? "var(--green)" : overall >= 60 ? "var(--yellow)" : "var(--red)"; }
-  const os = document.getElementById("h-overall-sub");
-  if (os) os.textContent = hh.overall_verdict || "–";
+  function setText(id, val) { var el = document.getElementById(id); if (el) el.textContent = val; }
+  function setBar(id, pct, color) {
+    var b = document.getElementById(id);
+    if (b) { b.style.width = pct + "%"; b.style.background = color; }
+  }
+  var col = overall >= 80 ? "var(--green)" : overall >= 60 ? "var(--yellow)" : "var(--red)";
 
-  const ch = (cardH.score || 0);
-  document.getElementById("h-card").textContent = ch.toFixed(0);
-  const cb = document.getElementById("h-card-bar");
-  if (cb) cb.style.width = ch + "%";
-  const cs = document.getElementById("h-card-sub");
-  if (cs) cs.textContent = (cardH.active || 0) + " active / " + (cardH.total || 0) + " total";
+  setText("h-overall", overall.toFixed(0));
+  setBar("h-overall-bar", overall, col);
+  setText("h-overall-sub", hh.overall_verdict || "");
 
-  const sh = (skillH.score || 0);
-  document.getElementById("h-skill").textContent = sh.toFixed(0);
-  const sb = document.getElementById("h-skill-bar");
-  if (sb) sb.style.width = sh + "%";
-  const sks = document.getElementById("h-skill-sub");
-  if (sks) sks.textContent = (skillH.active || 0) + " active / " + (skillH.total || 0) + " total";
+  setText("h-card", (cardH.score || 0).toFixed(0));
+  setBar("h-card-bar", cardH.score || 0, col);
+  setText("h-card-sub", "active=" + (cardH.active||0) + " · candidate=" + (cardH.candidate||0) + " · ref=" + (cardH.reference||0));
 
-  const fa = (flyA.score || 0);
-  document.getElementById("h-fly").textContent = fa.toFixed(0);
-  const fb = document.getElementById("h-fly-bar");
-  if (fb) fb.style.width = fa + "%";
-  const fas = document.getElementById("h-fly-sub");
-  if (fas) fas.textContent = (flyA.active_runs || 0) + " runs / " + (flyA.total || 0) + " slots";
+  setText("h-skill", (skillH.score || 0).toFixed(0));
+  setBar("h-skill-bar", skillH.score || 0, col);
+  setText("h-skill-sub", "active=" + (skillH.active||0) + " · total=" + (skillH.total||0));
+  setText("h-skill-count", skillH.total || 0);
 
-  // hub count
-  const total = (d.card_stats_by_type && d.card_stats_by_type.total) ||
-    Object.values(d.card_stats_by_type || {}).reduce(function(s, n) { return s + (typeof n === "number" ? n : 0); }, 0);
-  document.getElementById("h-hub-count").textContent = (total || "--") + " 卡";
+  setText("h-fly", (flyA.score || 0).toFixed(0));
+  setBar("h-fly-bar", flyA.score || 0, col);
+  setText("h-fly-sub", "7 天 " + (flyA.active_runs||0) + " 阶段活跃 · " + (flyA.total||0) + " 次运行");
 
-  // donut chart — card type distribution
-  var stats = d.card_stats_by_type || {};
-  var total2 = 0;
-  Object.keys(stats).forEach(function(k) { if (typeof stats[k] === "number") total2 += stats[k]; });
-  document.getElementById("h-total-cards").textContent = total2 || "--";
-  var legend = document.getElementById("donut-legend");
-  if (legend) {
-    var legend_items = [
-      { id: "donut-exp", label: "经验", color: "var(--accent)", key: "exp" },
-      { id: "donut-method", label: "方法论", color: "var(--green)", key: "methodology" },
-      { id: "donut-blueprint", label: "蓝图", color: "var(--yellow)", key: "blueprint" },
-      { id: "donut-rule", label: "规则", color: "var(--red)", key: "rule" }
-    ];
-    var legendHtml = "";
-    legend_items.forEach(function(item) {
-      var val = typeof stats[item.key] === "number" ? stats[item.key] : 0;
-      var pct = total2 > 0 ? (val / total2 * 100).toFixed(0) : 0;
-      var circle = document.getElementById(item.id);
-      if (circle) circle.setAttribute("stroke-dasharray", pct.toFixed(1) + " " + (100 - pct).toFixed(1));
-      legendHtml += "<div style='display:flex;align-items:center;gap:6px;margin-bottom:4px;font-size:11px'><span style='width:10px;height:10px;border-radius:2px;background:" + item.color + ";display:inline-block;flex-shrink:0'></span>" + item.label + " <strong>" + val + "</strong> (" + pct + "%)</div>";
-    });
-    legend.innerHTML = legendHtml;
+  setText("h-hub-count", cardH.total || 0);
+  setText("h-total-cards", cardH.total || 0);
+
+  // donut: exp / method / blueprint / rule 比例（按 card_stats_by_type）
+  var cstats = d.card_stats_by_type || [];
+  var totalCards = cstats.reduce(function(s, x) { return s + x.count; }, 0) || 1;
+  function pctOf(name) {
+    var x = cstats.find(function(c) { return c.type === name; });
+    return ((x ? x.count : 0) / totalCards) * 100;
+  }
+  var pE = pctOf("exp"), pM = pctOf("methodology"), pB = pctOf("blueprint"), pR = pctOf("rule");
+  function setDash(id, pct) {
+    var el = document.getElementById(id);
+    if (el) el.setAttribute("stroke-dasharray", pct.toFixed(1) + " " + (100 - pct).toFixed(1));
+  }
+  var acc = pE;
+  setDash("donut-exp", pE);
+  setDash("donut-method", pM);
+  setDash("donut-blueprint", pB);
+  setDash("donut-rule", pR);
+  setText("donut-legend",
+    "EXP " + pE.toFixed(0) + "%<br>" +
+    "METHOD " + pM.toFixed(0) + "%<br>" +
+    "BLUEPRINT " + pB.toFixed(0) + "%<br>" +
+    "RULE " + pR.toFixed(0) + "%"
+  );
+
+  // card bars (按 status)
+  var bars = document.getElementById("h-card-bars");
+  if (bars) {
+    var st = cardH;
+    var sb = function(label, n, color) {
+      return "<div style='display:flex;align-items:center;gap:8px;margin-bottom:4px;font-size:12px'>" +
+        "<div style='width:80px;color:var(--text-2)'>" + label + "</div>" +
+        "<div style='flex:1;height:8px;background:var(--bg-3);border-radius:4px;overflow:hidden'>" +
+        "<div style='height:100%;width:" + ((n / Math.max(st.total||1, 1)) * 100).toFixed(1) + "%;background:" + color + "'></div>" +
+        "</div><div class=mono style='width:40px;text-align:right'>" + n + "</div></div>";
+    };
+    bars.innerHTML = sb("active", st.active||0, "var(--green)") + sb("candidate", st.candidate||0, "var(--yellow)") + sb("reference", st.reference||0, "var(--accent)") + sb("archived", st.archived||0, "var(--text-3)");
   }
 
-  // card health bars
-  var chBars = document.getElementById("h-card-bars");
-  if (chBars) {
-    var chItems = [
-      { label: "active", val: cardH.active || 0, color: "var(--green)" },
-      { label: "candidate", val: cardH.candidate || 0, color: "var(--yellow)" },
-      { label: "reference", val: cardH.reference || 0, color: "var(--text-3)" }
-    ];
-    chBars.innerHTML = chItems.map(function(item) {
-      var maxVal = Math.max(cardH.total || 1, 1);
-      var pct = (item.val / maxVal * 100).toFixed(0);
-      return "<div style='display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:12px'><span style='width:72px'>" + item.label + "</span><div style='flex:1;height:6px;background:var(--bg-3);border-radius:3px;overflow:hidden'><div style='height:100%;width:" + pct + "%;background:" + item.color + ";border-radius:3px'></div></div><span style='width:28px;text-align:right;font-family:monospace;font-size:11px'>" + item.val + "</span></div>";
+  // skill table（前 20 个）
+  var skT = document.getElementById("h-skill-table");
+  if (skT) {
+    var rows = (skillH.skills || []).map(function(s) {
+      var stColor = s.status === "active" ? "green" : s.status === "candidate" ? "yellow" : "red";
+      return "<tr><td>" + s.name + "</td><td><span class='status-pill s-" + stColor + "'>" + s.status + "</span></td><td class=mono>" + (s.reuse_count||0) + "</td></tr>";
     }).join("");
-  }
-
-  // skill health table
-  var skTable = document.getElementById("h-skill-table");
-  if (skTable) {
-    var skills = skillH.skills || [];
-    skTable.innerHTML = (skills.length > 0 ? skills.slice(0, 8).map(function(s) {
-      var st = s.status === "active" ? "s-green" : s.status === "warning" ? "s-yellow" : "s-red";
-      return "<div style='display:flex;align-items:center;gap:8px;margin-bottom:4px;font-size:11px'><span class='status-pill " + st + "'>" + (s.status || "–") + "</span><span style='flex:1'>" + (s.name || "–") + "</span><span style='color:var(--text-3);font-family:monospace;font-size:10px'>" + (s.reuse_count || 0) + " reuse</span></div>";
-    }).join("") : "<div class=empty>无技能数据</div>");
-    var skCount = document.getElementById("h-skill-count");
-    if (skCount) skCount.textContent = skills.length || "--";
+    skT.innerHTML = "<table><thead><tr><th>技能</th><th>状态</th><th>复用</th></tr></thead><tbody>" + rows + "</tbody></table>";
   }
 
   // actions
-  var actions = document.getElementById("h-actions");
-  if (actions) {
-    var acts = (hh.actions || []).slice(0, 5);
-    actions.innerHTML = acts.length > 0 ? acts.map(function(a) {
-      return "<div style='padding:6px 8px;background:var(--bg-2);border-radius:4px;margin-bottom:6px;font-size:12px'>" + a + "</div>";
-    }).join("") : "<div class=empty>无需操作</div>";
-  }
+  var acts = (hh.actions || []).map(function(a) { return "<div style='padding:4px 0;border-bottom:1px solid var(--border);font-size:12px'>• " + a + "</div>"; }).join("");
+  var actEl = document.getElementById("h-actions");
+  if (actEl) actEl.innerHTML = acts || "<div class='empty'>暂无建议</div>";
 }
 
 function runCron(id, name) {
-  if (!confirm("确认立即跑 cron 任务: " + name + " ?")) return;
-  setStatus("yellow", "已发送请求: " + name);
-  alert("已请求运行 " + name + "\n（注：当前为模拟 trigger，真后端 trigger 待接入）");
+  setStatus("yellow", "已请求: " + name + "（" + id + "），等待后端 trigger…");
 }
 
 function sendChat() {
-  const input = document.getElementById("chat-msg");
-  const msg = input.value.trim();
+  var input = document.getElementById("chat-msg");
+  var log = document.getElementById("chat-log");
+  if (!input || !log) return;
+  var msg = input.value.trim();
   if (!msg) return;
-  const log = document.getElementById("chat-log");
-  log.innerHTML += '<div class=chat-msg><span class=who>You:</span>' + msg + '</div>';
-  log.innerHTML += '<div class=chat-msg><span class=who>Hermes:</span>（占位响应：当前 chat 后端未接入）</div>';
+  if (log.querySelector(".empty")) log.innerHTML = "";
+  log.innerHTML += "<div class=chat-msg><span class=who>Fan:</span>" + msg.replace(/</g, "<") + "</div>";
+  log.innerHTML += "<div class=chat-msg><span class=who>Hermes:</span>（占位响应：当前 chat 后端未接入）</div>";
   input.value = "";
   log.scrollTop = log.scrollHeight;
 }
 
-// Enter to send (override existing keydown inline)
+// 用 addEventListener 替代所有 inline onclick（T24 教训：inline handler 易被破坏）
 document.addEventListener("DOMContentLoaded", function() {
-  const ci = document.getElementById("chat-msg");
-  if (ci) {
-    ci.addEventListener("keydown", function(e) {
-      if (e.key === "Enter") { e.preventDefault(); sendChat(); }
+  var ci = document.getElementById("chat-msg");
+  if (ci) ci.addEventListener("keydown", function(e) { if (e.key === "Enter") { e.preventDefault(); sendChat(); } });
+  document.querySelectorAll(".nav-item").forEach(function(el) {
+    el.addEventListener("click", function() {
+      var tab = el.getAttribute("data-tab");
+      if (tab && typeof showTab === "function") showTab(tab);
     });
-  }
+  });
+  document.querySelectorAll("[data-action]").forEach(function(el) {
+    el.addEventListener("click", function() {
+      var act = el.getAttribute("data-action");
+      if (act === "refresh") location.reload();
+      else if (act === "collect") setStatus("yellow", "需要后端 trigger");
+    });
+  });
+  document.querySelectorAll("[data-cid]").forEach(function(el) {
+    el.addEventListener("click", function() { runCron(el.getAttribute("data-cid"), el.getAttribute("data-cname")); });
+  });
+  var sb = document.querySelector(".chat-input .btn-primary");
+  if (sb) sb.addEventListener("click", function() { sendChat(); });
 });
 
 // init
-const DATA = {
-  "generated_at": "2026-09-10T09:53:16.447364+08:00",
-  "hub_root": "C:\\Users\\Fan-SJSS\\.trae-cn\\worktrees\\20260817-Fan-Agent-Momory\\feat-implement-plan-ZilBmv\\AgentMemoryHub",
-  "health": {
-    "overall": 100.0,
-    "panels_ok": 6,
-    "panels_total": 6
-  },
-  "platforms": {
-    "summary": {
-      "green": 4
-    },
-    "platforms": {
-      "hermes": {
-        "type": "mcp",
-        "status": "GREEN"
-      },
-      "trae": {
-        "type": "mcp",
-        "status": "YELLOW"
-      },
-      "code": {
-        "type": "mcp",
-        "status": "RED"
-      },
-      "workbuddy": {
-        "type": "mcp",
-        "status": "GREEN"
-      },
-      "dsh": {
-        "type": "file",
-        "status": "GREEN"
-      }
-    },
-    "raw_status": "OK"
-  },
-  "flywheel": {
-    "skill_health": {
-      "ok": true,
-      "stdout": "avg: 95.0 low_health: 0",
-      "stderr": ""
-    },
-    "llm_route": {
-      "ok": true,
-      "stdout": "llm_route hits: []",
-      "stderr": ""
-    },
-    "stale_detect": {
-      "ok": true,
-      "stdout": "Stale 卡片：0 张\nStale 技能：0 个",
-      "stderr": ""
-    },
-    "knowledge_gap": {
-      "ok": true,
-      "stdout": "gap: 0/0 (0.0%)",
-      "stderr": ""
-    },
-    "skill_candidate": {
-      "ok": true,
-      "stdout": "生成 54 张建议卡：\n  - cards\\skill-candidates\\activedirs-five-type-discipline.md\n  - cards\\skill-candidates\\agent-memory-hub-mcp.md\n  - cards\\skill-candidates\\autocad-com-automation-deadlock.md\n  - cards\\ski",
-      "stderr": ""
-    },
-    "freshness": {
-      "ok": true,
-      "stdout": "Stale 卡片：0 张\nStale 技能：0 个",
-      "stderr": ""
-    }
-  },
-  "knowledge_gap": {
-    "total": 0,
-    "miss": 0,
-    "miss_rate": 0.0,
-    "top_misses": []
-  },
-  "todos": {
-    "projects": [
-      {
-        "name": "cad-plugin-management-platform",
-        "title": "---"
-      },
-      {
-        "name": "cad2020-pdf-merge",
-        "title": "---"
-      },
-      {
-        "name": "github-autopush",
-        "title": "---"
-      },
-      {
-        "name": "hermes-fan-debug-v1",
-        "title": "---"
-      },
-      {
-        "name": "improve-ingest-dedup-threshold",
-        "title": "---"
-      },
-      {
-        "name": "pluginhub-current-state",
-        "title": "---"
-      },
-      {
-        "name": "project-threeRowRein-baseline-v51-snapshot",
-        "title": "﻿---"
-      },
-      {
-        "name": "sglang-dashboard-pluginhub-registration",
-        "title": "---"
-      },
-      {
-        "name": "t1-plan-three-blueprints",
-        "title": "---"
-      },
-      {
-        "name": "T19-cron-long-term-optimization",
-        "title": "---"
-      },
-      {
-        "name": "T21-5platform-后续优化-待办",
-        "title": "---"
-      }
-    ],
-    "pending_rules": 0
-  },
-  "alerts": {
-    "critical": [
-      "code"
-    ],
-    "announcements": [
-      {
-        "ts": 1788825228,
-        "platform": "hermes",
-        "action": "ingest_done",
-        "payload": {
-          "moved": [
-            "test.md"
-          ],
-          "commit": "abc123"
-        },
-        "audit_id": "20260907T235348Z-ff4fceb6"
-      }
-    ]
-  },
-  "hub_health": {
-    "overall_score": 29.0,
-    "overall_verdict": "🚨 需修复",
-    "card_health": {
-      "score": 67.9,
-      "active": 241,
-      "candidate": 39,
-      "reference": 71,
-      "archived": 4,
-      "total": 355
-    },
-    "skill_health": {
-      "score": 0.0,
-      "active": 0,
-      "candidate": 0,
-      "reference": 0,
-      "deprecated": 0,
-      "total": 0,
-      "skills": []
-    },
-    "flywheel_activity": {
-      "score": 0.0,
-      "active_runs": 0,
-      "total": 0,
-      "by_stage": {
-        "ingest": 0,
-        "build-vectors": 0,
-        "dedup": 0,
-        "consolidate": 0,
-        "lint": 0
-      }
-    },
-    "actions": []
-  },
-  "cron_jobs": [
-    {
-      "id": "12c532815d47",
-      "name": "飞轮日报·微信推送",
-      "schedule": "45 7 * * *",
-      "status": "active",
-      "last": "07:45 ok"
-    },
-    {
-      "id": "21ff20ab3607",
-      "name": "GitHub star-distill + T1 迭代",
-      "schedule": "10 8 * * *",
-      "status": "active",
-      "last": "08:10 ok"
-    },
-    {
-      "id": "78247c397f8f",
-      "name": "中枢每日健康快照 (agent)",
-      "schedule": "50 7 * * *",
-      "status": "active",
-      "last": "07:50 ok"
-    },
-    {
-      "id": "691ec6456904",
-      "name": "每周召回评测复核",
-      "schedule": "30 8 * * 6",
-      "status": "active",
-      "last": "Sat 08:30 ok"
-    },
-    {
-      "id": "29774d09dfbe",
-      "name": "SkillHub 周晋级巡检",
-      "schedule": "0 8 * * 6",
-      "status": "active",
-      "last": "Sat 待跑"
-    },
-    {
-      "id": "461dd62b4da3",
-      "name": "T15-6工具每日编排",
-      "schedule": "0 6 * * *",
-      "status": "active",
-      "last": "06:00 ok"
-    },
-    {
-      "id": "fbcdc46ca7f0",
-      "name": "5平台每日健康检查",
-      "schedule": "55 7 * * *",
-      "status": "active",
-      "last": "07:55 ok"
-    }
-  ],
-  "card_stats_by_type": {
-    "exp": 144,
-    "rule": 26,
-    "methodology": 46,
-    "blueprints": 74,
-    "longterm": 0,
-    "projects": 13
-  },
-  "sync_status": {
-    "Fan-Agent-Momory": {
-      "ahead": 0,
-      "behind": 0,
-      "last_commit": "853782d",
-      "branch": "master"
-    },
-    "AgentMemoryHub": {
-      "ahead": 0,
-      "behind": 0,
-      "last_commit": "5ddb89a",
-      "branch": "master"
-    },
-    "SkillHub": {
-      "ahead": 0,
-      "behind": 0,
-      "last_commit": "5bc4a5a",
-      "branch": "master"
-    }
-  },
-  "ledger_recent": [
-    {
-      "ts": "2026-09-09T15:55",
-      "who": "hermes",
-      "intent": "ingest: T22 3-agent exp",
-      "sha": "a5d666b"
-    },
-    {
-      "ts": "2026-09-09T15:30",
-      "who": "hermes",
-      "intent": "sync: platforms.yaml v1.1",
-      "sha": "5ddb89a"
-    },
-    {
-      "ts": "2026-09-09T14:55",
-      "who": "hermes",
-      "intent": "platform_healthcheck 5/6",
-      "sha": "n/a"
-    },
-    {
-      "ts": "2026-09-09T14:00",
-      "who": "hermes",
-      "intent": "feat: T21 todos",
-      "sha": "f1713d9"
-    },
-    {
-      "ts": "2026-09-09T10:00",
-      "who": "trae",
-      "intent": "ingest: mavis 5th platform",
-      "sha": "f16c408"
-    }
-  ],
-  "ingest_recent": [
-    {
-      "ts": "2026-09-09",
-      "title": "T22 3-agent 并行实测",
-      "type": "exp",
-      "status": "promoted"
-    },
-    {
-      "ts": "2026-09-09",
-      "title": "T21 5 平台后续优化待办",
-      "type": "project",
-      "status": "promoted"
-    },
-    {
-      "ts": "2026-09-09",
-      "title": "T20 方案 D MCP 自愈",
-      "type": "exp",
-      "status": "promoted"
-    },
-    {
-      "ts": "2026-09-08",
-      "title": "T12 check-code-v1 全修复",
-      "type": "exp",
-      "status": "promoted"
-    },
-    {
-      "ts": "2026-09-08",
-      "title": "DSH file-junction 接入",
-      "type": "exp",
-      "status": "promoted"
-    }
-  ]
-};
+DATA = JSON.parse(atob("eyJnZW5lcmF0ZWRfYXQiOiAiMjAyNi0wOS0xMFQwOTo1MzoxNi40NDczNjQrMDg6MDAiLCAiaHViX3Jvb3QiOiAiQzpcXFVzZXJzXFxGYW4tU0pTU1xcLnRyYWUtY25cXHdvcmt0cmVlc1xcMjAyNjA4MTctRmFuLUFnZW50LU1vbW9yeVxcZmVhdC1pbXBsZW1lbnQtcGxhbi1aaWxCbXZcXEFnZW50TWVtb3J5SHViIiwgImhlYWx0aCI6IHsib3ZlcmFsbCI6IDEwMC4wLCAicGFuZWxzX29rIjogNiwgInBhbmVsc190b3RhbCI6IDZ9LCAicGxhdGZvcm1zIjogeyJzdW1tYXJ5IjogeyJncmVlbiI6IDR9LCAicGxhdGZvcm1zIjogeyJoZXJtZXMiOiB7InR5cGUiOiAibWNwIiwgInN0YXR1cyI6ICJHUkVFTiJ9LCAidHJhZSI6IHsidHlwZSI6ICJtY3AiLCAic3RhdHVzIjogIllFTExPVyJ9LCAiY29kZSI6IHsidHlwZSI6ICJtY3AiLCAic3RhdHVzIjogIlJFRCJ9LCAid29ya2J1ZGR5IjogeyJ0eXBlIjogIm1jcCIsICJzdGF0dXMiOiAiR1JFRU4ifSwgImRzaCI6IHsidHlwZSI6ICJmaWxlIiwgInN0YXR1cyI6ICJHUkVFTiJ9fSwgInJhd19zdGF0dXMiOiAiT0sifSwgImZseXdoZWVsIjogeyJza2lsbF9oZWFsdGgiOiB7Im9rIjogdHJ1ZSwgInN0ZG91dCI6ICJhdmc6IDk1LjAgbG93X2hlYWx0aDogMCIsICJzdGRlcnIiOiAiIn0sICJsbG1fcm91dGUiOiB7Im9rIjogdHJ1ZSwgInN0ZG91dCI6ICJsbG1fcm91dGUgaGl0czogW10iLCAic3RkZXJyIjogIiJ9LCAic3RhbGVfZGV0ZWN0IjogeyJvayI6IHRydWUsICJzdGRvdXQiOiAiU3RhbGUg5Y2h54mH77yaMCDlvKBcblN0YWxlIOaKgOiDve+8mjAg5LiqIiwgInN0ZGVyciI6ICIifSwgImtub3dsZWRnZV9nYXAiOiB7Im9rIjogdHJ1ZSwgInN0ZG91dCI6ICJnYXA6IDAvMCAoMC4wJSkiLCAic3RkZXJyIjogIiJ9LCAic2tpbGxfY2FuZGlkYXRlIjogeyJvayI6IHRydWUsICJzdGRvdXQiOiAi55Sf5oiQIDU0IOW8oOW7uuiuruWNoe+8mlxuICAtIGNhcmRzXFxza2lsbC1jYW5kaWRhdGVzXFxhY3RpdmVkaXJzLWZpdmUtdHlwZS1kaXNjaXBsaW5lLm1kXG4gIC0gY2FyZHNcXHNraWxsLWNhbmRpZGF0ZXNcXGFnZW50LW1lbW9yeS1odWItbWNwLm1kXG4gIC0gY2FyZHNcXHNraWxsLWNhbmRpZGF0ZXNcXGF1dG9jYWQtY29tLWF1dG9tYXRpb24tZGVhZGxvY2subWRcbiAgLSBjYXJkc1xcc2tpIiwgInN0ZGVyciI6ICIifSwgImZyZXNobmVzcyI6IHsib2siOiB0cnVlLCAic3Rkb3V0IjogIlN0YWxlIOWNoeeJh++8mjAg5bygXG5TdGFsZSDmioDog73vvJowIOS4qiIsICJzdGRlcnIiOiAiIn19LCAia25vd2xlZGdlX2dhcCI6IHsidG90YWwiOiAwLCAibWlzcyI6IDAsICJtaXNzX3JhdGUiOiAwLjAsICJ0b3BfbWlzc2VzIjogW119LCAidG9kb3MiOiB7InByb2plY3RzIjogW3sibmFtZSI6ICJjYWQtcGx1Z2luLW1hbmFnZW1lbnQtcGxhdGZvcm0iLCAidGl0bGUiOiAiLS0tIn0sIHsibmFtZSI6ICJjYWQyMDIwLXBkZi1tZXJnZSIsICJ0aXRsZSI6ICItLS0ifSwgeyJuYW1lIjogImdpdGh1Yi1hdXRvcHVzaCIsICJ0aXRsZSI6ICItLS0ifSwgeyJuYW1lIjogImhlcm1lcy1mYW4tZGVidWctdjEiLCAidGl0bGUiOiAiLS0tIn0sIHsibmFtZSI6ICJpbXByb3ZlLWluZ2VzdC1kZWR1cC10aHJlc2hvbGQiLCAidGl0bGUiOiAiLS0tIn0sIHsibmFtZSI6ICJwbHVnaW5odWItY3VycmVudC1zdGF0ZSIsICJ0aXRsZSI6ICItLS0ifSwgeyJuYW1lIjogInByb2plY3QtdGhyZWVSb3dSZWluLWJhc2VsaW5lLXY1MS1zbmFwc2hvdCIsICJ0aXRsZSI6ICLvu78tLS0ifSwgeyJuYW1lIjogInNnbGFuZy1kYXNoYm9hcmQtcGx1Z2luaHViLXJlZ2lzdHJhdGlvbiIsICJ0aXRsZSI6ICItLS0ifSwgeyJuYW1lIjogInQxLXBsYW4tdGhyZWUtYmx1ZXByaW50cyIsICJ0aXRsZSI6ICItLS0ifSwgeyJuYW1lIjogIlQxOS1jcm9uLWxvbmctdGVybS1vcHRpbWl6YXRpb24iLCAidGl0bGUiOiAiLS0tIn0sIHsibmFtZSI6ICJUMjEtNXBsYXRmb3JtLeWQjue7reS8mOWMli3lvoXlip4iLCAidGl0bGUiOiAiLS0tIn1dLCAicGVuZGluZ19ydWxlcyI6IDB9LCAiYWxlcnRzIjogeyJjcml0aWNhbCI6IFsiY29kZSJdLCAiYW5ub3VuY2VtZW50cyI6IFt7InRzIjogMTc4ODgyNTIyOCwgInBsYXRmb3JtIjogImhlcm1lcyIsICJhY3Rpb24iOiAiaW5nZXN0X2RvbmUiLCAicGF5bG9hZCI6IHsibW92ZWQiOiBbInRlc3QubWQiXSwgImNvbW1pdCI6ICJhYmMxMjMifSwgImF1ZGl0X2lkIjogIjIwMjYwOTA3VDIzNTM0OFotZmY0ZmNlYjYifV19LCAiaHViX2hlYWx0aCI6IHsib3ZlcmFsbF9zY29yZSI6IDI5LjAsICJvdmVyYWxsX3ZlcmRpY3QiOiAi8J+aqCDpnIDkv67lpI0iLCAiY2FyZF9oZWFsdGgiOiB7InNjb3JlIjogNjcuOSwgImFjdGl2ZSI6IDI0MSwgImNhbmRpZGF0ZSI6IDM5LCAicmVmZXJlbmNlIjogNzEsICJhcmNoaXZlZCI6IDQsICJ0b3RhbCI6IDM1NX0sICJza2lsbF9oZWFsdGgiOiB7InNjb3JlIjogMC4wLCAiYWN0aXZlIjogMCwgImNhbmRpZGF0ZSI6IDAsICJyZWZlcmVuY2UiOiAwLCAiZGVwcmVjYXRlZCI6IDAsICJ0b3RhbCI6IDAsICJza2lsbHMiOiBbXX0sICJmbHl3aGVlbF9hY3Rpdml0eSI6IHsic2NvcmUiOiAwLjAsICJhY3RpdmVfcnVucyI6IDAsICJ0b3RhbCI6IDAsICJieV9zdGFnZSI6IHsiaW5nZXN0IjogMCwgImJ1aWxkLXZlY3RvcnMiOiAwLCAiZGVkdXAiOiAwLCAiY29uc29saWRhdGUiOiAwLCAibGludCI6IDB9fSwgImFjdGlvbnMiOiBbXX0sICJjcm9uX2pvYnMiOiBbeyJpZCI6ICIxMmM1MzI4MTVkNDciLCAibmFtZSI6ICLpo57ova7ml6XmiqXCt+W+ruS/oeaOqOmAgSIsICJzY2hlZHVsZSI6ICI0NSA3ICogKiAqIiwgInN0YXR1cyI6ICJhY3RpdmUiLCAibGFzdCI6ICIwNzo0NSBvayJ9LCB7ImlkIjogIjIxZmYyMGFiMzYwNyIsICJuYW1lIjogIkdpdEh1YiBzdGFyLWRpc3RpbGwgKyBUMSDov63ku6MiLCAic2NoZWR1bGUiOiAiMTAgOCAqICogKiIsICJzdGF0dXMiOiAiYWN0aXZlIiwgImxhc3QiOiAiMDg6MTAgb2sifSwgeyJpZCI6ICI3ODI0N2MzOTdmOGYiLCAibmFtZSI6ICLkuK3mnqLmr4/ml6XlgaXlurflv6vnhacgKGFnZW50KSIsICJzY2hlZHVsZSI6ICI1MCA3ICogKiAqIiwgInN0YXR1cyI6ICJhY3RpdmUiLCAibGFzdCI6ICIwNzo1MCBvayJ9LCB7ImlkIjogIjY5MWVjNjQ1NjkwNCIsICJuYW1lIjogIuavj+WRqOWPrOWbnuivhOa1i+WkjeaguCIsICJzY2hlZHVsZSI6ICIzMCA4ICogKiA2IiwgInN0YXR1cyI6ICJhY3RpdmUiLCAibGFzdCI6ICJTYXQgMDg6MzAgb2sifSwgeyJpZCI6ICIyOTc3NGQwOWRmYmUiLCAibmFtZSI6ICJTa2lsbEh1YiDlkajmmYvnuqflt6Hmo4AiLCAic2NoZWR1bGUiOiAiMCA4ICogKiA2IiwgInN0YXR1cyI6ICJhY3RpdmUiLCAibGFzdCI6ICJTYXQg5b6F6LeRIn0sIHsiaWQiOiAiNDYxZGQ2MmI0ZGEzIiwgIm5hbWUiOiAiVDE1LTblt6Xlhbfmr4/ml6XnvJbmjpIiLCAic2NoZWR1bGUiOiAiMCA2ICogKiAqIiwgInN0YXR1cyI6ICJhY3RpdmUiLCAibGFzdCI6ICIwNjowMCBvayJ9LCB7ImlkIjogImZiY2RjNDZjYTdmMCIsICJuYW1lIjogIjXlubPlj7Dmr4/ml6XlgaXlurfmo4Dmn6UiLCAic2NoZWR1bGUiOiAiNTUgNyAqICogKiIsICJzdGF0dXMiOiAiYWN0aXZlIiwgImxhc3QiOiAiMDc6NTUgb2sifV0sICJjYXJkX3N0YXRzX2J5X3R5cGUiOiB7ImV4cCI6IDE0NCwgInJ1bGUiOiAyNiwgIm1ldGhvZG9sb2d5IjogNDYsICJibHVlcHJpbnRzIjogNzQsICJsb25ndGVybSI6IDAsICJwcm9qZWN0cyI6IDEzfSwgInN5bmNfc3RhdHVzIjogeyJGYW4tQWdlbnQtTW9tb3J5IjogeyJhaGVhZCI6IDAsICJiZWhpbmQiOiAwLCAibGFzdF9jb21taXQiOiAiODUzNzgyZCIsICJicmFuY2giOiAibWFzdGVyIn0sICJBZ2VudE1lbW9yeUh1YiI6IHsiYWhlYWQiOiAwLCAiYmVoaW5kIjogMCwgImxhc3RfY29tbWl0IjogIjVkZGI4OWEiLCAiYnJhbmNoIjogIm1hc3RlciJ9LCAiU2tpbGxIdWIiOiB7ImFoZWFkIjogMCwgImJlaGluZCI6IDAsICJsYXN0X2NvbW1pdCI6ICI1YmM0YTVhIiwgImJyYW5jaCI6ICJtYXN0ZXIifX0sICJsZWRnZXJfcmVjZW50IjogW3sidHMiOiAiMjAyNi0wOS0wOVQxNTo1NSIsICJ3aG8iOiAiaGVybWVzIiwgImludGVudCI6ICJpbmdlc3Q6IFQyMiAzLWFnZW50IGV4cCIsICJzaGEiOiAiYTVkNjY2YiJ9LCB7InRzIjogIjIwMjYtMDktMDlUMTU6MzAiLCAid2hvIjogImhlcm1lcyIsICJpbnRlbnQiOiAic3luYzogcGxhdGZvcm1zLnlhbWwgdjEuMSIsICJzaGEiOiAiNWRkYjg5YSJ9LCB7InRzIjogIjIwMjYtMDktMDlUMTQ6NTUiLCAid2hvIjogImhlcm1lcyIsICJpbnRlbnQiOiAicGxhdGZvcm1faGVhbHRoY2hlY2sgNS82IiwgInNoYSI6ICJuL2EifSwgeyJ0cyI6ICIyMDI2LTA5LTA5VDE0OjAwIiwgIndobyI6ICJoZXJtZXMiLCAiaW50ZW50IjogImZlYXQ6IFQyMSB0b2RvcyIsICJzaGEiOiAiZjE3MTNkOSJ9LCB7InRzIjogIjIwMjYtMDktMDlUMTA6MDAiLCAid2hvIjogInRyYWUiLCAiaW50ZW50IjogImluZ2VzdDogbWF2aXMgNXRoIHBsYXRmb3JtIiwgInNoYSI6ICJmMTZjNDA4In1dLCAiaW5nZXN0X3JlY2VudCI6IFt7InRzIjogIjIwMjYtMDktMDkiLCAidGl0bGUiOiAiVDIyIDMtYWdlbnQg5bm26KGM5a6e5rWLIiwgInR5cGUiOiAiZXhwIiwgInN0YXR1cyI6ICJwcm9tb3RlZCJ9LCB7InRzIjogIjIwMjYtMDktMDkiLCAidGl0bGUiOiAiVDIxIDUg5bmz5Y+w5ZCO57ut5LyY5YyW5b6F5YqeIiwgInR5cGUiOiAicHJvamVjdCIsICJzdGF0dXMiOiAicHJvbW90ZWQifSwgeyJ0cyI6ICIyMDI2LTA5LTA5IiwgInRpdGxlIjogIlQyMCDmlrnmoYggRCBNQ1Ag6Ieq5oSIIiwgInR5cGUiOiAiZXhwIiwgInN0YXR1cyI6ICJwcm9tb3RlZCJ9LCB7InRzIjogIjIwMjYtMDktMDgiLCAidGl0bGUiOiAiVDEyIGNoZWNrLWNvZGUtdjEg5YWo5L+u5aSNIiwgInR5cGUiOiAiZXhwIiwgInN0YXR1cyI6ICJwcm9tb3RlZCJ9LCB7InRzIjogIjIwMjYtMDktMDgiLCAidGl0bGUiOiAiRFNIIGZpbGUtanVuY3Rpb24g5o6l5YWlIiwgInR5cGUiOiAiZXhwIiwgInN0YXR1cyI6ICJwcm9tb3RlZCJ9XX0="));
 render();
-
-</script>
-</body>
-</html>
+\n</script>\n</body>\n</html>
