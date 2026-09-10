@@ -19,20 +19,16 @@ timeout: 60
 compress: llmlingua
 
 # ── 本地 LLM 优先链（2026-09-11 用户裁定）────────────────────────────
-# 顺序：① LM Studio(1234) ② SGLang(30000) ③ OmniRoute(20128，即 gateway_url 最后兜底)
-# SGLang 是 OpenAI 兼容端点，但 served_model_name 会随看板切换模型而变
-# （Qwen3.5-9B-AWQ / Qwen2.5-3B-Instruct-AWQ），故 model 留空 = 调用前用
-# GET /v1/models 动态解析；冷启动 3~7 分钟，未就绪时 /health 503，属加载中不是故障。
-# 依据：F:\ai\sglang\AGENT-HANDBOOK.md（推理端点 http://127.0.0.1:30000/v1）
+# 顺序：① LM Studio(1234) ② 本地次选端点（当前为空）③ OmniRoute(20128，即 gateway_url 最后兜底)
+# 检索用 embedding 走 LM Studio 的 bge 系（见 embed 段；两个 bge 模型维度不同，不可混用同一向量库）
 local_chat: # ① 本地首选：LM Studio
   url: http://127.0.0.1:1234/v1/chat/completions
   model: qwen/qwen3.5-9b
   max_tokens: 2048
 
-local_chat_fallbacks:
-  - url: http://127.0.0.1:30000/v1/chat/completions
-    model: ""
-    max_tokens: 2048
+# 2026-09-11 用户裁定：SGLang 不纳入 LLM 降级链（检索走 LM Studio 的 bge 系 embedding）
+# 机制保留：如需追加次选端点，按 [{url, model(留空=调用前动态解析), max_tokens}] 形式补
+local_chat_fallbacks: []
 
 authority_dirs:
   - rules

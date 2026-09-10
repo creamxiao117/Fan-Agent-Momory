@@ -295,7 +295,7 @@ def _resolve_served_model(url: str, timeout: int) -> str:
 
 
 def _local_chain_fallback(prompt: str, hub_root: Path) -> str:
-    """本地模型降级链：LM Studio(1234) → SGLang(30000) → OmniRoute 网关（最后兜底）。
+    """本地模型降级链：LM Studio → 本地次选端点（可空）→ OmniRoute 网关（最后兜底）。
 
     逐环尝试「健康 + 调用成功」；只有全链失败才落到 chat()（gateway_url = OmniRoute）。
     """

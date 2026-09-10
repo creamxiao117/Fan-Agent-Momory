@@ -38,16 +38,17 @@ _HTTP_PROBED = False
 
 
 def _http_cfg() -> tuple[str, str, str, int] | None:
-    """懒加载 engine.config.yaml 的 embed 段；无配置返回 None（只读一次）。"""
+    """懒加载单源配置的 embed 段；无配置返回 None（只读一次）。"""
     global _HTTP_CFG, _HTTP_PROBED
     if _HTTP_PROBED:
         return _HTTP_CFG
     _HTTP_PROBED = True
-    cfg_path = Path(__file__).resolve().parent.parent / "config" / "engine.config.yaml"
+    # 走单源配置入口（2026-09-11 修）：原实现硬编码读仓库内旧文件
+    # hub-engine/config/engine.config.yaml，绕过 system/config.yaml —— 单源形同虚设。
     try:
-        import yaml
+        from common.config import load_engine_config
 
-        raw = yaml.safe_load(cfg_path.read_text(encoding="utf-8")) or {}
+        raw = load_engine_config() or {}
         emb = raw.get("embed") or {}
         if emb.get("url") and emb.get("model"):
             _HTTP_CFG = (
