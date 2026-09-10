@@ -29,8 +29,8 @@ python -m http.server 8765
 ## 13 大区
 
 1. 总体健康 · 2. 5 平台连接 · 3. 6 面板自检 · 4. 知识缺口 · 5. 待人工处理
-6. 关键告警 · 7. Cron 任务 · 8. 中枢卡片 · 9. 三仓同步 · 10. commit_ledger
-11. 最近 ingest · 12. Hermes Chat（占位）· 13. 立即跑按钮组
+2. 关键告警 · 7. Cron 任务 · 8. 中枢卡片 · 9. 三仓同步 · 10. commit_ledger
+3. 最近 ingest · 12. Hermes Chat（占位）· 13. 立即跑按钮组
 
 ## 互动功能
 
