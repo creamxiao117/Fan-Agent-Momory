@@ -23,6 +23,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -31,6 +32,7 @@ import sqlite3
 import subprocess
 import sys
 import time
+from collections import Counter
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -59,6 +61,11 @@ BACKENDS: list[tuple[str, int, str]] = [
 ]
 
 CARD_COUNT_CAP = 8000  # 单目录卡数上限，防扫爆
+
+# P3-10 性能：技能"被引用次数"用一次分词 + Counter 查表，
+# 替代原来"每个技能各扫一遍全文"的 158 次全文正则。
+TOKEN_RE = re.compile(r"[A-Za-z0-9_\-]+")
+SIMPLE_NAME_RE = re.compile(r"\A[A-Za-z0-9_\-]+\Z")
 
 
 # ---------------------------------------------------------------- 工具
@@ -92,6 +99,74 @@ def _probe(host: str, port: int, timeout: float = 0.7) -> tuple[bool, float]:
     finally:
         s.close()
     return alive, round((time.perf_counter() - t0) * 1000, 1)
+
+
+CACHE_REL = ".sync/state/dashboard-collect-cache.json"
+_CACHE_NAME = "dashboard-collect-cache.json"  # 自身不参与签名，否则写一次就自失效
+
+
+def _watch_paths(hub: Path) -> list[Path]:
+    """两个重扫描函数实际读的路径集合（签名必须覆盖全集，否则会出脏缓存）。"""
+    ps = [SKILLS_ROOT]
+    ps += [hub / d for d, _ in CARD_DIRS]
+    ps += [hub / "INDEX.md", hub / ".sync" / "state", hub / ".sync" / "logs"]
+    return ps
+
+
+def _sig_tree(paths: list[Path]) -> str:
+    """轻量指纹：只 stat（mtime_ns+size），不读正文。
+
+    实测 ~105ms（SKILLS 全树 2526 文件 94ms + 卡目录 7ms），
+    远低于被缓存函数的 2270ms，所以签名本身不会成为新热点。
+    """
+    h = hashlib.blake2b(digest_size=8)
+    for r in paths:
+        if not r.exists():
+            h.update(f"!{r}".encode())
+            continue
+        if r.is_file():
+            st = r.stat()
+            h.update(f"{r.name}{st.st_mtime_ns}{st.st_size}".encode())
+            continue
+        for dirpath, dirnames, filenames in os.walk(r):
+            dirnames[:] = sorted(d for d in dirnames if not d.startswith("."))
+            for f in sorted(filenames):
+                if f == _CACHE_NAME:
+                    continue
+                try:
+                    st = os.stat(os.path.join(dirpath, f))
+                except OSError:
+                    continue
+                h.update(f"{f}{st.st_mtime_ns}{st.st_size}".encode())
+    return h.hexdigest()
+
+
+def _cache_load(hub: Path) -> dict:
+    try:
+        return json.loads((hub / CACHE_REL).read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
+def _cache_save(hub: Path, cache: dict) -> None:
+    p = hub / CACHE_REL
+    try:
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(json.dumps(cache, ensure_ascii=False, indent=2), encoding="utf-8")
+    except OSError:
+        pass
+
+
+def _cached_pick(cache: dict, sig: str, key: str):
+    """签名命中且该键有缓存 → 返回结果（并标 _cached）；否则 None。"""
+    if cache.get("sig") != sig:
+        return None
+    val = cache.get(key)
+    if not isinstance(val, dict):
+        return None
+    out = dict(val)
+    out["_cached"] = True
+    return out
 
 
 def _frontmatter(p: Path) -> dict[str, str]:
@@ -413,6 +488,22 @@ def collect_hub_health(root: Path, hub: Path) -> dict:
         return {"ok": False, "error": str(e)}
 
 
+def _count_cited(name: str, haystack: str, token_count: Counter) -> int:
+    """技能名在中枢卡正文里的词边界出现次数。
+
+    等价性：原正则 `(?<![A-Za-z0-9_-])NAME(?![A-Za-z0-9_-])` 在 NAME 只含
+    [A-Za-z0-9_-] 时，要求 NAME 恰好是完整 token —— 与 Counter 查表同义。
+    名字含该字符类以外的字符（如 . + 空格）时才回退到原正则。
+    """
+    if SIMPLE_NAME_RE.match(name):
+        return token_count.get(name, 0)
+    return len(
+        re.findall(
+            r"(?<![A-Za-z0-9_\-])" + re.escape(name) + r"(?![A-Za-z0-9_\-])", haystack
+        )
+    )
+
+
 def collect_skills(hub: Path) -> dict:
     """技能清单 + 被中枢卡引用次数（真实可算的替代"复用"指标）。"""
     if not SKILLS_ROOT.is_dir():
@@ -430,6 +521,24 @@ def collect_skills(hub: Path) -> dict:
             except OSError:
                 continue
     haystack = "\n".join(blob)
+    token_count = Counter(TOKEN_RE.findall(haystack))
+
+    # P3-10：单次遍历技能树统计各目录自身文件数，替代"每个技能目录各做一次 rglob"
+    own_files: dict[Path, int] = {}
+    for dirpath, dirnames, filenames in os.walk(SKILLS_ROOT):
+        dirnames[:] = [x for x in dirnames if not x.startswith(".")]
+        own_files[Path(dirpath)] = len(filenames)
+    # 一次自底向上累加出「子树文件数」，避免对每个技能目录各做一次全表求和。
+    # 反面教材：`sum(n for p, n in own_files.items() if p == d or d in p.parents)`
+    # 会为每个技能构造 ~57 万次 Path（`parents` 是惰性生成），实测吃掉 6.0s。
+    subtree_files: dict[Path, int] = {}
+    for p, n in own_files.items():
+        cur = p
+        while True:
+            subtree_files[cur] = subtree_files.get(cur, 0) + n
+            if cur == SKILLS_ROOT or cur.parent == cur:
+                break
+            cur = cur.parent
 
     rows = []
     seen: set[str] = set()
@@ -467,16 +576,11 @@ def collect_skills(hub: Path) -> dict:
             for sub in ("references", "templates", "scripts", "assets")
             if (d / sub).is_dir()
         )
-        files = sum(1 for x in d.rglob("*") if x.is_file())
+        files = subtree_files.get(d, 0)
         # 被引用：用词边界匹配。
         # 不能用 substring（"reference" 会被 "references" 命中，污染成上百次），
         # 也不能只认反引号（中枢卡正文很少加反引号，会漏成 0）。
-        cited = len(
-            re.findall(
-                r"(?<![A-Za-z0-9_\-])" + re.escape(name) + r"(?![A-Za-z0-9_\-])",
-                haystack,
-            )
-        )
+        cited = _count_cited(name, haystack, token_count)
         rows.append(
             {
                 "name": name,
@@ -828,7 +932,6 @@ def collect_alerts(hub: Path, data: dict) -> list[dict]:
                 docs=["methodology/memory-hub-card-promotion"],
             )
         )
-    return out
     sh = data.get("source_health") or {}
     if sh.get("unhealthy"):
         out.append(
@@ -848,6 +951,7 @@ def collect_alerts(hub: Path, data: dict) -> list[dict]:
                 ],
             )
         )
+    return out
 
 
 def collect_metric_sources(hub: Path, data: dict) -> dict:
@@ -868,6 +972,16 @@ def collect_metric_sources(hub: Path, data: dict) -> dict:
     jobs = cron.get("jobs", [])
     ran = [j for j in jobs if j.get("last_run")]
     ok_rate = round(len(ran) / len(jobs) * 100, 1) if jobs else None
+    # P2-5：飞轮 / 技能 / 仓库 三组出处补齐所需的原始数据
+    git_rt = data["runtime"].get("git", [])
+    backends = data["runtime"].get("backends", [])
+    qlog = data["activity"].get("query_log", {})
+    lock = data["hub"].get("lock", {})
+    dirty_total = sum(int(g.get("dirty") or 0) for g in git_rt)
+    alive_n = sum(1 for b in backends if b.get("alive"))
+    bailian_n = sum(
+        1 for r in sk.get("rows", []) if str(r.get("name", "")).startswith("bailian-")
+    )
 
     return {
         "cards_total": {
@@ -917,6 +1031,83 @@ def collect_metric_sources(hub: Path, data: dict) -> dict:
             "source": f"{hub_rel}/.sync/state/flywheel-log.json",
             "formula": "now - max(日志时间戳)，单位小时",
             "kind": "json",
+        },
+        # ---- P2-5 补齐（飞轮组）：卡片健康/技能健康/飞轮活动 复用已有 key，
+        #      只有「综合」是新指标，避免同一数字登记两份出处而产生口径漂移。
+        "health_overall": {
+            "value": hh.get("overall_score"),
+            "source": f"{hub_rel}/.sync/state/（hub_health 加权）",
+            "formula": "卡片健康 × 技能健康 × 飞轮活动 加权综合（0–100）",
+            "kind": "json",
+        },
+        # ---- P2-5 补齐（技能组）----
+        "skills_cited_any": {
+            "value": sk.get("cited_any"),
+            "source": f"{hub_rel}/权威卡正文（引用扫描）",
+            "formula": "引用次数 ≥ 1 的技能目录计数",
+            "kind": "text-match",
+        },
+        "skills_uncited": {
+            "value": (sk.get("total") or 0) - (sk.get("cited_any") or 0),
+            "source": f"{hub_rel}/权威卡正文（引用扫描）",
+            "formula": "技能总数 − 被引用过的技能数",
+            "kind": "text-match",
+        },
+        "skills_bailian": {
+            "value": bailian_n,
+            "source": "本机技能根目录（目录名前缀）",
+            "formula": "目录名以 bailian- 开头的技能计数",
+            "kind": "scan",
+        },
+        # ---- P2-5 补齐（仓库组）----
+        "repo_dirty": {
+            "value": dirty_total,
+            "source": "git status --porcelain（各仓库工作区）",
+            "formula": "各仓库 modified + untracked 文件数之和",
+            "kind": "external-cmd",
+        },
+        "runtime_backends": {
+            "value": f"{alive_n}/{len(backends)}",
+            "source": "本机服务端口探测（HTTP/TCP）",
+            "formula": "存活后端数 ÷ 被探测后端总数",
+            "kind": "probe",
+        },
+        "query_log": {
+            "value": qlog.get("total"),
+            "source": f"{hub_rel}/.sync/state/query.log.jsonl",
+            "formula": "逐行 parse 的 JSONL 条数（read + writeback 合计）",
+            "kind": "jsonl",
+        },
+        "writer_lock": {
+            "value": bool(lock.get("writer_lock")),
+            "source": f"{hub_rel}/.sync/locks/writer.lock",
+            "formula": "锁文件是否存在（存在=有写入者）",
+            "kind": "fs",
+        },
+        # ---- P2-5 顺带补齐（cron 视图组）----
+        "cron_total": {
+            "value": cron.get("total") if cron.get("total") is not None else len(jobs),
+            "source": "hermes cron（本地调度库）",
+            "formula": "调度任务条数",
+            "kind": "external-cmd",
+        },
+        "cron_exec": {
+            "value": cron.get("exec_total"),
+            "source": "hermes cron（执行流水）",
+            "formula": "累计执行次数",
+            "kind": "external-cmd",
+        },
+        "cron_exec_rate": {
+            "value": cron.get("success_rate"),
+            "source": "hermes cron（执行流水）",
+            "formula": "成功执行次数 ÷ 累计执行次数",
+            "kind": "external-cmd",
+        },
+        "cron_incidents": {
+            "value": cron.get("incidents_open"),
+            "source": "hermes cron（失败流水）",
+            "formula": "未处理故障条数",
+            "kind": "external-cmd",
         },
     }
 
@@ -992,13 +1183,35 @@ def collect_all(hub: Path, root: Path) -> dict:
     t0 = time.perf_counter()
     data: dict = {"schema": 2, "hub_root": str(hub)}
 
+    # P3-10 增量：只给两个重扫描函数做"文件系统签名"缓存。
+    # 实测这两项占全量 91%（hub_health 2270ms + skills 1653ms），
+    # 而签名本身只要 ~105ms，所以签名不变时直接复用上次结果。
+    cache = _cache_load(hub)
+    sig = _sig_tree(_watch_paths(hub))
+    new_cache: dict = {}
+    saved_ms = 0.0
+    hits: list[str] = []
+
     data["hub"] = {
         "cards": collect_cards(hub),
         "vector": collect_vector(hub),
         "lock": {"writer_lock": (hub / ".sync" / "locks" / "writer.lock").exists()},
     }
     data["hub"]["_vector_age_min"] = data["hub"]["vector"].get("stale_min", 0)
-    data["hub"]["health"] = collect_hub_health(root, hub)
+    _t = time.perf_counter()
+    hh = _cached_pick(cache, sig, "hub_health")
+    if hh is None:
+        hh = collect_hub_health(root, hub)
+        hh["_cached"] = False
+    else:
+        hits.append("hub_health")
+    hh_ms = round((time.perf_counter() - _t) * 1000, 1)
+    if hh.get("_cached"):
+        saved_ms += max(
+            0.0, float(cache.get("cost_ms", {}).get("hub_health", 0.0)) - hh_ms
+        )
+    data["hub"]["health"] = hh
+    new_cache["hub_health"] = {k: v for k, v in hh.items() if k != "_cached"}
     # 飞轮活动真实来源（hub_health 的 .sync/logs 口径在本机不成立，见函数 docstring）
     data["hub"]["flywheel_real"] = collect_flywheel_real(hub)
 
@@ -1011,12 +1224,35 @@ def collect_all(hub: Path, root: Path) -> dict:
         "query_log": collect_query_log(hub),
         **collect_activity(hub, root),
     }
-    data["skills"] = collect_skills(hub)
+    _t = time.perf_counter()
+    sk = _cached_pick(cache, sig, "skills")
+    if sk is None:
+        sk = collect_skills(hub)
+        sk["_cached"] = False
+    else:
+        hits.append("skills")
+    sk_ms = round((time.perf_counter() - _t) * 1000, 1)
+    if sk.get("_cached"):
+        saved_ms += max(0.0, float(cache.get("cost_ms", {}).get("skills", 0.0)) - sk_ms)
+    data["skills"] = sk
+    new_cache["skills"] = {k: v for k, v in sk.items() if k != "_cached"}
     # P0-1/P3-11: 先算「来源出处」与「数据源体检」，再算告警（告警要用体检结果）
     data["metric_sources"] = collect_metric_sources(hub, data)
     data["source_health"] = collect_source_health(hub, root, data)
     data["alerts"] = collect_alerts(hub, data)
 
+    new_cache["sig"] = sig
+    new_cache["cost_ms"] = {"hub_health": hh_ms, "skills": sk_ms}
+    new_cache["saved_at"] = datetime.now(CST).isoformat(timespec="seconds")
+    _cache_save(hub, new_cache)
+
+    data["cache"] = {
+        "sig": sig[:12],
+        "hits": hits,
+        "saved_ms": round(saved_ms, 1),
+        "hub_health_ms": hh_ms,
+        "skills_ms": sk_ms,
+    }
     data["generated_at"] = datetime.now(CST).isoformat(timespec="seconds")
     data["collect_ms"] = round((time.perf_counter() - t0) * 1000, 1)
     return data

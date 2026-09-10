@@ -42,7 +42,7 @@ import urllib.request
 from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import unquote, urlparse
+from urllib.parse import parse_qs, unquote, urlparse
 
 CST = timezone(timedelta(hours=8))
 
@@ -62,6 +62,80 @@ STATE: dict = {
     "lock": threading.Lock(),
 }
 CACHE_TTL = 10.0  # 秒
+
+# ---------------------------------------------------------------- P1-3 趋势历史
+# 原来趋势只存在浏览器 localStorage：换设备/清缓存就归零，且无法跨端共享。
+# 改为服务端把每次「有变化」的快照追加进 JSONL，前端优先读它，localStorage 只做兜底。
+HIST_REL = ".sync/state/dashboard-history.jsonl"
+HIST_MAX = 800  # 行数上限，超出按行截断重写（append-only 的轻量轮转）
+
+
+def hist_kpis(data: dict) -> dict:
+    """从快照里抽出要跟踪趋势的 KPI 序列（键名与前端 delta 一致）。"""
+    hh = (data.get("hub") or {}).get("health") or {}
+    vec = (data.get("hub") or {}).get("vector") or {}
+    sk = data.get("skills") or {}
+    cr = (data.get("runtime") or {}).get("cron") or {}
+    ck = hh.get("card_health") or {}
+    # 键名必须与前端 deltaBadge 用的完全一致，否则服务端历史喂不进趋势。
+    return {
+        "cards": ((data.get("hub") or {}).get("cards") or {}).get("total"),
+        "overall": hh.get("overall_score"),
+        "cron_ok": cr.get("success_rate"),
+        "vector_missing": vec.get("missing"),
+        # 扩展跟踪项（供后续图表复用，不参与 delta）
+        "card_health": ck.get("score"),
+        "skills": sk.get("total"),
+        "skills_cited": sk.get("cited_any"),
+        "skills_rate": sk.get("cited_rate"),
+        "flywheel": ((data.get("hub") or {}).get("flywheel_real") or {}).get("score"),
+        "cron_jobs": cr.get("total"),
+    }
+
+
+def hist_append(hub_root: Path, data: dict) -> None:
+    """把本次 KPI 追加进历史（与上一行完全相同则跳过，避免刷屏）。"""
+    try:
+        p = Path(hub_root) / HIST_REL
+        p.parent.mkdir(parents=True, exist_ok=True)
+        row = {"ts": time.strftime("%Y-%m-%dT%H:%M:%S"), "kpi": hist_kpis(data)}
+        last = None
+        if p.exists():
+            with p.open("r", encoding="utf-8", errors="replace") as f:
+                for line in f:
+                    if line.strip():
+                        last = line
+            try:
+                if json.loads(last or "{}").get("kpi") == row["kpi"]:
+                    return
+            except json.JSONDecodeError:
+                pass
+        with p.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(row, ensure_ascii=False) + "\n")
+        # 轮转：超上限时只保留最后 HIST_MAX 行
+        lines = p.read_text(encoding="utf-8", errors="replace").splitlines()
+        if len(lines) > HIST_MAX:
+            p.write_text("\n".join(lines[-HIST_MAX:]) + "\n", encoding="utf-8")
+    except OSError:
+        pass
+
+
+def hist_read(hub_root: Path, limit: int = 120) -> dict:
+    """读最近 limit 条历史（时间正序），供前端算 delta。"""
+    p = Path(hub_root) / HIST_REL
+    if not p.exists():
+        return {"ok": True, "count": 0, "rows": []}
+    rows = []
+    try:
+        for line in p.read_text(encoding="utf-8", errors="replace").splitlines():
+            if line.strip():
+                try:
+                    rows.append(json.loads(line))
+                except json.JSONDecodeError:
+                    continue
+    except OSError:
+        return {"ok": False, "count": 0, "rows": []}
+    return {"ok": True, "count": len(rows), "rows": rows[-limit:]}
 
 
 # ---------------------------------------------------------------- 数据
@@ -99,6 +173,7 @@ def run_collect(force: bool = False) -> dict:
     with STATE["lock"]:
         STATE["snapshot"] = data
         STATE["snapshot_ts"] = time.time()
+    hist_append(STATE["hub_root"], data)  # P1-3：落服务端趋势历史
     return data
 
 
@@ -410,6 +485,14 @@ class Handler(BaseHTTPRequestHandler):
             if "error" in data:
                 return self._json(data, 500)
             return self._json_cached(data, ttl=5)
+
+        if path == "/api/history":
+            q = parse_qs(urlparse(self.path).query)
+            try:
+                limit = max(1, min(800, int((q.get("limit") or ["120"])[0])))
+            except (TypeError, ValueError):
+                limit = 120
+            return self._json(hist_read(STATE["hub_root"], limit))
 
         if path == "/api/cron/incidents":
             return self._json(cron_incidents())

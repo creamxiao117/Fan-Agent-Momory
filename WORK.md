@@ -227,6 +227,40 @@ ector_bench --real --fail-below 0.8 融合命中率 **67%（4/6）< 80% 门禁�
 **长 patch 输入被静默截断**，一次会话命中 4 次——其中 `$("#kpis")` 被削成 `$("kpis")`
 语法完全合法，py/ruff/node 全过，**只有真开浏览器才炸**。故「改完必须真开页面」不是形式主义。
 
+## 本轮 R13（P3-10 采集器增量 + P2-5 徽章补全 + P1-3 服务端趋势 + 2 个真 bug 修复）
+
+**性能（P3-10 采集器增量）——先度量再优化**：
+- 剖析全量 4349ms：`collect_hub_health` 2270ms（52.7%）+ `collect_skills` 1653ms（38.4%）
+  = **91% 集中在 2 个函数**，其余 10 项合计仅 4.4% → 只打这两个，不做全量缓存。
+- `collect_skills` **1675ms → 142ms（12.1×）**：真凶不是「158 个技能各扫一遍全文正则」
+  （改成一次分词 + `Counter` 后仍 1.0x，**假设错了**），而是 `d in p.parents` 生成式
+  → 约 90 万次 Path 构造、profiled 6.03s；改为一次自底向上累加子树计数即解。
+- 签名缓存（walk + stat 指纹 ≈101ms）：**冷 2919ms → 热 585ms（降 80%）**；
+  签名遍历须跳过缓存文件自身（否则每写一次缓存就把自己失效）。
+- 等价性：新旧 `collect_skills` 输出 `json.dumps(sort_keys)` **逐字段一致**；冷/热仅时间字段不同。
+
+**P2-5 来源徽章补全**：`metric_sources` 8 → **20 条**；飞轮 / 技能 / 仓库 / cron 四组 KPI 全挂 ⓘ。
+浏览器实测：17 个 `srcKey` **0 未登记**、20 个徽章 **0 个 tooltip 异常**。
+
+**P1-3 服务端趋势历史**：新增 `.sync/state/dashboard-history.jsonl` + `GET /api/history`；
+每次采集按 KPI 变化去重追加（上限 800 行轮转）。前端改为「本地（旧）+ 服务端（新）串联」，
+`histPrev` 从尾部回溯 → 优先服务端、本地只补位，**既跨设备共享、又不让既有趋势归零**。
+
+**两个真 bug（既存缺陷，非本轮引入）**：
+1. `collect_alerts` 中 `return out` **误置于体检告警块之前** → 「数据源体检不通过」告警
+   永不触发（HEAD 即如此）。已修 + 分支单测：正常 6 条 → 异常 7 条、证据/命令正确。
+2. 前端 `kpi()` 读 `ms.how`，而采集器只发 `formula` → **所有徽章口径显示 "undefined"**。
+   已修（`ms.formula || ms.how || "—"`）。
+
+验证：`docs/dashboard/verify_v5.py --url http://127.0.0.1:8898/` → **47 PASS / 0 FAIL**，
+delta 逐位一致（▲29.0 / ▲9.2 / ▲43.0 / ▼9.0）。
+
+经验卡（已 ingest + build-vectors；语义检索对两张卡的自然语言查询均列**第 1**）：
+`experience/stale-run-false-failure-freeze-test-first.md`、
+`experience/dashboard-collector-incremental-three-pitfalls.md`。
+
+⚠️ **生效前提**：8899 常驻服务仍加载旧后端代码，**需重启才生效**（静态前端因逐请求读盘已即时生效）。
+
 ## 待办（R12 起，按等级）
 
 ### P0（未做，建议优先）
@@ -234,11 +268,13 @@ ector_bench --real --fail-below 0.8 融合命中率 **67%（4/6）< 80% 门禁�
 2. `/api/alert/<id>` 的证据行随告警类型扩展（当前 cron/git 已覆盖，hub 类待补）。
 
 ### P1
-3. 采集器增量：现每次全量扫 359 卡 + 158 技能（4.45s），改按 mtime 增量 + single-flight。
-4. KPI 趋势的**服务端**历史（现仅 localStorage，清浏览器即丢）：写 `.sync/state/dashboard-history.jsonl`。
+3. ~~采集器增量（全量 4.45s）~~ ✅ **R13 完成**：冷 2919ms → 热 585ms（-80%），
+   `collect_skills` 1675→142ms（12.1×）。遗留：`collect_git`（237ms）是热态最大项，
+   暂不缓存 —— git 状态变动频繁，收益/风险不划算。
+4. ~~KPI 趋势的服务端历史~~ ✅ **R13 完成**：`.sync/state/dashboard-history.jsonl` + `GET /api/history`。
 
 ### P2
-5. 指标来源徽章补全到飞轮/技能/仓库三组 KPI（现仅 overview 四个）。
+5. ~~指标来源徽章补全到飞轮/技能/仓库三组~~ ✅ **R13 完成**（另顺带补齐 cron 视图组共四组）。
 
 ### P3 / 阻塞
 6. **VLM 视觉评审（见下节「VLM 现状与改进」）**——需用户决策是否腾显存。

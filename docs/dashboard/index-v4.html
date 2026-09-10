@@ -552,7 +552,7 @@ function kpi(o){
   // P0-1：每个数字挂「来源徽章」。srcKey 指向快照里的 metric_sources，
   // hover/聚焦显示出处与计算式——让「读不到的 0」无法伪装成「真的 0」。
   var ms=(D.metric_sources||{})[o.srcKey];
-  var tip=ms ? (ms.source+"｜口径："+ms.how) : "";
+  var tip=ms ? (ms.source+"｜口径："+(ms.formula||ms.how||"—")) : "";
   var badge=ms ? '<span class="src" tabindex="0" role="img" title="'+esc(tip)+'" aria-label="数据来源：'+esc(tip)+'">i</span>' : '';
   return '<div class="card kpi '+o.cls+'"><div class="k-lab">'+esc(o.lab)+badge+'</div>'
     + '<div class="k-val">'+o.val+(o.unit?'<small>'+esc(o.unit)+'</small>':'')+'</div>'
@@ -570,7 +570,42 @@ function barFoot(v,good,bad,text){
 /* P1-5 趋势 delta —— 与「上一个不同的历史值」比较。
    只存当前值做对比会永远相等（首次渲染即写入），故存历史数组，
    由近及远找第一个与当前不同的值；从未有过差异则显示「基线」。 */
-function histSnap(){ try{ return JSON.parse(localStorage.getItem("hubHist2")||"{}"); }catch(e){ return {}; } }
+/* P1-3：趋势历史改以「服务端 JSONL」为主源（跨设备共享、清缓存不丢），
+   localStorage 降级为兜底；数据源标记在 body[data-hist-src] 上便于自检。 */
+var SRV_HIST = null;
+function srvHistMap(){
+  if(!SRV_HIST) return null;
+  var m = {};
+  (SRV_HIST.rows||[]).forEach(function(p){
+    var s = p.kpi || {};
+    Object.keys(s).forEach(function(k){
+      if(s[k]==null || isNaN(s[k])) return;
+      (m[k] = m[k] || []).push(s[k]);
+    });
+  });
+  return Object.keys(m).length ? m : null;
+}
+function histSnap(){
+  var loc; try{ loc = JSON.parse(localStorage.getItem("hubHist2")||"{}"); }catch(e){ loc = {}; }
+  var srv = srvHistMap();
+  var out = {}, keys = {}, src;
+  Object.keys(loc).forEach(function(k){ keys[k]=1; });
+  if(srv) Object.keys(srv).forEach(function(k){ keys[k]=1; });
+  Object.keys(keys).forEach(function(k){
+    /* 拼接顺序：本地（较旧）在前、服务端（较新）在后。
+       histPrev 从尾部回溯取「第一个与当前值不同的值」→ 优先采用服务端，
+       本地历史只做「服务端刚上线、历史太短」时的补位，避免趋势被归零。 */
+    out[k] = (loc[k]||[]).slice(-20).concat(srv ? (srv[k]||[]).slice(-40) : []);
+  });
+  src = (srv && Object.keys(loc).length) ? "mixed" : (srv ? "server" : "local");
+  try{ document.body.setAttribute("data-hist-src", src); }catch(e){}
+  return out;
+}
+function loadSrvHist(){
+  return fetch("/api/history?limit=200").then(function(r){ return r.json(); })
+    .then(function(j){ if(j && j.rows) SRV_HIST = j; })
+    .catch(function(){ /* 服务端历史不可用 → 退回 localStorage */ });
+}
 function histPrev(key, cur){
   var arr = histSnap()[key] || [];
   for(var i=arr.length-1;i>=0;i--){ if(Math.abs(arr[i]-cur) >= 0.05) return arr[i]; }
@@ -635,13 +670,13 @@ function flyScores(){
   var hp=(D.hub.health||{});
   var ch=hp.card_health||{}, fr=D.hub.flywheel_real||{}, sk=D.skills||{};
   return [
-    {lab:"卡片健康", val:(ch.score==null?null:ch.score),
+    {lab:"卡片健康", val:(ch.score==null?null:ch.score), key:"card_health",
      src:"活跃 "+num(ch.active)+" · 候选 "+num(ch.candidate)+" · 归档 "+num(ch.archived),
      from:"hub_health.card_health.score"},
-    {lab:"技能健康", val:(sk.total?sk.cited_rate:null),
+    {lab:"技能健康", val:(sk.total?sk.cited_rate:null), key:"skill_cited_rate",
      src:"被引用 "+num(sk.cited_any)+"/"+num(sk.total)+"（"+pct(sk.cited_any,sk.total)+"%）",
      from:"skills.cited_rate —— hub_health 的 skill.yaml 口径在本机不成立"},
-    {lab:"飞轮活动", val:(fr.exists===false?null:fr.score),
+    {lab:"飞轮活动", val:(fr.exists===false?null:fr.score), key:"flywheel_score",
      src:(fr.last_run? "最后运行 "+String(fr.last_run).slice(0,10)+"（"+Math.round((fr.hours_ago||0)/24)+" 天前）" : "无记录"),
      from:".sync/state/flywheel-log.json —— hub_health 的 .sync/logs 口径在本机不成立"}
   ];
@@ -651,23 +686,24 @@ function renderKpisFly(){
   var hp=(D.hub.health||{});
   var html = flyScores().map(function(it){
     return kpi({lab:it.lab, val:(it.val==null?"—":Number(it.val).toFixed(1)), unit:"/100",
-      cls:(it.val==null?"":level(it.val,80,60)),
+      cls:(it.val==null?"":level(it.val,80,60)), srcKey:it.key,
       foot: barFoot(it.val||0,80,60,(it.val==null?"无数据":(it.val<60?"偏低":"正常")))
         + '<span class="mut" title="'+esc(it.from)+'">'+esc(it.src)+'</span>'});
   }).join("");
   var overall = hp.overall_score==null?null:hp.overall_score;
   html += kpi({lab:"综合", val:(overall==null?"—":overall.toFixed(1)), unit:"/100",
-    cls: overall==null?"":level(overall,80,60), foot:barFoot(overall||0,80,60,(overall||0)<60?"需修复":"正常")});
+    cls: overall==null?"":level(overall,80,60), srcKey:"health_overall",
+    foot:barFoot(overall||0,80,60,(overall||0)<60?"需修复":"正常")});
   $("#kpis-fly").innerHTML = html;
 }
 
 function renderKpisCron(){
   var c=D.runtime.cron;
   $("#kpis-cron").innerHTML = [
-    kpi({lab:"任务总数", val:num(c.total), foot:'<span class="mut">启用 '+num(c.enabled)+'</span>'}),
-    kpi({lab:"执行次数", val:num(c.exec_total), unit:"次", foot:'<span class="trend">成功 '+num(c.exec_ok)+'</span>'}),
-    kpi({lab:"成功率", val:c.success_rate, unit:"%", cls:level(c.success_rate,95,80), foot:barFoot(c.success_rate,95,80,"")}),
-    kpi({lab:"未处理故障", val:num(c.incidents_open), cls:c.incidents_open>0?"err":"ok",
+    kpi({lab:"任务总数", val:num(c.total), srcKey:"cron_total", foot:'<span class="mut">启用 '+num(c.enabled)+'</span>'}),
+    kpi({lab:"执行次数", val:num(c.exec_total), unit:"次", srcKey:"cron_exec", foot:'<span class="trend">成功 '+num(c.exec_ok)+'</span>'}),
+    kpi({lab:"成功率", val:c.success_rate, unit:"%", cls:level(c.success_rate,95,80), srcKey:"cron_exec_rate", foot:barFoot(c.success_rate,95,80,"")}),
+    kpi({lab:"未处理故障", val:num(c.incidents_open), cls:c.incidents_open>0?"err":"ok", srcKey:"cron_incidents",
          foot:'<span class="mut">累计 '+num(c.incidents_total)+'</span>'})
   ].join("");
 }
@@ -676,12 +712,13 @@ function renderKpisSkills(){
   var s=D.skills;
   var bailian = s.rows.filter(function(x){return x.name.indexOf("bailian-")===0;}).length;
   $("#kpis-skills").innerHTML = [
-    kpi({lab:"技能总数", val:num(s.total), foot:'<span class="mut">'+s.groups+' 个分组</span>'}),
-    kpi({lab:"被中枢引用过", val:num(s.cited_any), cls: s.cited_any>0?"ok":"warn",
+    kpi({lab:"技能总数", val:num(s.total), srcKey:"skills_total", foot:'<span class="mut">'+s.groups+' 个分组</span>'}),
+    kpi({lab:"被中枢引用过", val:num(s.cited_any), cls: s.cited_any>0?"ok":"warn", srcKey:"skills_cited_any",
          foot:'<span class="mut">占比 '+pct(s.cited_any,s.total)+'%</span>'}),
-    kpi({lab:"从未被引用", val:num(s.total-s.cited_any), cls:(s.total-s.cited_any)>10?"warn":"ok",
+    kpi({lab:"从未被引用", val:num(s.total-s.cited_any), cls:(s.total-s.cited_any)>10?"warn":"ok", srcKey:"skills_uncited",
          foot:'<span class="mut">候选清理对象</span>'}),
-    kpi({lab:"bailian-* 待清理", val:num(bailian), cls:bailian>0?"warn":"ok", foot:'<span class="mut">你已确认用不到</span>'})
+    kpi({lab:"bailian-* 待清理", val:num(bailian), cls:bailian>0?"warn":"ok", srcKey:"skills_bailian",
+         foot:'<span class="mut">你已确认用不到</span>'})
   ].join("");
 }
 
@@ -691,13 +728,13 @@ function renderKpisRepos(){
   var alive = b.filter(function(x){return x.alive;}).length;
   var f=D.activity.query_log;
   $("#kpis-repos").innerHTML = [
-    kpi({lab:"未提交改动", val:num(dirty), cls:dirty>=3?"warn":"ok",
+    kpi({lab:"未提交改动", val:num(dirty), cls:dirty>=3?"warn":"ok", srcKey:"repo_dirty",
          foot:'<span class="mut">'+g.length+' 个仓库</span>'}),
-    kpi({lab:"本地服务在线", val:alive+"/"+b.length, cls:alive===b.length?"ok":"err",
+    kpi({lab:"本地服务在线", val:alive+"/"+b.length, cls:alive===b.length?"ok":"err", srcKey:"runtime_backends",
          foot:'<span class="mut">TCP 探测</span>'}),
-    kpi({lab:"检索日志", val:num(f.total), unit:"条", cls:f.idle_hours>48?"warn":"ok",
+    kpi({lab:"检索日志", val:num(f.total), unit:"条", cls:f.idle_hours>48?"warn":"ok", srcKey:"query_log",
          foot:'<span class="mut">闲置 '+f.idle_hours+' 小时</span>'}),
-    kpi({lab:"写锁", val:D.hub.lock.writer_lock?"持有":"空闲", cls:D.hub.lock.writer_lock?"warn":"ok",
+    kpi({lab:"写锁", val:D.hub.lock.writer_lock?"持有":"空闲", cls:D.hub.lock.writer_lock?"warn":"ok", srcKey:"writer_lock",
          foot:'<span class="mut">单写者锁</span>'})
   ].join("");
 }
@@ -1024,14 +1061,14 @@ function load(force){
     if(_lo){ _lo.style.display="block"; _lo.textContent="⏳ 采集中… 全量扫描 359 卡 + 158 技能，约 4-5 秒"; }
     fetch("/api/action/collect",{method:"POST",headers:{"Content-Type":"application/json"},body:"{}"})
       .then(function(r){return r.json();})
-      .then(function(j){ if(j.snapshot){D=j.snapshot; renderAll();} else if(_lo){_lo.textContent="采集失败";} })
+      .then(function(j){ if(j.snapshot){D=j.snapshot; loadSrvHist().then(renderAll);} else if(_lo){_lo.textContent="采集失败";} })
       .catch(function(e){ if(_lo){_lo.textContent="采集失败: "+e.message;} })
       .then(function(){ $("#btn-refresh").disabled=false; if(_lo){_lo.style.display="none";} });
   } else {
     fetch(url).then(function(r){return r.json();})
       .then(function(j){ D=j;
         if(j.error){ $("#loading").textContent="后端返回错误: "+j.error; return; }
-        renderAll(); })
+        loadSrvHist().then(renderAll); })
       .catch(function(e){ $("#loading").textContent="无法连接后端: "+e.message+"（请确认已运行 hub_dashboard_server.py）"; })
       .then(function(){ $("#btn-refresh").disabled=false; });
   }
