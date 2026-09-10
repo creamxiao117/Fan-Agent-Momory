@@ -14,15 +14,19 @@ nav{background:var(--bg-1);border-right:1px solid var(--border);padding:16px 0;o
 main{overflow:auto;padding:16px}
 header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
 h1{font-size:20px;font-weight:600}
-.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px}
-.grid-2{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
-.card{background:var(--bg-1);border:1px solid var(--border);border-radius:8px;padding:14px;transition:border-color .2s}
+.grid{display:grid;gap:12px;margin-bottom:16px}
+.grid.hero{grid-template-columns:1.4fr 1fr 1fr 1fr}
+.grid.cols2{grid-template-columns:1fr 1fr}
+.grid.cols3{grid-template-columns:1fr 1fr 1fr}
+.card{background:var(--bg-1);border:1px solid var(--border);border-radius:8px;padding:14px;position:relative}
 .card:hover{border-color:var(--border-h)}
-.card-title{font-size:11px;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px}
+.card-title{font-size:10px;color:var(--text-3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px}
 .card-value{font-size:24px;font-weight:600;line-height:1.2}
 .card-sub{font-size:11px;color:var(--text-3);margin-top:4px}
+.hero-score{font-size:48px;font-weight:300;letter-spacing:-0.02em;line-height:1}
+.hero-score .pct{font-size:18px;color:var(--text-3)}
 table{width:100%;border-collapse:collapse;font-size:12px}
-th{text-align:left;font-weight:500;color:var(--text-3);padding:6px 0;border-bottom:1px solid var(--border)}
+th{text-align:left;font-weight:500;color:var(--text-3);padding:6px 0;border-bottom:1px solid var(--border);font-size:10px;text-transform:uppercase;letter-spacing:.05em}
 td{padding:6px 0;border-bottom:1px solid var(--border)}
 .mono{font-family:'JetBrains Mono',Consolas,monospace;font-size:11px}
 .btn{background:var(--bg-2);border:1px solid var(--border);color:var(--text-1);padding:6px 12px;border-radius:6px;font-size:12px;cursor:pointer;transition:.15s}
@@ -38,18 +42,31 @@ td{padding:6px 0;border-bottom:1px solid var(--border)}
 .d-yellow{background:var(--yellow)}
 .d-red{background:var(--red)}
 .empty{color:var(--text-3);font-size:12px;padding:8px 0;text-align:center}
-.chat-log{height:300px;overflow:auto;background:var(--bg-0);border-radius:6px;padding:10px;margin-bottom:8px}
-.chat-input{display:flex;gap:6px}
-.chat-input input{flex:1;background:var(--bg-0);border:1px solid var(--border);color:var(--text-1);padding:6px 10px;border-radius:6px;font-size:13px}
-.chat-msg{margin-bottom:6px;font-size:12px}
-.chat-msg .who{color:var(--accent);margin-right:6px}
-.panel{display:none}
-.panel.active{display:block}
+.chat-log{height:300px;overflow:auto;background:var(--bg-0);border:1px solid var(--border);border-radius:6px;padding:10px;margin-bottom:10px;font-size:13px}
+.chat-msg{margin-bottom:8px}
+.chat-msg .who{font-weight:600;margin-right:6px;color:var(--accent)}
+.chat-input{display:flex;gap:8px}
+.chat-input input{flex:1;background:var(--bg-0);border:1px solid var(--border);color:var(--text-1);padding:8px 12px;border-radius:6px;font-size:13px;font-family:inherit}
+.chat-input input:focus{outline:none;border-color:var(--accent)}
+.bar-row{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+.bar-label{width:80px;font-size:11px;color:var(--text-3);text-align:right}
+.bar-track{flex:1;height:18px;background:var(--bg-3);border-radius:3px;overflow:hidden}
+.bar-fill{height:100%;display:flex;align-items:center;padding-left:8px;font-size:10px;color:#fff;font-weight:600}
+.bar-count{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--text-3);width:40px;text-align:right}
+.donut-wrap{display:flex;align-items:center;gap:20px;margin-top:12px}
+.donut{width:110px;height:110px;flex-shrink:0}
+.donut-legend{flex:1;font-size:12px}
+.donut-legend li{display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border)}
+.donut-legend li:last-child{border-bottom:none}
+.flywheel-svg{width:100%;max-width:380px;height:auto;margin:8px auto;display:block}
+.section-title{margin:24px 0 12px;padding-top:12px;border-top:1px solid var(--border);font-size:11px;color:var(--text-3);text-transform:uppercase;letter-spacing:.1em}
+.skill-card{cursor:pointer;transition:transform .15s}
+.skill-card:hover{transform:translateY(-2px)}
 </style>
-</head>
-<body>
-<div class='app'>
+</head><body>
+<div class="app">
 <nav>
+<div class='nav-title'>MEMORY HUB</div>
 <div class='nav-item active' data-tab='main'>▦ 总控台</div>
 <div class='nav-item' data-tab='flywheel'>⚙ 飞轮详情</div>
 <div class='nav-item' data-tab='skillhub'>⚡ SkillHub</div>
@@ -59,24 +76,24 @@ td{padding:6px 0;border-bottom:1px solid var(--border)}
 <main>
 <header>
 <h1 id='page-title'>总控台</h1>
-<div style='display:flex;gap:6px'>
-<button class='btn' data-action='refresh'>🔄 刷新</button>
+<div>
+<button class='btn' data-action='refresh'>🔄 刷新</button> 
 <button class='btn btn-primary' data-action='collect'>⚡ 立即收集</button>
-</div>
-</header>
+</div></header>
 <div class='panel active' id='panel-main'>
-<div class='grid'>
-<div class='card' id='c-health'><div class='card-title'>健康度</div><div class='card-value' id='m-health'>--</div><div class='card-sub' id='m-health-sub'>加载中…</div></div>
+<div class='grid hero'>
+<div class='card' id='c-health'><div class='dot d-green'></div><div class='card-title'>健康度</div><div class='card-value' id='m-health'>--</div><div class='card-sub' id='m-health-sub'>-- 面板 OK</div></div>
 <div class='card'><div class='card-title'>平台数</div><div class='card-value' id='m-platforms'>--</div><div class='card-sub'>Agent 平台接入</div></div>
-<div class='card'><div class='card-title'>Cron 数</div><div class='card-value' id='m-cron'>--</div><div class='card-sub'>定时任务</div></div>
+<div class='card'><div class='card-title'>CRON 数</div><div class='card-value' id='m-cron'>--</div><div class='card-sub'>定时任务</div></div>
+<div class='card'><div class='card-title'>总卡片</div><div class='card-value' id='m-cards'>--</div><div class='card-sub'>中枢知识库</div></div>
 </div>
-<div class='grid-2'>
+<div class='grid cols2'>
 <div class='card'><div class='card-title'>平台状态</div><table><tbody id='tbl-platforms'></tbody></table></div>
 <div class='card'><div class='card-title'>飞轮面板</div><table><tbody id='tbl-panels'></tbody></table></div>
 </div>
 <div class='card'><div class='card-title'>Cron 任务</div><table><thead><tr><th>ID</th><th>名称</th><th>调度</th><th>最后</th><th></th></tr></thead><tbody id='tbl-cron'></tbody></table></div>
 <div class='grid' id='cards-grid' style='margin-top:12px'></div>
-<div class='grid-2' style='margin-top:12px'>
+<div class='grid cols2' style='margin-top:12px'>
 <div class='card'><div class='card-title'>仓库同步</div><table><tbody id='tbl-sync'></tbody></table></div>
 <div class='card'><div class='card-title'>最近 ledger</div><table><tbody id='tbl-ledger'></tbody></table></div>
 </div>
@@ -84,40 +101,70 @@ td{padding:6px 0;border-bottom:1px solid var(--border)}
 <div class='card' style='margin-top:12px'><div class='card-title'>关键告警</div><div id='alerts'></div></div>
 </div>
 <div class='panel' id='panel-flywheel'>
-<div style='display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr;gap:12px;margin-bottom:12px'>
-<div class='card' style='background:rgba(94,106,210,0.08);border-color:var(--accent)'><div class='card-title' style='color:var(--accent)'>OVERALL SCORE</div><div id='h-overall' style='font-size:48px;font-weight:500;line-height:1'>--</div><div style='height:6px;background:var(--bg-3);border-radius:3px;overflow:hidden;margin-top:8px'><div id='h-overall-bar' style='height:100%;width:0%'></div></div><div class='card-sub' id='h-overall-sub'>--</div></div>
-<div class='card'><div class='card-title'>卡片健康度</div><div id='h-card' style='font-size:32px;font-weight:500;line-height:1'>--</div><div style='height:6px;background:var(--bg-3);border-radius:3px;overflow:hidden;margin-top:8px'><div id='h-card-bar' style='height:100%;width:0%'></div></div><div class='card-sub' id='h-card-sub'>--</div></div>
-<div class='card'><div class='card-title'>技能健康度</div><div id='h-skill' style='font-size:32px;font-weight:500;line-height:1'>--</div><div style='height:6px;background:var(--bg-3);border-radius:3px;overflow:hidden;margin-top:8px'><div id='h-skill-bar' style='height:100%;width:0%'></div></div><div class='card-sub' id='h-skill-sub'>--</div></div>
-<div class='card'><div class='card-title'>飞轮活跃度</div><div id='h-fly' style='font-size:32px;font-weight:500;line-height:1'>--</div><div style='height:6px;background:var(--bg-3);border-radius:3px;overflow:hidden;margin-top:8px'><div id='h-fly-bar' style='height:100%;width:0%'></div></div><div class='card-sub' id='h-fly-sub'>--</div></div>
+<div class='grid hero'>
+<div class='card' style='background:rgba(94,106,210,0.08);border-color:var(--accent)'>
+<div class='card-title' style='color:var(--accent)'>OVERALL SCORE</div>
+<div class='hero-score'><span id='h-overall'>--</span><span class='pct'>/100</span></div>
+<div style='height:8px;background:var(--bg-3);border-radius:4px;overflow:hidden;margin-top:12px'><div id='h-overall-bar' style='height:100%;width:0%;background:var(--accent);transition:width .6s ease'></div></div>
+<div class='card-sub' id='h-overall-sub'>--</div>
 </div>
-<div style='display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px'>
-<div class='card'><div class='card-title'>中枢卡片 · <span id='h-hub-count'>--</span> 张（按状态）</div><div id='h-card-bars' style='margin-top:8px'></div></div>
-<div class='card'><div class='card-title'>卡片类型分布（donut）</div><div style='display:flex;align-items:center;gap:20px;margin-top:8px'>
-<svg width='100' height='100' viewBox='0 0 42 42' style='flex-shrink:0'>
-<circle cx='21' cy='21' r='15.9' fill='transparent' stroke='var(--bg-3)' stroke-width='6'/>
-<circle id='donut-exp' cx='21' cy='21' r='15.9' fill='transparent' stroke='var(--accent)' stroke-width='6' stroke-dasharray='0 100' transform='rotate(-90 21 21)'/>
-<circle id='donut-method' cx='21' cy='21' r='15.9' fill='transparent' stroke='var(--green)' stroke-width='6' stroke-dasharray='0 100' transform='rotate(-90 21 21)'/>
-<circle id='donut-blueprint' cx='21' cy='21' r='15.9' fill='transparent' stroke='var(--yellow)' stroke-width='6' stroke-dasharray='0 100' transform='rotate(-90 21 21)'/>
-<circle id='donut-rule' cx='21' cy='21' r='15.9' fill='transparent' stroke='var(--red)' stroke-width='6' stroke-dasharray='0 100' transform='rotate(-90 21 21)'/>
+<div class='card'><div class='card-title'>CARD HEALTH</div><div class='card-value' id='h-card'>--</div><div style='height:8px;background:var(--bg-3);border-radius:4px;overflow:hidden;margin-top:12px'><div id='h-card-bar' style='height:100%;width:0%;background:var(--green)'></div></div><div class='card-sub' id='h-card-sub'>--</div></div>
+<div class='card'><div class='card-title'>SKILL HEALTH</div><div class='card-value' id='h-skill'>--</div><div style='height:8px;background:var(--bg-3);border-radius:4px;overflow:hidden;margin-top:12px'><div id='h-skill-bar' style='height:100%;width:0%;background:var(--yellow)'></div></div><div class='card-sub' id='h-skill-sub'>--</div></div>
+<div class='card'><div class='card-title'>FLYWHEEL ACTIVITY</div><div class='card-value' id='h-fly'>--</div><div style='height:8px;background:var(--bg-3);border-radius:4px;overflow:hidden;margin-top:12px'><div id='h-fly-bar' style='height:100%;width:0%;background:var(--accent)'></div></div><div class='card-sub' id='h-fly-sub'>--</div></div>
+</div>
+<div class='grid cols2'>
+<div class='card'><div class='card-title'>FLYWHEEL STATUS</div><div class='card-sub'>自驱成长飞轮 · 6 阶段</div>
+<svg class='flywheel-svg' viewBox='0 0 400 300'>
+<circle cx='200' cy='150' r='52' fill='var(--bg-2)' opacity='0.5'/><text x='200' y='146' text-anchor='middle' fill='var(--text-2)' font-size='13' font-weight='600'>中枢</text><text x='200' y='164' text-anchor='middle' fill='var(--text-3)' font-size='10'>-- 卡</text>
+<circle cx='200' cy='48' r='22' fill='var(--bg-1)' stroke='var(--accent)' stroke-width='1.5'/>
+<text x='200' y='45' text-anchor='middle' fill='var(--text-1)' font-size='11' font-weight='600'>实践</text>
+<text x='200' y='58' text-anchor='middle' fill='var(--text-3)' font-size='8'>A 引擎</text>
+<circle cx='310' cy='92' r='22' fill='var(--bg-1)' stroke='var(--text-3)' stroke-width='1.5'/>
+<text x='310' y='89' text-anchor='middle' fill='var(--text-1)' font-size='11' font-weight='600'>沉淀</text>
+<text x='310' y='102' text-anchor='middle' fill='var(--text-3)' font-size='8'>B 维护站</text>
+<circle cx='310' cy='208' r='22' fill='var(--bg-1)' stroke='var(--text-3)' stroke-width='1.5'/>
+<text x='310' y='205' text-anchor='middle' fill='var(--text-1)' font-size='11' font-weight='600'>提炼</text>
+<text x='310' y='218' text-anchor='middle' fill='var(--text-3)' font-size='8'>C 维护站</text>
+<circle cx='200' cy='252' r='22' fill='var(--bg-1)' stroke='var(--text-3)' stroke-width='1.5'/>
+<text x='200' y='249' text-anchor='middle' fill='var(--text-1)' font-size='11' font-weight='600'>萃取</text>
+<text x='200' y='262' text-anchor='middle' fill='var(--text-3)' font-size='8'>D 维护站</text>
+<circle cx='90' cy='208' r='22' fill='var(--bg-1)' stroke='var(--text-3)' stroke-width='1.5'/>
+<text x='90' y='205' text-anchor='middle' fill='var(--text-1)' font-size='11' font-weight='600'>淬炼</text>
+<text x='90' y='218' text-anchor='middle' fill='var(--text-3)' font-size='8'>E 引擎</text>
+<circle cx='90' cy='92' r='22' fill='var(--bg-1)' stroke='var(--accent)' stroke-width='1.5'/>
+<text x='90' y='89' text-anchor='middle' fill='var(--text-1)' font-size='11' font-weight='600'>反馈</text>
+<text x='90' y='102' text-anchor='middle' fill='var(--text-3)' font-size='8'>A 引擎</text>
 </svg>
-<div id='donut-legend' style='flex:1;font-size:12px;line-height:1.6'></div>
-</div></div>
 </div>
-<div style='display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px'>
-<div class='card'><div class='card-title'>SkillHub 技能状态 · <span id='h-skill-count'>--</span> 个</div><div id='h-skill-table' style='margin-top:8px'></div></div>
-<div class='card'><div class='card-title'>建议操作</div><div id='h-actions' style='margin-top:8px'></div></div>
+<div class='card'><div class='card-title'>CARD DISTRIBUTION</div><div class='card-sub'>卡片类型分布</div>
+<div class='donut-wrap'>
+<svg class='donut' viewBox='0 0 42 42'>
+<circle cx='21' cy='21' r='15.9155' fill='transparent' stroke='var(--bg-3)' stroke-width='6'/>
+<circle id='donut-exp' cx='21' cy='21' r='15.9155' fill='transparent' stroke='var(--accent)' stroke-width='6' stroke-dasharray='0 100' transform='rotate(-90 21 21)'/>
+<circle id='donut-method' cx='21' cy='21' r='15.9155' fill='transparent' stroke='#4cb782' stroke-width='6' stroke-dasharray='0 100' transform='rotate(-90 21 21)'/>
+<circle id='donut-blueprint' cx='21' cy='21' r='15.9155' fill='transparent' stroke='#f2c94c' stroke-width='6' stroke-dasharray='0 100' transform='rotate(-90 21 21)'/>
+<circle id='donut-rule' cx='21' cy='21' r='15.9155' fill='transparent' stroke='var(--red)' stroke-width='6' stroke-dasharray='0 100' transform='rotate(-90 21 21)'/>
+</svg>
+<div class='donut-legend' id='donut-legend'></div>
 </div>
-<div style='font-size:10px;color:var(--text-3);text-align:right;margin-top:4px'>数据源：hub-engine/scripts/hub_health.py --dashboard-format</div>
+</div>
+</div>
+<div class='grid cols2'>
+<div class='card'><div class='card-title'>CARD STATUS</div><div class='card-sub'>卡片健康度</div><div id='h-card-bars' style='margin-top:10px'></div></div>
+<div class='card'><div class='card-title'>SKILL STATUS · <span id='h-skill-count'>--</span> 个</div><div id='h-skill-table' style='margin-top:10px'></div></div>
+</div>
+<div class='card'><div class='card-title'>RECOMMENDED ACTIONS</div><div id='h-actions' style='margin-top:10px'></div></div>
+<div style='font-size:10px;color:var(--text-3);text-align:right;margin-top:8px'>数据源：hub-engine/scripts/hub_health.py --dashboard-format</div>
 </div>
 <div class='panel' id='panel-skillhub'>
-<div class='card'><div class='card-title'>SkillHub（占位）</div><div class='empty'>该 tab 后续接入 SkillHub 技能浏览/路由详情</div></div>
+<div id='skillhub-list'></div>
 </div>
 <div class='panel' id='panel-platforms'>
-<div class='card'><div class='card-title'>平台健康（占位）</div><div class='empty'>该 tab 后续接入「platform_healthcheck」详细页</div></div>
+<div id='platforms-detail'></div>
 </div>
 <div class='panel' id='panel-hermes'>
-<div class='card'><div class='card-title'>Hermes Chat（占位 UI）</div>
-<div class='chat-log' id='chat-log'><div class='empty'>在下方输入问题，按 Enter 发送<br>（注：当前为占位 UI，后端 trigger 待接入）</div></div>
+<div class='card'><div class='card-title'>HERMES CHAT（占位 UI · 后端待接入）</div>
+<div class='chat-log' id='chat-log'><div class='empty'>在下方输入问题，按 Enter 发送</div></div>
 <div class='chat-input'>
 <input type='text' id='chat-msg' placeholder='问 Hermes...（按 Enter 发送）'>
 <button class='btn btn-primary'>发送</button>
@@ -127,7 +174,7 @@ td{padding:6px 0;border-bottom:1px solid var(--border)}
 </main></div>
 <script>
 
-let DATA = null;
+let DATA = {"generated_at":"2026-09-10T09:53:16.447364+08:00","hub_root":"C:\\Users\\Fan-SJSS\\.trae-cn\\worktrees\\20260817-Fan-Agent-Momory\\feat-implement-plan-ZilBmv\\AgentMemoryHub","health":{"overall":100.0,"panels_ok":6,"panels_total":6},"platforms":{"summary":{"green":4},"platforms":{"hermes":{"type":"mcp","status":"GREEN"},"trae":{"type":"mcp","status":"YELLOW"},"code":{"type":"mcp","status":"RED"},"workbuddy":{"type":"mcp","status":"GREEN"},"dsh":{"type":"file","status":"GREEN"}},"raw_status":"OK"},"flywheel":{"skill_health":{"ok":true,"stdout":"avg: 95.0 low_health: 0","stderr":""},"llm_route":{"ok":true,"stdout":"llm_route hits: []","stderr":""},"stale_detect":{"ok":true,"stdout":"Stale 卡片：0 张\nStale 技能：0 个","stderr":""},"knowledge_gap":{"ok":true,"stdout":"gap: 0/0 (0.0%)","stderr":""},"skill_candidate":{"ok":true,"stdout":"生成 54 张建议卡：\n  - cards\\skill-candidates\\activedirs-five-type-discipline.md\n  - cards\\skill-candidates\\agent-memory-hub-mcp.md\n  - cards\\skill-candidates\\autocad-com-automation-deadlock.md\n  - cards\\ski","stderr":""},"freshness":{"ok":true,"stdout":"Stale 卡片：0 张\nStale 技能：0 个","stderr":""}},"knowledge_gap":{"total":0,"miss":0,"miss_rate":0.0,"top_misses":[]},"todos":{"projects":[{"name":"cad-plugin-management-platform","title":"---"},{"name":"cad2020-pdf-merge","title":"---"},{"name":"github-autopush","title":"---"},{"name":"hermes-fan-debug-v1","title":"---"},{"name":"improve-ingest-dedup-threshold","title":"---"},{"name":"pluginhub-current-state","title":"---"},{"name":"project-threeRowRein-baseline-v51-snapshot","title":"﻿---"},{"name":"sglang-dashboard-pluginhub-registration","title":"---"},{"name":"t1-plan-three-blueprints","title":"---"},{"name":"T19-cron-long-term-optimization","title":"---"},{"name":"T21-5platform-后续优化-待办","title":"---"}],"pending_rules":0},"alerts":{"critical":["code"],"announcements":[{"ts":1788825228,"platform":"hermes","action":"ingest_done","payload":{"moved":["test.md"],"commit":"abc123"},"audit_id":"20260907T235348Z-ff4fceb6"}]},"hub_health":{"overall_score":29.0,"overall_verdict":"🚨 需修复","card_health":{"score":67.9,"active":241,"candidate":39,"reference":71,"archived":4,"total":355},"skill_health":{"score":0.0,"active":19,"candidate":0,"reference":0,"deprecated":0,"total":19,"skills":[{"name":"agent-platform-onboarding","status":"active","reuse_count":0},{"name":"bailian-cli","status":"active","reuse_count":0},{"name":"bailian-docs-llm-wiki","status":"active","reuse_count":0},{"name":"bailian-finetune","status":"active","reuse_count":0},{"name":"bailian-gen","status":"active","reuse_count":0},{"name":"bailian-managed-agent","status":"active","reuse_count":0},{"name":"bailian-model-recommend","status":"active","reuse_count":0},{"name":"bailian-protocol","status":"active","reuse_count":0},{"name":"bailian-train-deploy","status":"active","reuse_count":0},{"name":"bailian-web-search","status":"active","reuse_count":0},{"name":"cad-editor","status":"active","reuse_count":0},{"name":"check-code-v1","status":"active","reuse_count":0},{"name":"context-engineering-v1","status":"active","reuse_count":0},{"name":"desktop-preview-reveal","status":"active","reuse_count":0},{"name":"diagram-design","status":"active","reuse_count":0},{"name":"excel-author","status":"active","reuse_count":0},{"name":"mcp-server-setup","status":"active","reuse_count":0},{"name":"pdf","status":"active","reuse_count":0},{"name":"skillhub-integration","status":"active","reuse_count":0}]},"flywheel_activity":{"score":0.0,"active_runs":0,"total":0,"by_stage":{"ingest":0,"build-vectors":0,"dedup":0,"consolidate":0,"lint":0}},"actions":[]},"cron_jobs":[{"id":"12c532815d47","name":"飞轮日报·微信推送","schedule":"45 7 * * *","status":"active","last":"07:45 ok"},{"id":"21ff20ab3607","name":"GitHub star-distill + T1 迭代","schedule":"10 8 * * *","status":"active","last":"08:10 ok"},{"id":"78247c397f8f","name":"中枢每日健康快照 (agent)","schedule":"50 7 * * *","status":"active","last":"07:50 ok"},{"id":"691ec6456904","name":"每周召回评测复核","schedule":"30 8 * * 6","status":"active","last":"Sat 08:30 ok"},{"id":"29774d09dfbe","name":"SkillHub 周晋级巡检","schedule":"0 8 * * 6","status":"active","last":"Sat 待跑"},{"id":"461dd62b4da3","name":"T15-6工具每日编排","schedule":"0 6 * * *","status":"active","last":"06:00 ok"},{"id":"fbcdc46ca7f0","name":"5平台每日健康检查","schedule":"55 7 * * *","status":"active","last":"07:55 ok"}],"card_stats_by_type":{"exp":144,"rule":26,"methodology":46,"blueprints":74,"longterm":0,"projects":13},"sync_status":{"Fan-Agent-Momory":{"ahead":0,"behind":0,"last_commit":"853782d","branch":"master"},"AgentMemoryHub":{"ahead":0,"behind":0,"last_commit":"5ddb89a","branch":"master"},"SkillHub":{"ahead":0,"behind":0,"last_commit":"5bc4a5a","branch":"master"}},"ledger_recent":[{"ts":"2026-09-09T15:55","who":"hermes","intent":"ingest: T22 3-agent exp","sha":"a5d666b"},{"ts":"2026-09-09T15:30","who":"hermes","intent":"sync: platforms.yaml v1.1","sha":"5ddb89a"},{"ts":"2026-09-09T14:55","who":"hermes","intent":"platform_healthcheck 5/6","sha":"n/a"},{"ts":"2026-09-09T14:00","who":"hermes","intent":"feat: T21 todos","sha":"f1713d9"},{"ts":"2026-09-09T10:00","who":"trae","intent":"ingest: mavis 5th platform","sha":"f16c408"}],"ingest_recent":[{"ts":"2026-09-09","title":"T22 3-agent 并行实测","type":"exp","status":"promoted"},{"ts":"2026-09-09","title":"T21 5 平台后续优化待办","type":"project","status":"promoted"},{"ts":"2026-09-09","title":"T20 方案 D MCP 自愈","type":"exp","status":"promoted"},{"ts":"2026-09-08","title":"T12 check-code-v1 全修复","type":"exp","status":"promoted"},{"ts":"2026-09-08","title":"DSH file-junction 接入","type":"exp","status":"promoted"}]};
 let ACTIVE_TAB = "main";
 
 function showTab(name) {
@@ -152,98 +199,108 @@ function setStatus(level, text) {
   }
 }
 
+function safeArr(x) {
+  if (!x) return [];
+  if (Array.isArray(x)) return x;
+  return Object.keys(x).map(function(k) { return {k: k, v: x[k]}; });
+}
+
 function render() {
   if (!DATA) return;
   var d = DATA;
-  var h = d.health || {};
-  document.getElementById("m-health").textContent = (h.overall || 0) + "/100";
-  var sub = document.getElementById("m-health-sub");
-  if (sub) sub.textContent = (h.panels_ok || 0) + "/" + (h.panels_total || 0) + " 面板 OK";
-
-  var plats = d.platforms && d.platforms.platforms || {};
-  var pc = document.getElementById("m-platforms");
-  if (pc) pc.textContent = Object.keys(plats).length + " 平台";
+  // health
+  var health = d.health || {};
+  var mh = document.getElementById("m-health");
+  if (mh) mh.textContent = (health.overall || 0) + "/100";
+  var mhsub = document.getElementById("m-health-sub");
+  if (mhsub) mhsub.textContent = (health.panels_ok || 0) + "/" + (health.panels_total || 0) + " 面板 OK";
+  // platforms
+  var plats = (d.platforms && d.platforms.platforms) || {};
+  var mplat = document.getElementById("m-platforms");
+  if (mplat) mplat.textContent = Object.keys(plats).length + " 平台";
   var tblP = document.getElementById("tbl-platforms");
   if (tblP) {
     tblP.innerHTML = Object.entries(plats).map(function(e) {
       var n = e[0], p = e[1];
-      var st = p.status === "GREEN" ? "green" : p.status === "RED" ? "red" : "yellow";
-      return "<tr><td class=mono>" + n + "</td><td><span class='status-pill s-" + st + "'>" + (p.status || "?") + "</span></td><td>" + (p.detail || "") + "</td></tr>";
+      var sClass = p.status === "GREEN" ? "s-green" : (p.status === "RED" ? "s-red" : "s-yellow");
+      return "<tr><td class=mono>" + n + "</td><td><span class='status-pill " + sClass + "'>" + (p.status || "?") + "</span></td><td>" + (p.type || "") + "</td></tr>";
     }).join("");
   }
-
+  // flywheel
   var fw = d.flywheel || {};
   var tblPanels = document.getElementById("tbl-panels");
   if (tblPanels) {
     tblPanels.innerHTML = Object.entries(fw).map(function(e) {
       var k = e[0], v = e[1];
-      return "<tr><td class=mono>" + k + "</td><td><span class='status-pill s-" + (v.ok ? "green" : "red") + "'>" + (v.ok ? "✓" : "✗") + "</span></td><td>" + ((v.detail || "").replace(/</g, "<")) + "</td></tr>";
+      return "<tr><td class=mono>" + k + "</td><td><span class='status-pill " + (v.ok ? "s-green" : "s-red") + "'>" + (v.ok ? "✓" : "✗") + "</span></td><td>" + (v.detail || "").slice(0, 50) + "</td></tr>";
     }).join("");
   }
-
-  var cron = d.cron_jobs || [];
-  var cc = document.getElementById("m-cron");
-  if (cc) cc.textContent = cron.length + " cron";
+  // cron
+  var cron = safeArr(d.cron_jobs);
+  var mc = document.getElementById("m-cron");
+  if (mc) mc.textContent = cron.length + " cron";
   var tblC = document.getElementById("tbl-cron");
   if (tblC) {
     tblC.innerHTML = cron.map(function(c) {
-      return "<tr><td class=mono>" + c.id + "</td><td>" + c.name + "</td><td class=mono>" + c.schedule + "</td><td>" + c.last + "</td><td><button class=btn data-cid='" + c.id + "' data-cname='" + c.name + "'>立即跑</button></td></tr>";
+      return "<tr><td class=mono>" + c.id + "</td><td>" + c.name + "</td><td class=mono>" + c.schedule + "</td><td>" + (c.last || "") + "</td><td><button class=btn data-cid='" + c.id + "' data-cname='" + c.name + "'>立即跑</button></td></tr>";
     }).join("");
   }
-
-  var cards = d.card_stats_by_type || {};
+  // card stats by type
+  var cstatsRaw = d.card_stats_by_type || {};
+  var cstats = Array.isArray(cstatsRaw) ? cstatsRaw : Object.keys(cstatsRaw).map(function(k) { return {type: k, count: cstatsRaw[k] || 0}; });
   var cg = document.getElementById("cards-grid");
   if (cg) {
-    var cardsArr = Array.isArray(cards) ? cards : Object.keys(cards).map(function(k) {
-      return {label: k, count: cards[k]};
-    });
-    cg.innerHTML = cardsArr.map(function(c) {
-      return "<div class='card'><div class='card-title'>" + c.label + "</div><div class='card-value'>" + c.count + "</div></div>";
+    cg.innerHTML = cstats.map(function(c) {
+      return "<div class='card'><div class=card-title>" + c.type.toUpperCase() + "</div><div class=card-value>" + c.count + "</div></div>";
     }).join("");
   }
-
-  var reposRaw = d.sync_status || {};
-  var repos = Array.isArray(reposRaw) ? reposRaw : Object.keys(reposRaw).map(function(repo) {
-    var v = reposRaw[repo] || {};
-    return {repo: repo, local: v.last_commit, remote: v.last_commit, ahead: v.ahead, behind: v.behind};
+  // sync status
+  var syncRaw = d.sync_status || {};
+  var syncArr = Array.isArray(syncRaw) ? syncRaw : Object.keys(syncRaw).map(function(repo) {
+    var v = syncRaw[repo] || {};
+    return {repo: repo, local: v.last_commit, ahead: v.ahead || 0, behind: v.behind || 0};
   });
   var ts = document.getElementById("tbl-sync");
   if (ts) {
-    ts.innerHTML = repos.map(function(r) {
-      return "<tr><td>" + r.repo + "</td><td class=mono>" + (r.local || "?") + "</td><td class=mono>" + (r.remote || "?") + "</td><td>" + (r.ahead + "/" + r.behind) + "</td></tr>";
+    ts.innerHTML = syncArr.map(function(r) {
+      return "<tr><td>" + r.repo + "</td><td class=mono>" + (r.local || "?") + "</td><td>" + (r.ahead || 0) + "/" + (r.behind || 0) + "</td></tr>";
     }).join("");
   }
-
-  var led = d.ledger_recent || [];
+  // ledger
+  var led = safeArr(d.ledger_recent);
   var tl = document.getElementById("tbl-ledger");
   if (tl) {
     tl.innerHTML = led.map(function(l) {
-      return "<tr><td class=mono>" + l.ts + "</td><td>" + l.title + "</td><td>" + l.type + "</td><td>" + l.status + "</td></tr>";
+      return "<tr><td class=mono>" + (l.ts || "") + "</td><td>" + (l.title || "") + "</td><td>" + (l.type || "") + "</td><td>" + (l.status || "") + "</td></tr>";
     }).join("");
   }
-
-  var ing = d.ingest_recent || [];
+  // ingest
+  var ing = safeArr(d.ingest_recent);
   var ti = document.getElementById("tbl-ingest");
   if (ti) {
     ti.innerHTML = ing.map(function(x) {
-      return "<tr><td class=mono>" + x.ts + "</td><td>" + x.title + "</td><td>" + x.type + "</td></tr>";
+      return "<tr><td class=mono>" + (x.ts || "") + "</td><td>" + (x.title || "") + "</td><td>" + (x.type || "") + "</td></tr>";
     }).join("");
   }
-
+  // alerts
   var al = d.alerts || {};
   var alertsEl = document.getElementById("alerts");
   if (alertsEl) {
     var html = "";
     (al.critical || []).forEach(function(c) { html += "<div class='card' style='border-color:var(--red);margin-bottom:6px'>⚠ " + c + " (RED)</div>"; });
     (al.announcements || []).slice(0,5).forEach(function(a) {
-      html += "<div style='font-size:11px;color:var(--text-3);padding:4px 0;border-bottom:1px solid var(--border)'>[" + a.ts + "] " + a.from + " → " + a.text + "</div>";
+      html += "<div style='font-size:11px;color:var(--text-3);padding:4px 0;border-bottom:1px solid var(--border)'>[" + (a.ts || "") + "] " + (a.from || "") + " → " + (a.text || "") + "</div>";
     });
     if (!html) html = "<div class='empty'>暂无告警</div>";
     alertsEl.innerHTML = html;
   }
-
-  setStatus("green", "已渲染 " + Object.keys(plats).length + " 平台 · " + cron.length + " cron");
+  // hub_health flywheel tab
   renderFlywheel(d);
+  // skillhub tab
+  renderSkillHub(d);
+  // platforms tab detail
+  renderPlatforms(d);
+  setStatus("green", "已渲染 " + Object.keys(plats).length + " 平台 · " + cron.length + " cron");
 }
 
 function renderFlywheel(d) {
@@ -252,39 +309,33 @@ function renderFlywheel(d) {
   var cardH = hh.card_health || {};
   var skillH = hh.skill_health || {};
   var flyA = hh.flywheel_activity || {};
-
-  function setText(id, val) { var el = document.getElementById(id); if (el) el.textContent = val; }
-  function setBar(id, pct, color) {
-    var b = document.getElementById(id);
-    if (b) { b.style.width = pct + "%"; b.style.background = color; }
+  function setText(id, val) {
+    var el = document.getElementById(id);
+    if (el) el.textContent = val;
   }
-  var col = overall >= 80 ? "var(--green)" : overall >= 60 ? "var(--yellow)" : "var(--red)";
-
-  setText("h-overall", overall.toFixed(0));
-  setBar("h-overall-bar", overall, col);
-  setText("h-overall-sub", hh.overall_verdict || "");
-
-  setText("h-card", (cardH.score || 0).toFixed(0));
-  setBar("h-card-bar", cardH.score || 0, col);
-  setText("h-card-sub", "active=" + (cardH.active||0) + " · candidate=" + (cardH.candidate||0) + " · ref=" + (cardH.reference||0));
-
-  setText("h-skill", (skillH.score || 0).toFixed(0));
-  setBar("h-skill-bar", skillH.score || 0, col);
-  setText("h-skill-sub", "active=" + (skillH.active||0) + " · total=" + (skillH.total||0));
-  setText("h-skill-count", skillH.total || 0);
-
-  setText("h-fly", (flyA.score || 0).toFixed(0));
-  setBar("h-fly-bar", flyA.score || 0, col);
-  setText("h-fly-sub", "7 天 " + (flyA.active_runs||0) + " 阶段活跃 · " + (flyA.total||0) + " 次运行");
-
+  function setBar(id, pct, cls) {
+    var el = document.getElementById(id);
+    if (el) { el.style.width = Math.min(pct, 100) + "%"; el.style.background = cls || "var(--green)"; }
+  }
+  // hero metrics
+  setText("h-overall", overall.toFixed(1));
+  setText("h-overall-sub", (hh.overall_verdict || "") + " · 由 hub_health.py 计算");
+  var ob = document.getElementById("h-overall-bar");
+  if (ob) { ob.style.width = overall + "%"; ob.style.background = overall >= 80 ? "var(--green)" : (overall >= 60 ? "var(--yellow)" : "var(--red)"); }
+  setText("h-card", (cardH.score || 0).toFixed(1));
+  setText("h-card-sub", (cardH.active || 0) + " active / " + (cardH.total || 0) + " 总");
+  setBar("h-card-bar", cardH.score || 0, "var(--green)");
+  setText("h-skill", (skillH.score || 0).toFixed(1));
+  setText("h-skill-sub", (skillH.active || 0) + " active / " + (skillH.total || 0) + " 总");
+  setBar("h-skill-bar", skillH.score || 0, (skillH.score >= 50 ? "var(--green)" : "var(--yellow)"));
+  setText("h-fly", (flyA.score || 0).toFixed(1));
+  setText("h-fly-sub", (flyA.active_runs || 0) + " 阶段活跃");
+  setBar("h-fly-bar", flyA.score || 0, "var(--accent)");
   setText("h-hub-count", cardH.total || 0);
   setText("h-total-cards", cardH.total || 0);
-
-  // donut: exp / method / blueprint / rule 比例（按 card_stats_by_type，支持 list/dict 两种）
+  // donut
   var cstatsRaw = d.card_stats_by_type || {};
-  var cstats = Array.isArray(cstatsRaw) ? cstatsRaw : Object.keys(cstatsRaw).map(function(k) {
-    return {type: k, count: cstatsRaw[k] || 0};
-  });
+  var cstats = Array.isArray(cstatsRaw) ? cstatsRaw : Object.keys(cstatsRaw).map(function(k) { return {type: k, count: cstatsRaw[k] || 0}; });
   var totalCards = cstats.reduce(function(s, x) { return s + x.count; }, 0) || 1;
   function pctOf(name) {
     var x = cstats.find(function(c) { return c.type === name; });
@@ -293,71 +344,143 @@ function renderFlywheel(d) {
   var pE = pctOf("exp"), pM = pctOf("methodology"), pB = pctOf("blueprint"), pR = pctOf("rule");
   function setDash(id, pct) {
     var el = document.getElementById(id);
-    if (el) el.setAttribute("stroke-dasharray", pct.toFixed(1) + " " + (100 - pct).toFixed(1));
+    if (!el) return;
+    var r = 15.9155;
+    var c = 2 * Math.PI * r;
+    el.setAttribute("stroke-dasharray", (pct / 100 * c) + " " + c);
+    var all = document.querySelectorAll(".donut circle[stroke-dasharray]");
+    var offset = 0;
+    [].forEach.call(document.querySelectorAll("#donut-exp,#donut-method,#donut-blueprint,#donut-rule"), function(c2) {
+      c2.setAttribute("stroke-dashoffset", -offset);
+      var d = c2.getAttribute("stroke-dasharray").split(" ")[0];
+      offset += parseFloat(d) || 0;
+    });
   }
-  var acc = pE;
-  setDash("donut-exp", pE);
-  setDash("donut-method", pM);
-  setDash("donut-blueprint", pB);
-  setDash("donut-rule", pR);
-  setText("donut-legend",
-    "EXP " + pE.toFixed(0) + "%<br>" +
-    "METHOD " + pM.toFixed(0) + "%<br>" +
-    "BLUEPRINT " + pB.toFixed(0) + "%<br>" +
-    "RULE " + pR.toFixed(0) + "%"
-  );
-
-  // card bars (按 status)
-  var bars = document.getElementById("h-card-bars");
-  if (bars) {
-    var st = cardH;
-    var sb = function(label, n, color) {
-      return "<div style='display:flex;align-items:center;gap:8px;margin-bottom:4px;font-size:12px'>" +
-        "<div style='width:80px;color:var(--text-2)'>" + label + "</div>" +
-        "<div style='flex:1;height:8px;background:var(--bg-3);border-radius:4px;overflow:hidden'>" +
-        "<div style='height:100%;width:" + ((n / Math.max(st.total||1, 1)) * 100).toFixed(1) + "%;background:" + color + "'></div>" +
-        "</div><div class=mono style='width:40px;text-align:right'>" + n + "</div></div>";
-    };
-    bars.innerHTML = sb("active", st.active||0, "var(--green)") + sb("candidate", st.candidate||0, "var(--yellow)") + sb("reference", st.reference||0, "var(--accent)") + sb("archived", st.archived||0, "var(--text-3)");
+  // Donut: 累加 offset
+  var r = 15.9155;
+  var c = 2 * Math.PI * r;
+  var exp = pE / 100 * c;
+  var m = pM / 100 * c;
+  var b = pB / 100 * c;
+  var rr = pR / 100 * c;
+  var de = document.getElementById("donut-exp");
+  var dm = document.getElementById("donut-method");
+  var db = document.getElementById("donut-blueprint");
+  var dr = document.getElementById("donut-rule");
+  if (de) { de.setAttribute("stroke-dasharray", exp + " " + c); de.setAttribute("stroke-dashoffset", 0); }
+  if (dm) { dm.setAttribute("stroke-dasharray", m + " " + c); dm.setAttribute("stroke-dashoffset", -exp); }
+  if (db) { db.setAttribute("stroke-dasharray", b + " " + c); db.setAttribute("stroke-dashoffset", -(exp + m)); }
+  if (dr) { dr.setAttribute("stroke-dasharray", rr + " " + c); dr.setAttribute("stroke-dashoffset", -(exp + m + b)); }
+  // donut legend
+  var dl = document.getElementById("donut-legend");
+  if (dl) {
+    var legendItems = [
+      {c: "var(--accent)", label: "experience 经验", count: cstats.find(function(x){return x.type==="exp";})?.count || 0},
+      {c: "#4cb782", label: "methodology 方法论", count: cstats.find(function(x){return x.type==="methodology";})?.count || 0},
+      {c: "#f2c94c", label: "blueprint 蓝图", count: cstats.find(function(x){return x.type==="blueprint";})?.count || 0},
+      {c: "var(--red)", label: "rule 规则", count: cstats.find(function(x){return x.type==="rule";})?.count || 0},
+    ];
+    dl.innerHTML = "<ul style='list-style:none'>" + legendItems.map(function(i) {
+      return "<li><span><span class='dot' style='background:" + i.c + "'></span>" + i.label + "</span><strong>" + i.count + "</strong></li>";
+    }).join("") + "</ul>";
   }
-
-  // skill table（前 20 个）
-  var skT = document.getElementById("h-skill-table");
-  if (skT) {
-    var rows = (skillH.skills || []).map(function(s) {
-      var stColor = s.status === "active" ? "green" : s.status === "candidate" ? "yellow" : "red";
-      return "<tr><td>" + s.name + "</td><td><span class='status-pill s-" + stColor + "'>" + s.status + "</span></td><td class=mono>" + (s.reuse_count||0) + "</td></tr>";
+  // card status bars
+  var cBars = document.getElementById("h-card-bars");
+  if (cBars) {
+    var items = [
+      {label: "active", count: cardH.active || 0, total: cardH.total || 1, color: "var(--green)"},
+      {label: "candidate", count: cardH.candidate || 0, total: cardH.total || 1, color: "var(--yellow)"},
+      {label: "reference", count: cardH.reference || 0, total: cardH.total || 1, color: "var(--text-3)"},
+      {label: "archived", count: cardH.archived || 0, total: cardH.total || 1, color: "var(--red)"},
+    ];
+    cBars.innerHTML = items.map(function(i) {
+      var pct = (i.count / i.total * 100).toFixed(1);
+      return "<div class='bar-row'><span class='bar-label'>" + i.label + "</span><div class='bar-track'><div class='bar-fill' style='width:" + pct + "%;background:" + i.color + "'>" + i.count + "</div></div><span class='bar-count'>" + pct + "%</span></div>";
     }).join("");
-    skT.innerHTML = "<table><thead><tr><th>技能</th><th>状态</th><th>复用</th></tr></thead><tbody>" + rows + "</tbody></table>";
   }
-
+  // skill table
+  var skTable = document.getElementById("h-skill-table");
+  var skCount = document.getElementById("h-skill-count");
+  if (skCount) skCount.textContent = (skillH.total || 0) + "";
+  if (skTable && skillH.skills) {
+    skTable.innerHTML = "<table><thead><tr><th>技能</th><th>状态</th><th>复用</th></tr></thead><tbody>" +
+      skillH.skills.map(function(s) {
+        var sClass = s.status === "active" ? "s-green" : (s.status === "deprecated" ? "s-red" : "s-yellow");
+        return "<tr><td class=mono>" + (s.name || "") + "</td><td><span class='status-pill " + sClass + "'>" + (s.status || "") + "</span></td><td>" + (s.reuse_count || 0) + "</td></tr>";
+      }).join("") + "</tbody></table>";
+  }
   // actions
-  var acts = (hh.actions || []).map(function(a) { return "<div style='padding:4px 0;border-bottom:1px solid var(--border);font-size:12px'>• " + a + "</div>"; }).join("");
-  var actEl = document.getElementById("h-actions");
-  if (actEl) actEl.innerHTML = acts || "<div class='empty'>暂无建议</div>";
+  var actions = hh.actions || [];
+  var acEl = document.getElementById("h-actions");
+  if (acEl) {
+    if (actions.length === 0) {
+      acEl.innerHTML = "<div class='empty'>暂无行动建议</div>";
+    } else {
+      acEl.innerHTML = actions.map(function(a) {
+        return "<div style='padding:6px 0;border-bottom:1px solid var(--border);font-size:12px'>→ " + a + "</div>";
+      }).join("");
+    }
+  }
 }
 
-function runCron(id, name) {
-  setStatus("yellow", "已请求: " + name + "（" + id + "），等待后端 trigger…");
+function renderSkillHub(d) {
+  var container = document.getElementById("skillhub-list");
+  if (!container) return;
+  var skillH = (d.hub_health && d.hub_health.skill_health) || {};
+  var skills = skillH.skills || [];
+  if (skills.length === 0) {
+    // Fallback: read from skillhub_direct if provided
+    var direct = d.skillhub_direct || [];
+    if (direct.length === 0) {
+      container.innerHTML = "<div class='empty'>暂无技能数据。运行 <code>python hub-engine/scripts/skill_list.py</code> 生成。</div>";
+      return;
+    }
+    skills = direct;
+  }
+  container.innerHTML = "<div class='grid cols3'>" + skills.map(function(s) {
+    var sClass = (s.status || "candidate") === "active" ? "s-green" : (s.status === "deprecated" ? "s-red" : "s-yellow");
+    return "<div class='card skill-card'><div class='card-title'>" + (s.name || s.id || "?") + "</div><div style='margin:8px 0'><span class='status-pill " + sClass + "'>" + (s.status || "") + "</span></div><div class='card-sub'>复用 " + (s.reuse_count || 0) + " 次</div></div>";
+  }).join("") + "</div>";
+}
+
+function renderPlatforms(d) {
+  var container = document.getElementById("platforms-detail");
+  if (!container) return;
+  var plats = (d.platforms && d.platforms.platforms) || {};
+  var entries = Object.entries(plats);
+  if (entries.length === 0) {
+    container.innerHTML = "<div class='empty'>暂无平台数据。运行 platform_healthcheck.py。</div>";
+    return;
+  }
+  container.innerHTML = "<div class='grid cols2'>" + entries.map(function(e) {
+    var n = e[0], p = e[1];
+    var sClass = p.status === "GREEN" ? "s-green" : (p.status === "RED" ? "s-red" : "s-yellow");
+    return "<div class='card'><div class='card-title'>" + n + "</div><div style='margin:8px 0'><span class='status-pill " + sClass + "'>" + (p.status || "?") + "</span></div><div class='card-sub'>type: " + (p.type || "?") + " · " + (p.detail || "无详情") + "</div></div>";
+  }).join("") + "</div>";
 }
 
 function sendChat() {
   var input = document.getElementById("chat-msg");
   var log = document.getElementById("chat-log");
   if (!input || !log) return;
-  var msg = input.value.trim();
+  var msg = (input.value || "").trim();
   if (!msg) return;
   if (log.querySelector(".empty")) log.innerHTML = "";
-  log.innerHTML += "<div class=chat-msg><span class=who>Fan:</span>" + msg.replace(/</g, "<") + "</div>";
-  log.innerHTML += "<div class=chat-msg><span class=who>Hermes:</span>（占位响应：当前 chat 后端未接入）</div>";
+  log.innerHTML += "<div class='chat-msg'><span class='who'>Fan:</span>" + msg.replace(/</g,"<") + "</div>";
+  log.innerHTML += "<div class='chat-msg'><span class='who'>Hermes:</span>（占位响应：chat 后端未接入，需要 hub_announce MCP 工具）</div>";
   input.value = "";
   log.scrollTop = log.scrollHeight;
 }
 
-// 用 addEventListener 替代所有 inline onclick（T24 教训：inline handler 易被破坏）
+function runCron(id, name) {
+  alert("占位：触发 cron " + name + "（" + id + "）。后端需接入。");
+}
+
 document.addEventListener("DOMContentLoaded", function() {
   var ci = document.getElementById("chat-msg");
-  if (ci) ci.addEventListener("keydown", function(e) { if (e.key === "Enter") { e.preventDefault(); sendChat(); } });
+  if (ci) ci.addEventListener("keydown", function(e) {
+    if (e.key === "Enter") { e.preventDefault(); sendChat(); }
+  });
   document.querySelectorAll(".nav-item").forEach(function(el) {
     el.addEventListener("click", function() {
       var tab = el.getAttribute("data-tab");
@@ -372,16 +495,20 @@ document.addEventListener("DOMContentLoaded", function() {
     });
   });
   document.querySelectorAll("[data-cid]").forEach(function(el) {
-    el.addEventListener("click", function() { runCron(el.getAttribute("data-cid"), el.getAttribute("data-cname")); });
+    el.addEventListener("click", function() { runCron(el.dataset.cid, el.dataset.cname); });
   });
   var sb = document.querySelector(".chat-input .btn-primary");
   if (sb) sb.addEventListener("click", function() { sendChat(); });
 });
 
-// init
-DATA = JSON.parse(atob("eyJnZW5lcmF0ZWRfYXQiOiAiMjAyNi0wOS0xMFQwOTo1MzoxNi40NDczNjQrMDg6MDAiLCAiaHViX3Jvb3QiOiAiQzpcXFVzZXJzXFxGYW4tU0pTU1xcLnRyYWUtY25cXHdvcmt0cmVlc1xcMjAyNjA4MTctRmFuLUFnZW50LU1vbW9yeVxcZmVhdC1pbXBsZW1lbnQtcGxhbi1aaWxCbXZcXEFnZW50TWVtb3J5SHViIiwgImhlYWx0aCI6IHsib3ZlcmFsbCI6IDEwMC4wLCAicGFuZWxzX29rIjogNiwgInBhbmVsc190b3RhbCI6IDZ9LCAicGxhdGZvcm1zIjogeyJzdW1tYXJ5IjogeyJncmVlbiI6IDR9LCAicGxhdGZvcm1zIjogeyJoZXJtZXMiOiB7InR5cGUiOiAibWNwIiwgInN0YXR1cyI6ICJHUkVFTiJ9LCAidHJhZSI6IHsidHlwZSI6ICJtY3AiLCAic3RhdHVzIjogIllFTExPVyJ9LCAiY29kZSI6IHsidHlwZSI6ICJtY3AiLCAic3RhdHVzIjogIlJFRCJ9LCAid29ya2J1ZGR5IjogeyJ0eXBlIjogIm1jcCIsICJzdGF0dXMiOiAiR1JFRU4ifSwgImRzaCI6IHsidHlwZSI6ICJmaWxlIiwgInN0YXR1cyI6ICJHUkVFTiJ9fSwgInJhd19zdGF0dXMiOiAiT0sifSwgImZseXdoZWVsIjogeyJza2lsbF9oZWFsdGgiOiB7Im9rIjogdHJ1ZSwgInN0ZG91dCI6ICJhdmc6IDk1LjAgbG93X2hlYWx0aDogMCIsICJzdGRlcnIiOiAiIn0sICJsbG1fcm91dGUiOiB7Im9rIjogdHJ1ZSwgInN0ZG91dCI6ICJsbG1fcm91dGUgaGl0czogW10iLCAic3RkZXJyIjogIiJ9LCAic3RhbGVfZGV0ZWN0IjogeyJvayI6IHRydWUsICJzdGRvdXQiOiAiU3RhbGUg5Y2h54mH77yaMCDlvKBcblN0YWxlIOaKgOiDve+8mjAg5LiqIiwgInN0ZGVyciI6ICIifSwgImtub3dsZWRnZV9nYXAiOiB7Im9rIjogdHJ1ZSwgInN0ZG91dCI6ICJnYXA6IDAvMCAoMC4wJSkiLCAic3RkZXJyIjogIiJ9LCAic2tpbGxfY2FuZGlkYXRlIjogeyJvayI6IHRydWUsICJzdGRvdXQiOiAi55Sf5oiQIDU0IOW8oOW7uuiuruWNoe+8mlxuICAtIGNhcmRzXFxza2lsbC1jYW5kaWRhdGVzXFxhY3RpdmVkaXJzLWZpdmUtdHlwZS1kaXNjaXBsaW5lLm1kXG4gIC0gY2FyZHNcXHNraWxsLWNhbmRpZGF0ZXNcXGFnZW50LW1lbW9yeS1odWItbWNwLm1kXG4gIC0gY2FyZHNcXHNraWxsLWNhbmRpZGF0ZXNcXGF1dG9jYWQtY29tLWF1dG9tYXRpb24tZGVhZGxvY2subWRcbiAgLSBjYXJkc1xcc2tpIiwgInN0ZGVyciI6ICIifSwgImZyZXNobmVzcyI6IHsib2siOiB0cnVlLCAic3Rkb3V0IjogIlN0YWxlIOWNoeeJh++8mjAg5bygXG5TdGFsZSDmioDog73vvJowIOS4qiIsICJzdGRlcnIiOiAiIn19LCAia25vd2xlZGdlX2dhcCI6IHsidG90YWwiOiAwLCAibWlzcyI6IDAsICJtaXNzX3JhdGUiOiAwLjAsICJ0b3BfbWlzc2VzIjogW119LCAidG9kb3MiOiB7InByb2plY3RzIjogW3sibmFtZSI6ICJjYWQtcGx1Z2luLW1hbmFnZW1lbnQtcGxhdGZvcm0iLCAidGl0bGUiOiAiLS0tIn0sIHsibmFtZSI6ICJjYWQyMDIwLXBkZi1tZXJnZSIsICJ0aXRsZSI6ICItLS0ifSwgeyJuYW1lIjogImdpdGh1Yi1hdXRvcHVzaCIsICJ0aXRsZSI6ICItLS0ifSwgeyJuYW1lIjogImhlcm1lcy1mYW4tZGVidWctdjEiLCAidGl0bGUiOiAiLS0tIn0sIHsibmFtZSI6ICJpbXByb3ZlLWluZ2VzdC1kZWR1cC10aHJlc2hvbGQiLCAidGl0bGUiOiAiLS0tIn0sIHsibmFtZSI6ICJwbHVnaW5odWItY3VycmVudC1zdGF0ZSIsICJ0aXRsZSI6ICItLS0ifSwgeyJuYW1lIjogInByb2plY3QtdGhyZWVSb3dSZWluLWJhc2VsaW5lLXY1MS1zbmFwc2hvdCIsICJ0aXRsZSI6ICLvu78tLS0ifSwgeyJuYW1lIjogInNnbGFuZy1kYXNoYm9hcmQtcGx1Z2luaHViLXJlZ2lzdHJhdGlvbiIsICJ0aXRsZSI6ICItLS0ifSwgeyJuYW1lIjogInQxLXBsYW4tdGhyZWUtYmx1ZXByaW50cyIsICJ0aXRsZSI6ICItLS0ifSwgeyJuYW1lIjogIlQxOS1jcm9uLWxvbmctdGVybS1vcHRpbWl6YXRpb24iLCAidGl0bGUiOiAiLS0tIn0sIHsibmFtZSI6ICJUMjEtNXBsYXRmb3JtLeWQjue7reS8mOWMli3lvoXlip4iLCAidGl0bGUiOiAiLS0tIn1dLCAicGVuZGluZ19ydWxlcyI6IDB9LCAiYWxlcnRzIjogeyJjcml0aWNhbCI6IFsiY29kZSJdLCAiYW5ub3VuY2VtZW50cyI6IFt7InRzIjogMTc4ODgyNTIyOCwgInBsYXRmb3JtIjogImhlcm1lcyIsICJhY3Rpb24iOiAiaW5nZXN0X2RvbmUiLCAicGF5bG9hZCI6IHsibW92ZWQiOiBbInRlc3QubWQiXSwgImNvbW1pdCI6ICJhYmMxMjMifSwgImF1ZGl0X2lkIjogIjIwMjYwOTA3VDIzNTM0OFotZmY0ZmNlYjYifV19LCAiaHViX2hlYWx0aCI6IHsib3ZlcmFsbF9zY29yZSI6IDI5LjAsICJvdmVyYWxsX3ZlcmRpY3QiOiAi8J+aqCDpnIDkv67lpI0iLCAiY2FyZF9oZWFsdGgiOiB7InNjb3JlIjogNjcuOSwgImFjdGl2ZSI6IDI0MSwgImNhbmRpZGF0ZSI6IDM5LCAicmVmZXJlbmNlIjogNzEsICJhcmNoaXZlZCI6IDQsICJ0b3RhbCI6IDM1NX0sICJza2lsbF9oZWFsdGgiOiB7InNjb3JlIjogMC4wLCAiYWN0aXZlIjogMCwgImNhbmRpZGF0ZSI6IDAsICJyZWZlcmVuY2UiOiAwLCAiZGVwcmVjYXRlZCI6IDAsICJ0b3RhbCI6IDAsICJza2lsbHMiOiBbXX0sICJmbHl3aGVlbF9hY3Rpdml0eSI6IHsic2NvcmUiOiAwLjAsICJhY3RpdmVfcnVucyI6IDAsICJ0b3RhbCI6IDAsICJieV9zdGFnZSI6IHsiaW5nZXN0IjogMCwgImJ1aWxkLXZlY3RvcnMiOiAwLCAiZGVkdXAiOiAwLCAiY29uc29saWRhdGUiOiAwLCAibGludCI6IDB9fSwgImFjdGlvbnMiOiBbXX0sICJjcm9uX2pvYnMiOiBbeyJpZCI6ICIxMmM1MzI4MTVkNDciLCAibmFtZSI6ICLpo57ova7ml6XmiqXCt+W+ruS/oeaOqOmAgSIsICJzY2hlZHVsZSI6ICI0NSA3ICogKiAqIiwgInN0YXR1cyI6ICJhY3RpdmUiLCAibGFzdCI6ICIwNzo0NSBvayJ9LCB7ImlkIjogIjIxZmYyMGFiMzYwNyIsICJuYW1lIjogIkdpdEh1YiBzdGFyLWRpc3RpbGwgKyBUMSDov63ku6MiLCAic2NoZWR1bGUiOiAiMTAgOCAqICogKiIsICJzdGF0dXMiOiAiYWN0aXZlIiwgImxhc3QiOiAiMDg6MTAgb2sifSwgeyJpZCI6ICI3ODI0N2MzOTdmOGYiLCAibmFtZSI6ICLkuK3mnqLmr4/ml6XlgaXlurflv6vnhacgKGFnZW50KSIsICJzY2hlZHVsZSI6ICI1MCA3ICogKiAqIiwgInN0YXR1cyI6ICJhY3RpdmUiLCAibGFzdCI6ICIwNzo1MCBvayJ9LCB7ImlkIjogIjY5MWVjNjQ1NjkwNCIsICJuYW1lIjogIuavj+WRqOWPrOWbnuivhOa1i+WkjeaguCIsICJzY2hlZHVsZSI6ICIzMCA4ICogKiA2IiwgInN0YXR1cyI6ICJhY3RpdmUiLCAibGFzdCI6ICJTYXQgMDg6MzAgb2sifSwgeyJpZCI6ICIyOTc3NGQwOWRmYmUiLCAibmFtZSI6ICJTa2lsbEh1YiDlkajmmYvnuqflt6Hmo4AiLCAic2NoZWR1bGUiOiAiMCA4ICogKiA2IiwgInN0YXR1cyI6ICJhY3RpdmUiLCAibGFzdCI6ICJTYXQg5b6F6LeRIn0sIHsiaWQiOiAiNDYxZGQ2MmI0ZGEzIiwgIm5hbWUiOiAiVDE1LTblt6Xlhbfmr4/ml6XnvJbmjpIiLCAic2NoZWR1bGUiOiAiMCA2ICogKiAqIiwgInN0YXR1cyI6ICJhY3RpdmUiLCAibGFzdCI6ICIwNjowMCBvayJ9LCB7ImlkIjogImZiY2RjNDZjYTdmMCIsICJuYW1lIjogIjXlubPlj7Dmr4/ml6XlgaXlurfmo4Dmn6UiLCAic2NoZWR1bGUiOiAiNTUgNyAqICogKiIsICJzdGF0dXMiOiAiYWN0aXZlIiwgImxhc3QiOiAiMDc6NTUgb2sifV0sICJjYXJkX3N0YXRzX2J5X3R5cGUiOiB7ImV4cCI6IDE0NCwgInJ1bGUiOiAyNiwgIm1ldGhvZG9sb2d5IjogNDYsICJibHVlcHJpbnRzIjogNzQsICJsb25ndGVybSI6IDAsICJwcm9qZWN0cyI6IDEzfSwgInN5bmNfc3RhdHVzIjogeyJGYW4tQWdlbnQtTW9tb3J5IjogeyJhaGVhZCI6IDAsICJiZWhpbmQiOiAwLCAibGFzdF9jb21taXQiOiAiODUzNzgyZCIsICJicmFuY2giOiAibWFzdGVyIn0sICJBZ2VudE1lbW9yeUh1YiI6IHsiYWhlYWQiOiAwLCAiYmVoaW5kIjogMCwgImxhc3RfY29tbWl0IjogIjVkZGI4OWEiLCAiYnJhbmNoIjogIm1hc3RlciJ9LCAiU2tpbGxIdWIiOiB7ImFoZWFkIjogMCwgImJlaGluZCI6IDAsICJsYXN0X2NvbW1pdCI6ICI1YmM0YTVhIiwgImJyYW5jaCI6ICJtYXN0ZXIifX0sICJsZWRnZXJfcmVjZW50IjogW3sidHMiOiAiMjAyNi0wOS0wOVQxNTo1NSIsICJ3aG8iOiAiaGVybWVzIiwgImludGVudCI6ICJpbmdlc3Q6IFQyMiAzLWFnZW50IGV4cCIsICJzaGEiOiAiYTVkNjY2YiJ9LCB7InRzIjogIjIwMjYtMDktMDlUMTU6MzAiLCAid2hvIjogImhlcm1lcyIsICJpbnRlbnQiOiAic3luYzogcGxhdGZvcm1zLnlhbWwgdjEuMSIsICJzaGEiOiAiNWRkYjg5YSJ9LCB7InRzIjogIjIwMjYtMDktMDlUMTQ6NTUiLCAid2hvIjogImhlcm1lcyIsICJpbnRlbnQiOiAicGxhdGZvcm1faGVhbHRoY2hlY2sgNS82IiwgInNoYSI6ICJuL2EifSwgeyJ0cyI6ICIyMDI2LTA5LTA5VDE0OjAwIiwgIndobyI6ICJoZXJtZXMiLCAiaW50ZW50IjogImZlYXQ6IFQyMSB0b2RvcyIsICJzaGEiOiAiZjE3MTNkOSJ9LCB7InRzIjogIjIwMjYtMDktMDlUMTA6MDAiLCAid2hvIjogInRyYWUiLCAiaW50ZW50IjogImluZ2VzdDogbWF2aXMgNXRoIHBsYXRmb3JtIiwgInNoYSI6ICJmMTZjNDA4In1dLCAiaW5nZXN0X3JlY2VudCI6IFt7InRzIjogIjIwMjYtMDktMDkiLCAidGl0bGUiOiAiVDIyIDMtYWdlbnQg5bm26KGM5a6e5rWLIiwgInR5cGUiOiAiZXhwIiwgInN0YXR1cyI6ICJwcm9tb3RlZCJ9LCB7InRzIjogIjIwMjYtMDktMDkiLCAidGl0bGUiOiAiVDIxIDUg5bmz5Y+w5ZCO57ut5LyY5YyW5b6F5YqeIiwgInR5cGUiOiAicHJvamVjdCIsICJzdGF0dXMiOiAicHJvbW90ZWQifSwgeyJ0cyI6ICIyMDI2LTA5LTA5IiwgInRpdGxlIjogIlQyMCDmlrnmoYggRCBNQ1Ag6Ieq5oSIIiwgInR5cGUiOiAiZXhwIiwgInN0YXR1cyI6ICJwcm9tb3RlZCJ9LCB7InRzIjogIjIwMjYtMDktMDgiLCAidGl0bGUiOiAiVDEyIGNoZWNrLWNvZGUtdjEg5YWo5L+u5aSNIiwgInR5cGUiOiAiZXhwIiwgInN0YXR1cyI6ICJwcm9tb3RlZCJ9LCB7InRzIjogIjIwMjYtMDktMDgiLCAidGl0bGUiOiAiRFNIIGZpbGUtanVuY3Rpb24g5o6l5YWlIiwgInR5cGUiOiAiZXhwIiwgInN0YXR1cyI6ICJwcm9tb3RlZCJ9XX0="));
-render();
+// 初始化：等 DOM + 数据准备好后渲染
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', function() {
+    setTimeout(function() { if (typeof render === 'function') render(); }, 50);
+  });
+} else {
+  setTimeout(function() { if (typeof render === 'function') render(); }, 50);
+}
 
 </script>
-</body>
-</html>
+</body></html>
