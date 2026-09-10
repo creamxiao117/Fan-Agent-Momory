@@ -1,4 +1,7 @@
-<!DOCTYPE html>\n<html lang='zh'>\n<head><meta charset='utf-8'><title>中枢总控台 v3</title>\n<style>
+<!DOCTYPE html>
+<html lang='zh'>
+<head><meta charset='utf-8'><title>中枢总控台 v3</title>
+<style>
 :root{--bg-0:#08090a;--bg-1:#0f1011;--bg-2:#191a1b;--bg-3:#222428;--border:rgba(255,255,255,0.08);--border-h:rgba(255,255,255,0.18);--text-1:#f7f8f8;--text-2:#b4b8be;--text-3:#62666d;--accent:#5e6ad2;--accent-h:#7170ff;--green:#4cb782;--yellow:#f2c94c;--red:#f87171}
 *{margin:0;padding:0;box-sizing:border-box}
 html,body{font-family:'Inter',system-ui,-apple-system,sans-serif;font-size:14px;background:var(--bg-0);color:var(--text-1);height:100vh;overflow:hidden}
@@ -38,7 +41,88 @@ td{padding:6px 0;border-bottom:1px solid var(--border)}
 .chat-msg .who{color:var(--accent);margin-right:6px}
 .panel{display:none}
 .panel.active{display:block}
-</style>\n</head>\n<body>\n<div class='app'>\n<nav>\n<div class='nav-item active' data-tab='main'>▦ 总控台</div>\n<div class='nav-item' data-tab='flywheel'>⚙ 飞轮详情</div>\n<div class='nav-item' data-tab='skillhub'>⚡ SkillHub</div>\n<div class='nav-item' data-tab='platforms'>▥ 平台健康</div>\n<div class='nav-item' data-tab='hermes'>💬 Hermes Chat</div>\n</nav>\n<main>\n<header>\n<h1 id='page-title'>总控台</h1>\n<div style='display:flex;gap:6px'>\n<button class='btn' data-action='refresh'>🔄 刷新</button>\n<button class='btn btn-primary' data-action='collect'>⚡ 立即收集</button>\n</div>\n</header>\n<div class='panel active' id='panel-main'>\n<div class='grid'>\n<div class='card' id='c-health'><div class='card-title'>健康度</div><div class='card-value' id='m-health'>--</div><div class='card-sub' id='m-health-sub'>加载中…</div></div>\n<div class='card'><div class='card-title'>平台数</div><div class='card-value' id='m-platforms'>--</div><div class='card-sub'>Agent 平台接入</div></div>\n<div class='card'><div class='card-title'>Cron 数</div><div class='card-value' id='m-cron'>--</div><div class='card-sub'>定时任务</div></div>\n</div>\n<div class='grid-2'>\n<div class='card'><div class='card-title'>平台状态</div><table><tbody id='tbl-platforms'></tbody></table></div>\n<div class='card'><div class='card-title'>飞轮面板</div><table><tbody id='tbl-panels'></tbody></table></div>\n</div>\n<div class='card'><div class='card-title'>Cron 任务</div><table><thead><tr><th>ID</th><th>名称</th><th>调度</th><th>最后</th><th></th></tr></thead><tbody id='tbl-cron'></tbody></table></div>\n<div class='grid' id='cards-grid' style='margin-top:12px'></div>\n<div class='grid-2' style='margin-top:12px'>\n<div class='card'><div class='card-title'>仓库同步</div><table><tbody id='tbl-sync'></tbody></table></div>\n<div class='card'><div class='card-title'>最近 ledger</div><table><tbody id='tbl-ledger'></tbody></table></div>\n</div>\n<div class='card' style='margin-top:12px'><div class='card-title'>最近 ingest</div><table><tbody id='tbl-ingest'></tbody></table></div>\n<div class='card' style='margin-top:12px'><div class='card-title'>关键告警</div><div id='alerts'></div></div>\n</div>\n<div class='panel' id='panel-flywheel'>\n<div style='display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr;gap:12px;margin-bottom:12px'>\n<div class='card' style='background:rgba(94,106,210,0.08);border-color:var(--accent)'><div class='card-title' style='color:var(--accent)'>OVERALL SCORE</div><div id='h-overall' style='font-size:48px;font-weight:500;line-height:1'>--</div><div style='height:6px;background:var(--bg-3);border-radius:3px;overflow:hidden;margin-top:8px'><div id='h-overall-bar' style='height:100%;width:0%'></div></div><div class='card-sub' id='h-overall-sub'>--</div></div>\n<div class='card'><div class='card-title'>卡片健康度</div><div id='h-card' style='font-size:32px;font-weight:500;line-height:1'>--</div><div style='height:6px;background:var(--bg-3);border-radius:3px;overflow:hidden;margin-top:8px'><div id='h-card-bar' style='height:100%;width:0%'></div></div><div class='card-sub' id='h-card-sub'>--</div></div>\n<div class='card'><div class='card-title'>技能健康度</div><div id='h-skill' style='font-size:32px;font-weight:500;line-height:1'>--</div><div style='height:6px;background:var(--bg-3);border-radius:3px;overflow:hidden;margin-top:8px'><div id='h-skill-bar' style='height:100%;width:0%'></div></div><div class='card-sub' id='h-skill-sub'>--</div></div>\n<div class='card'><div class='card-title'>飞轮活跃度</div><div id='h-fly' style='font-size:32px;font-weight:500;line-height:1'>--</div><div style='height:6px;background:var(--bg-3);border-radius:3px;overflow:hidden;margin-top:8px'><div id='h-fly-bar' style='height:100%;width:0%'></div></div><div class='card-sub' id='h-fly-sub'>--</div></div>\n</div>\n<div style='display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px'>\n<div class='card'><div class='card-title'>中枢卡片 · <span id='h-hub-count'>--</span> 张（按状态）</div><div id='h-card-bars' style='margin-top:8px'></div></div>\n<div class='card'><div class='card-title'>卡片类型分布（donut）</div><div style='display:flex;align-items:center;gap:20px;margin-top:8px'>\n<svg width='100' height='100' viewBox='0 0 42 42' style='flex-shrink:0'>\n<circle cx='21' cy='21' r='15.9' fill='transparent' stroke='var(--bg-3)' stroke-width='6'/>\n<circle id='donut-exp' cx='21' cy='21' r='15.9' fill='transparent' stroke='var(--accent)' stroke-width='6' stroke-dasharray='0 100' transform='rotate(-90 21 21)'/>\n<circle id='donut-method' cx='21' cy='21' r='15.9' fill='transparent' stroke='var(--green)' stroke-width='6' stroke-dasharray='0 100' transform='rotate(-90 21 21)'/>\n<circle id='donut-blueprint' cx='21' cy='21' r='15.9' fill='transparent' stroke='var(--yellow)' stroke-width='6' stroke-dasharray='0 100' transform='rotate(-90 21 21)'/>\n<circle id='donut-rule' cx='21' cy='21' r='15.9' fill='transparent' stroke='var(--red)' stroke-width='6' stroke-dasharray='0 100' transform='rotate(-90 21 21)'/>\n</svg>\n<div id='donut-legend' style='flex:1;font-size:12px;line-height:1.6'></div>\n</div></div>\n</div>\n<div style='display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px'>\n<div class='card'><div class='card-title'>SkillHub 技能状态 · <span id='h-skill-count'>--</span> 个</div><div id='h-skill-table' style='margin-top:8px'></div></div>\n<div class='card'><div class='card-title'>建议操作</div><div id='h-actions' style='margin-top:8px'></div></div>\n</div>\n<div style='font-size:10px;color:var(--text-3);text-align:right;margin-top:4px'>数据源：hub-engine/scripts/hub_health.py --dashboard-format</div>\n</div>\n<div class='panel' id='panel-skillhub'>\n<div class='card'><div class='card-title'>SkillHub（占位）</div><div class='empty'>该 tab 后续接入 SkillHub 技能浏览/路由详情</div></div>\n</div>\n<div class='panel' id='panel-platforms'>\n<div class='card'><div class='card-title'>平台健康（占位）</div><div class='empty'>该 tab 后续接入「platform_healthcheck」详细页</div></div>\n</div>\n<div class='panel' id='panel-hermes'>\n<div class='card'><div class='card-title'>Hermes Chat（占位 UI）</div>\n<div class='chat-log' id='chat-log'><div class='empty'>在下方输入问题，按 Enter 发送<br>（注：当前为占位 UI，后端 trigger 待接入）</div></div>\n<div class='chat-input'>\n<input type='text' id='chat-msg' placeholder='问 Hermes...（按 Enter 发送）'>\n<button class='btn btn-primary'>发送</button>\n</div>\n</div>\n</div>\n</main></div>\n<script>\n
+</style>
+</head>
+<body>
+<div class='app'>
+<nav>
+<div class='nav-item active' data-tab='main'>▦ 总控台</div>
+<div class='nav-item' data-tab='flywheel'>⚙ 飞轮详情</div>
+<div class='nav-item' data-tab='skillhub'>⚡ SkillHub</div>
+<div class='nav-item' data-tab='platforms'>▥ 平台健康</div>
+<div class='nav-item' data-tab='hermes'>💬 Hermes Chat</div>
+</nav>
+<main>
+<header>
+<h1 id='page-title'>总控台</h1>
+<div style='display:flex;gap:6px'>
+<button class='btn' data-action='refresh'>🔄 刷新</button>
+<button class='btn btn-primary' data-action='collect'>⚡ 立即收集</button>
+</div>
+</header>
+<div class='panel active' id='panel-main'>
+<div class='grid'>
+<div class='card' id='c-health'><div class='card-title'>健康度</div><div class='card-value' id='m-health'>--</div><div class='card-sub' id='m-health-sub'>加载中…</div></div>
+<div class='card'><div class='card-title'>平台数</div><div class='card-value' id='m-platforms'>--</div><div class='card-sub'>Agent 平台接入</div></div>
+<div class='card'><div class='card-title'>Cron 数</div><div class='card-value' id='m-cron'>--</div><div class='card-sub'>定时任务</div></div>
+</div>
+<div class='grid-2'>
+<div class='card'><div class='card-title'>平台状态</div><table><tbody id='tbl-platforms'></tbody></table></div>
+<div class='card'><div class='card-title'>飞轮面板</div><table><tbody id='tbl-panels'></tbody></table></div>
+</div>
+<div class='card'><div class='card-title'>Cron 任务</div><table><thead><tr><th>ID</th><th>名称</th><th>调度</th><th>最后</th><th></th></tr></thead><tbody id='tbl-cron'></tbody></table></div>
+<div class='grid' id='cards-grid' style='margin-top:12px'></div>
+<div class='grid-2' style='margin-top:12px'>
+<div class='card'><div class='card-title'>仓库同步</div><table><tbody id='tbl-sync'></tbody></table></div>
+<div class='card'><div class='card-title'>最近 ledger</div><table><tbody id='tbl-ledger'></tbody></table></div>
+</div>
+<div class='card' style='margin-top:12px'><div class='card-title'>最近 ingest</div><table><tbody id='tbl-ingest'></tbody></table></div>
+<div class='card' style='margin-top:12px'><div class='card-title'>关键告警</div><div id='alerts'></div></div>
+</div>
+<div class='panel' id='panel-flywheel'>
+<div style='display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr;gap:12px;margin-bottom:12px'>
+<div class='card' style='background:rgba(94,106,210,0.08);border-color:var(--accent)'><div class='card-title' style='color:var(--accent)'>OVERALL SCORE</div><div id='h-overall' style='font-size:48px;font-weight:500;line-height:1'>--</div><div style='height:6px;background:var(--bg-3);border-radius:3px;overflow:hidden;margin-top:8px'><div id='h-overall-bar' style='height:100%;width:0%'></div></div><div class='card-sub' id='h-overall-sub'>--</div></div>
+<div class='card'><div class='card-title'>卡片健康度</div><div id='h-card' style='font-size:32px;font-weight:500;line-height:1'>--</div><div style='height:6px;background:var(--bg-3);border-radius:3px;overflow:hidden;margin-top:8px'><div id='h-card-bar' style='height:100%;width:0%'></div></div><div class='card-sub' id='h-card-sub'>--</div></div>
+<div class='card'><div class='card-title'>技能健康度</div><div id='h-skill' style='font-size:32px;font-weight:500;line-height:1'>--</div><div style='height:6px;background:var(--bg-3);border-radius:3px;overflow:hidden;margin-top:8px'><div id='h-skill-bar' style='height:100%;width:0%'></div></div><div class='card-sub' id='h-skill-sub'>--</div></div>
+<div class='card'><div class='card-title'>飞轮活跃度</div><div id='h-fly' style='font-size:32px;font-weight:500;line-height:1'>--</div><div style='height:6px;background:var(--bg-3);border-radius:3px;overflow:hidden;margin-top:8px'><div id='h-fly-bar' style='height:100%;width:0%'></div></div><div class='card-sub' id='h-fly-sub'>--</div></div>
+</div>
+<div style='display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px'>
+<div class='card'><div class='card-title'>中枢卡片 · <span id='h-hub-count'>--</span> 张（按状态）</div><div id='h-card-bars' style='margin-top:8px'></div></div>
+<div class='card'><div class='card-title'>卡片类型分布（donut）</div><div style='display:flex;align-items:center;gap:20px;margin-top:8px'>
+<svg width='100' height='100' viewBox='0 0 42 42' style='flex-shrink:0'>
+<circle cx='21' cy='21' r='15.9' fill='transparent' stroke='var(--bg-3)' stroke-width='6'/>
+<circle id='donut-exp' cx='21' cy='21' r='15.9' fill='transparent' stroke='var(--accent)' stroke-width='6' stroke-dasharray='0 100' transform='rotate(-90 21 21)'/>
+<circle id='donut-method' cx='21' cy='21' r='15.9' fill='transparent' stroke='var(--green)' stroke-width='6' stroke-dasharray='0 100' transform='rotate(-90 21 21)'/>
+<circle id='donut-blueprint' cx='21' cy='21' r='15.9' fill='transparent' stroke='var(--yellow)' stroke-width='6' stroke-dasharray='0 100' transform='rotate(-90 21 21)'/>
+<circle id='donut-rule' cx='21' cy='21' r='15.9' fill='transparent' stroke='var(--red)' stroke-width='6' stroke-dasharray='0 100' transform='rotate(-90 21 21)'/>
+</svg>
+<div id='donut-legend' style='flex:1;font-size:12px;line-height:1.6'></div>
+</div></div>
+</div>
+<div style='display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px'>
+<div class='card'><div class='card-title'>SkillHub 技能状态 · <span id='h-skill-count'>--</span> 个</div><div id='h-skill-table' style='margin-top:8px'></div></div>
+<div class='card'><div class='card-title'>建议操作</div><div id='h-actions' style='margin-top:8px'></div></div>
+</div>
+<div style='font-size:10px;color:var(--text-3);text-align:right;margin-top:4px'>数据源：hub-engine/scripts/hub_health.py --dashboard-format</div>
+</div>
+<div class='panel' id='panel-skillhub'>
+<div class='card'><div class='card-title'>SkillHub（占位）</div><div class='empty'>该 tab 后续接入 SkillHub 技能浏览/路由详情</div></div>
+</div>
+<div class='panel' id='panel-platforms'>
+<div class='card'><div class='card-title'>平台健康（占位）</div><div class='empty'>该 tab 后续接入「platform_healthcheck」详细页</div></div>
+</div>
+<div class='panel' id='panel-hermes'>
+<div class='card'><div class='card-title'>Hermes Chat（占位 UI）</div>
+<div class='chat-log' id='chat-log'><div class='empty'>在下方输入问题，按 Enter 发送<br>（注：当前为占位 UI，后端 trigger 待接入）</div></div>
+<div class='chat-input'>
+<input type='text' id='chat-msg' placeholder='问 Hermes...（按 Enter 发送）'>
+<button class='btn btn-primary'>发送</button>
+</div>
+</div>
+</div>
+</main></div>
+<script>
+
 let DATA = null;
 let ACTIVE_TAB = "main";
 
@@ -283,4 +367,7 @@ document.addEventListener("DOMContentLoaded", function() {
 // init
 DATA = JSON.parse(atob("eyJnZW5lcmF0ZWRfYXQiOiAiMjAyNi0wOS0xMFQwOTo1MzoxNi40NDczNjQrMDg6MDAiLCAiaHViX3Jvb3QiOiAiQzpcXFVzZXJzXFxGYW4tU0pTU1xcLnRyYWUtY25cXHdvcmt0cmVlc1xcMjAyNjA4MTctRmFuLUFnZW50LU1vbW9yeVxcZmVhdC1pbXBsZW1lbnQtcGxhbi1aaWxCbXZcXEFnZW50TWVtb3J5SHViIiwgImhlYWx0aCI6IHsib3ZlcmFsbCI6IDEwMC4wLCAicGFuZWxzX29rIjogNiwgInBhbmVsc190b3RhbCI6IDZ9LCAicGxhdGZvcm1zIjogeyJzdW1tYXJ5IjogeyJncmVlbiI6IDR9LCAicGxhdGZvcm1zIjogeyJoZXJtZXMiOiB7InR5cGUiOiAibWNwIiwgInN0YXR1cyI6ICJHUkVFTiJ9LCAidHJhZSI6IHsidHlwZSI6ICJtY3AiLCAic3RhdHVzIjogIllFTExPVyJ9LCAiY29kZSI6IHsidHlwZSI6ICJtY3AiLCAic3RhdHVzIjogIlJFRCJ9LCAid29ya2J1ZGR5IjogeyJ0eXBlIjogIm1jcCIsICJzdGF0dXMiOiAiR1JFRU4ifSwgImRzaCI6IHsidHlwZSI6ICJmaWxlIiwgInN0YXR1cyI6ICJHUkVFTiJ9fSwgInJhd19zdGF0dXMiOiAiT0sifSwgImZseXdoZWVsIjogeyJza2lsbF9oZWFsdGgiOiB7Im9rIjogdHJ1ZSwgInN0ZG91dCI6ICJhdmc6IDk1LjAgbG93X2hlYWx0aDogMCIsICJzdGRlcnIiOiAiIn0sICJsbG1fcm91dGUiOiB7Im9rIjogdHJ1ZSwgInN0ZG91dCI6ICJsbG1fcm91dGUgaGl0czogW10iLCAic3RkZXJyIjogIiJ9LCAic3RhbGVfZGV0ZWN0IjogeyJvayI6IHRydWUsICJzdGRvdXQiOiAiU3RhbGUg5Y2h54mH77yaMCDlvKBcblN0YWxlIOaKgOiDve+8mjAg5LiqIiwgInN0ZGVyciI6ICIifSwgImtub3dsZWRnZV9nYXAiOiB7Im9rIjogdHJ1ZSwgInN0ZG91dCI6ICJnYXA6IDAvMCAoMC4wJSkiLCAic3RkZXJyIjogIiJ9LCAic2tpbGxfY2FuZGlkYXRlIjogeyJvayI6IHRydWUsICJzdGRvdXQiOiAi55Sf5oiQIDU0IOW8oOW7uuiuruWNoe+8mlxuICAtIGNhcmRzXFxza2lsbC1jYW5kaWRhdGVzXFxhY3RpdmVkaXJzLWZpdmUtdHlwZS1kaXNjaXBsaW5lLm1kXG4gIC0gY2FyZHNcXHNraWxsLWNhbmRpZGF0ZXNcXGFnZW50LW1lbW9yeS1odWItbWNwLm1kXG4gIC0gY2FyZHNcXHNraWxsLWNhbmRpZGF0ZXNcXGF1dG9jYWQtY29tLWF1dG9tYXRpb24tZGVhZGxvY2subWRcbiAgLSBjYXJkc1xcc2tpIiwgInN0ZGVyciI6ICIifSwgImZyZXNobmVzcyI6IHsib2siOiB0cnVlLCAic3Rkb3V0IjogIlN0YWxlIOWNoeeJh++8mjAg5bygXG5TdGFsZSDmioDog73vvJowIOS4qiIsICJzdGRlcnIiOiAiIn19LCAia25vd2xlZGdlX2dhcCI6IHsidG90YWwiOiAwLCAibWlzcyI6IDAsICJtaXNzX3JhdGUiOiAwLjAsICJ0b3BfbWlzc2VzIjogW119LCAidG9kb3MiOiB7InByb2plY3RzIjogW3sibmFtZSI6ICJjYWQtcGx1Z2luLW1hbmFnZW1lbnQtcGxhdGZvcm0iLCAidGl0bGUiOiAiLS0tIn0sIHsibmFtZSI6ICJjYWQyMDIwLXBkZi1tZXJnZSIsICJ0aXRsZSI6ICItLS0ifSwgeyJuYW1lIjogImdpdGh1Yi1hdXRvcHVzaCIsICJ0aXRsZSI6ICItLS0ifSwgeyJuYW1lIjogImhlcm1lcy1mYW4tZGVidWctdjEiLCAidGl0bGUiOiAiLS0tIn0sIHsibmFtZSI6ICJpbXByb3ZlLWluZ2VzdC1kZWR1cC10aHJlc2hvbGQiLCAidGl0bGUiOiAiLS0tIn0sIHsibmFtZSI6ICJwbHVnaW5odWItY3VycmVudC1zdGF0ZSIsICJ0aXRsZSI6ICItLS0ifSwgeyJuYW1lIjogInByb2plY3QtdGhyZWVSb3dSZWluLWJhc2VsaW5lLXY1MS1zbmFwc2hvdCIsICJ0aXRsZSI6ICLvu78tLS0ifSwgeyJuYW1lIjogInNnbGFuZy1kYXNoYm9hcmQtcGx1Z2luaHViLXJlZ2lzdHJhdGlvbiIsICJ0aXRsZSI6ICItLS0ifSwgeyJuYW1lIjogInQxLXBsYW4tdGhyZWUtYmx1ZXByaW50cyIsICJ0aXRsZSI6ICItLS0ifSwgeyJuYW1lIjogIlQxOS1jcm9uLWxvbmctdGVybS1vcHRpbWl6YXRpb24iLCAidGl0bGUiOiAiLS0tIn0sIHsibmFtZSI6ICJUMjEtNXBsYXRmb3JtLeWQjue7reS8mOWMli3lvoXlip4iLCAidGl0bGUiOiAiLS0tIn1dLCAicGVuZGluZ19ydWxlcyI6IDB9LCAiYWxlcnRzIjogeyJjcml0aWNhbCI6IFsiY29kZSJdLCAiYW5ub3VuY2VtZW50cyI6IFt7InRzIjogMTc4ODgyNTIyOCwgInBsYXRmb3JtIjogImhlcm1lcyIsICJhY3Rpb24iOiAiaW5nZXN0X2RvbmUiLCAicGF5bG9hZCI6IHsibW92ZWQiOiBbInRlc3QubWQiXSwgImNvbW1pdCI6ICJhYmMxMjMifSwgImF1ZGl0X2lkIjogIjIwMjYwOTA3VDIzNTM0OFotZmY0ZmNlYjYifV19LCAiaHViX2hlYWx0aCI6IHsib3ZlcmFsbF9zY29yZSI6IDI5LjAsICJvdmVyYWxsX3ZlcmRpY3QiOiAi8J+aqCDpnIDkv67lpI0iLCAiY2FyZF9oZWFsdGgiOiB7InNjb3JlIjogNjcuOSwgImFjdGl2ZSI6IDI0MSwgImNhbmRpZGF0ZSI6IDM5LCAicmVmZXJlbmNlIjogNzEsICJhcmNoaXZlZCI6IDQsICJ0b3RhbCI6IDM1NX0sICJza2lsbF9oZWFsdGgiOiB7InNjb3JlIjogMC4wLCAiYWN0aXZlIjogMCwgImNhbmRpZGF0ZSI6IDAsICJyZWZlcmVuY2UiOiAwLCAiZGVwcmVjYXRlZCI6IDAsICJ0b3RhbCI6IDAsICJza2lsbHMiOiBbXX0sICJmbHl3aGVlbF9hY3Rpdml0eSI6IHsic2NvcmUiOiAwLjAsICJhY3RpdmVfcnVucyI6IDAsICJ0b3RhbCI6IDAsICJieV9zdGFnZSI6IHsiaW5nZXN0IjogMCwgImJ1aWxkLXZlY3RvcnMiOiAwLCAiZGVkdXAiOiAwLCAiY29uc29saWRhdGUiOiAwLCAibGludCI6IDB9fSwgImFjdGlvbnMiOiBbXX0sICJjcm9uX2pvYnMiOiBbeyJpZCI6ICIxMmM1MzI4MTVkNDciLCAibmFtZSI6ICLpo57ova7ml6XmiqXCt+W+ruS/oeaOqOmAgSIsICJzY2hlZHVsZSI6ICI0NSA3ICogKiAqIiwgInN0YXR1cyI6ICJhY3RpdmUiLCAibGFzdCI6ICIwNzo0NSBvayJ9LCB7ImlkIjogIjIxZmYyMGFiMzYwNyIsICJuYW1lIjogIkdpdEh1YiBzdGFyLWRpc3RpbGwgKyBUMSDov63ku6MiLCAic2NoZWR1bGUiOiAiMTAgOCAqICogKiIsICJzdGF0dXMiOiAiYWN0aXZlIiwgImxhc3QiOiAiMDg6MTAgb2sifSwgeyJpZCI6ICI3ODI0N2MzOTdmOGYiLCAibmFtZSI6ICLkuK3mnqLmr4/ml6XlgaXlurflv6vnhacgKGFnZW50KSIsICJzY2hlZHVsZSI6ICI1MCA3ICogKiAqIiwgInN0YXR1cyI6ICJhY3RpdmUiLCAibGFzdCI6ICIwNzo1MCBvayJ9LCB7ImlkIjogIjY5MWVjNjQ1NjkwNCIsICJuYW1lIjogIuavj+WRqOWPrOWbnuivhOa1i+WkjeaguCIsICJzY2hlZHVsZSI6ICIzMCA4ICogKiA2IiwgInN0YXR1cyI6ICJhY3RpdmUiLCAibGFzdCI6ICJTYXQgMDg6MzAgb2sifSwgeyJpZCI6ICIyOTc3NGQwOWRmYmUiLCAibmFtZSI6ICJTa2lsbEh1YiDlkajmmYvnuqflt6Hmo4AiLCAic2NoZWR1bGUiOiAiMCA4ICogKiA2IiwgInN0YXR1cyI6ICJhY3RpdmUiLCAibGFzdCI6ICJTYXQg5b6F6LeRIn0sIHsiaWQiOiAiNDYxZGQ2MmI0ZGEzIiwgIm5hbWUiOiAiVDE1LTblt6Xlhbfmr4/ml6XnvJbmjpIiLCAic2NoZWR1bGUiOiAiMCA2ICogKiAqIiwgInN0YXR1cyI6ICJhY3RpdmUiLCAibGFzdCI6ICIwNjowMCBvayJ9LCB7ImlkIjogImZiY2RjNDZjYTdmMCIsICJuYW1lIjogIjXlubPlj7Dmr4/ml6XlgaXlurfmo4Dmn6UiLCAic2NoZWR1bGUiOiAiNTUgNyAqICogKiIsICJzdGF0dXMiOiAiYWN0aXZlIiwgImxhc3QiOiAiMDc6NTUgb2sifV0sICJjYXJkX3N0YXRzX2J5X3R5cGUiOiB7ImV4cCI6IDE0NCwgInJ1bGUiOiAyNiwgIm1ldGhvZG9sb2d5IjogNDYsICJibHVlcHJpbnRzIjogNzQsICJsb25ndGVybSI6IDAsICJwcm9qZWN0cyI6IDEzfSwgInN5bmNfc3RhdHVzIjogeyJGYW4tQWdlbnQtTW9tb3J5IjogeyJhaGVhZCI6IDAsICJiZWhpbmQiOiAwLCAibGFzdF9jb21taXQiOiAiODUzNzgyZCIsICJicmFuY2giOiAibWFzdGVyIn0sICJBZ2VudE1lbW9yeUh1YiI6IHsiYWhlYWQiOiAwLCAiYmVoaW5kIjogMCwgImxhc3RfY29tbWl0IjogIjVkZGI4OWEiLCAiYnJhbmNoIjogIm1hc3RlciJ9LCAiU2tpbGxIdWIiOiB7ImFoZWFkIjogMCwgImJlaGluZCI6IDAsICJsYXN0X2NvbW1pdCI6ICI1YmM0YTVhIiwgImJyYW5jaCI6ICJtYXN0ZXIifX0sICJsZWRnZXJfcmVjZW50IjogW3sidHMiOiAiMjAyNi0wOS0wOVQxNTo1NSIsICJ3aG8iOiAiaGVybWVzIiwgImludGVudCI6ICJpbmdlc3Q6IFQyMiAzLWFnZW50IGV4cCIsICJzaGEiOiAiYTVkNjY2YiJ9LCB7InRzIjogIjIwMjYtMDktMDlUMTU6MzAiLCAid2hvIjogImhlcm1lcyIsICJpbnRlbnQiOiAic3luYzogcGxhdGZvcm1zLnlhbWwgdjEuMSIsICJzaGEiOiAiNWRkYjg5YSJ9LCB7InRzIjogIjIwMjYtMDktMDlUMTQ6NTUiLCAid2hvIjogImhlcm1lcyIsICJpbnRlbnQiOiAicGxhdGZvcm1faGVhbHRoY2hlY2sgNS82IiwgInNoYSI6ICJuL2EifSwgeyJ0cyI6ICIyMDI2LTA5LTA5VDE0OjAwIiwgIndobyI6ICJoZXJtZXMiLCAiaW50ZW50IjogImZlYXQ6IFQyMSB0b2RvcyIsICJzaGEiOiAiZjE3MTNkOSJ9LCB7InRzIjogIjIwMjYtMDktMDlUMTA6MDAiLCAid2hvIjogInRyYWUiLCAiaW50ZW50IjogImluZ2VzdDogbWF2aXMgNXRoIHBsYXRmb3JtIiwgInNoYSI6ICJmMTZjNDA4In1dLCAiaW5nZXN0X3JlY2VudCI6IFt7InRzIjogIjIwMjYtMDktMDkiLCAidGl0bGUiOiAiVDIyIDMtYWdlbnQg5bm26KGM5a6e5rWLIiwgInR5cGUiOiAiZXhwIiwgInN0YXR1cyI6ICJwcm9tb3RlZCJ9LCB7InRzIjogIjIwMjYtMDktMDkiLCAidGl0bGUiOiAiVDIxIDUg5bmz5Y+w5ZCO57ut5LyY5YyW5b6F5YqeIiwgInR5cGUiOiAicHJvamVjdCIsICJzdGF0dXMiOiAicHJvbW90ZWQifSwgeyJ0cyI6ICIyMDI2LTA5LTA5IiwgInRpdGxlIjogIlQyMCDmlrnmoYggRCBNQ1Ag6Ieq5oSIIiwgInR5cGUiOiAiZXhwIiwgInN0YXR1cyI6ICJwcm9tb3RlZCJ9LCB7InRzIjogIjIwMjYtMDktMDgiLCAidGl0bGUiOiAiVDEyIGNoZWNrLWNvZGUtdjEg5YWo5L+u5aSNIiwgInR5cGUiOiAiZXhwIiwgInN0YXR1cyI6ICJwcm9tb3RlZCJ9LCB7InRzIjogIjIwMjYtMDktMDgiLCAidGl0bGUiOiAiRFNIIGZpbGUtanVuY3Rpb24g5o6l5YWlIiwgInR5cGUiOiAiZXhwIiwgInN0YXR1cyI6ICJwcm9tb3RlZCJ9XX0="));
 render();
-\n</script>\n</body>\n</html>
+
+</script>
+</body>
+</html>
