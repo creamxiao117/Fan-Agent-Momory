@@ -2,80 +2,157 @@
 <html lang='zh'>
 <head><meta charset='utf-8'><title>中枢总控台 v3</title>
 <style>
-:root{--bg-0:#08090a;--bg-1:#0f1011;--bg-2:#191a1b;--bg-3:#222428;--border:rgba(255,255,255,0.06);--border-h:rgba(255,255,255,0.16);--text-1:#f7f8f8;--text-2:#b4b8be;--text-3:#62666d;--accent:#5e6ad2;--accent-h:#7170ff;--green:#4cb782;--yellow:#f2c94c;--red:#f87171}
+:root{
+  --bg-0:#08090a;--bg-1:#0f1011;--bg-2:#191a1b;--bg-3:#222428;--bg-elevated:#1d1e20;
+  --border:rgba(255,255,255,0.07);--border-h:rgba(255,255,255,0.16);
+  --text-1:#f7f8f8;--text-2:#b4b8be;--text-3:#62666d;--text-4:#44464a;
+  --accent:#5e6ad2;--accent-h:#7170ff;--accent-dim:rgba(94,106,210,0.12);
+  --green:#4cb782;--yellow:#f2c94c;--red:#f87171;--blue:#6cb6ff
+}
 *{margin:0;padding:0;box-sizing:border-box}
-html,body{font-family:'Inter','PingFang SC','Microsoft YaHei','Hiragino Sans GB','Source Han Sans CN','WenQuanYi Micro Hei',system-ui,-apple-system,sans-serif;font-size:12px;background:var(--bg-0);color:var(--text-1);height:100vh;overflow:hidden}
-.app{display:grid;grid-template-columns:190px 1fr;height:100vh}
-nav{background:var(--bg-1);border-right:1px solid var(--border);padding:10px 0;overflow:auto}
-.brand{padding:0 12px 10px;border-bottom:1px solid var(--border);margin-bottom:6px}
-.brand h1{font-size:14px;font-weight:600;letter-spacing:-0.01em}
-.brand .sub{font-size:9px;color:var(--text-3);margin-top:2px;text-transform:uppercase;letter-spacing:.08em}
-.nav-item{display:flex;align-items:center;gap:7px;padding:6px 12px;cursor:pointer;color:var(--text-2);border-left:2px solid transparent;font-size:11px;transition:background .15s,color .15s,border-color .15s;user-select:none;font-weight:500}
+html,body{font-family:'Inter','PingFang SC','Microsoft YaHei','Hiragino Sans GB','Source Han Sans CN',system-ui,-apple-system,sans-serif;font-size:13px;background:var(--bg-0);color:var(--text-1);height:100vh;overflow:hidden;-webkit-font-smoothing:antialiased}
+.app{display:grid;grid-template-columns:240px 1fr;height:100vh}
+
+/* nav: 13-14px 字号 + 大 padding */
+nav{background:var(--bg-1);border-right:1px solid var(--border);padding:14px 0;overflow:auto}
+.brand{padding:0 16px 14px;border-bottom:1px solid var(--border);margin-bottom:8px}
+.brand h1{font-size:15px;font-weight:600;letter-spacing:-0.01em}
+.brand .sub{font-size:11px;color:var(--text-3);margin-top:3px;text-transform:uppercase;letter-spacing:.08em}
+.nav-section{padding:14px 16px 4px;font-size:11px;color:var(--text-4);text-transform:uppercase;letter-spacing:.1em;font-weight:600}
+.nav-item{display:flex;align-items:center;gap:11px;padding:10px 16px;cursor:pointer;color:var(--text-2);border-left:2px solid transparent;font-size:13.5px;transition:background .15s,color .15s,border-color .15s;user-select:none;font-weight:500;line-height:1.2}
 .nav-item:hover{background:var(--bg-2);color:var(--text-1);border-left-color:var(--accent)}
-.nav-item.active{background:var(--bg-2);color:var(--accent-h);border-left-color:var(--accent);font-weight:600}
-.nav-title{padding:6px 12px 8px;font-size:9px;color:var(--text-3);text-transform:uppercase;letter-spacing:.08em;border-bottom:1px solid var(--border);margin-bottom:4px}
-.panel{display:none}
-.panel.active{display:block}
-main{overflow:auto;padding:12px 14px}
-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
-h1{font-size:16px;font-weight:600;letter-spacing:-0.01em}
-h2{font-size:10px;font-weight:600;color:var(--text-2);margin:10px 0 6px;text-transform:uppercase;letter-spacing:.06em}
-.grid{display:grid;gap:8px;margin-bottom:8px}
-.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
-.grid-4{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
-.section-title{margin:10px 0 6px;padding-top:8px;border-top:1px solid var(--border);font-size:9px;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;font-weight:600}
-.card{background:var(--bg-1);border:1px solid var(--border);border-radius:5px;padding:8px 10px;position:relative;transition:border-color .15s}
-.card:hover{border-color:var(--border-h)}
-.card-title{font-size:9px;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;font-weight:600}
-.card-value{font-size:15px;font-weight:600;line-height:1.2;letter-spacing:-0.01em}
-.card-sub{font-size:10px;color:var(--text-3);margin-top:2px}
+.nav-item.active{background:var(--accent-dim);color:var(--accent-h);border-left-color:var(--accent);font-weight:600}
+.nav-item .badge{margin-left:auto;background:var(--bg-3);color:var(--text-3);font-size:11px;padding:2px 6px;border-radius:11px;font-weight:600;min-width:18px;text-align:center}
+.nav-item.active .badge{background:var(--accent);color:#fff}
+.nav-search{margin:8px 12px;padding:7px 10px;background:var(--bg-0);border:1px solid var(--border);border-radius:5px;color:var(--text-3);font-size:13px;display:flex;align-items:center;gap:8px}
+.nav-search .kbd{background:var(--bg-3);color:var(--text-4);font-size:11px;padding:1px 5px;border-radius:3px;margin-left:auto;font-family:monospace}
+
+/* main */
+main{overflow:auto;padding:16px 24px}
+header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;padding-bottom:13px;border-bottom:1px solid var(--border)}
+h1{font-size:18px;font-weight:600;letter-spacing:-0.01em}
+h1 .count{font-size:13px;color:var(--text-3);font-weight:400;margin-left:8px}
+.header-info{font-size:11px;color:var(--text-3);display:flex;gap:14px;align-items:center}
+.header-info .live{color:var(--green);font-weight:600}
+
+/* grids - 4 列默认 */
+.grid{display:grid;gap:11px;margin-bottom:14px}
+.grid.hero{grid-template-columns:repeat(4,1fr)}
+.grid.cols2{grid-template-columns:repeat(2,1fr)}
+.grid.cols3{grid-template-columns:repeat(3,1fr)}
+.grid.cols4{grid-template-columns:repeat(4,1fr)}
+.grid.cols5{grid-template-columns:repeat(5,1fr)}
+.grid.cols6{grid-template-columns:repeat(6,1fr)}
+
+/* card */
+.card{background:var(--bg-1);border:1px solid var(--border);border-radius:6px;padding:10px 12px;position:relative;transition:border-color .15s,background .15s}
+.card:hover{border-color:var(--border-h);background:var(--bg-elevated)}
+.card-title{font-size:11px;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:5px;font-weight:600}
+.card-value{font-size:17px;font-weight:600;line-height:1.2;letter-spacing:-0.01em}
+.card-sub{font-size:13.5px;color:var(--text-3);margin-top:2px}
+.card-mini{padding:8px 10px}
+.card-mini .card-title{font-size:11px;margin-bottom:3px}
+.card-mini .card-value{font-size:13px}
+
+.hero-score{font-size:36px;font-weight:300;letter-spacing:-0.03em;line-height:1;color:var(--text-1)}
+.hero-score .pct{font-size:14px;color:var(--text-3);font-weight:400;margin-left:2px}
+.section-title{margin:12px 0 8px;padding-top:11px;border-top:1px solid var(--border);font-size:11px;color:var(--text-3);text-transform:uppercase;letter-spacing:.08em;font-weight:600;display:flex;align-items:center;gap:8px}
+.section-title .tag{background:var(--bg-3);color:var(--text-2);font-size:11px;padding:2px 6px;border-radius:3px;font-weight:600;letter-spacing:0}
+
+/* table */
+table{width:100%;border-collapse:collapse;font-size:11px}
+th{text-align:left;font-weight:600;color:var(--text-3);padding:5px 0;border-bottom:1px solid var(--border);font-size:11px;text-transform:uppercase;letter-spacing:.05em}
+td{padding:5px 0;border-bottom:1px solid var(--border)}
+tr:last-child td{border-bottom:none}
+.mono{font-family:'JetBrains Mono',Consolas,monospace;font-size:13.5px;color:var(--text-2)}
+.btn{background:var(--bg-2);border:1px solid var(--border);color:var(--text-1);padding:4px 10px;border-radius:4px;font-size:13.5px;cursor:pointer;transition:.15s;font-weight:500}
+.btn:hover{border-color:var(--accent);background:var(--bg-3)}
+.btn-primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+.btn-primary:hover{background:var(--accent-h);border-color:var(--accent-h)}
+.btn-tiny{padding:2px 6px;font-size:9.5px;border-radius:3px}
+
+/* status */
+.status-pill{display:inline-flex;align-items:center;gap:4px;padding:2px 7px;border-radius:11px;font-size:9.5px;font-weight:600;letter-spacing:.03em;text-transform:uppercase}
+.status-pill::before{content:"";width:5px;height:5px;border-radius:50%;background:currentColor}
+.s-green{background:rgba(76,183,130,.12);color:var(--green)}
+.s-yellow{background:rgba(242,201,76,.12);color:var(--yellow)}
+.s-red{background:rgba(248,113,113,.12);color:var(--red)}
+.s-blue{background:rgba(108,182,255,.12);color:var(--blue)}
+.s-purple{background:var(--accent-dim);color:var(--accent-h)}
 .dot{width:5px;height:5px;border-radius:50%;display:inline-block;margin-right:4px}
 .d-green{background:var(--green)}
 .d-yellow{background:var(--yellow)}
 .d-red{background:var(--red)}
-.empty{color:var(--text-3);font-size:10px;padding:4px 0;text-align:center}
-table{width:100%;border-collapse:collapse;font-size:10px}
-th{text-align:left;font-weight:600;color:var(--text-3);padding:4px 0;border-bottom:1px solid var(--border);font-size:8px;text-transform:uppercase;letter-spacing:.05em}
-td{padding:4px 0;border-bottom:1px solid var(--border)}
-tr:last-child td{border-bottom:none}
-.mono{font-family:'JetBrains Mono',Consolas,monospace;font-size:10px;color:var(--text-2)}
-.btn{background:var(--bg-2);border:1px solid var(--border);color:var(--text-1);padding:4px 9px;border-radius:4px;font-size:10px;cursor:pointer;transition:.15s;font-weight:500}
-.btn:hover{border-color:var(--accent);background:var(--bg-3)}
-.btn-primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
-.btn-primary:hover{background:var(--accent-h);border-color:var(--accent-h)}
-.status-pill{display:inline-block;padding:1px 6px;border-radius:7px;font-size:9px;font-weight:600;letter-spacing:.03em}
-.s-green{background:rgba(76,183,130,.15);color:var(--green)}
-.s-yellow{background:rgba(242,201,76,.15);color:var(--yellow)}
-.s-red{background:rgba(248,113,113,.15);color:var(--red)}
-.chat-log{height:380px;overflow:auto;background:var(--bg-0);border:1px solid var(--border);border-radius:5px;padding:10px;margin-bottom:8px;font-size:11px;line-height:1.5}
-.chat-msg{margin-bottom:6px}
-.chat-msg .who{font-weight:600;margin-right:5px;color:var(--accent)}
-.chat-input{display:flex;gap:6px}
-.chat-input input{flex:1;background:var(--bg-0);border:1px solid var(--border);color:var(--text-1);padding:6px 10px;border-radius:4px;font-size:11px;font-family:inherit}
+.empty{color:var(--text-3);font-size:11px;padding:8px 0;text-align:center;font-style:italic}
+
+/* chat */
+.chat-log{height:520px;overflow:auto;background:var(--bg-0);border:1px solid var(--border);border-radius:6px;padding:13px;margin-bottom:11px;font-size:13.5px;line-height:1.55}
+.chat-msg{margin-bottom:8px}
+.chat-msg .who{font-weight:600;margin-right:6px;color:var(--accent)}
+.chat-msg .who.user{color:var(--blue)}
+.chat-input{display:flex;gap:8px}
+.chat-input input{flex:1;background:var(--bg-0);border:1px solid var(--border);color:var(--text-1);padding:8px 12px;border-radius:5px;font-size:13.5px;font-family:inherit}
 .chat-input input:focus{outline:none;border-color:var(--accent)}
-.bar-row{display:flex;align-items:center;gap:8px;margin-bottom:4px}
-.bar-label{width:70px;font-size:10px;color:var(--text-2);text-align:right;font-weight:500}
-.bar-track{flex:1;height:13px;background:var(--bg-3);border-radius:2px;overflow:hidden;position:relative}
-.bar-fill{height:100%;display:flex;align-items:center;padding-left:6px;font-size:9px;font-weight:600;color:#fff}
-.bar-count{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--text-2);min-width:50px;text-align:right;font-weight:500}
-.donut-wrap{display:flex;align-items:center;gap:12px;margin-top:6px}
-.donut{width:80px;height:80px;flex-shrink:0}
-.donut-legend{flex:1;font-size:10px}
-.donut-legend li{display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid var(--border);align-items:center}
+
+/* bars */
+.bar-row{display:flex;align-items:center;gap:11px;margin-bottom:5px}
+.bar-label{width:80px;font-size:11px;color:var(--text-2);text-align:right;font-weight:500}
+.bar-track{flex:1;height:18px;background:var(--bg-3);border-radius:3px;overflow:hidden}
+.bar-fill{height:100%;display:flex;align-items:center;padding-left:11px;font-size:11px;font-weight:600;color:#fff}
+.bar-count{font-family:'JetBrains Mono',monospace;font-size:13.5px;color:var(--text-2);min-width:60px;text-align:right;font-weight:500}
+
+/* donut */
+.donut-wrap{display:flex;align-items:center;gap:20px;margin-top:12px}
+.donut{width:110px;height:110px;flex-shrink:0}
+.donut-legend{flex:1;font-size:11.5px}
+.donut-legend li{display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border);align-items:center}
 .donut-legend li:last-child{border-bottom:none}
-.donut-legend .leg-dot{width:7px;height:7px;border-radius:1px;display:inline-block;margin-right:5px}
-.donut-legend .leg-count{font-family:'JetBrains Mono',monospace;color:var(--text-1);font-weight:600}
+.donut-legend .leg-dot{width:11px;height:11px;border-radius:2px;display:inline-block;margin-right:11px;flex-shrink:0}
+.donut-legend .leg-count{font-family:'JetBrains Mono',monospace;color:var(--text-1);font-weight:600;font-size:11.5px}
+
+/* flywheel SVG */
+.flywheel-svg{width:100%;max-width:320px;height:auto;margin:6px auto;display:block}
+
+/* skill card - 可点击 */
+.skill-card{cursor:pointer;position:relative;transition:all .15s}
+.skill-card:hover{background:var(--bg-elevated);border-color:var(--accent)}
+.skill-card:active{transform:scale(0.98)}
+.skill-card .skill-actions{position:absolute;top:6px;right:6px;opacity:0;transition:opacity .15s}
+.skill-card:hover .skill-actions{opacity:1}
+.skill-card .skill-meta{display:flex;justify-content:space-between;margin-top:6px;font-size:11px;color:var(--text-3)}
+.skill-card .skill-meta .reuse{color:var(--accent);font-weight:600}
+.skill-card .skill-desc{font-size:13.5px;color:var(--text-2);margin-top:5px;line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+
+/* filter chips */
+.filter-bar{display:flex;gap:6px;margin-bottom:13px;flex-wrap:wrap}
+.chip{background:var(--bg-1);border:1px solid var(--border);color:var(--text-2);padding:4px 10px;border-radius:13px;font-size:11px;cursor:pointer;transition:.15s;font-weight:500}
+.chip:hover{border-color:var(--accent);color:var(--text-1)}
+.chip.active{background:var(--accent);border-color:var(--accent);color:#fff}
+
+/* platform card */
+.platform-card{padding:12px}
+.platform-card .platform-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.platform-card .platform-name{font-size:13px;font-weight:600;color:var(--text-1)}
+.platform-card .platform-meta{font-size:13.5px;color:var(--text-3);margin-top:4px;display:flex;justify-content:space-between}
+
+/* progress ring */
+.ring{position:relative;width:60px;height:60px;flex-shrink:0}
+.ring-text{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600}
 </style>
 </head><body>
 <div class="app">
 <nav>
-<div class='nav-title'>MEMORY HUB</div>
-<div class='nav-item active' data-tab='main'>▦ 总控台</div>
-<div class='nav-item' data-tab='flywheel'>⚙ 飞轮详情</div>
-<div class='nav-item' data-tab='skillhub'>⚡ SkillHub</div>
-<div class='nav-item' data-tab='platforms'>▥ 平台健康</div>
-<div class='nav-item' data-tab='hermes'>💬 Hermes Chat</div>
+<div class='brand'>
+<h1>中枢总控台</h1>
+<div class='sub'>v3.0 · AgentMemoryHub</div>
+</div>
+<div class='nav-search'>🔍 搜索...<span class='kbd'>⌘K</span></div>
+<div class='nav-section'>主导航</div>
+<div class='nav-item active' data-tab='main'>▦ 总控台<span class='badge' id='nav-badge-main'>...</span></div>
+<div class='nav-item' data-tab='flywheel'>⚙ 飞轮详情<span class='badge' id='nav-badge-flywheel'>...</span></div>
+<div class='nav-item' data-tab='skillhub'>⚡ SkillHub<span class='badge' id='nav-badge-skillhub'>...</span></div>
+<div class='nav-item' data-tab='platforms'>▥ 平台健康<span class='badge' id='nav-badge-platforms'>...</span></div>
+<div class='nav-item' data-tab='hermes'>💬 Hermes Chat<span class='badge' id='nav-badge-hermes'>·</span></div>
 </nav>
 <main>
 <header>
@@ -85,60 +162,89 @@ tr:last-child td{border-bottom:none}
 <button class='btn btn-primary' data-action='collect'>⚡ 立即收集</button>
 </div></header>
 <div class='panel active' id='panel-main'>
+<!-- 4 hero -->
 <div class='grid hero'>
-<div class='card' id='c-health'><div class='dot d-green'></div><div class='card-title'>健康度</div><div class='card-value' id='m-health'>--</div><div class='card-sub' id='m-health-sub'>-- 面板 OK</div></div>
-<div class='card'><div class='card-title'>平台数</div><div class='card-value' id='m-platforms'>--</div><div class='card-sub'>Agent 平台接入</div></div>
-<div class='card'><div class='card-title'>CRON 数</div><div class='card-value' id='m-cron'>--</div><div class='card-sub'>定时任务</div></div>
-<div class='card'><div class='card-title'>总卡片</div><div class='card-value' id='m-cards'>--</div><div class='card-sub'>中枢知识库</div></div>
+  <div class='card' id='c-health'>
+    <div class='card-title'>健康度</div>
+    <div class='hero-score'><span id='m-health'>--</span><span class='pct'>/100</span></div>
+    <div class='card-sub' id='m-health-sub'>--</div>
+  </div>
+  <div class='card card-mini'>
+    <div class='card-title'>平台</div>
+    <div class='card-value' id='m-platforms'>--</div>
+    <div class='card-sub'><span id='m-platforms-sub'>Agent 平台</span></div>
+  </div>
+  <div class='card card-mini'>
+    <div class='card-title'>CRON</div>
+    <div class='card-value' id='m-cron'>--</div>
+    <div class='card-sub'>定时任务</div>
+  </div>
+  <div class='card card-mini'>
+    <div class='card-title'>卡片</div>
+    <div class='card-value' id='m-cards'>--</div>
+    <div class='card-sub'>中枢知识库</div>
+  </div>
 </div>
-<div class='grid cols2'>
-<div class='card'><div class='card-title'>平台状态</div><table><tbody id='tbl-platforms'></tbody></table></div>
-<div class='card'><div class='card-title'>飞轮面板</div><table><tbody id='tbl-panels'></tbody></table></div>
+<!-- System status + Flywheel panels - 4 cols -->
+<div class='section-title'>系统状态<span class='tag'>实时</span></div>
+<div class='grid cols4'>
+  <div class='card card-mini'>
+    <div class='card-title'>平台状态</div>
+    <div id='mini-platforms'></div>
+  </div>
+  <div class='card card-mini'>
+    <div class='card-title'>飞轮面板</div>
+    <div id='mini-panels'></div>
+  </div>
+  <div class='card card-mini'>
+    <div class='card-title'>Skill 状态</div>
+    <div id='mini-skill-status'></div>
+  </div>
+  <div class='card card-mini'>
+    <div class='card-title'>告警</div>
+    <div id='mini-alerts'></div>
+  </div>
 </div>
-<div class='card'><div class='card-title'>Cron 任务</div><table><thead><tr><th>ID</th><th>名称</th><th>调度</th><th>最后</th><th></th></tr></thead><tbody id='tbl-cron'></tbody></table></div>
-<div class='grid' id='cards-grid' style='margin-top:12px'></div>
-<div class='grid cols2' style='margin-top:12px'>
-<div class='card'><div class='card-title'>仓库同步</div><table><tbody id='tbl-sync'></tbody></table></div>
-<div class='card'><div class='card-title'>最近 ledger</div><table><tbody id='tbl-ledger'></tbody></table></div>
+<!-- Tables - 4 cols -->
+<div class='section-title'>定时任务<span class='tag' id='cron-count-tag'>--</span></div>
+<div class='card' style='margin-bottom:12px'>
+  <table><thead><tr><th>ID</th><th>名称</th><th>调度</th><th>最后</th><th>执行日</th><th></th></tr></thead><tbody id='tbl-cron'></tbody></table>
 </div>
-<div class='card' style='margin-top:12px'><div class='card-title'>最近 ingest</div><table><tbody id='tbl-ingest'></tbody></table></div>
-<div class='card' style='margin-top:12px'><div class='card-title'>关键告警</div><div id='alerts'></div></div>
-</div>
-<div class='panel' id='panel-flywheel'>
+<div class='section-title'>仓库同步 / 活动</div>
+<div class='grid cols4'>
+  <div class='card card-mini'>
+    <div class='card-title'>仓库同步</div>
+    <div id='mini-sync'></div>
+  </div>
+  <div class='card card-mini'>
+    <div class='card-title'>最近 Ledger</div>
+    <div id='mini-ledger'></div>
+  </div>
+  <div class='card card-mini'>
+    <div class='card-title'>最近 Ingest</div>
+    <div id='mini-ingest'></div>
+  </div>
+  <div class='card card-mini'>
+    <div class='card-title'>卡片分布</div>
+    <div id='mini-cards'></div>
+  </div>
+  </div>
+  </div>
+  <div class='panel' id='panel-flywheel'>
 <div class='grid hero'>
 <div class='card' style='background:rgba(94,106,210,0.08);border-color:var(--accent)'>
 <div class='card-title' style='color:var(--accent)'>OVERALL SCORE</div>
 <div class='hero-score'><span id='h-overall'>--</span><span class='pct'>/100</span></div>
-<div style='height:8px;background:var(--bg-3);border-radius:4px;overflow:hidden;margin-top:12px'><div id='h-overall-bar' style='height:100%;width:0%;background:var(--accent);transition:width .6s ease'></div></div>
+<div style='height:11px;background:var(--bg-3);border-radius:4px;overflow:hidden;margin-top:12px'><div id='h-overall-bar' style='height:100%;width:0%;background:var(--accent);transition:width .6s ease'></div></div>
 <div class='card-sub' id='h-overall-sub'>--</div>
 </div>
-<div class='card'><div class='card-title'>CARD HEALTH</div><div class='card-value' id='h-card'>--</div><div style='height:8px;background:var(--bg-3);border-radius:4px;overflow:hidden;margin-top:12px'><div id='h-card-bar' style='height:100%;width:0%;background:var(--green)'></div></div><div class='card-sub' id='h-card-sub'>--</div></div>
-<div class='card'><div class='card-title'>SKILL HEALTH</div><div class='card-value' id='h-skill'>--</div><div style='height:8px;background:var(--bg-3);border-radius:4px;overflow:hidden;margin-top:12px'><div id='h-skill-bar' style='height:100%;width:0%;background:var(--yellow)'></div></div><div class='card-sub' id='h-skill-sub'>--</div></div>
-<div class='card'><div class='card-title'>FLYWHEEL ACTIVITY</div><div class='card-value' id='h-fly'>--</div><div style='height:8px;background:var(--bg-3);border-radius:4px;overflow:hidden;margin-top:12px'><div id='h-fly-bar' style='height:100%;width:0%;background:var(--accent)'></div></div><div class='card-sub' id='h-fly-sub'>--</div></div>
+<div class='card'><div class='card-title'>CARD HEALTH</div><div class='card-value' id='h-card'>--</div><div style='height:11px;background:var(--bg-3);border-radius:4px;overflow:hidden;margin-top:12px'><div id='h-card-bar' style='height:100%;width:0%;background:var(--green)'></div></div><div class='card-sub' id='h-card-sub'>--</div></div>
+<div class='card'><div class='card-title'>SKILL HEALTH</div><div class='card-value' id='h-skill'>--</div><div style='height:11px;background:var(--bg-3);border-radius:4px;overflow:hidden;margin-top:12px'><div id='h-skill-bar' style='height:100%;width:0%;background:var(--yellow)'></div></div><div class='card-sub' id='h-skill-sub'>--</div></div>
+<div class='card'><div class='card-title'>FLYWHEEL ACTIVITY</div><div class='card-value' id='h-fly'>--</div><div style='height:11px;background:var(--bg-3);border-radius:4px;overflow:hidden;margin-top:12px'><div id='h-fly-bar' style='height:100%;width:0%;background:var(--accent)'></div></div><div class='card-sub' id='h-fly-sub'>--</div></div>
 </div>
 <div class='grid cols2'>
 <div class='card'><div class='card-title'>FLYWHEEL STATUS</div><div class='card-sub'>自驱成长飞轮 · 6 阶段</div>
-<svg class='flywheel-svg' viewBox='0 0 400 300'>
-<circle cx='200' cy='150' r='52' fill='var(--bg-2)' opacity='0.5'/><text x='200' y='146' text-anchor='middle' fill='var(--text-2)' font-size='13' font-weight='600'>中枢</text><text x='200' y='164' text-anchor='middle' fill='var(--text-3)' font-size='10'>-- 卡</text>
-<circle cx='200' cy='48' r='22' fill='var(--bg-1)' stroke='var(--accent)' stroke-width='1.5'/>
-<text x='200' y='45' text-anchor='middle' fill='var(--text-1)' font-size='11' font-weight='600'>实践</text>
-<text x='200' y='58' text-anchor='middle' fill='var(--text-3)' font-size='8'>A 引擎</text>
-<circle cx='310' cy='92' r='22' fill='var(--bg-1)' stroke='var(--text-3)' stroke-width='1.5'/>
-<text x='310' y='89' text-anchor='middle' fill='var(--text-1)' font-size='11' font-weight='600'>沉淀</text>
-<text x='310' y='102' text-anchor='middle' fill='var(--text-3)' font-size='8'>B 维护站</text>
-<circle cx='310' cy='208' r='22' fill='var(--bg-1)' stroke='var(--text-3)' stroke-width='1.5'/>
-<text x='310' y='205' text-anchor='middle' fill='var(--text-1)' font-size='11' font-weight='600'>提炼</text>
-<text x='310' y='218' text-anchor='middle' fill='var(--text-3)' font-size='8'>C 维护站</text>
-<circle cx='200' cy='252' r='22' fill='var(--bg-1)' stroke='var(--text-3)' stroke-width='1.5'/>
-<text x='200' y='249' text-anchor='middle' fill='var(--text-1)' font-size='11' font-weight='600'>萃取</text>
-<text x='200' y='262' text-anchor='middle' fill='var(--text-3)' font-size='8'>D 维护站</text>
-<circle cx='90' cy='208' r='22' fill='var(--bg-1)' stroke='var(--text-3)' stroke-width='1.5'/>
-<text x='90' y='205' text-anchor='middle' fill='var(--text-1)' font-size='11' font-weight='600'>淬炼</text>
-<text x='90' y='218' text-anchor='middle' fill='var(--text-3)' font-size='8'>E 引擎</text>
-<circle cx='90' cy='92' r='22' fill='var(--bg-1)' stroke='var(--accent)' stroke-width='1.5'/>
-<text x='90' y='89' text-anchor='middle' fill='var(--text-1)' font-size='11' font-weight='600'>反馈</text>
-<text x='90' y='102' text-anchor='middle' fill='var(--text-3)' font-size='8'>A 引擎</text>
-</svg>
+<svg class='flywheel-svg' viewBox='0 0 500 420' xmlns='http://www.w3.org/2000/svg'><defs><marker id='arrow' markerWidth='10' markerHeight='10' refX='8' refY='3' orient='auto'><path d='M0,0 L0,6 L9,3 z' fill='var(--accent)'/></marker></defs><!-- 6 arcs --><path d='M 250 90 Q 380 60 400 140' stroke='var(--accent)' stroke-width='2' fill='none' marker-end='url(#arrow)' opacity='0.7'/><path d='M 420 170 Q 430 240 400 280' stroke='var(--accent)' stroke-width='2' fill='none' marker-end='url(#arrow)' opacity='0.7'/><path d='M 380 320 Q 320 360 260 370' stroke='var(--accent)' stroke-width='2' fill='none' marker-end='url(#arrow)' opacity='0.7'/><path d='M 230 370 Q 170 360 110 320' stroke='var(--accent)' stroke-width='2' fill='none' marker-end='url(#arrow)' opacity='0.7'/><path d='M 90 280 Q 70 240 90 180' stroke='var(--accent)' stroke-width='2' fill='none' marker-end='url(#arrow)' opacity='0.7'/><path d='M 110 140 Q 140 70 220 80' stroke='var(--accent)' stroke-width='2' fill='none' marker-end='url(#arrow)' opacity='0.7'/><!-- center node --><circle cx='250' cy='220' r='68' fill='var(--accent)' opacity='0.15'/><circle cx='250' cy='220' r='62' fill='var(--bg-1)' stroke='var(--accent)' stroke-width='2.5'/><text x='250' y='216' text-anchor='middle' fill='var(--accent)' font-size='18' font-weight='700'>中枢</text><text x='250' y='238' text-anchor='middle' fill='var(--text-3)' font-size='13' id='fw-center-count'>-- 卡</text><!-- 6 outer nodes (radius 38) --><circle cx='250' cy='90' r='42' fill='var(--bg-1)' stroke='var(--accent)' stroke-width='2'/><text x='250' y='86' text-anchor='middle' fill='var(--accent)' font-size='15' font-weight='700'>实践</text><text x='250' y='104' text-anchor='middle' fill='var(--text-3)' font-size='11'>A 引擎</text><circle cx='420' cy='155' r='42' fill='var(--bg-1)' stroke='var(--accent)' stroke-width='2'/><text x='420' y='151' text-anchor='middle' fill='var(--accent)' font-size='15' font-weight='700'>沉淀</text><text x='420' y='169' text-anchor='middle' fill='var(--text-3)' font-size='11'>B 维护站</text><circle cx='420' cy='285' r='42' fill='var(--bg-1)' stroke='var(--accent)' stroke-width='2'/><text x='420' y='281' text-anchor='middle' fill='var(--accent)' font-size='15' font-weight='700'>提炼</text><text x='420' y='299' text-anchor='middle' fill='var(--text-3)' font-size='11'>C 维护站</text><circle cx='250' cy='350' r='42' fill='var(--bg-1)' stroke='var(--accent)' stroke-width='2'/><text x='250' y='346' text-anchor='middle' fill='var(--accent)' font-size='15' font-weight='700'>萃取</text><text x='250' y='364' text-anchor='middle' fill='var(--text-3)' font-size='11'>D 维护站</text><circle cx='80' cy='285' r='42' fill='var(--bg-1)' stroke='var(--accent)' stroke-width='2'/><text x='80' y='281' text-anchor='middle' fill='var(--accent)' font-size='15' font-weight='700'>淬炼</text><text x='80' y='299' text-anchor='middle' fill='var(--text-3)' font-size='11'>E 引擎</text><circle cx='80' cy='155' r='42' fill='var(--bg-1)' stroke='var(--accent)' stroke-width='2'/><text x='80' y='151' text-anchor='middle' fill='var(--accent)' font-size='15' font-weight='700'>反馈</text><text x='80' y='169' text-anchor='middle' fill='var(--text-3)' font-size='11'>A 引擎</text></svg>
 </div>
 <div class='card'><div class='card-title'>CARD DISTRIBUTION</div><div class='card-sub'>卡片类型分布</div>
 <div class='donut-wrap'>
@@ -158,7 +264,7 @@ tr:last-child td{border-bottom:none}
 <div class='card'><div class='card-title'>SKILL STATUS · <span id='h-skill-count'>--</span> 个</div><div id='h-skill-table' style='margin-top:10px'></div></div>
 </div>
 <div class='card'><div class='card-title'>RECOMMENDED ACTIONS</div><div id='h-actions' style='margin-top:10px'></div></div>
-<div style='font-size:10px;color:var(--text-3);text-align:right;margin-top:8px'>数据源：hub-engine/scripts/hub_health.py --dashboard-format</div>
+<div style='font-size:11px;color:var(--text-3);text-align:right;margin-top:8px'>数据源：hub-engine/scripts/hub_health.py --dashboard-format</div>
 </div>
 <div class='panel' id='panel-skillhub'>
 <div id='skillhub-list'></div>
@@ -178,7 +284,7 @@ tr:last-child td{border-bottom:none}
 </main></div>
 <script>
 
-let DATA = {"generated_at":"2026-09-10T09:53:16.447364+08:00","hub_root":"C:\\Users\\Fan-SJSS\\.trae-cn\\worktrees\\20260817-Fan-Agent-Momory\\feat-implement-plan-ZilBmv\\AgentMemoryHub","health":{"overall":100.0,"panels_ok":6,"panels_total":6},"platforms":{"summary":{"green":4},"platforms":{"hermes":{"type":"mcp","status":"GREEN"},"trae":{"type":"mcp","status":"YELLOW"},"code":{"type":"mcp","status":"RED"},"workbuddy":{"type":"mcp","status":"GREEN"},"dsh":{"type":"file","status":"GREEN"}},"raw_status":"OK"},"flywheel":{"skill_health":{"ok":true,"stdout":"avg: 95.0 low_health: 0","stderr":""},"llm_route":{"ok":true,"stdout":"llm_route hits: []","stderr":""},"stale_detect":{"ok":true,"stdout":"Stale 卡片：0 张\nStale 技能：0 个","stderr":""},"knowledge_gap":{"ok":true,"stdout":"gap: 0/0 (0.0%)","stderr":""},"skill_candidate":{"ok":true,"stdout":"生成 54 张建议卡：\n  - cards\\skill-candidates\\activedirs-five-type-discipline.md\n  - cards\\skill-candidates\\agent-memory-hub-mcp.md\n  - cards\\skill-candidates\\autocad-com-automation-deadlock.md\n  - cards\\ski","stderr":""},"freshness":{"ok":true,"stdout":"Stale 卡片：0 张\nStale 技能：0 个","stderr":""}},"knowledge_gap":{"total":0,"miss":0,"miss_rate":0.0,"top_misses":[]},"todos":{"projects":[{"name":"cad-plugin-management-platform","title":"---"},{"name":"cad2020-pdf-merge","title":"---"},{"name":"github-autopush","title":"---"},{"name":"hermes-fan-debug-v1","title":"---"},{"name":"improve-ingest-dedup-threshold","title":"---"},{"name":"pluginhub-current-state","title":"---"},{"name":"project-threeRowRein-baseline-v51-snapshot","title":"﻿---"},{"name":"sglang-dashboard-pluginhub-registration","title":"---"},{"name":"t1-plan-three-blueprints","title":"---"},{"name":"T19-cron-long-term-optimization","title":"---"},{"name":"T21-5platform-后续优化-待办","title":"---"}],"pending_rules":0},"alerts":{"critical":["code"],"announcements":[{"ts":1788825228,"platform":"hermes","action":"ingest_done","payload":{"moved":["test.md"],"commit":"abc123"},"audit_id":"20260907T235348Z-ff4fceb6"}]},"hub_health":{"overall_score":29.0,"overall_verdict":"🚨 需修复","card_health":{"score":67.9,"active":241,"candidate":39,"reference":71,"archived":4,"total":355},"skill_health":{"score":0.0,"active":19,"candidate":0,"reference":0,"deprecated":0,"total":19,"skills":[{"name":"agent-platform-onboarding","status":"active","reuse_count":0},{"name":"bailian-cli","status":"active","reuse_count":0},{"name":"bailian-docs-llm-wiki","status":"active","reuse_count":0},{"name":"bailian-finetune","status":"active","reuse_count":0},{"name":"bailian-gen","status":"active","reuse_count":0},{"name":"bailian-managed-agent","status":"active","reuse_count":0},{"name":"bailian-model-recommend","status":"active","reuse_count":0},{"name":"bailian-protocol","status":"active","reuse_count":0},{"name":"bailian-train-deploy","status":"active","reuse_count":0},{"name":"bailian-web-search","status":"active","reuse_count":0},{"name":"cad-editor","status":"active","reuse_count":0},{"name":"check-code-v1","status":"active","reuse_count":0},{"name":"context-engineering-v1","status":"active","reuse_count":0},{"name":"desktop-preview-reveal","status":"active","reuse_count":0},{"name":"diagram-design","status":"active","reuse_count":0},{"name":"excel-author","status":"active","reuse_count":0},{"name":"mcp-server-setup","status":"active","reuse_count":0},{"name":"pdf","status":"active","reuse_count":0},{"name":"skillhub-integration","status":"active","reuse_count":0}]},"flywheel_activity":{"score":0.0,"active_runs":0,"total":0,"by_stage":{"ingest":0,"build-vectors":0,"dedup":0,"consolidate":0,"lint":0}},"actions":[]},"cron_jobs":[{"id":"12c532815d47","name":"飞轮日报·微信推送","schedule":"45 7 * * *","status":"active","last":"07:45 ok"},{"id":"21ff20ab3607","name":"GitHub star-distill + T1 迭代","schedule":"10 8 * * *","status":"active","last":"08:10 ok"},{"id":"78247c397f8f","name":"中枢每日健康快照 (agent)","schedule":"50 7 * * *","status":"active","last":"07:50 ok"},{"id":"691ec6456904","name":"每周召回评测复核","schedule":"30 8 * * 6","status":"active","last":"Sat 08:30 ok"},{"id":"29774d09dfbe","name":"SkillHub 周晋级巡检","schedule":"0 8 * * 6","status":"active","last":"Sat 待跑"},{"id":"461dd62b4da3","name":"T15-6工具每日编排","schedule":"0 6 * * *","status":"active","last":"06:00 ok"},{"id":"fbcdc46ca7f0","name":"5平台每日健康检查","schedule":"55 7 * * *","status":"active","last":"07:55 ok"}],"card_stats_by_type":{"exp":144,"rule":26,"methodology":46,"blueprints":74,"longterm":0,"projects":13},"sync_status":{"Fan-Agent-Momory":{"ahead":0,"behind":0,"last_commit":"853782d","branch":"master"},"AgentMemoryHub":{"ahead":0,"behind":0,"last_commit":"5ddb89a","branch":"master"},"SkillHub":{"ahead":0,"behind":0,"last_commit":"5bc4a5a","branch":"master"}},"ledger_recent":[{"ts":"2026-09-09T15:55","who":"hermes","intent":"ingest: T22 3-agent exp","sha":"a5d666b"},{"ts":"2026-09-09T15:30","who":"hermes","intent":"sync: platforms.yaml v1.1","sha":"5ddb89a"},{"ts":"2026-09-09T14:55","who":"hermes","intent":"platform_healthcheck 5/6","sha":"n/a"},{"ts":"2026-09-09T14:00","who":"hermes","intent":"feat: T21 todos","sha":"f1713d9"},{"ts":"2026-09-09T10:00","who":"trae","intent":"ingest: mavis 5th platform","sha":"f16c408"}],"ingest_recent":[{"ts":"2026-09-09","title":"T22 3-agent 并行实测","type":"exp","status":"promoted"},{"ts":"2026-09-09","title":"T21 5 平台后续优化待办","type":"project","status":"promoted"},{"ts":"2026-09-09","title":"T20 方案 D MCP 自愈","type":"exp","status":"promoted"},{"ts":"2026-09-08","title":"T12 check-code-v1 全修复","type":"exp","status":"promoted"},{"ts":"2026-09-08","title":"DSH file-junction 接入","type":"exp","status":"promoted"}]};
+let DATA = {"generated_at": "2026-09-10T09:53:16.447364+08:00", "hub_root": "C:\\Users\\Fan-SJSS\\.trae-cn\\worktrees\\20260817-Fan-Agent-Momory\\feat-implement-plan-ZilBmv\\AgentMemoryHub", "health": {"overall": 100.0, "panels_ok": 6, "panels_total": 6}, "platforms": {"summary": {"green": 4}, "platforms": {"hermes": {"type": "mcp", "status": "GREEN"}, "trae": {"type": "mcp", "status": "YELLOW"}, "code": {"type": "mcp", "status": "RED"}, "workbuddy": {"type": "mcp", "status": "GREEN"}, "dsh": {"type": "file", "status": "GREEN"}}, "raw_status": "OK"}, "flywheel": {"skill_health": {"ok": true, "stdout": "avg: 95.0 low_health: 0", "stderr": ""}, "llm_route": {"ok": true, "stdout": "llm_route hits: []", "stderr": ""}, "stale_detect": {"ok": true, "stdout": "Stale 卡片：0 张\nStale 技能：0 个", "stderr": ""}, "knowledge_gap": {"ok": true, "stdout": "gap: 0/0 (0.0%)", "stderr": ""}, "skill_candidate": {"ok": true, "stdout": "生成 54 张建议卡：\n  - cards\\skill-candidates\\activedirs-five-type-discipline.md\n  - cards\\skill-candidates\\agent-memory-hub-mcp.md\n  - cards\\skill-candidates\\autocad-com-automation-deadlock.md\n  - cards\\ski", "stderr": ""}, "freshness": {"ok": true, "stdout": "Stale 卡片：0 张\nStale 技能：0 个", "stderr": ""}}, "knowledge_gap": {"total": 0, "miss": 0, "miss_rate": 0.0, "top_misses": []}, "todos": {"projects": [{"name": "cad-plugin-management-platform", "title": "---"}, {"name": "cad2020-pdf-merge", "title": "---"}, {"name": "github-autopush", "title": "---"}, {"name": "hermes-fan-debug-v1", "title": "---"}, {"name": "improve-ingest-dedup-threshold", "title": "---"}, {"name": "pluginhub-current-state", "title": "---"}, {"name": "project-threeRowRein-baseline-v51-snapshot", "title": "---"}, {"name": "sglang-dashboard-pluginhub-registration", "title": "---"}, {"name": "t1-plan-three-blueprints", "title": "---"}, {"name": "T19-cron-long-term-optimization", "title": "---"}, {"name": "T21-5platform-后续优化-待办", "title": "---"}], "pending_rules": 0}, "alerts": {"critical": ["code"], "announcements": [{"ts": 1788825228, "platform": "hermes", "action": "ingest_done", "payload": {"moved": ["test.md"], "commit": "abc123"}, "audit_id": "20260907T235348Z-ff4fceb6"}]}, "hub_health": {"overall_score": 29.0, "overall_verdict": "🚨 需修复", "card_health": {"score": 67.9, "active": 241, "candidate": 39, "reference": 71, "archived": 4, "total": 355}, "skill_health": {"score": 0.0, "active": 19, "candidate": 0, "reference": 0, "deprecated": 0, "total": 19, "skills": [{"name": "agent-platform-onboarding", "status": "active", "reuse_count": 0}, {"name": "bailian-cli", "status": "active", "reuse_count": 0}, {"name": "bailian-docs-llm-wiki", "status": "active", "reuse_count": 0}, {"name": "bailian-finetune", "status": "active", "reuse_count": 0}, {"name": "bailian-gen", "status": "active", "reuse_count": 0}, {"name": "bailian-managed-agent", "status": "active", "reuse_count": 0}, {"name": "bailian-model-recommend", "status": "active", "reuse_count": 0}, {"name": "bailian-protocol", "status": "active", "reuse_count": 0}, {"name": "bailian-train-deploy", "status": "active", "reuse_count": 0}, {"name": "bailian-web-search", "status": "active", "reuse_count": 0}, {"name": "cad-editor", "status": "active", "reuse_count": 0}, {"name": "check-code-v1", "status": "active", "reuse_count": 0}, {"name": "context-engineering-v1", "status": "active", "reuse_count": 0}, {"name": "desktop-preview-reveal", "status": "active", "reuse_count": 0}, {"name": "diagram-design", "status": "active", "reuse_count": 0}, {"name": "excel-author", "status": "active", "reuse_count": 0}, {"name": "mcp-server-setup", "status": "active", "reuse_count": 0}, {"name": "pdf", "status": "active", "reuse_count": 0}, {"name": "skillhub-integration", "status": "active", "reuse_count": 0}]}, "flywheel_activity": {"score": 0.0, "active_runs": 0, "total": 0, "by_stage": {"ingest": 0, "build-vectors": 0, "dedup": 0, "consolidate": 0, "lint": 0}}, "actions": []}, "cron_jobs": [{"id": "12c532815d47", "name": "飞轮日报·微信推送", "schedule": "45 7 * * *", "status": "active", "last": "07:45 ok"}, {"id": "21ff20ab3607", "name": "GitHub star-distill + T1 迭代", "schedule": "10 8 * * *", "status": "active", "last": "08:10 ok"}, {"id": "78247c397f8f", "name": "中枢每日健康快照 (agent)", "schedule": "50 7 * * *", "status": "active", "last": "07:50 ok"}, {"id": "691ec6456904", "name": "每周召回评测复核", "schedule": "30 8 * * 6", "status": "active", "last": "Sat 08:30 ok"}, {"id": "29774d09dfbe", "name": "SkillHub 周晋级巡检", "schedule": "0 8 * * 6", "status": "active", "last": "Sat 待跑"}, {"id": "461dd62b4da3", "name": "T15-6工具每日编排", "schedule": "0 6 * * *", "status": "active", "last": "06:00 ok"}, {"id": "fbcdc46ca7f0", "name": "5平台每日健康检查", "schedule": "55 7 * * *", "status": "active", "last": "07:55 ok"}], "card_stats_by_type": {"exp": 144, "rule": 26, "methodology": 46, "blueprints": 74, "longterm": 0, "projects": 13}, "sync_status": {"Fan-Agent-Momory": {"ahead": 0, "behind": 0, "last_commit": "853782d", "branch": "master"}, "AgentMemoryHub": {"ahead": 0, "behind": 0, "last_commit": "5ddb89a", "branch": "master"}, "SkillHub": {"ahead": 0, "behind": 0, "last_commit": "5bc4a5a", "branch": "master"}}, "ledger_recent": [{"ts": "2026-09-09T15:55", "who": "hermes", "intent": "ingest: T22 3-agent exp", "sha": "a5d666b"}, {"ts": "2026-09-09T15:30", "who": "hermes", "intent": "sync: platforms.yaml v1.1", "sha": "5ddb89a"}, {"ts": "2026-09-09T14:55", "who": "hermes", "intent": "platform_healthcheck 5/6", "sha": "n/a"}, {"ts": "2026-09-09T14:00", "who": "hermes", "intent": "feat: T21 todos", "sha": "f1713d9"}, {"ts": "2026-09-09T10:00", "who": "trae", "intent": "ingest: mavis 5th platform", "sha": "f16c408"}], "ingest_recent": [{"ts": "2026-09-09", "title": "T22 3-agent 并行实测", "type": "exp", "status": "promoted"}, {"ts": "2026-09-09", "title": "T21 5 平台后续优化待办", "type": "project", "status": "promoted"}, {"ts": "2026-09-09", "title": "T20 方案 D MCP 自愈", "type": "exp", "status": "promoted"}, {"ts": "2026-09-08", "title": "T12 check-code-v1 全修复", "type": "exp", "status": "promoted"}, {"ts": "2026-09-08", "title": "DSH file-junction 接入", "type": "exp", "status": "promoted"}]};
 let ACTIVE_TAB = "main";
 
 function showTab(name) {
@@ -207,6 +313,61 @@ function safeArr(x) {
   if (!x) return [];
   if (Array.isArray(x)) return x;
   return Object.keys(x).map(function(k) { return {k: k, v: x[k]}; });
+}
+
+// helper: set text safely
+function setText(id, val) {
+  var el = document.getElementById(id);
+  if (el) el.textContent = val;
+}
+
+// helper: set HTML safely
+function setHTML(id, html) {
+  var el = document.getElementById(id);
+  if (el) el.innerHTML = html;
+}
+
+// helper: escape HTML attribute
+function escapeAttr(s) {
+  return String(s).replace(/&/g, "&").replace(/'/g, "&#39;").replace(/"/g, "").replace(/</g, "<").replace(/>/g, ">");
+}
+
+// helper: escape HTML text
+function escapeHTML(s) {
+  return String(s).replace(/&/g, "&").replace(/</g, "<").replace(/>/g, ">");
+}
+
+// update nav badge counts
+function updateNavBadges(d) {
+  var plats = (d.platforms && d.platforms.platforms) || {};
+  var skills = (d.skillhub_direct || []).length;
+  var cron = safeArr(d.cron_jobs).length;
+  var alerts = ((d.alerts && d.alerts.critical) || []).length;
+  setText("nav-badge-main", "LIVE");
+  setText("nav-badge-flywheel", ((d.hub_health && d.hub_health.overall_score) || 0).toFixed(0));
+  setText("nav-badge-skillhub", skills || "—");
+  setText("nav-badge-platforms", Object.keys(plats).length);
+  setText("nav-badge-hermes", alerts > 0 ? alerts : "·");
+  var heroBadge = document.getElementById("nav-badge-hermes");
+  if (heroBadge && alerts > 0) { heroBadge.style.background = "var(--red)"; heroBadge.style.color = "#fff"; }
+}
+
+// mini-card: render compact status list
+function renderMini(containerId, items, maxItems) {
+  maxItems = maxItems || 6;
+  var html = "";
+  items.slice(0, maxItems).forEach(function(item) {
+    var colorClass = item.status === "GREEN" || item.status === "pass" || item.status === "active" || item.ok ? "s-green" :
+                     item.status === "RED" || item.status === "fail" || item.status === "error" ? "s-red" :
+                     item.status === "YELLOW" || item.status === "warn" ? "s-yellow" : "s-blue";
+    html += "<div style='display:flex;justify-content:space-between;align-items:center;padding:3px 0;font-size:11px'>";
+    html += "<span style='overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1'>" + (item.name || item.id || item.repo || item.title || "?") + "</span>";
+    html += "<span class='status-pill " + colorClass + "'>" + (item.status || item.count || "·") + "</span>";
+    html += "</div>";
+  });
+  if (items.length === 0) html = "<div class='empty'>暂无数据</div>";
+  if (items.length > maxItems) html += "<div style='text-align:center;color:var(--text-3);font-size:11px;margin-top:4px'>+ " + (items.length - maxItems) + " 更多</div>";
+  setHTML(containerId, html);
 }
 
 function render() {
@@ -246,7 +407,8 @@ function render() {
   var tblC = document.getElementById("tbl-cron");
   if (tblC) {
     tblC.innerHTML = cron.map(function(c) {
-      return "<tr><td class=mono>" + c.id + "</td><td>" + c.name + "</td><td class=mono>" + c.schedule + "</td><td>" + (c.last || "") + "</td><td><button class=btn data-cid='" + c.id + "' data-cname='" + c.name + "'>立即跑</button></td></tr>";
+      var lastDate = c.last_date ? "<span class='mono' style='font-size:11px'>" + c.last_date + "</span>" : "<span style='color:var(--text-3)'>--</span>";
+      return "<tr><td class=mono>" + c.id + "</td><td>" + c.name + "</td><td class=mono>" + c.schedule + "</td><td>" + (c.last || "") + "</td><td>" + lastDate + "</td><td><button class=btn data-cid='" + c.id + "' data-cname='" + c.name + "'>立即跑</button></td></tr>";
     }).join("");
   }
   // card stats by type
@@ -304,6 +466,39 @@ function render() {
   renderSkillHub(d);
   // platforms tab detail
   renderPlatforms(d);
+  // update nav badges
+  updateNavBadges(d);
+  // populate mini-cards on main panel
+  var platformArr = Object.entries(plats).map(function(e) {
+    return {name: e[0], status: (e[1] && e[1].status) || "?"};
+  });
+  renderMini("mini-platforms", platformArr, 6);
+  var panelArr = Object.entries(fw).map(function(e) {
+    return {name: e[0], status: (e[1] && e[1].ok) ? "pass" : "fail"};
+  });
+  renderMini("mini-panels", panelArr, 6);
+  var skillH2 = (d.hub_health && d.hub_health.skill_health) || {};
+  var skillStatus = [
+    {name: "active", status: skillH2.active || 0},
+    {name: "candidate", status: skillH2.candidate || 0},
+    {name: "reference", status: skillH2.reference || 0},
+    {name: "deprecated", status: skillH2.deprecated || 0}
+  ];
+  renderMini("mini-skill-status", skillStatus, 6);
+  var alArr = (d.alerts && d.alerts.critical) || [];
+  var alMini = alArr.concat((d.alerts && d.alerts.announcements) || []);
+  renderMini("mini-alerts", alMini.slice(0, 6).map(function(a) {
+    return typeof a === "string" ? {name: a, status: "RED"} : {name: (a.text || a.from || ""), status: "info"};
+  }), 6);
+  var syncMini = syncArr.map(function(s) {
+    return {name: s.repo, status: ((s.ahead || 0) > 0 || (s.behind || 0) > 0) ? "warn" : "active"};
+  });
+  renderMini("mini-sync", syncMini, 6);
+  renderMini("mini-ledger", (led || []).slice(0, 6), 6);
+  renderMini("mini-ingest", (ing || []).slice(0, 6), 6);
+  var cstats = Array.isArray(cstatsRaw) ? cstatsRaw : Object.keys(cstatsRaw).map(function(k) { return {name: k, status: cstatsRaw[k] || 0}; });
+  renderMini("mini-cards", cstats.slice(0, 6), 6);
+  setText("cron-count-tag", cron.length + " 条");
   setStatus("green", "已渲染 " + Object.keys(plats).length + " 平台 · " + cron.length + " cron");
 }
 
@@ -433,7 +628,6 @@ function renderSkillHub(d) {
   var skillH = (d.hub_health && d.hub_health.skill_health) || {};
   var skills = skillH.skills || [];
   if (skills.length === 0) {
-    // Fallback: read from skillhub_direct if provided
     var direct = d.skillhub_direct || [];
     if (direct.length === 0) {
       container.innerHTML = "<div class='empty'>暂无技能数据。运行 <code>python hub-engine/scripts/skill_list.py</code> 生成。</div>";
@@ -441,10 +635,98 @@ function renderSkillHub(d) {
     }
     skills = direct;
   }
-  container.innerHTML = "<div class='grid cols3'>" + skills.map(function(s) {
-    var sClass = (s.status || "candidate") === "active" ? "s-green" : (s.status === "deprecated" ? "s-red" : "s-yellow");
-    return "<div class='card skill-card'><div class='card-title'>" + (s.name || s.id || "?") + "</div><div style='margin:8px 0'><span class='status-pill " + sClass + "'>" + (s.status || "") + "</span></div><div class='card-sub'>复用 " + (s.reuse_count || 0) + " 次</div></div>";
-  }).join("") + "</div>";
+  // build filter chips + view mode + skill detail dialog
+  var allSkills = skills;
+  var byStatus = {};
+  allSkills.forEach(function(s) { var st = s.status || "candidate"; byStatus[st] = (byStatus[st] || 0) + 1; });
+  var sortMode = window.__skillSort || "status";
+  var curFilter = window.__skillFilter || "all";
+  var filtered = (curFilter === "all") ? allSkills : allSkills.filter(function(s) { return (s.status || "candidate") === curFilter; });
+  if (sortMode === "reuse") {
+    filtered.sort(function(a, b) { return (b.reuse_count || 0) - (a.reuse_count || 0); });
+  } else if (sortMode === "name") {
+    filtered.sort(function(a, b) { return (a.name || a.id || "").localeCompare(b.name || b.id || ""); });
+  } else {
+    var order = ["active", "reference", "candidate", "deprecated"];
+    filtered.sort(function(a, b) { return order.indexOf(a.status || "candidate") - order.indexOf(b.status || "candidate"); });
+  }
+  var html = "<div class='filter-bar'>";
+  html += "<div class='chip " + ((window.__skillFilter === "all" || !window.__skillFilter) ? "active" : "") + "' onclick='window.__skillFilter=\"all\";renderSkillHub(DATA)'>全部 <span class='mono'>" + allSkills.length + "</span></div>";
+  ["active", "reference", "candidate", "deprecated"].forEach(function(st) {
+    if (byStatus[st]) html += "<div class='chip " + (window.__skillFilter === st ? "active" : "") + "' onclick='window.__skillFilter=\"" + st + "\";renderSkillHub(DATA)'>" + st + " <span class='mono'>" + byStatus[st] + "</span></div>";
+  });
+  html += "</div>";
+  html += "<div class='filter-bar'>";
+  html += "<span style='font-size:11px;color:var(--text-3);line-height:28px;margin-right:8px'>排序：</span>";
+  ["status", "reuse", "name"].forEach(function(m) {
+    html += "<div class='chip " + (sortMode === m ? "active" : "") + "' onclick='window.__skillSort=\"" + m + "\";renderSkillHub(DATA)'>" + m + "</div>";
+  });
+  html += "</div>";
+  html += "<div class='grid cols4'>";
+  filtered.slice(0, 32).forEach(function(s) {
+    var st = s.status || "candidate";
+    var sClass = st === "active" ? "s-green" : (st === "deprecated" ? "s-red" : (st === "reference" ? "s-purple" : "s-yellow"));
+    var desc = s.description || s.desc || ("技能: " + (s.name || s.id || "?"));
+    html += "<div class='card skill-card' data-skill-id='" + escapeAttr(s.id || s.name || "?") + "'>";
+    html += "<div style='display:flex;justify-content:space-between;align-items:start;gap:8px'>";
+    html += "<div class='card-title' style='flex:1;overflow:hidden;text-overflow:ellipsis'>" + (s.name || s.id || "?") + "</div>";
+    html += "<span class='status-pill " + sClass + "'>" + st + "</span>";
+    html += "</div>";
+    html += "<div class='skill-desc'>" + desc + "</div>";
+    html += "<div class='skill-meta'><span>复用 <span class='reuse'>" + (s.reuse_count || 0) + "</span> 次</span><span class='mono'>" + (s.id || "—").slice(0, 16) + "</span></div>";
+    html += "</div>";
+  });
+  html += "</div>";
+  if (filtered.length > 32) {
+    html += "<div style='text-align:center;color:var(--text-3);font-size:11px;padding:10px'>显示前 32 / " + filtered.length + " 个</div>";
+  }
+  container.innerHTML = html;
+}
+
+function showSkillDetail(id) {
+  var skills = (DATA.hub_health && DATA.hub_health.skill_health && DATA.hub_health.skill_health.skills) || (DATA.skillhub_direct || []);
+  var s = skills.find(function(x) { return (x.id || x.name) === id; });
+  if (!s) return;
+  var st = s.status || "candidate";
+  var sClass = st === "active" ? "s-green" : (st === "deprecated" ? "s-red" : (st === "reference" ? "s-purple" : "s-yellow"));
+  var modal = document.createElement("div");
+  modal.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:100;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px)";
+  modal.onclick = function(e) { if (e.target === modal) modal.remove(); };
+  modal.innerHTML = "<div style='background:var(--bg-1);border:1px solid var(--border);border-radius:11px;padding:24px;width:480px;max-width:90vw;max-height:80vh;overflow:auto'>" +
+    "<div style='display:flex;justify-content:space-between;align-items:center;margin-bottom:16px'>" +
+    "<div><div class='card-title'>技能详情</div><h2 style='margin:4px 0 0;font-size:18px'>" + (s.name || s.id || "?") + "</h2></div>" +
+    "<span class='status-pill " + sClass + "'>" + st + "</span></div>" +
+    "<div style='display:grid;grid-template-columns:1fr 1fr;gap:11px;margin-bottom:16px'>" +
+    "<div><div class='card-title'>ID</div><div class='mono' style='font-size:11px'>" + (s.id || "—") + "</div></div>" +
+    "<div><div class='card-title'>复用次数</div><div class='card-value' style='font-size:20px'>" + (s.reuse_count || 0) + "</div></div>" +
+    "</div>" +
+    "<div style='margin-bottom:16px'><div class='card-title'>描述</div><div style='font-size:13.5px;line-height:1.5;margin-top:6px'>" + (s.description || s.desc || "暂无描述") + "</div></div>" +
+    "<div style='margin-bottom:16px'><div class='card-title'>路径</div><div class='mono' style='font-size:11px;margin-top:4px'>" + (s.path || "—") + "</div></div>" +
+    "<div style='display:flex;gap:11px;margin-top:20px'>" +
+    "<button class='btn btn-primary' data-act='call'>▶ 调用此技能</button>" +
+    "<button class='btn' data-act='view'>📄 查看源文件</button>" +
+    "<button class='btn' data-act='close' style='margin-left:auto'>关闭</button>" +
+    "</div></div>";
+  document.body.appendChild(modal);
+  // bind modal button actions
+  var skillName = s.name || s.id || "?";
+  var skillPath = s.path || s.id || "";
+  modal.querySelector("[data-act=call]").onclick = function() {
+    var status = modal.querySelector(".modal-status") || (function() {
+      var el = document.createElement("div");
+      el.className = "modal-status";
+      el.style.cssText = "margin-top:11px;padding:11px;background:var(--bg-2);border-radius:4px;font-size:11px;color:var(--text-2)";
+      modal.firstChild.appendChild(el);
+      return el;
+    })();
+    status.textContent = "▶ 调用技能: " + skillName + " — (模拟) 后端接入后会真实执行";
+    setStatus("yellow", "调用技能: " + skillName);
+  };
+  modal.querySelector("[data-act=view]").onclick = function() {
+    setStatus("green", "查看源文件: " + skillPath);
+    alert("查看源文件: " + skillPath + "\n\n(模拟) - 后端接入后会打开文件");
+  };
+  modal.querySelector("[data-act=close]").onclick = function() { modal.remove(); };
 }
 
 function renderPlatforms(d) {
@@ -508,11 +790,24 @@ document.addEventListener("DOMContentLoaded", function() {
 // 初始化：等 DOM + 数据准备好后渲染
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', function() {
-    setTimeout(function() { if (typeof render === 'function') render(); }, 50);
-  });
-} else {
-  setTimeout(function() { if (typeof render === 'function') render(); }, 50);
-}
+      setTimeout(function() {
+        if (typeof render === 'function') render();
+        // bind skill-card clicks (delegated)
+        document.body.addEventListener('click', function(e) {
+          var card = e.target.closest('.skill-card');
+          if (card && card.dataset.skillId) showSkillDetail(card.dataset.skillId);
+        });
+      }, 50);
+    });
+  } else {
+    setTimeout(function() {
+      if (typeof render === 'function') render();
+      document.body.addEventListener('click', function(e) {
+        var card = e.target.closest('.skill-card');
+        if (card && card.dataset.skillId) showSkillDetail(card.dataset.skillId);
+      });
+    }, 50);
+  }
 
 </script>
 </body></html>

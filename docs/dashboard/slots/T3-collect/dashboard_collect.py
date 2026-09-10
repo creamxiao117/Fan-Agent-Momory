@@ -3,6 +3,7 @@
 
 V1.0 (2026-09-09): 5 数据源 → 6 大区 dashboard-data.json.
 """
+
 import argparse
 import json
 import re
@@ -18,6 +19,7 @@ DEFAULT_SOURCES = {
     "announcements": ".sync/announcements.jsonl",
     "platform_health": ".sync/state/platform-health.jsonl",
 }
+
 
 def _load_jsonl(p: Path, limit: int = 100) -> list[dict]:
     if not p.exists():
@@ -39,6 +41,7 @@ def _load_jsonl(p: Path, limit: int = 100) -> list[dict]:
         return []
     return out
 
+
 def _load_json(p: Path) -> dict | None:
     if not p.exists():
         return None
@@ -47,6 +50,7 @@ def _load_json(p: Path) -> dict | None:
             return json.load(fh)
     except (OSError, json.JSONDecodeError):
         return None
+
 
 def _parse_platform_dashboard(p: Path) -> dict:
     """解析 platform-dashboard.md → platforms 区."""
@@ -65,13 +69,12 @@ def _parse_platform_dashboard(p: Path) -> dict:
         if m:
             out["summary"][color.lower()] = int(m.group(1))
     # 每个平台 ✅/❌ 块
-    blocks = re.findall(
-        r"###\s+(✅|❌|🟡)\s+(\w+)\s+\((\w+)\)([\s\S]*?)(?=###|\Z)", text
-    )
+    blocks = re.findall(r"###\s+(✅|❌|🟡)\s+(\w+)\s+\((\w+)\)([\s\S]*?)(?=###|\Z)", text)
     for mark, name, ptype, body in blocks:
         status = "GREEN" if mark == "✅" else ("RED" if mark == "❌" else "YELLOW")
         out["platforms"][name] = {"type": ptype, "status": status}
     return out
+
 
 def _calc_knowledge_gap(query_log: Path, hours: int = 24) -> dict:
     """统计 24h 内未命中查询."""
@@ -103,6 +106,7 @@ def _calc_knowledge_gap(query_log: Path, hours: int = 24) -> dict:
         "top_misses": top,
     }
 
+
 def _parse_daily_6panel(p: Path) -> dict:
     """解析 daily-6panel.json → 6 panel 子区."""
     data = _load_json(p) or {}
@@ -115,10 +119,12 @@ def _parse_daily_6panel(p: Path) -> dict:
         out[name] = {"ok": ok, "stdout": stdout[:300], "stderr": stderr[:200]}
     return out
 
+
 def _parse_announcements(p: Path, limit: int = 5) -> list[dict]:
     """最近 5 条公告."""
     entries = _load_jsonl(p, limit=200)
     return entries[-limit:] if entries else []
+
 
 def _parse_platform_health(p: Path) -> dict:
     """platform-health.jsonl 状态累计."""
@@ -129,6 +135,7 @@ def _parse_platform_health(p: Path) -> dict:
         if s in summary:
             summary[s] += 1
     return summary
+
 
 def _load_todos_from_prompts(hub_root: Path) -> dict:
     """读 projects/ 找 type=project + status=active 当作 todos."""
@@ -153,6 +160,7 @@ def _load_todos_from_prompts(hub_root: Path) -> dict:
         out["pending_rules"] = sum(1 for _ in pending.glob("*.md"))
     return out
 
+
 def collect_all(hub_root: Path, skillhub_root: Path | None = None) -> dict:
     """主入口: 6 大区数据采集. 单源失败不影响其他."""
     out: dict = {
@@ -169,15 +177,11 @@ def collect_all(hub_root: Path, skillhub_root: Path | None = None) -> dict:
         "panels_total": total_count,
     }
     # 2. platforms
-    out["platforms"] = _parse_platform_dashboard(
-        hub_root / DEFAULT_SOURCES["platform_dashboard"]
-    )
+    out["platforms"] = _parse_platform_dashboard(hub_root / DEFAULT_SOURCES["platform_dashboard"])
     # 3. flywheel (复用 daily-6panel)
     out["flywheel"] = six
     # 4. knowledge_gap
-    out["knowledge_gap"] = _calc_knowledge_gap(
-        hub_root / DEFAULT_SOURCES["query_log"]
-    )
+    out["knowledge_gap"] = _calc_knowledge_gap(hub_root / DEFAULT_SOURCES["query_log"])
     # 5. todos
     out["todos"] = _load_todos_from_prompts(hub_root)
     # 6. alerts (从 platform-dashboard 解析 RED)
@@ -185,9 +189,7 @@ def collect_all(hub_root: Path, skillhub_root: Path | None = None) -> dict:
     red_list = [n for n, v in platforms.items() if v.get("status") == "RED"]
     out["alerts"] = {
         "critical": red_list,
-        "announcements": _parse_announcements(
-            hub_root / DEFAULT_SOURCES["announcements"]
-        ),
+        "announcements": _parse_announcements(hub_root / DEFAULT_SOURCES["announcements"]),
     }
 
     # ===== 增强大区（任务 2-3）=====
@@ -195,30 +197,78 @@ def collect_all(hub_root: Path, skillhub_root: Path | None = None) -> dict:
     _hub_health = {"hub_health": None}
     try:
         import subprocess
+
         skillhub = skillhub_root or Path("C:/Users/Fan-SJSS/AppData/Local/hermes/skills")
         result = subprocess.run(
             [
                 sys.executable,
                 str(hub_root.parent / "hub-engine" / "scripts" / "hub_health.py"),
-                "--hub-root", str(hub_root),
-                "--skillhub-root", str(skillhub),
+                "--hub-root",
+                str(hub_root),
+                "--skillhub-root",
+                str(skillhub),
                 "--dashboard-format",
             ],
-            capture_output=True, text=True, timeout=30,
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
         )
         if result.returncode == 0:
             _hub_health = json.loads(result.stdout)
-    except Exception:
+    except Exception:  # noqa: S110,BLE001
         pass
     out["hub_health"] = _hub_health.get("hub_health") or {}
     out["cron_jobs"] = [
-        {"id": "12c532815d47", "name": "飞轮日报·微信推送", "schedule": "45 7 * * *", "status": "active", "last": "07:45 ok"},
-        {"id": "21ff20ab3607", "name": "GitHub star-distill + T1 迭代", "schedule": "10 8 * * *", "status": "active", "last": "08:10 ok"},
-        {"id": "78247c397f8f", "name": "中枢每日健康快照 (agent)", "schedule": "50 7 * * *", "status": "active", "last": "07:50 ok"},
-        {"id": "691ec6456904", "name": "每周召回评测复核", "schedule": "30 8 * * 6", "status": "active", "last": "Sat 08:30 ok"},
-        {"id": "29774d09dfbe", "name": "SkillHub 周晋级巡检", "schedule": "0 8 * * 6", "status": "active", "last": "Sat 待跑"},
-        {"id": "461dd62b4da3", "name": "T15-6工具每日编排", "schedule": "0 6 * * *", "status": "active", "last": "06:00 ok"},
-        {"id": "fbcdc46ca7f0", "name": "5平台每日健康检查", "schedule": "55 7 * * *", "status": "active", "last": "07:55 ok"}
+        {
+            "id": "12c532815d47",
+            "name": "飞轮日报·微信推送",
+            "schedule": "45 7 * * *",
+            "status": "active",
+            "last": "07:45 ok",
+        },
+        {
+            "id": "21ff20ab3607",
+            "name": "GitHub star-distill + T1 迭代",
+            "schedule": "10 8 * * *",
+            "status": "active",
+            "last": "08:10 ok",
+        },
+        {
+            "id": "78247c397f8f",
+            "name": "中枢每日健康快照 (agent)",
+            "schedule": "50 7 * * *",
+            "status": "active",
+            "last": "07:50 ok",
+        },
+        {
+            "id": "691ec6456904",
+            "name": "每周召回评测复核",
+            "schedule": "30 8 * * 6",
+            "status": "active",
+            "last": "Sat 08:30 ok",
+        },
+        {
+            "id": "29774d09dfbe",
+            "name": "SkillHub 周晋级巡检",
+            "schedule": "0 8 * * 6",
+            "status": "active",
+            "last": "Sat 待跑",
+        },
+        {
+            "id": "461dd62b4da3",
+            "name": "T15-6工具每日编排",
+            "schedule": "0 6 * * *",
+            "status": "active",
+            "last": "06:00 ok",
+        },
+        {
+            "id": "fbcdc46ca7f0",
+            "name": "5平台每日健康检查",
+            "schedule": "55 7 * * *",
+            "status": "active",
+            "last": "07:55 ok",
+        },
     ]
     out["card_stats_by_type"] = [
         {"type": "exp", "label": "EXP", "count": 144},
@@ -226,13 +276,13 @@ def collect_all(hub_root: Path, skillhub_root: Path | None = None) -> dict:
         {"type": "methodology", "label": "METHODOLOGY", "count": 46},
         {"type": "blueprints", "label": "BLUEPRINTS", "count": 74},
         {"type": "longterm", "label": "LONGTERM", "count": 0},
-        {"type": "projects", "label": "PROJECTS", "count": 13}
+        {"type": "projects", "label": "PROJECTS", "count": 13},
     ]
     out["sync_status"] = {
         "repos": [
             {"name": "Fan-Agent-Momory", "ahead": 0, "behind": 0, "last_commit": "853782d", "branch": "master"},
             {"name": "AgentMemoryHub", "ahead": 0, "behind": 0, "last_commit": "5ddb89a", "branch": "master"},
-            {"name": "SkillHub", "ahead": 0, "behind": 0, "last_commit": "5bc4a5a", "branch": "master"}
+            {"name": "SkillHub", "ahead": 0, "behind": 0, "last_commit": "5bc4a5a", "branch": "master"},
         ]
     }
     out["ledger_recent"] = [
@@ -240,25 +290,30 @@ def collect_all(hub_root: Path, skillhub_root: Path | None = None) -> dict:
         {"ts": "2026-09-09T15:30", "who": "hermes", "intent": "sync: platforms.yaml v1.1", "sha": "5ddb89a"},
         {"ts": "2026-09-09T14:55", "who": "hermes", "intent": "platform_healthcheck 5/6", "sha": "n/a"},
         {"ts": "2026-09-09T14:00", "who": "hermes", "intent": "feat: T21 todos", "sha": "f1713d9"},
-        {"ts": "2026-09-09T10:00", "who": "trae", "intent": "ingest: mavis 5th platform", "sha": "f16c408"}
+        {"ts": "2026-09-09T10:00", "who": "trae", "intent": "ingest: mavis 5th platform", "sha": "f16c408"},
     ]
     out["ingest_recent"] = [
         {"ts": "2026-09-09", "title": "T22 3-agent 并行实测", "type": "exp", "status": "promoted"},
         {"ts": "2026-09-09", "title": "T21 5 平台后续优化待办", "type": "project", "status": "promoted"},
         {"ts": "2026-09-09", "title": "T20 方案 D MCP 自愈", "type": "exp", "status": "promoted"},
         {"ts": "2026-09-08", "title": "T12 check-code-v1 全修复", "type": "exp", "status": "promoted"},
-        {"ts": "2026-09-08", "title": "DSH file-junction 接入", "type": "exp", "status": "promoted"}
+        {"ts": "2026-09-08", "title": "DSH file-junction 接入", "type": "exp", "status": "promoted"},
     ]
     out["card_stats_by_type"] = {
-        "exp": 144, "rule": 26, "methodology": 46,
-        "blueprints": 74, "longterm": 0, "projects": 13
+        "exp": 144,
+        "rule": 26,
+        "methodology": 46,
+        "blueprints": 74,
+        "longterm": 0,
+        "projects": 13,
     }
     out["sync_status"] = {
         "Fan-Agent-Momory": {"ahead": 0, "behind": 0, "last_commit": "853782d", "branch": "master"},
         "AgentMemoryHub": {"ahead": 0, "behind": 0, "last_commit": "5ddb89a", "branch": "master"},
-        "SkillHub": {"ahead": 0, "behind": 0, "last_commit": "5bc4a5a", "branch": "master"}
+        "SkillHub": {"ahead": 0, "behind": 0, "last_commit": "5bc4a5a", "branch": "master"},
     }
     return out
+
 
 def main() -> int:
     ap = argparse.ArgumentParser(description="Dashboard data collector")
@@ -277,6 +332,7 @@ def main() -> int:
     else:
         print(out_json)
     return 0
+
 
 if __name__ == "__main__":
     sys.exit(main())
