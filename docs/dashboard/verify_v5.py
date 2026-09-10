@@ -17,6 +17,7 @@ import argparse
 import pathlib
 import sys
 
+from playwright.sync_api import TimeoutError as PWTimeoutError
 from playwright.sync_api import sync_playwright
 
 PASS: list[str] = []
@@ -187,22 +188,56 @@ def main() -> int:
         sh_txt = pg.locator("#src-health").inner_text() or ""
         chk("体检显示 SKILL.md 真实数量", "SKILL.md" in sh_txt and "158" in sh_txt, sh_txt.replace(chr(10), " ")[:70])
 
-        # --- P1-5 趋势 delta：注入一个不同的历史值，验证真能算出变化 ---
-        pg.evaluate("""(() => {
-            const cur = JSON.parse(localStorage.getItem('hubHist2') || '{}');
-            localStorage.setItem('hubHist2', JSON.stringify({
-              cards: [300, 340], overall: [20], cron_ok: [50], vector_missing: [9],
-              cited: [40], flywheel: [10]
-            }));
-        })()""")
+        # --- P1-5 趋势 delta：注入可复现的历史种子，验证真能算出变化 ---
+        # 关键：必须等"没有采集在飞"再注入，否则并发 load() 的 saveHist() 会覆盖种子，
+        # 页面会退化成"＋ 基线"从而造成随机假失败（实测 1/5 复现）。
+        pg.wait_for_function(
+            "() => { const b = document.querySelector('#btn-refresh'); return b && !b.disabled; }",
+            timeout=30000,
+        )
+        SEED = {
+            "cards": [300, 340],
+            "overall": [20],
+            "cron_ok": [50],
+            "vector_missing": [9],
+            "cited": [40],
+            "flywheel": [10],
+        }
+        pg.evaluate("(s) => localStorage.setItem('hubHist2', JSON.stringify(s))", SEED)
+        seeded = pg.evaluate("localStorage.getItem('hubHist2')") or ""
+        chk("历史种子确实写入 localStorage", "340" in seeded, seeded[:56])
+
         pg.click("#btn-refresh")
-        pg.wait_for_timeout(9000)
+        # 轮询等待（采集约 4.5s，给 20s 上限），而不是死等固定 9s
+        try:
+            pg.wait_for_function(
+                "() => document.querySelectorAll('.delta.up,.delta.down').length >= 1",
+                timeout=20000,
+            )
+        except PWTimeoutError as exc:  # 超时不致命：由下方断言给出精确诊断
+            print(f"  (提示) 等待 delta 超时，转为直接断言: {exc.__class__.__name__}")
         n_delta = pg.locator(".delta").count()
         chk("注入历史后趋势 delta 出现", n_delta >= 1, f"{n_delta} 个")
+        updown = pg.locator(".delta.up").count() + pg.locator(".delta.down").count()
+        flat = pg.locator(".delta.flat").count()
+        detail = (
+            pg.evaluate(
+                "[...document.querySelectorAll('.delta')]"
+                ".map(e => e.className.replace('delta ','') + '|' + e.textContent.trim()).join('  ')"
+            )
+            or ""
+        )
+        chk("delta 数值方向正确", updown >= 1, f"up/down={updown} flat={flat} [{detail[:70]}]")
+        # 确定性数值断言：cards 的 delta 必须 == 当前值 - 种子末值(340)
+        expect_txt = pg.evaluate(
+            "() => { const c = (D.hub && D.hub.cards) ? D.hub.cards.total : null;"
+            " if (c == null) return null; const d = c - 340;"
+            " return (d > 0 ? '\u25b2' : '\u25bc') + Math.abs(d).toFixed(1); }"
+        )
         chk(
-            "delta 数值方向正确",
-            pg.locator(".delta.up").count() >= 1 or pg.locator(".delta.down").count() >= 1,
-            (pg.locator(".delta").first.inner_text() or "").strip(),
+            "delta 数值 == 当前值-种子值(340)",
+            bool(expect_txt) and expect_txt in detail,
+            f"期望 {expect_txt} 出现在 [{detail[:70]}]",
         )
 
         import os
