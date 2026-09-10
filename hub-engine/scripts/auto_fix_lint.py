@@ -2,7 +2,7 @@ r"""auto_fix_lint.py — 自动修复 lint invalid 卡片的 frontmatter 缺失�
 
 保守修复策略（只碰 frontmatter，不改正文）：
 1. 缺失 type → 从父目录推断（rules/ → rule, experience/ → exp, ...）
-2. 缺失 updated → 填今天日期
+2. 缺失 updated → 优先取卡内 created（保留时序），无 created 才填今天
 3. 缺失 status → active
 4. tags 缺失 → 填空数组 []（tag 自动生成交给后续 LLM 流程）
 
@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import argparse
 import sys
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 _HUB_ENGINE = Path(__file__).resolve().parent.parent
@@ -45,13 +45,40 @@ def _dir_to_type(dir_name: str) -> str | None:
     return _DIR_TO_TYPE.get(dir_name)
 
 
+def _fill_updated(card, fallback: str) -> str:
+    """补 updated 时优先取卡内 created（保留内容时序）。
+
+    updated=今天会让 stale 判定失真（180 天阈值下历史卡被'刷新'成新卡）；
+    取 created 保留真实时序；created 缺失或格式非法时回退 fallback。
+    """
+    raw = card.extra.get("created")
+    if raw is None:
+        return fallback
+    if hasattr(raw, "isoformat"):  # yaml 会把 created: 2026-09-10 解析为 date
+        return str(raw.isoformat())
+    text = str(raw).strip()
+    try:
+        date.fromisoformat(text)
+    except ValueError:
+        return fallback
+    return text
+
+
 def run_fix(root: Path, *, dry_run: bool = False) -> dict:
     """执行修复，返回统计结果。"""
-    from common.frontmatter import save_card, today_date, try_read_card, validate_card
+    from common.frontmatter import (
+        VALID_TYPES,
+        save_card,
+        today_date,
+        try_read_card,
+        validate_card,
+    )
     from tools.lint import lint
 
     report = lint(root)
-    invalid_count = report.get("invalid", 0)
+    # 同时看非权威区漂移：experience/notes/retro 不参与 lint 的 invalid 计数，
+    # 只按 invalid 判定会让漂移卡再次静默存活（2026-09-11 教训）
+    invalid_count = report.get("invalid", 0) + len(report.get("schema_drift", []))
     if invalid_count == 0:
         return {
             "fixed": 0,
@@ -87,24 +114,16 @@ def run_fix(root: Path, *, dry_run: bool = False) -> dict:
             fixes: list[str] = []
             rel_path = str(md.relative_to(root))
 
-            if card.type not in (
-                "rule",
-                "exp",
-                "note",
-                "project",
-                "retro",
-                "methodology",
-                "longterm",
-                "blueprint",
-            ):
+            if card.type not in VALID_TYPES:
                 new_type = _dir_to_type(sub)
                 if new_type:
+                    old_type = card.type
                     card.type = new_type
-                    fixes.append(f"type: {card.type} → {new_type}")
+                    fixes.append(f"type: {old_type} → {new_type}")
 
             if not card.updated:
-                card.updated = today_date()
-                fixes.append(f"updated: (空) → {today_date()}")
+                card.updated = _fill_updated(card, today_date())
+                fixes.append(f"updated: (空) → {card.updated}")
 
             if card.status not in ("active", "archived", "candidate", "reference"):
                 card.status = "active"

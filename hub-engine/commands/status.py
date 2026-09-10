@@ -59,6 +59,7 @@ def cmd_status(args) -> int:
             "hooks": len(report["hooks"]),
             "stale": len(report["stale"]),
             "invalid": report["invalid"],
+            "schema_drift": len(report["schema_drift"]),
         },
         "pending": len(pending),
         "pending_first": pending[0].name if pending else None,
@@ -396,13 +397,19 @@ def collect_snapshot_alerts(
         + len(report.get("ghosts", []))
         + len(report.get("stale", []))
         + report.get("invalid", 0)
+        + len(report.get("schema_drift", []))
     )
     if unhealthy > 0:
         alerts.append(
             {
                 "level": "warning",
                 "rule": "lint_issues",
-                "message": f"Lint 发现 {unhealthy} 处问题：orphans={len(report.get('orphans', []))} ghosts={len(report.get('ghosts', []))} stale={len(report.get('stale', []))} invalid={report.get('invalid', 0)}",
+                "message": (
+                    f"Lint 发现 {unhealthy} 处问题：orphans={len(report.get('orphans', []))} "
+                    f"ghosts={len(report.get('ghosts', []))} stale={len(report.get('stale', []))} "
+                    f"invalid={report.get('invalid', 0)} "
+                    f"schema_drift={len(report.get('schema_drift', []))}"
+                ),
                 "suggestion": "运行 hub lint 检查详情并修复",
             }
         )

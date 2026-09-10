@@ -16,6 +16,13 @@ AUTHORITY_DIRS = (
 )
 STALE_DAYS = 180
 
+# 非权威区目录（experience/notes/retro）：不参与孤儿/陈旧判定（它们不是权威区、
+# 也没有 INDEX 入链语义），但**必须单独做 schema 校验**——2026-09-11 实测：11 张
+# `type: experience` 漂移卡在 experience/ 静默存活，lint 报的 7 处问题里完全不出现
+# （同类漂移 2026-08-29 已修过 23 张后复发）。本维度只跑 validate_card，
+# 不与孤儿/陈旧逻辑混算，保持各维度语义独立。
+NON_AUTHORITY_DIRS = ("experience", "notes", "retro")
+
 
 def _all_cards(root: Path) -> list:
     """返回 (dir, Path, Card) 列表；跳过时间线/报告等非卡片文件"""
@@ -98,8 +105,44 @@ def find_orphans(root: Path) -> list[Path]:
     return orphans
 
 
+def _non_authority_cards(root: Path) -> list[tuple[str, Path, object]]:
+    """非权威区卡片；跳过时间线/报告等非卡片文件（与 _all_cards 同口径）"""
+    out = []
+    for sub in NON_AUTHORITY_DIRS:
+        d = root / sub
+        if not d.exists():
+            continue
+        for p in sorted(d.glob("*.md")):
+            if p.name == "log.md" or p.name.startswith("lint-report-"):
+                continue
+            out.append((sub, p, try_read_card(p)))
+    return out
+
+
+def find_schema_drift(root: Path) -> list[dict]:
+    """非权威区 schema 漂移（独立维度，只做 frontmatter 校验）。
+
+    返回 [{"dir", "name", "errors"}]：
+      - errors == ["frontmatter 无法解析"] → 坏文件/非卡片（该卡不会被检索收录）
+      - 其他 errors → type/status/updated 不合规
+
+    与 find_orphans / find_index_ghosts 无关：非权威区不做入链判定。
+    """
+    drift = []
+    for sub, p, card in _non_authority_cards(Path(root)):
+        if card is None:
+            drift.append(
+                {"dir": sub, "name": p.name, "errors": ["frontmatter 无法解析"]}
+            )
+            continue
+        errs = validate_card(card)
+        if errs:
+            drift.append({"dir": sub, "name": p.name, "errors": errs})
+    return drift
+
+
 def lint(root: Path) -> dict:
-    """健康检查报告：orphans / stale / invalid / notes"""
+    """健康检查报告：orphans / stale / invalid / schema_drift / notes"""
     root = Path(root)
     stale, invalid = [], 0  # invalid 是 int 计数（计划原文有 bug）
     for sub, p, card in _all_cards(root):
@@ -124,6 +167,7 @@ def lint(root: Path) -> dict:
         "hooks": [],  # 预留：hook 漂移检测（未实现）
         "stale": stale,
         "invalid": invalid,
+        "schema_drift": find_schema_drift(root),
         "notes": f"共检查 {total} 张卡片",
     }
 

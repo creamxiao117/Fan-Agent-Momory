@@ -20,17 +20,21 @@ def cmd_lint(args) -> int:
     print("hook漂移:", [h["name"] for h in report["hooks"]])
     print("陈旧页:", report["stale"])
     print("无效卡片:", report["invalid"])
+    drift = report["schema_drift"]
+    print("非权威区漂移:", [f"{d['dir']}/{d['name']}" for d in drift])
     print("备注:", report["notes"])
     unhealthy = (
         len(report["orphans"])
         + len(report["ghosts"])
         + len(report["stale"])
         + report["invalid"]
+        + len(drift)
     )
     if unhealthy:
         print(
             f"【告警】发现 {unhealthy} 处健康问题：orphans {len(report['orphans'])} / "
-            f"ghosts {len(report['ghosts'])} / stale {len(report['stale'])} / invalid {report['invalid']}"
+            f"ghosts {len(report['ghosts'])} / stale {len(report['stale'])} / invalid {report['invalid']} / "
+            f"schema_drift {len(drift)}"
         )
         return 2
     return 0

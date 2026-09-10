@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from scripts.bootstrap_hub import bootstrap
-from tools.lint import find_index_ghosts, find_orphans, lint
+from tools.lint import find_index_ghosts, find_orphans, find_schema_drift, lint
 
 
 def _seed(root: Path) -> None:
@@ -39,7 +39,15 @@ def test_lint_returns_full_shape(tmp_path):
     root = bootstrap(tmp_path)
     _seed(root)
     report = lint(root)
-    assert set(report) == {"orphans", "ghosts", "stale", "invalid", "notes", "hooks"}
+    assert set(report) == {
+        "orphans",
+        "ghosts",
+        "stale",
+        "invalid",
+        "schema_drift",
+        "notes",
+        "hooks",
+    }
     assert isinstance(report["invalid"], int)
 
 
@@ -48,6 +56,38 @@ def test_lint_ignores_log_and_report_files(tmp_path):
     root = bootstrap(tmp_path)
     report = lint(root)
     assert report["invalid"] == 0
+
+
+def _seed_non_authority_drift(root: Path) -> None:
+    """非权威区漂移卡：type 非法 + 无 frontmatter（2026-09-11 真实漂移形态）"""
+    (root / "experience").mkdir(parents=True, exist_ok=True)
+    (root / "experience" / "drift-type.md").write_text(
+        "---\ntype: experience\ntags: [x]\nstatus: active\n---\n漂移卡\n",
+        encoding="utf-8",
+    )
+    (root / "experience" / "drift-nofm.md").write_text(
+        "# 无 frontmatter\n正文\n", encoding="utf-8"
+    )
+
+
+def test_find_schema_drift_flags_non_authority(tmp_path):
+    """非权威区 schema 漂移必须被独立维度检出——权威区 invalid 计数不覆盖它"""
+    root = bootstrap(tmp_path)
+    _seed_non_authority_drift(root)
+    report = lint(root)
+    assert report["invalid"] == 0  # 非权威区不计入权威区 invalid
+    names = {d["name"] for d in report["schema_drift"]}
+    assert names == {"drift-type.md", "drift-nofm.md"}
+    errs = {d["name"]: d["errors"] for d in report["schema_drift"]}
+    assert any("experience" in e for e in errs["drift-type.md"])
+    assert errs["drift-nofm.md"] == ["frontmatter 无法解析"]
+
+
+def test_schema_drift_clean_hub_is_empty(tmp_path):
+    root = bootstrap(tmp_path)
+    _seed(root)
+    assert find_schema_drift(root) == []
+    assert lint(root)["schema_drift"] == []
 
 
 def test_find_index_ghosts_reports_missing(tmp_path):
