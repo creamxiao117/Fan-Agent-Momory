@@ -10,7 +10,8 @@
     GET  /                      看板页面
     GET  /static/<path>         静态资源
     GET  /api/health            服务自检
-    GET  /api/snapshot          实时采集（10s 缓存）
+    GET  /api/snapshot          实时采集（10s TTL + ETag/304）
+    GET  /api/alert/<id>        告警详情 + 现读证据 + 可复制修复包
     POST /api/action/collect    强制重采集（绕缓存）
     POST /api/action/cron/<id>  触发定时任务  → hermes cron run <id>
     GET  /api/skill/<name>      技能详情（SKILL.md + 支撑文件清单）
@@ -28,6 +29,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import mimetypes
 import os
@@ -37,9 +39,12 @@ import threading
 import time
 import urllib.error
 import urllib.request
+from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import unquote, urlparse
+
+CST = timezone(timedelta(hours=8))
 
 HERE = Path(__file__).resolve().parent
 LOCAL_APP = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData/Local"))
@@ -221,6 +226,83 @@ def cron_incidents() -> dict:
         return {"ok": False, "error": str(e)}
 
 
+def alert_detail(alert_id: str) -> dict:
+    """告警详情 + 现读证据 + 「修复包」文本（一键复制转发给 Agent）。
+
+    设计目标（用户明确要求）：警告里的错误信息要能点开看详情和错误日志，
+    并且能复制——方便直接发给 Agent 去修。所以这里不只回详情，
+    还组装一段自包含的 Markdown 修复包（症状/证据/来源/命令/关联卡），
+    Agent 拿到即能动手，不必回头追问上下文。
+    """
+    data = run_collect()
+    alerts = data.get("alerts", []) if isinstance(data, dict) else []
+    hit = next((a for a in alerts if a.get("id") == alert_id), None)
+    if not hit:
+        return {
+            "ok": False,
+            "error": f"未找到告警 {alert_id}",
+            "available": [a.get("id") for a in alerts],
+        }
+
+    # 现读证据：告警可能是快照采集后新增的，尽量取实时状态
+    live: list[str] = []
+    try:
+        if alert_id == "hub-writer-lock":
+            lock = STATE["hub_root"] / ".sync" / "locks" / "writer.lock"
+            live.append(f"锁文件存在={lock.exists()}")
+            if lock.exists():
+                live.append(
+                    f"mtime={datetime.fromtimestamp(lock.stat().st_mtime, CST).isoformat()}"
+                )
+        elif alert_id.startswith("git-"):
+            name = alert_id.split("-", 2)[2]
+            for repo in (STATE["repo_root"], STATE["hub_root"]):
+                if repo.name == name:
+                    out = subprocess.run(
+                        ["git", "status", "--short"],
+                        cwd=str(repo),
+                        capture_output=True,
+                        text=True,
+                        timeout=20,
+                        check=False,
+                    )
+                    live += [ln for ln in out.stdout.splitlines()[:15] if ln.strip()]
+    except (OSError, subprocess.SubprocessError):
+        pass
+
+    evidence = list(hit.get("evidence", [])) + (
+        [f"【现读】{x}" for x in live] if live else []
+    )
+
+    pkg_lines = [
+        f"## 看板告警修复包 · {hit['id']}",
+        "",
+        f"- **级别**: {hit['level']}",
+        f"- **症状**: {hit['text']}",
+        f"- **采集时间**: {data.get('generated_at', '?')}",
+        f"- **定位来源**: {hit.get('source') or '(未登记)'}",
+        "",
+        f"**根因说明**: {hit.get('detail') or '(未登记)'}",
+        "",
+        "**证据**:",
+        *([f"- {e}" for e in evidence] or ["- (无)"]),
+        "",
+        "**建议命令**:",
+        *([f"```bash\n{c}\n```" for c in hit.get("cmds", [])] or ["(无)"]),
+        "",
+        "**关联中枢卡**:",
+        *([f"- AgentMemoryHub/{d}.md" for d in hit.get("docs", [])] or ["(无)"]),
+        "",
+        "> 请据此定位并修复；修完请回报「告警 ID + 改动文件 + 验证方式」。",
+    ]
+    return {
+        "ok": True,
+        "alert": hit,
+        "evidence": evidence,
+        "repair_package": "\n".join(pkg_lines),
+    }
+
+
 # ---------------------------------------------------------------- HTTP
 
 
@@ -232,13 +314,23 @@ class Handler(BaseHTTPRequestHandler):
             sys.stderr.write(f"[api] {a[0] if a else fmt}\n")
 
     # ---- 响应助手
-    def _send(self, code: int, body: bytes, ctype: str) -> None:
+    def _send(
+        self,
+        code: int,
+        body: bytes,
+        ctype: str,
+        *,
+        etag: str | None = None,
+        cache: str = "no-store",
+    ) -> None:
         self.send_response(code)
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(len(body)))
-        self.send_header("Cache-Control", "no-store")
+        self.send_header("Cache-Control", cache)
+        if etag:
+            self.send_header("ETag", etag)
         self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, If-None-Match")
         self.send_header("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
         self.end_headers()
         if self.command != "HEAD":
@@ -249,6 +341,31 @@ class Handler(BaseHTTPRequestHandler):
             code,
             json.dumps(obj, ensure_ascii=False).encode(),
             "application/json; charset=utf-8",
+        )
+
+    def _json_cached(self, obj, ttl: int = 5) -> None:
+        """带 ETag 的 JSON 响应：命中 If-None-Match 时回 304，省掉重传。
+
+        P0-3：快照冷采集约 4s，但浏览器每次刷新都全量重传 JSON。
+        304 让"没变化"变成几乎零成本，刷新体感从"等 4 秒"变"瞬时"。
+        """
+        body = json.dumps(obj, ensure_ascii=False).encode()
+        etag = '"' + hashlib.sha1(body).hexdigest()[:16] + '"'
+        if self.headers.get("If-None-Match") == etag:
+            self._send(
+                304,
+                b"",
+                "application/json; charset=utf-8",
+                etag=etag,
+                cache=f"private, max-age={ttl}",
+            )
+            return
+        self._send(
+            200,
+            body,
+            "application/json; charset=utf-8",
+            etag=etag,
+            cache=f"private, max-age={ttl}",
         )
 
     def _err(self, msg: str, code: int = 400) -> None:
@@ -290,10 +407,15 @@ class Handler(BaseHTTPRequestHandler):
 
         if path == "/api/snapshot":
             data = run_collect()
-            return self._json(data, 200 if "error" not in data else 500)
+            if "error" in data:
+                return self._json(data, 500)
+            return self._json_cached(data, ttl=5)
 
         if path == "/api/cron/incidents":
             return self._json(cron_incidents())
+
+        if path.startswith("/api/alert/"):
+            return self._json(alert_detail(unquote(path[len("/api/alert/") :])))
 
         if path.startswith("/api/skill/"):
             return self._json(skill_detail(unquote(path[len("/api/skill/") :])))

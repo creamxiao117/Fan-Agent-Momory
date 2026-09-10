@@ -620,100 +620,372 @@ def collect_activity(hub: Path, root: Path) -> dict:
     return {"recent_cards": recent, "commits": commits, "hub_commits": hcommits}
 
 
-def collect_alerts(data: dict) -> list[dict]:
-    """按 Grafana『告警针对症状』原则，从真实数据推导告警。"""
+def _alert(
+    key: str,
+    level: str,
+    text: str,
+    *,
+    detail: str = "",
+    source: str = "",
+    evidence: list[str] | None = None,
+    cmds: list[str] | None = None,
+    docs: list[str] | None = None,
+) -> dict:
+    """构造一条「可转发给 Agent 修复」的告警。
+
+    设计要点（对应 UI 告警详情面板）：
+    - id 稳定，供 /api/alert/<id> 深链
+    - evidence 是原始证据行（真实文件内容/命令输出），不是复述
+    - cmds 可直接复制粘贴执行
+    - docs 指向中枢权威卡，避免 Agent 凭记忆瞎修
+    """
+    return {
+        "id": key,
+        "level": level,
+        "text": text,
+        "detail": detail,
+        "source": source,
+        "evidence": evidence or [],
+        "cmds": cmds or [],
+        "docs": docs or [],
+    }
+
+
+def collect_alerts(hub: Path, data: dict) -> list[dict]:
+    """按 Grafana『告警针对症状』原则，从真实数据推导告警。
+
+    每条告警都必须能回答四问：症状是什么 / 证据在哪 / 怎么定位 / 怎么修。
+    否则 Agent 接手只能靠猜——本函数是「可转发修复包」的组装点。
+    """
     out: list[dict] = []
+    hub_rel = "AgentMemoryHub"
 
     lock = data["hub"].get("lock", {})
     if lock.get("writer_lock"):
+        lockf = hub / ".sync" / "locks" / "writer.lock"
+        ev = []
+        try:
+            if lockf.exists():
+                ev.append(
+                    f"{lockf} 存在，mtime={datetime.fromtimestamp(lockf.stat().st_mtime, CST).isoformat()}"
+                )
+        except OSError as e:
+            ev.append(f"读锁文件失败: {e}")
+        ev.append("写锁只判 exists() 不判进程存活 → 可能是僵尸锁")
         out.append(
-            {
-                "level": "warn",
-                "text": "中枢单写者锁被持有",
-                "hint": "有并发写入可能，先确认进程",
-            }
+            _alert(
+                "hub-writer-lock",
+                "warn",
+                "中枢单写者锁被持有",
+                detail="写锁存在会阻塞 ingest / build-vectors 等中枢写操作。"
+                "该锁只检查文件是否存在，不检测持锁进程，异常退出会残留僵尸锁。",
+                source=f"{hub_rel}/.sync/locks/writer.lock",
+                evidence=ev,
+                cmds=[
+                    "tasklist | grep -iE 'python|node'   # 先确认有无活跃 ingest 进程",
+                    "rm -f AgentMemoryHub/.sync/locks/writer.lock   # 确认无进程后再删（僵尸锁）",
+                ],
+                docs=["rules/dual-platform-coherence-discipline"],
+            )
         )
 
     vec = data["hub"].get("vector", {})
     if vec.get("missing", 0) > 0:
         out.append(
-            {
-                "level": "warn",
-                "text": f"向量库有 {vec['missing']} 张卡缺向量",
-                "hint": "跑 hub build-vectors --root <Hub>",
-            }
+            _alert(
+                "hub-vector-missing",
+                "warn",
+                f"向量库有 {vec['missing']} 张卡缺向量",
+                detail="卡片无向量则语义检索永远命中不到它（卡片等于隐身）。"
+                "新增卡后必须重建向量库。",
+                source=f"{hub_rel}/.sync/vector.db",
+                evidence=[
+                    f"库内总数={vec.get('total', '?')}  有向量={vec.get('embedded', '?')}  缺={vec.get('missing')}",
+                ],
+                cmds=[
+                    "python hub-engine/engine.py build-vectors --root AgentMemoryHub"
+                ],
+                docs=["experience/bge-small-zh-sqlite-vector-search"],
+            )
         )
-    vmax = data["hub"].get("_vector_age_min", 0)
+    vmax = vec.get("stale_min", 0)
     if vmax and vmax > 24 * 60:
         out.append(
-            {
-                "level": "warn",
-                "text": f"向量库 {vmax / 60:.0f} 小时未重建",
-                "hint": "新增卡后需 build-vectors 才能被语义检索命中",
-            }
+            _alert(
+                "hub-vector-stale",
+                "warn",
+                f"向量库 {vmax / 60:.0f} 小时未重建",
+                detail="向量库是增量更新的，但超过 24h 未重建通常意味着新卡没进索引。",
+                source=f"{hub_rel}/.sync/vector.db（mtime 推算）",
+                evidence=[
+                    f"stale_min={vmax:.1f}（≈{vmax / 60:.1f} 小时）",
+                    f"mtime={vec.get('mtime', '?')}",
+                ],
+                cmds=[
+                    "python hub-engine/engine.py build-vectors --root AgentMemoryHub"
+                ],
+            )
         )
 
     cron = data["runtime"].get("cron", {})
     if cron.get("incidents_open"):
         out.append(
-            {
-                "level": "error",
-                "text": f"{cron['incidents_open']} 个定时任务故障未处理",
-                "hint": "hermes cron incidents",
-            }
+            _alert(
+                "cron-incidents",
+                "error",
+                f"{cron['incidents_open']} 个定时任务故障未处理",
+                detail="cron 故障未处理会静默丢失定时任务产出（如每日巡检、投递）。",
+                source="hermes cron（本地调度库）",
+                evidence=[f"未处理故障数={cron['incidents_open']}"],
+                cmds=["hermes cron incidents", "hermes cron list"],
+                docs=["rules/cron-audit-and-prune"],
+            )
         )
     never = [j["name"] for j in cron.get("jobs", []) if not j.get("last_run")]
     if never:
         out.append(
-            {
-                "level": "warn",
-                "text": f"{len(never)} 个定时任务从未执行: {', '.join(never[:2])}",
-                "hint": "hermes cron list",
-            }
+            _alert(
+                "cron-never-ran",
+                "warn",
+                f"{len(never)} 个定时任务从未执行: {', '.join(never[:2])}",
+                detail="任务登记了但从未跑过，通常是时间表达式写错、被禁用或刚创建。",
+                source="hermes cron（本地调度库）",
+                evidence=[f"从未执行: {', '.join(never)}"],
+                cmds=["hermes cron list", "hermes cron run <job-id>"],
+            )
         )
 
     for b in data["runtime"].get("backends", []):
         if not b["alive"]:
             out.append(
-                {
-                    "level": "error",
-                    "text": f"后端服务 {b['name']} (: {b['port']}) 未响应",
-                    "hint": b["desc"],
-                }
+                _alert(
+                    f"backend-{b['port']}",
+                    "error",
+                    f"后端服务 {b['name']} (: {b['port']}) 未响应",
+                    detail="依赖该端口的看板功能会显示为空或报错。空数据不等于没有数据。",
+                    source=f"http://127.0.0.1:{b['port']}",
+                    evidence=[
+                        f"探测 {b['name']} 端口 {b['port']} → 无响应",
+                        f"用途: {b['desc']}",
+                    ],
+                    cmds=[
+                        f"curl -s -m 3 -o /dev/null -w '%{{http_code}}' http://127.0.0.1:{b['port']}/health"
+                    ],
+                    docs=["rules/ollama-retired-lmstudio-takeover"],
+                )
             )
 
     for g in data["runtime"].get("git", []):
         if g.get("ok") and g.get("dirty", 0) >= 3:
+            name = g["name"]
             out.append(
-                {
-                    "level": "warn",
-                    "text": f"{g['name']} 有 {g['dirty']} 个未提交改动",
-                    "hint": "工作区守护规则: ≥3 视为有他人现场，需 commit/stash/reset",
-                }
+                _alert(
+                    f"git-dirty-{name}",
+                    "warn",
+                    f"{name} 有 {g['dirty']} 个未提交改动",
+                    detail="按工作区守护规则，≥3 个未提交改动视为「有他人现场」，"
+                    "需先判定来源（批量格式化 vs 人工批改）再 commit/stash/reset 三选一。",
+                    source=f"{name}（git working tree）",
+                    evidence=[
+                        f"dirty={g['dirty']}  ahead={g.get('ahead', 0)}  behind={g.get('behind', 0)}"
+                    ],
+                    cmds=[
+                        "git status --short",
+                        "git status --short | awk '{print $2}' | xargs -I{} stat -c '%y {}' {} | sort",
+                        "# 处置三选一: git add <精确路径> && git commit | git stash push -m '他人现场' | git checkout HEAD -- <路径>",
+                    ],
+                    docs=["rules/dual-platform-coherence-discipline"],
+                )
             )
         if g.get("ok") and (g.get("ahead", 0) or g.get("behind", 0)):
+            name = g["name"]
             out.append(
-                {
-                    "level": "info",
-                    "text": f"{g['name']} 与远端不同步 (ahead {g.get('ahead', 0)} / behind {g.get('behind', 0)})",
-                    "hint": "git push / git pull",
-                }
+                _alert(
+                    f"git-sync-{name}",
+                    "info",
+                    f"{name} 与远端不同步 (ahead {g.get('ahead', 0)} / behind {g.get('behind', 0)})",
+                    detail="ahead = 本地有未推送提交；behind = 远端有新提交。",
+                    source=f"{name}（git remote）",
+                    evidence=[
+                        f"ahead={g.get('ahead', 0)}  behind={g.get('behind', 0)}"
+                    ],
+                    cmds=["git push", "git pull --rebase"],
+                )
             )
 
     hh = data["hub"].get("health", {})
     score = hh.get("overall_score")
     if isinstance(score, (int, float)) and score < 60:
         out.append(
-            {
-                "level": "warn",
-                "text": f"飞轮健康度 {score} 分（< 60）",
-                "hint": "查看飞轮页的分解指标",
-            }
+            _alert(
+                "flywheel-health-low",
+                "warn",
+                f"飞轮健康度 {score} 分（< 60）",
+                detail="飞轮健康度由卡片健康 + 技能健康 + 飞轮活动加权而成，低于 60 表示多个环节同时欠账。",
+                source=f"{hub_rel}/.sync/state/（hub_health 计算）",
+                evidence=[f"overall_score={score}"],
+                cmds=["python hub-engine/engine.py lint --root AgentMemoryHub"],
+                docs=["methodology/memory-hub-card-promotion"],
+            )
         )
     return out
+    sh = data.get("source_health") or {}
+    if sh.get("unhealthy"):
+        out.append(
+            _alert(
+                "source-health",
+                "error",
+                f"{sh['unhealthy']} 个数据源体检不通过",
+                detail="体检不通过 = 「源错了却返回默认 0」，指标为 0 时无法区分「真的 0」与「读不到的 0」。",
+                source="collect_source_health()",
+                evidence=[
+                    f"{c['name']}: {c['note']}"
+                    for c in sh.get("checks", [])
+                    if not c.get("ok")
+                ],
+                cmds=[
+                    "python hub-engine/scripts/hub_dashboard_collect.py --hub-root AgentMemoryHub --repo-root ."
+                ],
+            )
+        )
 
 
-# ---------------------------------------------------------------- 主入口
+def collect_metric_sources(hub: Path, data: dict) -> dict:
+    """P0-1: 为每个 KPI 登记「出处 + 计算式 + 采集方式」。
+
+    动机（本看板真实踩坑）：三个指标曾同时显示 0 / —，UI 无法区分
+    「真的 0」与「读不到的 0」。给每个数字挂出处后，
+    来源文件缺失或格式不匹配会立刻暴露，而不是伪装成一个安静的 0。
+    """
+    hub_rel = hub.name
+    vec = data["hub"].get("vector", {})
+    cron = data["runtime"].get("cron", {})
+    hh = data["hub"].get("health", {})
+    fw = data["hub"].get("flywheel_real", {})
+    cards = data["hub"].get("cards", {})
+    sk = data["skills"]
+    ch = hh.get("card_health")
+    jobs = cron.get("jobs", [])
+    ran = [j for j in jobs if j.get("last_run")]
+    ok_rate = round(len(ran) / len(jobs) * 100, 1) if jobs else None
+
+    return {
+        "cards_total": {
+            "value": cards.get("total"),
+            "source": f"{hub_rel}/**/*.md（按类型目录扫描）",
+            "formula": "排除 .sync/ .git/ 模板后的卡片文件计数",
+            "kind": "scan",
+        },
+        "vector": {
+            "value": f"{vec.get('embedded', '?')}/{vec.get('cards', '?')}",
+            "source": f"{hub_rel}/.sync/vector.db",
+            "formula": "SELECT COUNT(*) / COUNT(embedding IS NOT NULL) FROM docs",
+            "kind": "sqlite",
+        },
+        "skills_total": {
+            "value": sk.get("total"),
+            "source": "本机技能根目录（SKILL.md 格式）",
+            "formula": "递归发现 SKILL.md 的目录计数",
+            "kind": "scan",
+        },
+        "skill_cited_rate": {
+            "value": sk.get("cited_rate"),
+            "source": f"{hub_rel}/权威卡正文（引用扫描）",
+            "formula": "被卡片正文引用过的技能数 ÷ 技能总数",
+            "kind": "text-match",
+        },
+        "cron_ok_rate": {
+            "value": ok_rate,
+            "source": "hermes cron（本地调度库）",
+            "formula": "有 last_run 的任务数 ÷ 任务总数",
+            "kind": "external-cmd",
+        },
+        "card_health": {
+            "value": ch.get("score") if isinstance(ch, dict) else None,
+            "source": f"{hub_rel}/.sync/state/（hub_health 输出）",
+            "formula": "frontmatter 完整度 / 时效 / 类型规范 加权",
+            "kind": "json",
+        },
+        "flywheel_score": {
+            "value": fw.get("score"),
+            "source": f"{hub_rel}/.sync/state/flywheel-log.json",
+            "formula": "按最后运行时间衰减（≤24h=100 / ≤72h=80 / ≤7d=60 / 更久=30）",
+            "kind": "json",
+        },
+        "flywheel_last_run": {
+            "value": fw.get("hours_ago"),
+            "source": f"{hub_rel}/.sync/state/flywheel-log.json",
+            "formula": "now - max(日志时间戳)，单位小时",
+            "kind": "json",
+        },
+    }
+
+
+def collect_source_health(hub: Path, root: Path, data: dict) -> dict:
+    """P3-11 数据源体检：把「口径错配」变成显式缺失。
+
+    本看板曾三个指标同时为 0，根因分别是 key 路径错 / 扫描器格式不匹配 /
+    目录不存在——共同点是「源错了却返回默认 0」。此处逐源自检。
+    """
+    ck = []
+
+    def add(name, path, kind, ok, note):
+        ck.append(
+            {
+                "name": name,
+                "path": str(path),
+                "kind": kind,
+                "ok": bool(ok),
+                "note": note,
+            }
+        )
+
+    sk_md = list(SKILLS_ROOT.rglob("SKILL.md")) if SKILLS_ROOT.is_dir() else []
+    sk_yaml = list(SKILLS_ROOT.rglob("skill.yaml")) if SKILLS_ROOT.is_dir() else []
+    add(
+        "技能清单",
+        SKILLS_ROOT,
+        "SKILL.md",
+        bool(sk_md),
+        f"SKILL.md {len(sk_md)} / skill.yaml {len(sk_yaml)}"
+        + ("；只认 skill.yaml 的扫描器会恒 0" if not sk_yaml else ""),
+    )
+
+    fl = hub / ".sync" / "state" / "flywheel-log.json"
+    add(
+        "飞轮日志",
+        fl,
+        "JSON",
+        fl.exists(),
+        f"{fl.name} {'存在' if fl.exists() else '缺失'}"
+        + f"；.sync/logs/ {'存在' if (hub / '.sync' / 'logs').exists() else '不存在（读此处恒 0）'}",
+    )
+
+    vdb = hub / ".sync" / "vector.db"
+    add(
+        "向量库",
+        vdb,
+        "sqlite",
+        vdb.exists(),
+        f"{vdb.stat().st_size // 1024} KB" if vdb.exists() else "缺失",
+    )
+
+    idxf = hub / "INDEX.md"
+    add(
+        "索引文件",
+        idxf,
+        "markdown",
+        idxf.exists(),
+        f"{idxf.stat().st_size // 1024} KB" if idxf.exists() else "缺失",
+    )
+
+    bad = [c for c in ck if not c["ok"]]
+    return {
+        "checks": ck,
+        "total": len(ck),
+        "unhealthy": len(bad),
+        "unhealthy_names": [c["name"] for c in bad],
+    }
 
 
 def collect_all(hub: Path, root: Path) -> dict:
@@ -740,7 +1012,10 @@ def collect_all(hub: Path, root: Path) -> dict:
         **collect_activity(hub, root),
     }
     data["skills"] = collect_skills(hub)
-    data["alerts"] = collect_alerts(data)
+    # P0-1/P3-11: 先算「来源出处」与「数据源体检」，再算告警（告警要用体检结果）
+    data["metric_sources"] = collect_metric_sources(hub, data)
+    data["source_health"] = collect_source_health(hub, root, data)
+    data["alerts"] = collect_alerts(hub, data)
 
     data["generated_at"] = datetime.now(CST).isoformat(timespec="seconds")
     data["collect_ms"] = round((time.perf_counter() - t0) * 1000, 1)

@@ -201,6 +201,70 @@ ector_bench --real --fail-below 0.8 融合命中率 **67%（4/6）< 80% 门禁�
 - **INDEX 幽灵登记落地（已落地，主仓 commit `5e1c338`）**：从 skill-docroute-verify-blueprint 路径A「INDEX.md 登记防漂移」**选取反向盲区落地**——新增 `tools/lint.py find_index_ghosts(root)`：检测「INDEX 已登记但权威区查无对应卡文件」的幽灵登记（支持连字符卡名 `[A-Za-z0-9_-]+`、排除 `/` 目录行），与现有 `find_orphans`（文件在但未登记）双向互补；`engine.py` lint/status 命令输出、JSON、退出码全部纳入 ghosts。补 2 单测，全量 **224 通过**、ruff 全绿（PIE810 startswith tuple）；真机 lint **幽灵=[] 零误报**、孤儿仍仅历史 autocad（保留项）。
 - 进度小结：本 session 绪 method（verify-docs-sync 结构门禁 + ADR 纪律）判级 B+、沉淀 reference 蓝图 + 落地一个真实采纳点（INDEX 幽灵登记）；待未来需求触发再转 active。
 
+
+## 本轮 R12（看板 v5：P0→P3 分级完善 + 告警详情抽屉 + 数据源体检 + VLM 待办）
+
+后端（`hub-engine/scripts/`）：
+- `hub_dashboard_collect.py`：告警富化（`id/level/detail/source/evidence/cmds/docs` 七字段，
+  含现读证据行 + 可复制修复命令 + 关联中枢卡）；新增 `collect_metric_sources`（8 个 KPI 的
+  出处/计算式）与 `collect_source_health`（4 项数据源自检）。
+- `hub_dashboard_server.py`：新增 `GET /api/alert/<id>`（返回现读证据 + 自包含「修复包」Markdown）；
+  `/api/snapshot` 加 **ETag/304**（配合既有 10s TTL）——命中时 0 字节。
+前端（`docs/dashboard/index-v4.html`，单文件无外链）：
+- 告警**可点击 → 详情抽屉**：根因/定位来源/证据/错误日志/建议命令/关联卡，含
+  「复制修复包」「复制证据」「复制命令」三键（剪贴板实测可读回，修复包 398 字符）。
+- P0-1 来源徽章（每个 KPI 挂 ⓘ，hover 显示出处+口径）；P0-2 a11y（tablist/tab 角色 +
+  aria-selected + aria-live 播报 + skip 链接 + focus-visible + prefers-reduced-motion）；
+  P0-3 采集期「采集中…」可见反馈 + 刷新按钮禁用。
+- P1-4 字阶 13/14/16/20/30 + 全局 `tabular-nums`；P1-5 KPI 趋势 delta（历史数组，
+  与「上一个不同值」比较，无差异显示基线）；P1-6 Ctrl/⌘+K 命令面板（视图+技能）。
+- P2-7 亮色主题（Alt+T，localStorage 记忆）；P2-9 表内滚动；P3-11 数据源体检面板。
+
+验证：`docs/dashboard/verify_v5.py`（真 Chromium，DOM 取值断言）——**45 项，45 PASS / 0 FAIL**；
+七视图高度全部 ≤1.6 屏（最高 overview 1520px）。
+
+本轮踩坑（已沉淀 `experience/2026-09-11-patch-input-truncation-silent-corruption`）：
+**长 patch 输入被静默截断**，一次会话命中 4 次——其中 `$("#kpis")` 被削成 `$("kpis")`
+语法完全合法，py/ruff/node 全过，**只有真开浏览器才炸**。故「改完必须真开页面」不是形式主义。
+
+## 待办（R12 起，按等级）
+
+### P0（未做，建议优先）
+1. 技能表虚拟滚动（>500 条时仍会卡）。
+2. `/api/alert/<id>` 的证据行随告警类型扩展（当前 cron/git 已覆盖，hub 类待补）。
+
+### P1
+3. 采集器增量：现每次全量扫 359 卡 + 158 技能（4.45s），改按 mtime 增量 + single-flight。
+4. KPI 趋势的**服务端**历史（现仅 localStorage，清浏览器即丢）：写 `.sync/state/dashboard-history.jsonl`。
+
+### P2
+5. 指标来源徽章补全到飞轮/技能/仓库三组 KPI（现仅 overview 四个）。
+
+### P3 / 阻塞
+6. **VLM 视觉评审（见下节「VLM 现状与改进」）**——需用户决策是否腾显存。
+
+## VLM 现状与改进（诚实声明，2026-09-11 实测）
+
+**现状（比"本机没有 VLM"更准确的说法）**：
+- 本机**有**真实视觉模型 `nvidia/LocateAnything-3B`（`D:\AIminiLLM\cad-gui-tester\`），
+  但 `vision_server.py` **未运行**；其默认端口 5001 **被 `VaultService.Gui.exe` 占用**
+  （中枢卡早预警「常被占用换 --port 5005」，5005 实测空闲）。
+- 显存是**硬约束**：RTX 4070 Ti 共 12.3 GB，**已用 10.4 GB（LM Studio 常驻），仅剩 1.6 GB**，
+  装不下 3B 视觉模型（需 ~7 GB）。
+- LM Studio 内只有 `paddleocr-vl`（**OCR 型**，不做审美判断）；`vision_analyze` 回落纯文本模型→看不到图。
+- 故本轮 UI 评分**全部来自 DOM 实测 + 数值断言**，**审美/观感未由视觉模型复核**。
+  （旁证：视觉模型认数字不准，实测把 0 读成 8、40 读成 48，数字类必须以 DOM 为准。）
+
+**改进路径（按性价比）**：
+1. **零成本**：布局/可访问性回归继续用 CDP + DOM 几何断言（重叠/溢出/对比度/字号/间距），
+   这比 VLM **更准**，且已固化为 `verify_v5.py`。VLM 只在"纯主观审美"上不可替代。
+2. **低成本（推荐）**：需要视觉定位时，停 LM Studio 常驻模型 → 释放 ~7 GB →
+   `python vision_server.py --port 5005` → 用完卸载。定位能力（bbox/center/confidence）真实可用。
+3. **中成本**：常备一个真 VLM 需固定占用 ~7-16 GB 显存，与 LM Studio 二选一；或换 16 GB+ 显卡。
+4. **兜底**：截图交付人工目检（本轮已产出 `shot-v5-*.png`）。
+
+**待用户决策**：是否接受「用时腾显存」模式（方案 2）？
+
 ## 阻塞项
 
 - 无（2026-08-18：源目录 `D:\AIwork\AgentMemoryHub` 已核销清理，原沙箱阻塞解除）。
