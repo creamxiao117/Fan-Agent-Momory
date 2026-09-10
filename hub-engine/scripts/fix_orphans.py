@@ -6,21 +6,23 @@
 
 支持通过 --list-file 指定多个文件路径（每行一个 rel path）。
 """
+
 import sys
 from pathlib import Path as _P
+
 _THIS = _P(__file__).resolve().parent
 sys.path.insert(0, str(_THIS.parent))  # hub-engine/
 
 from pathlib import Path
 
 SECTION_TITLES = {
-    "rules":       "## 规则（rules/）",
+    "rules": "## 规则（rules/）",
     "methodology": "## 方法论（methodology/）",
-    "blueprints":  "## 技术路径蓝图（blueprints/）",
-    "longterm":    "## 长期记忆（longterm/）",
-    "projects":    "## 项目记忆（projects/）",
-    "experience":  "## 经验（experience/）",
-    "notes":       "## 经验（experience/）",
+    "blueprints": "## 技术路径蓝图（blueprints/）",
+    "longterm": "## 长期记忆（longterm/）",
+    "projects": "## 项目记忆（projects/）",
+    "experience": "## 经验（experience/）",
+    "notes": "## 经验（experience/）",
 }
 
 
@@ -37,7 +39,13 @@ def _read_frontmatter_summary(card_path: Path) -> str:
             return s.lstrip("# ").strip()[:200]
     for line in lines:
         s = line.strip()
-        if s and not s.startswith("#") and not s.startswith("---") and not s.startswith("type:") and not s.startswith("tags:"):
+        if (
+            s
+            and not s.startswith("#")
+            and not s.startswith("---")
+            and not s.startswith("type:")
+            and not s.startswith("tags:")
+        ):
             return s[:200]
     return "(无描述)"
 
@@ -46,18 +54,22 @@ def _exists_in_index(index_path: Path, slug: str) -> bool:
     """幂等：检查 slug 是否已登记（含嵌套 |- 格式和单行多 slug 情况）。"""
     text = index_path.read_text(encoding="utf-8", errors="ignore")
     # 接受 | 后 2+ 空格、- 后 2+ 空格、行内多 slug 等
-    return any([
-        f"- {slug}    " in text,
-        f"- {slug}  " in text,
-        f"|- {slug}    " in text,
-        f"|- {slug}  " in text,
-        # 单行多 slug（罕见）：- slug1  描述-slot slug2  描述
-        f"- {slug}" in text,
-        f"|- {slug}" in text,
-    ])
+    return any(
+        [
+            f"- {slug}    " in text,
+            f"- {slug}  " in text,
+            f"|- {slug}    " in text,
+            f"|- {slug}  " in text,
+            # 单行多 slug（罕见）：- slug1  描述-slot slug2  描述
+            f"- {slug}" in text,
+            f"|- {slug}" in text,
+        ]
+    )
 
 
-def _append_to_index(index_path: Path, section_title: str, slug: str, summary: str) -> bool:
+def _append_to_index(
+    index_path: Path, section_title: str, slug: str, summary: str
+) -> bool:
     text = index_path.read_text(encoding="utf-8")
     if _exists_in_index(index_path, slug):
         return False
@@ -82,10 +94,14 @@ def _append_to_index(index_path: Path, section_title: str, slug: str, summary: s
 
 def main() -> int:
     import argparse
+
     ap = argparse.ArgumentParser(prog="fix-orphans")
     ap.add_argument("--root", required=True)
-    ap.add_argument("--list-file", default=None,
-                    help="每行一个相对路径（如 experience/xxx.md）；不传则默认 tmp/orphan_paths.txt")
+    ap.add_argument(
+        "--list-file",
+        default=None,
+        help="每行一个相对路径（如 experience/xxx.md）；不传则默认 tmp/orphan_paths.txt",
+    )
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
 
@@ -97,7 +113,11 @@ def main() -> int:
         print(f"orphan list file not found: {list_path}", file=sys.stderr)
         return 2
 
-    orphans = [line.strip() for line in list_path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    orphans = [
+        line.strip()
+        for line in list_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
     index_path = root / "INDEX.md"
     if not index_path.exists():
         print(f"INDEX.md 不存在: {index_path}", file=sys.stderr)
@@ -108,7 +128,7 @@ def main() -> int:
         rel = rel.replace("\\", "/")
         dir_name = rel.split("/")[0]
         file_name = rel.split("/")[1]
-        slug = file_name[:-3] if file_name.endswith(".md") else file_name
+        slug = file_name.removesuffix(".md")
         card_path = root / rel
 
         if not card_path.exists():
@@ -134,7 +154,7 @@ def main() -> int:
         else:
             skipped.append((slug, "append returned False"))
 
-    print(f"== 补登完成 ==")
+    print("== 补登完成 ==")
     print(f"added: {len(added)}")
     if added[:10]:
         print(f"  前10: {added[:10]}")

@@ -109,7 +109,7 @@ def tokenize(text: str, n: int = 2, mode: str = "char") -> list[str]:
         if len(w) <= n:
             tokens.append(w)
         else:
-            tokens.extend(w[j:j+n] for j in range(len(w) - n + 1))
+            tokens.extend(w[j : j + n] for j in range(len(w) - n + 1))
     return tokens
     return [norm[i : i + n] for i in range(len(norm) - n + 1)]
 

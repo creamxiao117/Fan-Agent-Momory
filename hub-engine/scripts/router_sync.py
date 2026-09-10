@@ -43,9 +43,22 @@ _REQUIRED_MCP_HANDLERS = [
 
 # tools/ 目录（排除 __init__.py）应可导入的模块
 _TOOLS_EXPECTED = [
-    "compress", "dedup", "distill", "inject", "lint", "llm_health",
-    "mcp_audit", "mcp_handlers", "mcp_policy", "memory_diff",
-    "platform_bridge", "resilience", "retrieve", "semsearch", "snippet", "tidy",
+    "compress",
+    "dedup",
+    "distill",
+    "inject",
+    "lint",
+    "llm_health",
+    "mcp_audit",
+    "mcp_handlers",
+    "mcp_policy",
+    "memory_diff",
+    "platform_bridge",
+    "resilience",
+    "retrieve",
+    "semsearch",
+    "snippet",
+    "tidy",
 ]
 
 
@@ -55,6 +68,7 @@ def _check_platforms(root: Path) -> tuple[list[str], list[str]]:
     warnings, infos = [], []
     try:
         from common.config import HubConfig
+
         cfg = HubConfig.load(root)
         platforms = cfg.platforms or {}
     except Exception as e:
@@ -63,7 +77,9 @@ def _check_platforms(root: Path) -> tuple[list[str], list[str]]:
 
     for name, meta in platforms.items():
         if name not in _SUPPORTED_PLATFORMS:
-            warnings.append(f"平台 '{name}' 在 hub.config.yaml 中登记，但 platform_bridge 未实现适配器")
+            warnings.append(
+                f"平台 '{name}' 在 hub.config.yaml 中登记，但 platform_bridge 未实现适配器"
+            )
             continue
         # 检查记忆文件路径可达性
         mem_dir = meta.get("memory_dir", "")
@@ -71,7 +87,9 @@ def _check_platforms(root: Path) -> tuple[list[str], list[str]]:
         if mem_dir and target:
             full = Path(mem_dir) / target
             if not full.is_file():
-                infos.append(f"平台 '{name}' 记忆文件不可达: {full}（平台可能未配置或未登录）")
+                infos.append(
+                    f"平台 '{name}' 记忆文件不可达: {full}（平台可能未配置或未登录）"
+                )
     return warnings, infos
 
 
@@ -107,7 +125,12 @@ def _run(root: Path) -> dict:
     """执行全部检查，返回结构化结果。"""
     result = {
         "platforms": {"warnings": [], "infos": []},
-        "mcp_handlers": {"critical": [], "warnings": [], "present": 0, "required": len(_REQUIRED_MCP_HANDLERS)},
+        "mcp_handlers": {
+            "critical": [],
+            "warnings": [],
+            "present": 0,
+            "required": len(_REQUIRED_MCP_HANDLERS),
+        },
         "tools": {"failed": [], "total": 0, "import_ok": 0},
         "exit_code": 0,
     }
@@ -124,7 +147,11 @@ def _run(root: Path) -> dict:
     # 实际存在的 handler 数
     try:
         mod = importlib.import_module("tools.mcp_handlers")
-        present = sum(1 for fn in _REQUIRED_MCP_HANDLERS if hasattr(mod, fn) and callable(getattr(mod, fn)))
+        present = sum(
+            1
+            for fn in _REQUIRED_MCP_HANDLERS
+            if hasattr(mod, fn) and callable(getattr(mod, fn))
+        )
     except ImportError:
         present = 0
     result["mcp_handlers"]["present"] = present
@@ -168,6 +195,7 @@ def main() -> int:
 
     if args.json:
         import json
+
         print(json.dumps(result, ensure_ascii=False, indent=2))
         return exit_code
 
@@ -177,7 +205,9 @@ def main() -> int:
     print("=" * 60)
 
     # 平台
-    print(f"\n🔧 platforms ({len(result['platforms']['warnings'])} warn, {len(result['platforms']['infos'])} info):")
+    print(
+        f"\n🔧 platforms ({len(result['platforms']['warnings'])} warn, {len(result['platforms']['infos'])} info):"
+    )
     for w in result["platforms"]["warnings"]:
         print(f"  ⚠️ {w}")
     for i in result["platforms"]["infos"]:
@@ -214,4 +244,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

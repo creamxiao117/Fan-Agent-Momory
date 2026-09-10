@@ -68,6 +68,7 @@ def load_records(root: Path) -> list[dict]:
     """
     try:
         from tools.mcp_audit import query_log_files
+
         files = query_log_files(root)
     except ImportError:
         files = [Path(root) / LOG]

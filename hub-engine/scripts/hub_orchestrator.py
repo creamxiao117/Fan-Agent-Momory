@@ -168,9 +168,14 @@ def main():
     try:
         out_path.write_text(
             json.dumps(
-                {"generated_at": _iso_now(), "hub_root": hub_root,
-                 "skillhub_root": skillhub_root, "results": results},
-                ensure_ascii=False, indent=2,
+                {
+                    "generated_at": _iso_now(),
+                    "hub_root": hub_root,
+                    "skillhub_root": skillhub_root,
+                    "results": results,
+                },
+                ensure_ascii=False,
+                indent=2,
             ),
             encoding="utf-8",
         )
@@ -184,6 +189,7 @@ def main():
 
 def _iso_now() -> str:
     from datetime import datetime, timezone
+
     return datetime.now(timezone.utc).isoformat()
 
 

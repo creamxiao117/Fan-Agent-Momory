@@ -26,6 +26,7 @@ RESPONSE_TIME_CRITICAL_THRESHOLD = 5000  # 响应时间严重阈值（毫秒）
 @dataclass
 class LLMStatus:
     """本地 LLM 服务状态。"""
+
     available: bool
     url: str
     models: list[str] = field(default_factory=list)
@@ -79,7 +80,11 @@ class LLMHealthChecker:
 
         try:
             # LM Studio /v1/models 作为健康检测端点
-            endpoint = f"{self.base_url}/v1/models" if "1234" in self.base_url else f"{self.base_url}/api/tags"
+            endpoint = (
+                f"{self.base_url}/v1/models"
+                if "1234" in self.base_url
+                else f"{self.base_url}/api/tags"
+            )
             req = urllib.request.Request(
                 endpoint,
                 headers={"Content-Type": "application/json"},
@@ -108,7 +113,7 @@ class LLMHealthChecker:
                 # LM Studio: 获取模型列表进行匹配
                 status = self.get_status()
                 return model in status.models
-            
+
             req = urllib.request.Request(
                 f"{self.base_url}/api/show",
                 data=f'{{"name":"{model}"}}'.encode(),
@@ -116,6 +121,7 @@ class LLMHealthChecker:
             )
             with urllib.request.urlopen(req, timeout=self.check_timeout) as resp:
                 import json
+
                 data = json.loads(resp.read())
                 return bool(data.get("model"))
         except Exception:
@@ -133,6 +139,7 @@ class LLMHealthChecker:
                 )
                 with urllib.request.urlopen(req, timeout=self.check_timeout) as resp:
                     import json
+
                     data = json.loads(resp.read())
                     models = [m["id"] for m in data.get("data", [])]
                     self._last_fail_time = 0.0
@@ -152,6 +159,7 @@ class LLMHealthChecker:
             )
             with urllib.request.urlopen(req, timeout=self.check_timeout) as resp:
                 import json
+
                 data = json.loads(resp.read())
                 models = [m["name"] for m in data.get("models", [])]
                 self._last_fail_time = 0.0
@@ -214,7 +222,9 @@ def create_llm_health_wrapper(
             if on_unavailable:
                 print("[llm_health] LLM 不可用，执行降级方案")
                 return on_unavailable(*args, **kwargs)
-            raise ConnectionError(f"LLM 服务不可用: {checker._cached_status.last_error if checker._cached_status else '未知错误'}")
+            raise ConnectionError(
+                f"LLM 服务不可用: {checker._cached_status.last_error if checker._cached_status else '未知错误'}"
+            )
         return fn(*args, **kwargs)
 
     return wrapper
@@ -238,8 +248,7 @@ def check_model(model: str, url: str = "http://localhost:11434") -> bool:
 # 开机自启同款 VBS（纯 ASCII，静默隐藏窗口拉起 lms server）
 # 路径按当前用户 HOME 推导（不硬编码用户名），环境变量 LM_STUDIO_START_VBS 可显式覆盖
 _LMS_AUTOSTART_VBS_DEFAULT = (
-    "AppData/Local/Programs/LM Studio"
-    "/resources/app/.webpack/start_lm_studio_api.vbs"
+    "AppData/Local/Programs/LM Studio/resources/app/.webpack/start_lm_studio_api.vbs"
 )
 
 
@@ -257,7 +266,10 @@ _self_heal_attempted = False
 
 def _manual_offline_flag() -> Path:
     """手动下线标记文件（用户故意停服务省显存时，自愈不得救活）。"""
-    return Path(os.environ.get("USERPROFILE", str(Path.home()))) / ".lmstudio-manual-offline"
+    return (
+        Path(os.environ.get("USERPROFILE", str(Path.home())))
+        / ".lmstudio-manual-offline"
+    )
 
 
 def set_manual_offline(off: bool = True) -> Path:

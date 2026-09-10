@@ -32,6 +32,7 @@ def test_cosine_unrelated_low():
 def test_cosine_identity_is_one():
     a = vector("hello world hello world")
     import pytest
+
     assert cosine(a, a) == pytest.approx(1.0)
 
 

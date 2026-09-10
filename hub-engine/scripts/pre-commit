@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+# @version V1.0 / 2026-09-10 / Hermes / hub-engine pre-commit ruff 门禁钩子
+#
+# 作用：pre-commit 时跑 ruff check + ruff format --check，不通过则阻断 commit
+# 触发原因：trae work ruff format 48 文件 2 天未 commit 未报警（2026-09-10 实证）
+# 安装：cp scripts/pre-commit .git/hooks/pre-commit
+#
+# 退出码：
+#   0 = 通过
+#   1 = 阻断（ruff check 报错）
+#   2 = 阻断（ruff format --check 不一致）
+#
+# 兼容：Windows + Linux + macOS（Git Bash）
+
+set -e
+
+echo "[pre-commit] hub-engine ruff 门禁启动..."
+
+# 检测 .py 文件 staged
+STAGED_PY=$(git diff --cached --name-only --diff-filter=ACM | grep "\.py$" || true)
+if [ -z "$STAGED_PY" ]; then
+    echo "[pre-commit] 无 .py 文件 staged，跳过"
+    exit 0
+fi
+
+echo "[pre-commit] 检测到 .py staged 文件:"
+echo "$STAGED_PY" | sed 's/^/  /'
+
+# 优先用 python -m ruff（兼容所有平台），回退到 ruff 命令
+RUFF_CMD=""
+if command -v ruff >/dev/null 2>&1; then
+    RUFF_CMD="ruff"
+elif python -m ruff --version >/dev/null 2>&1; then
+    RUFF_CMD="python -m ruff"
+else
+    echo "[pre-commit] ⚠️ ruff 未安装（PATH 或 python -m 都没），跳过门禁"
+    echo "[pre-commit] 安装提示：pip install ruff"
+    exit 0  # 缺工具不阻断（避免 CI 误判）
+fi
+
+# 1. ruff check
+echo "[pre-commit] 跑 ruff check..."
+if ! $RUFF_CMD check $STAGED_PY 2>&1; then
+    echo "[pre-commit] ❌ ruff check 未通过，commit 阻断"
+    exit 1
+fi
+
+# 2. ruff format --check
+echo "[pre-commit] 跑 ruff format --check..."
+if ! $RUFF_CMD format --check $STAGED_PY 2>&1; then
+    echo "[pre-commit] ❌ ruff format --check 不一致，commit 阻断"
+    exit 2
+fi
+
+echo "[pre-commit] ✅ ruff 门禁通过，commit 允许"
+exit 0

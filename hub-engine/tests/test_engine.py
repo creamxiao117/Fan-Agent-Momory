@@ -110,8 +110,10 @@ def test_status_returns_3_when_llm_unavailable(tmp_path, capsys, monkeypatch):
     code = main(["status", "--root", str(root), "--json"])
     data = json.loads(capsys.readouterr().out)
     assert code == 3
-    assert any(a["rule"] == "local_llm_unavailable" and a["level"] == "critical"
-               for a in data["alerts"])
+    assert any(
+        a["rule"] == "local_llm_unavailable" and a["level"] == "critical"
+        for a in data["alerts"]
+    )
 
 
 def test_build_vectors_returns_zero_when_model_ok(tmp_path, capsys):

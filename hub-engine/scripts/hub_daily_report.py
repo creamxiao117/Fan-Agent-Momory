@@ -128,7 +128,9 @@ def _format_6panel_section(panel: dict | None) -> list[str]:
     if lr.get("ok"):
         stdout = lr.get("info", {}).get("stdout", "")
         if "hits: []" in stdout:
-            lines.append("  🟡 LLM 路由：fallback 可用但 LLM 决策无命中（可能是离线或无可用模型）")
+            lines.append(
+                "  🟡 LLM 路由：fallback 可用但 LLM 决策无命中（可能是离线或无可用模型）"
+            )
         else:
             lines.append(f"  ✅ LLM 路由：{stdout[:60]}")
 

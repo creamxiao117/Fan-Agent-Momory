@@ -21,7 +21,11 @@ def _thin_section(root: Path) -> str:
         return "- 薄卡体量（<80 字）: 统计失败（跳过）\n"
     if not thins:
         return "- 薄卡体量（<80 字）: 0（无薄卡）\n"
-    lines = [f"- 薄卡体量（<80 字）: {len(thins)} 张（仅信息，不算告警；纵列前 3）", "  | 体量 | 类型目录 | 文件 |", "  | --- | --- | --- |"]
+    lines = [
+        f"- 薄卡体量（<80 字）: {len(thins)} 张（仅信息，不算告警；纵列前 3）",
+        "  | 体量 | 类型目录 | 文件 |",
+        "  | --- | --- | --- |",
+    ]
     for t in thins[:3]:
         lines.append(f"  | {t['body_chars']} | {t['dir']} | `{t['file']}` |")
     lines.append("  （完整清单见 thin_card_scan.py --json；人工决定补正文或归档）")

@@ -50,6 +50,7 @@ def _extract_cn_keywords(query: str, max_words: int = 6) -> list[str]:
 def _check_card_type(card_path: Path) -> str | None:
     """轻量检查卡 type，避免循环内重复 import。"""
     from common.frontmatter import try_read_card
+
     c = try_read_card(card_path)
     return c.type if c else None
 
@@ -57,6 +58,7 @@ def _check_card_type(card_path: Path) -> str | None:
 def _update_card_tags(card_path: Path, new_tags: list[str]) -> list[str]:
     """给卡追加 tag（去重），返回实际追加的 tag 列表。"""
     from common.frontmatter import save_card, try_read_card
+
     card = try_read_card(card_path)
     if card is None:
         return []
@@ -70,7 +72,9 @@ def _update_card_tags(card_path: Path, new_tags: list[str]) -> list[str]:
 
 def _generate_p0_draft(root: Path, query: str, keywords: list[str]) -> Path:
     """为 P0 候选生成草稿卡。"""
-    slug = re.sub(r"[^a-z0-9]+", "-", query.lower()).strip("-")[:60] or "sleep-candidate"
+    slug = (
+        re.sub(r"[^a-z0-9]+", "-", query.lower()).strip("-")[:60] or "sleep-candidate"
+    )
     now = datetime.now(_LOCAL_TZ).date().isoformat()
     frontmatter = (
         "---\n"
@@ -100,7 +104,9 @@ def _generate_p0_draft(root: Path, query: str, keywords: list[str]) -> Path:
     return draft_path
 
 
-def _process_proposal(proposal_path: Path, root: Path, *, dry_run: bool = False) -> dict:
+def _process_proposal(
+    proposal_path: Path, root: Path, *, dry_run: bool = False
+) -> dict:
     """处理单个 proposal.json。"""
     data = json.loads(proposal_path.read_text(encoding="utf-8"))
     cands = data.get("candidates", [])
@@ -151,7 +157,11 @@ def _process_proposal(proposal_path: Path, root: Path, *, dry_run: bool = False)
 def main() -> int:
     ap = argparse.ArgumentParser(prog="auto-process-sleep", description=__doc__)
     ap.add_argument("--root", required=True, help="中枢根目录")
-    ap.add_argument("--date", default=None, help="只处理某一天的 sleep 目录前缀（如 20260829-075557）")
+    ap.add_argument(
+        "--date",
+        default=None,
+        help="只处理某一天的 sleep 目录前缀（如 20260829-075557）",
+    )
     ap.add_argument("--since-days", type=int, default=3, help="最近 N 天")
     ap.add_argument("--dry-run", action="store_true", help="只分析，不写卡")
     args = ap.parse_args()
@@ -175,7 +185,9 @@ def main() -> int:
             if not ts_match:
                 continue
             try:
-                ts = datetime.strptime(sub.name, "%Y%m%d-%H%M%S").replace(tzinfo=_LOCAL_TZ)
+                ts = datetime.strptime(sub.name, "%Y%m%d-%H%M%S").replace(
+                    tzinfo=_LOCAL_TZ
+                )
             except ValueError:
                 continue
             if ts >= cutoff:
@@ -195,7 +207,9 @@ def main() -> int:
         result = _process_proposal(p, root, dry_run=args.dry_run)
         total_p1 += len(result["p1_tagged"])
         total_p0 += len(result["p0_drafts"])
-        print(f"[auto_process_sleep] [{mode}] {p.parent.name}: P1 补 tag {len(result['p1_tagged'])}, P0 草稿 {len(result['p0_drafts'])}, 跳过 {result['skipped']}")
+        print(
+            f"[auto_process_sleep] [{mode}] {p.parent.name}: P1 补 tag {len(result['p1_tagged'])}, P0 草稿 {len(result['p0_drafts'])}, 跳过 {result['skipped']}"
+        )
 
     # 留痕
     if (total_p1 > 0 or total_p0 > 0) and not args.dry_run:

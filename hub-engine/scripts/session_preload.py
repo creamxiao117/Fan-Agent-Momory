@@ -45,9 +45,40 @@ TYPE_LABELS = {
 
 _STOPWORDS = frozenset(
     {
-        "的", "了", "是", "在", "我", "有", "和", "就", "不", "人", "都", "一",
-        "上", "也", "很", "到", "说", "要", "去", "会", "着", "没有", "看", "好",
-        "自己", "这", "那", "你", "他", "什么", "怎么", "如何", "为什么", "吗",
+        "的",
+        "了",
+        "是",
+        "在",
+        "我",
+        "有",
+        "和",
+        "就",
+        "不",
+        "人",
+        "都",
+        "一",
+        "上",
+        "也",
+        "很",
+        "到",
+        "说",
+        "要",
+        "去",
+        "会",
+        "着",
+        "没有",
+        "看",
+        "好",
+        "自己",
+        "这",
+        "那",
+        "你",
+        "他",
+        "什么",
+        "怎么",
+        "如何",
+        "为什么",
+        "吗",
     }
 )
 
@@ -180,13 +211,9 @@ def _generate_brief(
         "",
     ]
     for i, c in enumerate(cards, 1):
-        lines.append(
-            f"**{i}. {c['type_label']} {c['title']}**"
-        )
+        lines.append(f"**{i}. {c['type_label']} {c['title']}**")
         lines.append(f"- 路径: `{c['path']}`")
-        lines.append(
-            f"- 相关度: {c['score']:.2f} | 价值分: {c['value_score']:.2f}"
-        )
+        lines.append(f"- 相关度: {c['score']:.2f} | 价值分: {c['value_score']:.2f}")
         if c.get("reuse_count", 0) > 0:
             lines.append(f"- 复用次数: {c['reuse_count']}")
         lines.append(f"- 摘要: {c['summary']}")

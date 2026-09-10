@@ -17,4 +17,3 @@ def cmd_distill(args) -> int:
     written = distill(Path(args.root), args.platform)
     print(f"产出候选 {len(written)} 张: {[p.name for p in written]}")
     return 0
-

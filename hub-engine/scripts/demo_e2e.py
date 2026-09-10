@@ -66,7 +66,9 @@ reuse_count: 0
     insight.type = "project"
     qwb = root / ".sync" / "drafts" / "trae_draft" / "query-writeback.md"
     qwb.write_text(write_card(insight), encoding="utf-8")
-    ingest(root, "trae")  # project 属权威区低风险 → 自动入区仅记日志（2026-09-02 口径：exp 已退出权威区）
+    ingest(
+        root, "trae"
+    )  # project 属权威区低风险 → 自动入区仅记日志（2026-09-02 口径：exp 已退出权威区）
 
     return {"confirmed": dst.name, "hits": [h.path.name for h in hits]}
 

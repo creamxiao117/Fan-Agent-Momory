@@ -329,8 +329,12 @@ def build(root: Path) -> dict:
             ).fetchone()[0]
             if n_valid > 0:
                 return {
-                    "reused": 0, "inserted": 0, "updated": 0, "removed": 0,
-                    "embedded": 0, "degraded": True,
+                    "reused": 0,
+                    "inserted": 0,
+                    "updated": 0,
+                    "removed": 0,
+                    "embedded": 0,
+                    "degraded": True,
                     "note": f"embed 后端不可用，保留 {n_valid} 条有效向量，未覆盖",
                 }
         # 探测库内已存维度；若模型名变了且维度不同 → 全量重建
@@ -347,9 +351,7 @@ def build(root: Path) -> dict:
             conn.execute("DELETE FROM docs")
         existing = {
             r[1]: (r[0], r[2], r[3], r[4])
-            for r in conn.execute(
-                "SELECT id, path, mtime, size, synced_at FROM docs"
-            )
+            for r in conn.execute("SELECT id, path, mtime, size, synced_at FROM docs")
         }
         stats = {"reused": 0, "inserted": 0, "updated": 0, "removed": 0, "embedded": 0}
         current: set[str] = set()
@@ -363,9 +365,7 @@ def build(root: Path) -> dict:
             text = f"{card.body} {' '.join(card.tags)}"
             # 签名未变 → 复用已有行（含向量），仅刷新同步时间（freshness 变更追踪）
             if old is not None and sig is not None and (old[1], old[2]) == sig:
-                conn.execute(
-                    "UPDATE docs SET synced_at=? WHERE id=?", (now, old[0])
-                )
+                conn.execute("UPDATE docs SET synced_at=? WHERE id=?", (now, old[0]))
                 stats["reused"] += 1
                 continue
 

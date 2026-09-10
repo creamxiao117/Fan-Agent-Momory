@@ -22,4 +22,3 @@ def cmd_retrieve(args) -> int:
         print(f"[{c.type}/{c.status}] {c.path.name}")
         print(extract_snippet(c.body, args.query))
     return 0
-

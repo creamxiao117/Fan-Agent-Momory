@@ -34,4 +34,3 @@ def cmd_lint(args) -> int:
         )
         return 2
     return 0
-

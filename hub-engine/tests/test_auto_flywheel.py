@@ -41,10 +41,12 @@ def test_root_level_draft_counted(tmp_path: Path):
     _make_draft(tmp_path, "trae_draft/card-a.md")
     _make_draft(tmp_path, "trae_draft/card-b.md")
     result = scan_drafts(tmp_path)
-    assert result == {"trae": [
-        tmp_path / ".sync" / "drafts" / "trae_draft" / "card-a.md",
-        tmp_path / ".sync" / "drafts" / "trae_draft" / "card-b.md",
-    ]}
+    assert result == {
+        "trae": [
+            tmp_path / ".sync" / "drafts" / "trae_draft" / "card-a.md",
+            tmp_path / ".sync" / "drafts" / "trae_draft" / "card-b.md",
+        ]
+    }
 
 
 def test_subdirs_not_counted(tmp_path: Path):

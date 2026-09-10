@@ -68,7 +68,9 @@ def _parse_index(index_path: Path) -> tuple[dict[str, list[str]], list[dict]]:
     return by_slug, entries
 
 
-def _authority_files(root: Path, dirs: tuple[str, ...] | None = None) -> dict[str, Path]:
+def _authority_files(
+    root: Path, dirs: tuple[str, ...] | None = None
+) -> dict[str, Path]:
     """权威区文件 → 相对路径。dirs=None 时用 AUTHORITY_DIRS。"""
     out: dict[str, Path] = {}
     scan_dirs = dirs if dirs is not None else AUTHORITY_DIRS

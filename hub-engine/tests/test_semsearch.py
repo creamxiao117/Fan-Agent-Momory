@@ -365,9 +365,12 @@ def test_semantic_vector_retrieve_normalizes_path_case(tmp_path, monkeypatch):
     _fake_embed()
     build(root)
     # 构造：库返回一个「大小写被改」的路径（模拟 build 存绝对路径 vs 检索 Path 相对/大小写不一致）
-    raw = semsearch.vector_scores(root, semsearch.embed("DLL 修改后必须递增版本号避免被锁"))
+    raw = semsearch.vector_scores(
+        root, semsearch.embed("DLL 修改后必须递增版本号避免被锁")
+    )
     upper_path = str(Path(raw[0][0]).resolve()).upper() if raw else ""
     assert upper_path
+
     # monkeypatch 强制库返回大写绝对路径，断言归一化后仍命中真实卡片
     def _mocked_scores(*a, **k):
         return [(upper_path, raw[0][1])]

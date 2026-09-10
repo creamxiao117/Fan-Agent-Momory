@@ -79,11 +79,7 @@ class TestTimeoutStrategy:
 
     def test_timeout_normal_completion(self):
         """正常完成不触发超时。"""
-        pipeline = (
-            ResiliencePipelineBuilder()
-            .add_timeout(timeout=5.0)
-            .build()
-        )
+        pipeline = ResiliencePipelineBuilder().add_timeout(timeout=5.0).build()
         result = pipeline.execute(lambda: "ok")
         assert result == "ok"
 
@@ -193,9 +189,7 @@ class TestFallbackStrategy:
     def test_fallback_value(self):
         """所有前置失败后返回 fallback_value。"""
         pipeline = (
-            ResiliencePipelineBuilder()
-            .add_fallback(fallback_value="降级结果")
-            .build()
+            ResiliencePipelineBuilder().add_fallback(fallback_value="降级结果").build()
         )
         # Fallback 策略捕获异常并返回 fallback_value，不抛异常
         result = pipeline.execute(lambda: (_ for _ in ()).throw(RuntimeError("失败")))
@@ -217,9 +211,7 @@ class TestFallbackStrategy:
     def test_fallback_on_success(self):
         """正常成功时不触发降级。"""
         pipeline = (
-            ResiliencePipelineBuilder()
-            .add_fallback(fallback_value="降级")
-            .build()
+            ResiliencePipelineBuilder().add_fallback(fallback_value="降级").build()
         )
         result = pipeline.execute(lambda: "正常结果")
         assert result == "正常结果"

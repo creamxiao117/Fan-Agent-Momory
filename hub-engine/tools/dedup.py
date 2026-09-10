@@ -39,7 +39,6 @@ def _clip(text: str, limit: int) -> str:
     return text[:limit] + "\n…（已截断，完整内容见原卡）"
 
 
-
 def candidates(
     root: Path, card, min_sim: float = DEFAULT_MIN_SIM, top_k: int = 5
 ) -> list[tuple]:
@@ -115,9 +114,7 @@ def parse_decision(text: str) -> dict:
         out["target"] = obj.get("target") or None
         out["reason"] = str(obj.get("reason", "")).strip() or "（无理由）"
         try:
-            out["confidence"] = max(
-                0.0, min(1.0, float(obj.get("confidence", 0.0)))
-            )
+            out["confidence"] = max(0.0, min(1.0, float(obj.get("confidence", 0.0))))
         except (TypeError, ValueError):
             out["confidence"] = 0.0
         return out

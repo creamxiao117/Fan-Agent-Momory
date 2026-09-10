@@ -109,6 +109,7 @@ def test_empty_query_returns_no_results(tmp_path):
 def test_semantic_n_is_tunable(tmp_path):
     """n-gram 长度可调（char 模式）：n 参数确实影响相似度计算"""
     from tools.retrieve import _semantic_scored
+
     root = bootstrap(tmp_path)
     _seed(root)
     q = "改了插件 DLL 结果被 AutoCAD 锁住打不开"
@@ -121,8 +122,9 @@ def test_semantic_n_is_tunable(tmp_path):
     scores2 = {c.path.name: s for c, s in scored2}
     scores3 = {c.path.name: s for c, s in scored3}
     common = set(scores2) & set(scores3)
-    assert any(abs(scores2[k] - scores3[k]) > 0.001 for k in common), \
+    assert any(abs(scores2[k] - scores3[k]) > 0.001 for k in common), (
         f"n=2 和 n=3 的分数完全相同，n 参数未生效: scores2={scores2} scores3={scores3}"
+    )
 
 
 def test_retrieve_passes_n_to_semantic(tmp_path):

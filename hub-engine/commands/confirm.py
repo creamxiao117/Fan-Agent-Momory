@@ -17,4 +17,3 @@ def cmd_confirm(args) -> int:
     dst = confirm_rule(Path(args.root), args.name)
     print(f"已确认并提升: {dst}")
     return 0
-

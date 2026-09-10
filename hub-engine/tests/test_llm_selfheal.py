@@ -29,9 +29,7 @@ def _patch_checker(monkeypatch, avail_sequence):
         calls["available"] += 1
         return seq.pop(0) if seq else False  # 序列耗尽视为持续离线（防假绿）
 
-    monkeypatch.setattr(
-        llm_health.LLMHealthChecker, "is_available", fake_is_available
-    )
+    monkeypatch.setattr(llm_health.LLMHealthChecker, "is_available", fake_is_available)
     monkeypatch.setattr(
         llm_health.LLMHealthChecker,
         "reset_cooldown",

@@ -26,9 +26,11 @@ T = TypeVar("T")
 # 上下文与事件
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class ResilienceContext:
     """管道执行上下文：跨策略共享状态。"""
+
     attempt: int = 0
     start_time: float = 0.0
     result: Any = None
@@ -44,9 +46,13 @@ class ResilienceContext:
         self.metadata.clear()
         self.events.clear()
 
-    def add_event(self, stage: str, attempt: int, elapsed: float, ok: bool, detail: str = "") -> PipelineEvent:
+    def add_event(
+        self, stage: str, attempt: int, elapsed: float, ok: bool, detail: str = ""
+    ) -> PipelineEvent:
         """添加事件到上下文（供管道收集）。"""
-        evt = PipelineEvent(stage=stage, attempt=attempt, elapsed=elapsed, ok=ok, detail=detail)
+        evt = PipelineEvent(
+            stage=stage, attempt=attempt, elapsed=elapsed, ok=ok, detail=detail
+        )
         self.events.append(evt)
         return evt
 
@@ -54,6 +60,7 @@ class ResilienceContext:
 @dataclass
 class PipelineEvent:
     """管道事件：可用于日志/遥测。"""
+
     stage: str
     attempt: int
     elapsed: float
@@ -64,6 +71,7 @@ class PipelineEvent:
 # ---------------------------------------------------------------------------
 # 策略接口
 # ---------------------------------------------------------------------------
+
 
 class ResilienceStrategy:
     """策略基类：包裹下一层调用，实现容错逻辑。"""
@@ -79,6 +87,7 @@ class ResilienceStrategy:
 # ---------------------------------------------------------------------------
 # 内建策略
 # ---------------------------------------------------------------------------
+
 
 class RetryStrategy(ResilienceStrategy):
     """重试策略：指数退避 + 可选抖动。
@@ -189,9 +198,7 @@ class TimeoutStrategy(ResilienceStrategy):
                 )
                 if strategy.on_timeout:
                     strategy.on_timeout(evt)
-                raise TimeoutError(
-                    f"执行超时 ({strategy.timeout}s)，已在后台继续"
-                )
+                raise TimeoutError(f"执行超时 ({strategy.timeout}s)，已在后台继续")
 
             if "exception" in exc_holder:
                 raise exc_holder["exception"]
@@ -265,7 +272,10 @@ class CircuitBreakerStrategy(ResilienceStrategy):
                 with strategy._lock:
                     strategy._failure_count += 1
                     strategy._last_failure_time = time.time()
-                    if strategy._state == "half_open" or strategy._failure_count >= strategy.failure_threshold:
+                    if (
+                        strategy._state == "half_open"
+                        or strategy._failure_count >= strategy.failure_threshold
+                    ):
                         strategy._transition("open")
                 raise
 
@@ -329,6 +339,7 @@ class FallbackStrategy(ResilienceStrategy):
 # 管道与 Builder
 # ---------------------------------------------------------------------------
 
+
 class ResiliencePipeline:
     """弹性管道：按策略链顺序包裹目标函数。"""
 
@@ -359,7 +370,10 @@ class ResiliencePipeline:
         @functools.wraps(fn)
         def outer_wrapper(*a: Any, **kw: Any) -> T:
             self._ctx.add_event(
-                stage="execute", attempt=0, elapsed=0.0, ok=True,
+                stage="execute",
+                attempt=0,
+                elapsed=0.0,
+                ok=True,
                 detail=f"管道开始执行（{len(self._strategies)} 个策略）",
             )
             return wrapped(*a, **kw)
@@ -368,25 +382,31 @@ class ResiliencePipeline:
             result = outer_wrapper(*args, **kwargs)
             self._ctx.result = result
             self._ctx.add_event(
-                stage="execute", attempt=self._ctx.attempt,
-                elapsed=time.time() - self._ctx.start_time, ok=True,
+                stage="execute",
+                attempt=self._ctx.attempt,
+                elapsed=time.time() - self._ctx.start_time,
+                ok=True,
                 detail="执行成功",
             )
             return result
         except Exception as e:
             self._ctx.exception = e
             self._ctx.add_event(
-                stage="execute", attempt=self._ctx.attempt,
-                elapsed=time.time() - self._ctx.start_time, ok=False,
+                stage="execute",
+                attempt=self._ctx.attempt,
+                elapsed=time.time() - self._ctx.start_time,
+                ok=False,
                 detail=f"执行失败: {e}",
             )
             raise
 
     def __call__(self, fn: Callable[..., T]) -> Callable[..., T]:
         """作为装饰器使用。"""
+
         @functools.wraps(fn)
         def wrapper(*args: Any, **kwargs: Any) -> T:
             return self.execute(fn, *args, **kwargs)
+
         return wrapper
 
 
@@ -405,11 +425,16 @@ class ResiliencePipelineBuilder:
         retry_on: tuple[type[Exception], ...] = (Exception,),
         on_retry: Callable[[PipelineEvent], None] | None = None,
     ) -> ResiliencePipelineBuilder:
-        self._strategies.append(RetryStrategy(
-            max_attempts=max_attempts, base_delay=base_delay,
-            max_delay=max_delay, jitter=jitter,
-            retry_on=retry_on, on_retry=on_retry,
-        ))
+        self._strategies.append(
+            RetryStrategy(
+                max_attempts=max_attempts,
+                base_delay=base_delay,
+                max_delay=max_delay,
+                jitter=jitter,
+                retry_on=retry_on,
+                on_retry=on_retry,
+            )
+        )
         return self
 
     def add_timeout(
@@ -417,9 +442,12 @@ class ResiliencePipelineBuilder:
         timeout: float = 30.0,
         on_timeout: Callable[[PipelineEvent], None] | None = None,
     ) -> ResiliencePipelineBuilder:
-        self._strategies.append(TimeoutStrategy(
-            timeout=timeout, on_timeout=on_timeout,
-        ))
+        self._strategies.append(
+            TimeoutStrategy(
+                timeout=timeout,
+                on_timeout=on_timeout,
+            )
+        )
         return self
 
     def add_circuit_breaker(
@@ -429,11 +457,14 @@ class ResiliencePipelineBuilder:
         half_open_max_calls: int = 1,
         on_state_change: Callable[[str], None] | None = None,
     ) -> ResiliencePipelineBuilder:
-        self._strategies.append(CircuitBreakerStrategy(
-            failure_threshold=failure_threshold, cooldown=cooldown,
-            half_open_max_calls=half_open_max_calls,
-            on_state_change=on_state_change,
-        ))
+        self._strategies.append(
+            CircuitBreakerStrategy(
+                failure_threshold=failure_threshold,
+                cooldown=cooldown,
+                half_open_max_calls=half_open_max_calls,
+                on_state_change=on_state_change,
+            )
+        )
         return self
 
     def add_fallback(
@@ -442,10 +473,13 @@ class ResiliencePipelineBuilder:
         fallback_fn: Callable[..., Any] | None = None,
         on_fallback: Callable[[PipelineEvent], None] | None = None,
     ) -> ResiliencePipelineBuilder:
-        self._strategies.append(FallbackStrategy(
-            fallback_value=fallback_value, fallback_fn=fallback_fn,
-            on_fallback=on_fallback,
-        ))
+        self._strategies.append(
+            FallbackStrategy(
+                fallback_value=fallback_value,
+                fallback_fn=fallback_fn,
+                on_fallback=on_fallback,
+            )
+        )
         return self
 
     def build(self) -> ResiliencePipeline:

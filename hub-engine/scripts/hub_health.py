@@ -183,7 +183,11 @@ def collect_llm_status() -> dict:
             "models": status.models,
             "model_count": len(status.models),
             "response_time_ms": round(status.response_time * 1000, 1),
-            "last_check": datetime.fromtimestamp(status.last_check, tz=timezone.utc).isoformat() if status.last_check else None,
+            "last_check": datetime.fromtimestamp(
+                status.last_check, tz=timezone.utc
+            ).isoformat()
+            if status.last_check
+            else None,
             "last_error": status.last_error,
         }
     except Exception as e:
@@ -193,7 +197,12 @@ def collect_llm_status() -> dict:
         }
 
 
-def compute_health_score(card_stats: dict, skill_stats: dict, flywheel_stats: dict, llm_status: dict | None = None) -> dict:
+def compute_health_score(
+    card_stats: dict,
+    skill_stats: dict,
+    flywheel_stats: dict,
+    llm_status: dict | None = None,
+) -> dict:
     """计算飞轮健康度评分（0-100）。"""
     scores = {}
 
@@ -232,7 +241,12 @@ def compute_health_score(card_stats: dict, skill_stats: dict, flywheel_stats: di
     scores["llm_health"] = round(llm_health, 1)
 
     # 总分
-    overall = card_health * 0.25 + skill_health * 0.35 + flywheel_activity * 0.2 + llm_health * 0.2
+    overall = (
+        card_health * 0.25
+        + skill_health * 0.35
+        + flywheel_activity * 0.2
+        + llm_health * 0.2
+    )
     scores["overall"] = round(overall, 1)
 
     return scores
@@ -268,24 +282,31 @@ def check_alerts(
                         recent_dates.add(d)
                 from datetime import date
                 from datetime import timedelta as td
+
                 today = datetime.now(timezone.utc).date()
-                days_with_logs = sorted([
-                    d for d in recent_dates
-                    if (today - date.fromisoformat(d)) <= td(days=alert_days)
-                ])
+                days_with_logs = sorted(
+                    [
+                        d
+                        for d in recent_dates
+                        if (today - date.fromisoformat(d)) <= td(days=alert_days)
+                    ]
+                )
                 if not days_with_logs:
-                    alerts.append({
-                        "level": "warning",
-                        "rule": "no_recent_productivity",
-                        "message": f"最近 {alert_days} 天无飞轮产物，建议触发 auto_flywheel",
-                        "suggestion": f"python auto_flywheel.py --root {hub_root}",
-                    })
+                    alerts.append(
+                        {
+                            "level": "warning",
+                            "rule": "no_recent_productivity",
+                            "message": f"最近 {alert_days} 天无飞轮产物，建议触发 auto_flywheel",
+                            "suggestion": f"python auto_flywheel.py --root {hub_root}",
+                        }
+                    )
         except (json.JSONDecodeError, ValueError, OSError):
             pass
 
     # 规则 2: 命中率低（读全部按日切分 + 旧版单一文件，向后兼容）
     try:
         from tools.mcp_audit import query_log_files
+
         log_files = query_log_files(hub_root)
     except ImportError:
         log_files = [hub_root / ".sync" / "state" / "query.log.jsonl"]
@@ -307,15 +328,19 @@ def check_alerts(
                 searches = [r for r in records if r.get("action") == "search"]
                 if searches:
                     total_searches = len(searches)
-                    zero_hits = sum(1 for r in searches if int(r.get("hit_count") or 0) == 0)
+                    zero_hits = sum(
+                        1 for r in searches if int(r.get("hit_count") or 0) == 0
+                    )
                     hit_rate = 1 - (zero_hits / max(total_searches, 1))
                     if hit_rate < 0.3:
-                        alerts.append({
-                            "level": "warning",
-                            "rule": "low_hit_rate",
-                            "message": f"最近命中率 {hit_rate:.0%}，低于 30% 阈值",
-                            "suggestion": f"python missing_query.py --root {hub_root} --auto-apply-p1",
-                        })
+                        alerts.append(
+                            {
+                                "level": "warning",
+                                "rule": "low_hit_rate",
+                                "message": f"最近命中率 {hit_rate:.0%}，低于 30% 阈值",
+                                "suggestion": f"python missing_query.py --root {hub_root} --auto-apply-p1",
+                            }
+                        )
         except (OSError, UnicodeDecodeError):
             pass
 
@@ -325,23 +350,27 @@ def check_alerts(
         if s.get("status") == "active" and int(s.get("reuse_count", 0) or 0) == 0:
             zero_reuse_active.append(s["name"])
     if zero_reuse_active:
-        alerts.append({
-            "level": "info",
-            "rule": "active_zero_reuse",
-            "message": f"{len(zero_reuse_active)} 个 active 技能零复用，建议 run smoke-test 或标记 deprecated",
-            "skills": zero_reuse_active[:10],
-            "suggestion": f"python flywheel.py smoke --hub-root {hub_root} --skillhub-root {skillhub_root} --promote",
-        })
+        alerts.append(
+            {
+                "level": "info",
+                "rule": "active_zero_reuse",
+                "message": f"{len(zero_reuse_active)} 个 active 技能零复用，建议 run smoke-test 或标记 deprecated",
+                "skills": zero_reuse_active[:10],
+                "suggestion": f"python flywheel.py smoke --hub-root {hub_root} --skillhub-root {skillhub_root} --promote",
+            }
+        )
 
     # 规则 4: Ollama 不可用
     llm_status = collect_llm_status()
     if not llm_status.get("available", True):
-        alerts.append({
-            "level": "critical",
-            "rule": "ollama_unavailable",
-            "message": f"本地 LLM 服务不可用 (LM Studio): {llm_status.get('last_error', '未知错误')}",
-            "suggestion": "检查 LM Studio 是否在运行，确认 API 端口 1234",
-        })
+        alerts.append(
+            {
+                "level": "critical",
+                "rule": "ollama_unavailable",
+                "message": f"本地 LLM 服务不可用 (LM Studio): {llm_status.get('last_error', '未知错误')}",
+                "suggestion": "检查 LM Studio 是否在运行，确认 API 端口 1234",
+            }
+        )
 
     return alerts
 
@@ -365,7 +394,9 @@ def main():
     skill_stats = collect_skill_stats(skillhub_root)
     flywheel_stats = count_scripts_run(log_dir, days=args.days)
     llm_status = collect_llm_status()
-    health_scores = compute_health_score(card_stats, skill_stats, flywheel_stats, llm_status)
+    health_scores = compute_health_score(
+        card_stats, skill_stats, flywheel_stats, llm_status
+    )
 
     report = {
         "generated_at": datetime.now(tz=timezone.utc).isoformat(),
@@ -380,15 +411,20 @@ def main():
     # 告警检查
     if args.alert:
         alerts = check_alerts(
-            hub_root, skillhub_root,
-            card_stats, skill_stats, flywheel_stats,
+            hub_root,
+            skillhub_root,
+            card_stats,
+            skill_stats,
+            flywheel_stats,
             alert_days=args.alert_days,
         )
         report["alerts"] = alerts
         if alerts:
             print("=== ⚠️ 飞轮自监控告警 ===")
             for alert in alerts:
-                level_icon = {"warning": "⚠️", "info": "ℹ️", "critical": "🚨"}.get(alert["level"], "⚠️")
+                level_icon = {"warning": "⚠️", "info": "ℹ️", "critical": "🚨"}.get(
+                    alert["level"], "⚠️"
+                )
             # Ollama 告警使用特殊图标
             if alert.get("rule") == "ollama_unavailable":
                 level_icon = "🦙"

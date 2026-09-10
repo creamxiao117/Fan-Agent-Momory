@@ -32,11 +32,40 @@ _LOCAL_TZ = timezone(timedelta(hours=+8))
 
 # Python 标准库白名单（出现在 ModuleNotFoundError 里就不是 pip 能解决的）
 _STDLIB = {
-    "abc", "argparse", "ast", "asyncio", "base64", "collections", "concurrent",
-    "contextlib", "copy", "dataclasses", "datetime", "decimal", "functools",
-    "hashlib", "http", "importlib", "inspect", "io", "itertools", "json",
-    "logging", "os", "pathlib", "re", "shutil", "signal", "subprocess",
-    "sys", "tempfile", "textwrap", "typing", "unittest", "urllib", "yaml",
+    "abc",
+    "argparse",
+    "ast",
+    "asyncio",
+    "base64",
+    "collections",
+    "concurrent",
+    "contextlib",
+    "copy",
+    "dataclasses",
+    "datetime",
+    "decimal",
+    "functools",
+    "hashlib",
+    "http",
+    "importlib",
+    "inspect",
+    "io",
+    "itertools",
+    "json",
+    "logging",
+    "os",
+    "pathlib",
+    "re",
+    "shutil",
+    "signal",
+    "subprocess",
+    "sys",
+    "tempfile",
+    "textwrap",
+    "typing",
+    "unittest",
+    "urllib",
+    "yaml",
 }
 
 
@@ -46,7 +75,10 @@ def run_pytest(engine_dir: Path) -> tuple[int, str]:
         r = subprocess.run(
             [sys.executable, "-m", "pytest", "-q", "--tb=line"],
             cwd=str(engine_dir),
-            capture_output=True, text=True, timeout=180, check=False,
+            capture_output=True,
+            text=True,
+            timeout=180,
+            check=False,
         )
         return r.returncode, (r.stdout or "") + "\n" + (r.stderr or "")
     except subprocess.TimeoutExpired:
@@ -83,12 +115,20 @@ def auto_fix(engine_dir: Path, *, dry_run: bool = False) -> dict:
     """执行自动修复流程。"""
     exit_code, output = run_pytest(engine_dir)
     if exit_code == 0:
-        return {"fixed": 0, "remaining_failures": 0, "message": "pytest 全绿", "pytest_exit_code_before": 0}
+        return {
+            "fixed": 0,
+            "remaining_failures": 0,
+            "message": "pytest 全绿",
+            "pytest_exit_code_before": 0,
+        }
 
     # 收集所有 ModuleNotFoundError / ImportError 行
     error_lines = [
-        l.strip() for l in output.splitlines()
-        if any(k in l for k in ("ModuleNotFoundError", "No module named", "ImportError"))
+        l.strip()
+        for l in output.splitlines()
+        if any(
+            k in l for k in ("ModuleNotFoundError", "No module named", "ImportError")
+        )
     ]
     # 去重
     seen_mods = set()
@@ -108,7 +148,9 @@ def auto_fix(engine_dir: Path, *, dry_run: bool = False) -> dict:
             try:
                 subprocess.run(
                     [sys.executable, "-m", "pip", "install", pkg, "-q"],
-                    capture_output=True, timeout=60, check=False,
+                    capture_output=True,
+                    timeout=60,
+                    check=False,
                 )
                 installed.append(pkg)
             except Exception as e:
@@ -125,7 +167,9 @@ def auto_fix(engine_dir: Path, *, dry_run: bool = False) -> dict:
 
 def main() -> int:
     ap = argparse.ArgumentParser(prog="auto-pytest-env-fix", description=__doc__)
-    ap.add_argument("--root", required=True, help="中枢根目录（脚本在 hub-engine 运行）")
+    ap.add_argument(
+        "--root", required=True, help="中枢根目录（脚本在 hub-engine 运行）"
+    )
     ap.add_argument("--dry-run", action="store_true", help="只分析，不执行 pip install")
     args = ap.parse_args()
 
@@ -140,9 +184,13 @@ def main() -> int:
 
     mode = "DRY-RUN" if args.dry_run else "APPLIED"
     if result["fixed"] > 0:
-        print(f"[auto_pytest_env_fix] [{mode}] 检测到 {len(result['modules_detected'])} 个缺失模块, 自动安装 {result['fixed']} 个: {result['installed']}")
+        print(
+            f"[auto_pytest_env_fix] [{mode}] 检测到 {len(result['modules_detected'])} 个缺失模块, 自动安装 {result['fixed']} 个: {result['installed']}"
+        )
     else:
-        print(f"[auto_pytest_env_fix] [{mode}] pytest exit={result['pytest_exit_code_before']}, 无环境类缺失需自动安装")
+        print(
+            f"[auto_pytest_env_fix] [{mode}] pytest exit={result['pytest_exit_code_before']}, 无环境类缺失需自动安装"
+        )
 
     return 0
 

@@ -14,8 +14,8 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 LOCAL_TZ = timezone(timedelta(hours=+8))  # Asia/Shanghai
-LEGACY_LOG = "query.log.jsonl"            # 历史单一文件（向后兼容）
-LOG_PREFIX = "query.log-"                # 按日切分文件前缀
+LEGACY_LOG = "query.log.jsonl"  # 历史单一文件（向后兼容）
+LOG_PREFIX = "query.log-"  # 按日切分文件前缀
 LOG_SUFFIX = ".jsonl"
 
 # 旧版的 8MB 字节级 rotate 仍保留作为最后兜底（单日极端情况）
@@ -79,7 +79,8 @@ def append_query_log(root: Path, record: dict) -> None:
         # 字节级兜底 rotate（单日极端超 8MB 时切新文件）
         if path.exists() and path.stat().st_size > ROTATE_BYTES:
             path.rename(
-                d / f"{LOG_PREFIX}{_today_str()}-{datetime.now(timezone.utc).strftime('%H%M%S')}{LOG_SUFFIX}"
+                d
+                / f"{LOG_PREFIX}{_today_str()}-{datetime.now(timezone.utc).strftime('%H%M%S')}{LOG_SUFFIX}"
             )
 
         rec = {"ts": _ts(), **record}

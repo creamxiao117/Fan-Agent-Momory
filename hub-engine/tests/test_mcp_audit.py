@@ -44,6 +44,7 @@ def test_query_log_files_returns_daily(tmp_path):
     """query_log_files 应包含按日切分文件"""
     root = bootstrap(tmp_path)
     from datetime import datetime, timedelta, timezone
+
     today = datetime.now(timezone(timedelta(hours=+8))).strftime("%Y-%m-%d")
     state = root / ".sync" / "state"
     state.mkdir(parents=True, exist_ok=True)
@@ -83,5 +84,6 @@ def test_query_log_files_empty_when_no_state(tmp_path):
     state = root / ".sync" / "state"
     if state.exists():
         import shutil
+
         shutil.rmtree(state)
     assert query_log_files(root) == []

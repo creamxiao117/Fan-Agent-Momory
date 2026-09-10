@@ -20,11 +20,7 @@ def cmd_ingest(args) -> int:
 
     cfg = load_engine_config()
     batch_model = str(cfg.get("batch_model", "") or "").strip()
-    chat_fn = (
-        (lambda prompt, root: smart_chat(prompt, root))
-        if batch_model
-        else chat
-    )
+    chat_fn = (lambda prompt, root: smart_chat(prompt, root)) if batch_model else chat
     stat = ingest(
         Path(args.root),
         args.platform,
@@ -34,7 +30,9 @@ def cmd_ingest(args) -> int:
     # T2 (2026-09-07): 把 L1 lint 软门禁的 errors 直接打印（标红）
     lint_errs = stat.get("lint_errors") or []
     if lint_errs:
-        print(f"  [L1 门禁] {len(lint_errs)} 张草稿不合规（软告警，{'-strict' if stat.get('status') == 'lint_blocked' else '继续 ingest'}）:")
+        print(
+            f"  [L1 门禁] {len(lint_errs)} 张草稿不合规（软告警，{'-strict' if stat.get('status') == 'lint_blocked' else '继续 ingest'}）:"
+        )
         for e in lint_errs[:5]:
             print(f"    - {e['name']}: {e['errors'][:2]}")
         if len(lint_errs) > 5:
@@ -49,22 +47,36 @@ def cmd_ingest(args) -> int:
         if (moved + promoted) > 0:
             moved_names = stat.get("moved_names", []) + stat.get("promoted_names", [])
             if moved_names:
-                hook_py = Path(__file__).resolve().parent.parent / "scripts" / "post_ingest_hook.py"
+                hook_py = (
+                    Path(__file__).resolve().parent.parent
+                    / "scripts"
+                    / "post_ingest_hook.py"
+                )
                 python_exe = sys.executable
                 try:
                     r = subprocess.run(
-                        [python_exe, str(hook_py), "--root", str(args.root),
-                         "--names", ",".join(moved_names)],
-                        capture_output=True, text=True, encoding="utf-8", timeout=60,
+                        [
+                            python_exe,
+                            str(hook_py),
+                            "--root",
+                            str(args.root),
+                            "--names",
+                            ",".join(moved_names),
+                        ],
+                        capture_output=True,
+                        text=True,
+                        encoding="utf-8",
+                        timeout=60,
                     )
                     if r.returncode == 0:
                         for line in r.stdout.splitlines():
                             print(f"  [hook] {line}")
                     else:
-                        print(f"  [hook WARN] exit={r.returncode}: {r.stderr.strip()[:200]}",
-                              file=sys.stderr)
+                        print(
+                            f"  [hook WARN] exit={r.returncode}: {r.stderr.strip()[:200]}",
+                            file=sys.stderr,
+                        )
                 except Exception as e:
                     print(f"  [hook WARN] {type(e).__name__}: {e}", file=sys.stderr)
 
     return 0 if stat["status"] == "ok" else 1
-

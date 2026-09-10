@@ -68,6 +68,7 @@ def cmd_status(args) -> int:
     # 向量 freshness
     try:
         from tools.semsearch import scan_stale
+
         fresh = scan_stale(root)
         data["fresh"] = {
             "stale_total": fresh["total"],
@@ -85,9 +86,7 @@ def cmd_status(args) -> int:
     data["today_metrics"] = today_metrics
 
     # === 4. 健康度评分 ===
-    health_scores = compute_snapshot_health_scores(
-        counts, report, llm_status, root
-    )
+    health_scores = compute_snapshot_health_scores(counts, report, llm_status, root)
     data["health_scores"] = health_scores
 
     # === 5. 自监控告警 ===
@@ -137,7 +136,8 @@ def collect_llm_status() -> dict:
             "response_time_ms": round(status.response_time * 1000, 1),
             "last_check": (
                 datetime.fromtimestamp(status.last_check, tz=timezone.utc).isoformat()
-                if status.last_check else None
+                if status.last_check
+                else None
             ),
             "last_error": status.last_error,
         }
@@ -206,7 +206,6 @@ def collect_today_metrics(root: Path) -> dict:
     }
 
 
-
 def estimate_hub_tool_capacity(root: Path) -> float:
     """当 SkillHub 目录不存在时，用 hub 自身 tools/ 模块数 + MCP handlers 估算技能健康度。
 
@@ -221,14 +220,28 @@ def estimate_hub_tool_capacity(root: Path) -> float:
     # tools/ 可导入模块
     engine_dir / "tools"
     expected_tools = {
-        "compress", "dedup", "distill", "inject", "lint", "llm_health",
-        "mcp_audit", "mcp_handlers", "mcp_policy", "memory_diff",
-        "platform_bridge", "resilience", "retrieve", "semsearch", "snippet", "tidy",
+        "compress",
+        "dedup",
+        "distill",
+        "inject",
+        "lint",
+        "llm_health",
+        "mcp_audit",
+        "mcp_handlers",
+        "mcp_policy",
+        "memory_diff",
+        "platform_bridge",
+        "resilience",
+        "retrieve",
+        "semsearch",
+        "snippet",
+        "tidy",
     }
     import_ok = 0
     for mod_name in expected_tools:
         try:
             import importlib
+
             sys.path.insert(0, str(engine_dir))
             importlib.import_module(f"tools.{mod_name}")
             import_ok += 1
@@ -237,12 +250,21 @@ def estimate_hub_tool_capacity(root: Path) -> float:
     score += min(import_ok, 16) * 4  # 上限 64
 
     # MCP handler 完整性
-    mcp_handlers = ["hub_search", "hub_get", "hub_index", "hub_bootstrap", "hub_ingest_candidate"]
+    mcp_handlers = [
+        "hub_search",
+        "hub_get",
+        "hub_index",
+        "hub_bootstrap",
+        "hub_ingest_candidate",
+    ]
     try:
         import importlib
+
         sys.path.insert(0, str(engine_dir))
         mod = importlib.import_module("tools.mcp_handlers")
-        present = sum(1 for fn in mcp_handlers if hasattr(mod, fn) and callable(getattr(mod, fn)))
+        present = sum(
+            1 for fn in mcp_handlers if hasattr(mod, fn) and callable(getattr(mod, fn))
+        )
         score += present * 6  # 上限 30
     except Exception:
         pass
@@ -250,6 +272,7 @@ def estimate_hub_tool_capacity(root: Path) -> float:
     # 平台适配器覆盖
     try:
         from common.config import HubConfig
+
         cfg = HubConfig.load(root)
         platforms = (cfg.platforms or {}).keys()
         supported = {"hermes", "trae", "code", "workbuddy"}
@@ -259,6 +282,8 @@ def estimate_hub_tool_capacity(root: Path) -> float:
         pass
 
     return min(round(score, 1), 100.0)
+
+
 def compute_snapshot_health_scores(
     counts: dict,
     report: dict,
@@ -276,9 +301,11 @@ def compute_snapshot_health_scores(
     if skillhub_root.is_dir():
         try:
             import yaml
+
             skills_root = skillhub_root / "skills"
             if skills_root.is_dir():
                 from collections import Counter as Ctr
+
                 status_counts = Ctr()
                 for yaml_file in skills_root.rglob("skill.yaml"):
                     try:
@@ -300,6 +327,7 @@ def compute_snapshot_health_scores(
             logs = json.loads(flywheel_log.read_text(encoding="utf-8"))
             if isinstance(logs, list) and logs:
                 from datetime import timedelta as td
+
                 cutoff = datetime.now(timezone.utc) - td(days=7)
                 recent = 0
                 for entry in logs[-30:]:
@@ -354,12 +382,14 @@ def collect_snapshot_alerts(
     alerts = []
 
     if not llm_status.get("available", False):
-        alerts.append({
-            "level": "critical",
-            "rule": "local_llm_unavailable",
-            "message": f"本地 LLM 服务不可用 (LM Studio): {llm_status.get('last_error', '未知错误')}",
-            "suggestion": "检查 LM Studio 是否在运行，确认 API 端口 1234",
-        })
+        alerts.append(
+            {
+                "level": "critical",
+                "rule": "local_llm_unavailable",
+                "message": f"本地 LLM 服务不可用 (LM Studio): {llm_status.get('last_error', '未知错误')}",
+                "suggestion": "检查 LM Studio 是否在运行，确认 API 端口 1234",
+            }
+        )
 
     unhealthy = (
         len(report.get("orphans", []))
@@ -368,45 +398,55 @@ def collect_snapshot_alerts(
         + report.get("invalid", 0)
     )
     if unhealthy > 0:
-        alerts.append({
-            "level": "warning",
-            "rule": "lint_issues",
-            "message": f"Lint 发现 {unhealthy} 处问题：orphans={len(report.get('orphans', []))} ghosts={len(report.get('ghosts', []))} stale={len(report.get('stale', []))} invalid={report.get('invalid', 0)}",
-            "suggestion": "运行 hub lint 检查详情并修复",
-        })
+        alerts.append(
+            {
+                "level": "warning",
+                "rule": "lint_issues",
+                "message": f"Lint 发现 {unhealthy} 处问题：orphans={len(report.get('orphans', []))} ghosts={len(report.get('ghosts', []))} stale={len(report.get('stale', []))} invalid={report.get('invalid', 0)}",
+                "suggestion": "运行 hub lint 检查详情并修复",
+            }
+        )
 
     hit_rate = today_metrics.get("hit_rate")
     if hit_rate is not None and 0 < hit_rate < 0.6:
-        alerts.append({
-            "level": "warning",
-            "rule": "low_hit_rate",
-            "message": f"今日命中率 {hit_rate:.1%}，低于 60% 阈值",
-            "suggestion": "检查高频未命中查询，补充卡片或优化 tags",
-        })
+        alerts.append(
+            {
+                "level": "warning",
+                "rule": "low_hit_rate",
+                "message": f"今日命中率 {hit_rate:.1%}，低于 60% 阈值",
+                "suggestion": "检查高频未命中查询，补充卡片或优化 tags",
+            }
+        )
 
     if health_scores.get("flywheel_activity", 100) < 30:
-        alerts.append({
-            "level": "warning",
-            "rule": "low_flywheel_activity",
-            "message": f"飞轮活跃度 {health_scores['flywheel_activity']}%，近 7 天活动不足",
-            "suggestion": "运行 auto_flywheel.py 处理草稿，保持飞轮运转",
-        })
+        alerts.append(
+            {
+                "level": "warning",
+                "rule": "low_flywheel_activity",
+                "message": f"飞轮活跃度 {health_scores['flywheel_activity']}%，近 7 天活动不足",
+                "suggestion": "运行 auto_flywheel.py 处理草稿，保持飞轮运转",
+            }
+        )
 
     if pending:
-        alerts.append({
-            "level": "info",
-            "rule": "pending_confirmation",
-            "message": f"{len(pending)} 张卡片待人工确认",
-            "suggestion": "运行 hub confirm 逐张确认 pending 目录下的卡",
-        })
+        alerts.append(
+            {
+                "level": "info",
+                "rule": "pending_confirmation",
+                "message": f"{len(pending)} 张卡片待人工确认",
+                "suggestion": "运行 hub confirm 逐张确认 pending 目录下的卡",
+            }
+        )
 
     if llm_status.get("available") and llm_status.get("response_time_ms", 0) > 500:
-        alerts.append({
-            "level": "info",
-            "rule": "local_llm_slow",
-            "message": f"本地 LLM 响应时间 (LM Studio) {llm_status['response_time_ms']}ms，建议优化",
-            "suggestion": "检查 LM Studio 资源占用，考虑开启 GPU 加速或冷启动预热",
-        })
+        alerts.append(
+            {
+                "level": "info",
+                "rule": "local_llm_slow",
+                "message": f"本地 LLM 响应时间 (LM Studio) {llm_status['response_time_ms']}ms，建议优化",
+                "suggestion": "检查 LM Studio 资源占用，考虑开启 GPU 加速或冷启动预热",
+            }
+        )
 
     return alerts
 
@@ -416,7 +456,7 @@ def load_previous_snapshot(root: Path) -> dict | None:
     retro_dir = root / "retro"
     if not retro_dir.is_dir():
         return None
-    yesterday = (datetime.now(timezone(timedelta(hours=+8))) - timedelta(days=1))
+    yesterday = datetime.now(timezone(timedelta(hours=+8))) - timedelta(days=1)
     snapshot_path = retro_dir / f"snapshot-{yesterday.date().isoformat()}.json"
     if not snapshot_path.is_file():
         return None
@@ -436,7 +476,11 @@ def compare_snapshots(prev: dict, curr: dict) -> dict:
     for k in set(list(prev_cards.keys()) + list(curr_cards.keys())):
         delta = curr_cards.get(k, 0) - prev_cards.get(k, 0)
         if delta != 0:
-            card_changes[k] = {"delta": delta, "prev": prev_cards.get(k, 0), "curr": curr_cards.get(k, 0)}
+            card_changes[k] = {
+                "delta": delta,
+                "prev": prev_cards.get(k, 0),
+                "curr": curr_cards.get(k, 0),
+            }
     if card_changes:
         changes["cards"] = card_changes
 
@@ -517,7 +561,9 @@ def print_snapshot_report(data: dict, report: dict, pending: list):
             + (f" · 模型: {models_str}" if models_str else "")
         )
     else:
-        print(f"🦙 本地 LLM 健康 (LM Studio): ❌ 不可用 · 错误: {llm_health.get('last_error', '未知')}")
+        print(
+            f"🦙 本地 LLM 健康 (LM Studio): ❌ 不可用 · 错误: {llm_health.get('last_error', '未知')}"
+        )
 
     scores = data.get("health_scores", {})
     if scores:
@@ -538,10 +584,12 @@ def print_snapshot_report(data: dict, report: dict, pending: list):
     if metrics:
         print("\n📈 今日指标:")
         hr = metrics.get("hit_rate", "N/A")
-        print(f"  查询 {metrics.get('searches', 0)} 次"
-              f" · 命中 {metrics.get('hits', 0)}"
-              f" · 命中率 {hr}"
-              f" · 复用 {metrics.get('reuse_ops', 0)} 次")
+        print(
+            f"  查询 {metrics.get('searches', 0)} 次"
+            f" · 命中 {metrics.get('hits', 0)}"
+            f" · 命中率 {hr}"
+            f" · 复用 {metrics.get('reuse_ops', 0)} 次"
+        )
 
     alerts = data.get("alerts", [])
     if alerts:
@@ -566,7 +614,9 @@ def print_snapshot_report(data: dict, report: dict, pending: list):
             elif area == "health_scores":
                 for k, v in changes.items():
                     arrow = "📈" if v["delta"] > 0 else "📉"
-                    print(f"  {arrow} 健康分 {k}: {v['prev']} → {v['curr']} ({v['delta']:+.1f})")
+                    print(
+                        f"  {arrow} 健康分 {k}: {v['prev']} → {v['curr']} ({v['delta']:+.1f})"
+                    )
             elif area == "llm_status":
                 print(f"  ⚡ 本地 LLM: {changes['prev']} → {changes['curr']}")
             elif area == "alerts":
@@ -574,6 +624,3 @@ def print_snapshot_report(data: dict, report: dict, pending: list):
                     print(f"  🆕 新告警: {r}")
                 for r in changes.get("resolved", []):
                     print(f"  ✅ 已消除: {r}")
-
-
-

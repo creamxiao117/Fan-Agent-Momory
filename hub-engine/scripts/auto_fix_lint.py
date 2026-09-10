@@ -53,7 +53,12 @@ def run_fix(root: Path, *, dry_run: bool = False) -> dict:
     report = lint(root)
     invalid_count = report.get("invalid", 0)
     if invalid_count == 0:
-        return {"fixed": 0, "failed": 0, "skipped": 0, "message": "lint 无 invalid 卡，无需修复"}
+        return {
+            "fixed": 0,
+            "failed": 0,
+            "skipped": 0,
+            "message": "lint 无 invalid 卡，无需修复",
+        }
 
     # 收集所有需要修复的卡
     fixed_list: list[tuple[str, list[str]]] = []  # (path_str, fixes_applied)
@@ -68,7 +73,10 @@ def run_fix(root: Path, *, dry_run: bool = False) -> dict:
             if card is None:
                 continue
             # rule/methodology 跳过自动修复（高风险，frontmatter 改动也需人工）
-            if card.type in HUMAN_REQUIRED_TYPES or _dir_to_type(sub) in HUMAN_REQUIRED_TYPES:
+            if (
+                card.type in HUMAN_REQUIRED_TYPES
+                or _dir_to_type(sub) in HUMAN_REQUIRED_TYPES
+            ):
                 failed_list.append(str(md.relative_to(root)))
                 continue
             errs = validate_card(card)
@@ -79,7 +87,16 @@ def run_fix(root: Path, *, dry_run: bool = False) -> dict:
             fixes: list[str] = []
             rel_path = str(md.relative_to(root))
 
-            if card.type not in ("rule", "exp", "note", "project", "retro", "methodology", "longterm", "blueprint"):
+            if card.type not in (
+                "rule",
+                "exp",
+                "note",
+                "project",
+                "retro",
+                "methodology",
+                "longterm",
+                "blueprint",
+            ):
                 new_type = _dir_to_type(sub)
                 if new_type:
                     card.type = new_type
@@ -148,7 +165,9 @@ def main() -> int:
         print(f"[auto_fix_lint] {result.get('message', '无修复')}")
     else:
         mode = "DRY-RUN" if args.dry_run else "APPLIED"
-        print(f"[auto_fix_lint] [{mode}] 修复 {result['fixed']} 张卡, 失败 {result['failed']} 张")
+        print(
+            f"[auto_fix_lint] [{mode}] 修复 {result['fixed']} 张卡, 失败 {result['failed']} 张"
+        )
         for path, fixes in result.get("details", []):
             print(f"  {path}")
             for f in fixes:

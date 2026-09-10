@@ -70,7 +70,9 @@ def load_records(skillhub_root: Path, limit: int = 500) -> list[dict]:
     return records
 
 
-def make_record(stage: str, input_str: str, output_str: str, ok: bool, extra: dict | None = None) -> dict:
+def make_record(
+    stage: str, input_str: str, output_str: str, ok: bool, extra: dict | None = None
+) -> dict:
     """构造一条 runlog 记录。"""
     now = datetime.now().astimezone()
     return {
@@ -115,7 +117,9 @@ def print_list(records: list[dict], limit: int) -> None:
     print(f"共 {len(records)} 条记录，展示最近 {len(recent)} 条:\n")
     for r in recent:
         status = "✅" if r.get("ok") else "❌"
-        print(f"  {r.get('ts', '?')[:19]}  {status}  {r.get('stage_label', r.get('stage'))}")
+        print(
+            f"  {r.get('ts', '?')[:19]}  {status}  {r.get('stage_label', r.get('stage'))}"
+        )
         if r.get("input"):
             print(f"      输入: {r['input'][:80]}")
         if r.get("output"):
@@ -149,7 +153,9 @@ def build_timeline_html(records: list[dict], html_path: Path) -> None:
             return ts
 
     timeline_items = []
-    for _idx, r in enumerate(reversed(records[-200:])):  # 最多显示 200 条，倒序（最新在上）
+    for _idx, r in enumerate(
+        reversed(records[-200:])
+    ):  # 最多显示 200 条，倒序（最新在上）
         status_cls = "ok" if r.get("ok") else "fail"
         tag_dot = "dot ok" if r.get("ok") else "dot fail"
         safe_input = (r.get("input") or "").replace("<", "&lt;").replace(">", "&gt;")
@@ -185,7 +191,9 @@ def build_timeline_html(records: list[dict], html_path: Path) -> None:
               <div class="daybar-track"><div class="daybar-fill" style="width:{w}%;background:{color}">{s["ok"]}/{s["total"]}</div></div>
             </div>
         """)
-    daybars_html = "\n".join(day_bars) if day_bars else '<div class="tl-empty">暂无数据</div>'
+    daybars_html = (
+        "\n".join(day_bars) if day_bars else '<div class="tl-empty">暂无数据</div>'
+    )
 
     # 完整圈数统计
     full_runs = [g for g in groups if g and g[0]["stage"] == "run"]
@@ -210,7 +218,9 @@ def build_timeline_html(records: list[dict], html_path: Path) -> None:
 
     # 近 7 天活跃数
     _now = datetime.now().astimezone()
-    seven_days_ago = (_now.replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=6)).strftime("%Y-%m-%d")
+    seven_days_ago = (
+        _now.replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=6)
+    ).strftime("%Y-%m-%d")
     recent_7d = sum(1 for r in records if r.get("date", "") >= seven_days_ago)
     recent_7d_w = min(recent_7d * 5, 100)
 
@@ -394,7 +404,9 @@ def build_timeline_data(records: list[dict]) -> dict:
 
     # 近 7 天
     _now = datetime.now().astimezone()
-    seven_days_ago = (_now.replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=6)).strftime("%Y-%m-%d")
+    seven_days_ago = (
+        _now.replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=6)
+    ).strftime("%Y-%m-%d")
     recent_7d = sum(1 for r in records if r.get("date", "") >= seven_days_ago)
 
     return {
@@ -414,7 +426,11 @@ def cmd_timeline(args: argparse.Namespace) -> int:
     """子命令 timeline：生成 HTML 回放页，并输出供 hub-health.html 读取的 JSON 数据。"""
     skillhub_root = Path(args.skillhub_root).resolve()
     records = load_records(skillhub_root)
-    out = Path(args.output).resolve() if args.output else (skillhub_root / "work" / "flywheel" / "timeline.html")
+    out = (
+        Path(args.output).resolve()
+        if args.output
+        else (skillhub_root / "work" / "flywheel" / "timeline.html")
+    )
     out.parent.mkdir(parents=True, exist_ok=True)
     build_timeline_html(records, out)
     print(f"[ok] 时间线 HTML 已生成: {out}")
@@ -426,7 +442,9 @@ def cmd_timeline(args: argparse.Namespace) -> int:
     # 输出 JSON 数据文件（与 HTML 同目录，供 hub-health.html fetch）
     data = build_timeline_data(records)
     data_path = out.with_name("flywheel-timeline-data.json")
-    data_path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    data_path.write_text(
+        json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
     print(f"[ok] 飞轮时间线数据 JSON: {data_path}")
 
     if args.json_out:
@@ -457,7 +475,9 @@ def cmd_list(args: argparse.Namespace) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
-    p = argparse.ArgumentParser(prog="flywheel-runlog", description="飞轮运行日志与可视化时间线回放")
+    p = argparse.ArgumentParser(
+        prog="flywheel-runlog", description="飞轮运行日志与可视化时间线回放"
+    )
     sub = p.add_subparsers(dest="cmd", required=True)
 
     pr = sub.add_parser("record", help="追加一条运行记录")

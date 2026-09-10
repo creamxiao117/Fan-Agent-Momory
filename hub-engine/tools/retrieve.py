@@ -298,8 +298,7 @@ def deterministic_retrieve(
                     hit_english
                     and len(q_words) >= 2
                     and all(
-                        not all("\u4e00" <= ch <= "\u9fff" for ch in w)
-                        for w in q_words
+                        not all("\u4e00" <= ch <= "\u9fff" for ch in w) for w in q_words
                     )
                 )
                 else 1
@@ -381,12 +380,13 @@ def semantic_vector_retrieve(
     qv = semsearch.query_embedded(query)
     if qv is None:
         return []
+
     def _norm_path(p) -> str:
         # 统一为绝对路径 + 小写：兼容 build 侧存绝对路径、检索侧 Path 为相对路径的差异（Windows 大小写不敏感）
         try:
             return str(Path(p).resolve()).lower()
         except OSError:
-            return str(p).replace('\\', '/').lower()
+            return str(p).replace("\\", "/").lower()
 
     path_to_card = {_norm_path(c.path): c for c in _index(root).cards}
     out = []

@@ -24,4 +24,3 @@ def cmd_build_vectors(args) -> int:
         )
         return 2
     return 0
-

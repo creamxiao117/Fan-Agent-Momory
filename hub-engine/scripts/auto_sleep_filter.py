@@ -31,9 +31,22 @@ _LOCAL_TZ = timezone(timedelta(hours=+8))
 
 # 内部工具关键词：命中任何一个即判为 lint/自检假信号
 _INTERNAL_NOISE_KEYWORDS = {
-    "孤儿", "orphan", "ghost", "stale", "INDEX 登记", "index 登记",
-    "conflicts", "sleep 消化", "sleep消化", "gate", "pytest", "ruff",
-    "lint", "orphans", "ghosts", "stales",
+    "孤儿",
+    "orphan",
+    "ghost",
+    "stale",
+    "INDEX 登记",
+    "index 登记",
+    "conflicts",
+    "sleep 消化",
+    "sleep消化",
+    "gate",
+    "pytest",
+    "ruff",
+    "lint",
+    "orphans",
+    "ghosts",
+    "stales",
 }
 
 
@@ -165,9 +178,13 @@ def main() -> int:
         result = filter_proposal(p)
         total_noise += result["noise"]
         total_real += result["real"]
-        print(f"[auto_sleep_filter] {p.parent.name}: 过滤 {result['noise']} noise, 保留 {result['real']} real")
+        print(
+            f"[auto_sleep_filter] {p.parent.name}: 过滤 {result['noise']} noise, 保留 {result['real']} real"
+        )
 
-    print(f"\n[auto_sleep_filter] 总计: {total_noise} noise 已自动忽略, {total_real} real 保留")
+    print(
+        f"\n[auto_sleep_filter] 总计: {total_noise} noise 已自动忽略, {total_real} real 保留"
+    )
     return 0
 
 

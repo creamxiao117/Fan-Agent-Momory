@@ -82,4 +82,3 @@ def cmd_gate(args) -> int:
     for k, v in results.items():
         print(f"   {k}: exit={v}")
     return fail
-

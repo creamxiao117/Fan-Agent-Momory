@@ -17,4 +17,3 @@ def cmd_tidy(args) -> int:
     dst = archive(Path(args.root), args.rel, reason=args.reason)
     print(f"已归档: {dst}")
     return 0
-

@@ -40,4 +40,3 @@ def cmd_sync(args) -> int:
         print(f"{name}: {stat}")
         ok = ok and stat["status"] == "ok"
     return 0 if ok else 1
-

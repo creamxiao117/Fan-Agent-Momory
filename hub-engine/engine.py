@@ -41,12 +41,6 @@ from commands.status import (
 )
 
 
-
-
-
-
-
-
 from common.config import (  # noqa: F401  (HubConfig 供 future shim 用)
     HubConfig,
     load_engine_config,
@@ -69,9 +63,7 @@ def _gateway_kwargs(
         cfg.get("gateway_url", "http://127.0.0.1:20128").rstrip("/")
         + "/v1/chat/completions"
     )
-    model = model or cfg.get(
-        "default_model", "auto/offline"
-    )
+    model = model or cfg.get("default_model", "auto/offline")
     api_key = keys.get("default", "")
     timeout = int(cfg.get("timeout", 30))
     compress = str(cfg.get("compress", "") or "").strip()
@@ -147,9 +139,7 @@ def chat(
         ResiliencePipelineBuilder()
         .add_fallback(
             fallback_fn=lambda: _do_fallback(prompt, hub_root),
-            on_fallback=lambda evt: print(
-                f"[resilience/chat] fallback: {evt.detail}"
-            ),
+            on_fallback=lambda evt: print(f"[resilience/chat] fallback: {evt.detail}"),
         )
         .add_timeout(timeout=timeout)
         .add_retry(
@@ -178,7 +168,10 @@ def _do_fallback(prompt: str, hub_root: Path) -> str:
     except Exception:
         local = ""
     if local:
-        return "（外部 AI 源不可用，已用本地模型兜底应答，仅供参考，建议人工复核）\n\n" + local
+        return (
+            "（外部 AI 源不可用，已用本地模型兜底应答，仅供参考，建议人工复核）\n\n"
+            + local
+        )
     return (
         "网关不可用，已回退本地检索：\n"
         + "\n".join(parts)
@@ -235,8 +228,12 @@ def _local_fallback_chat(
     pipeline = ResiliencePipelineBuilder()
     pipeline.add_timeout(timeout=60)
     pipeline.add_retry(
-        max_attempts=2, base_delay=1.0, jitter=0.2,
-        on_retry=lambda evt: print(f"[resilience/local_fallback] retry #{evt.attempt}: {evt.detail}"),
+        max_attempts=2,
+        base_delay=1.0,
+        jitter=0.2,
+        on_retry=lambda evt: print(
+            f"[resilience/local_fallback] retry #{evt.attempt}: {evt.detail}"
+        ),
     )
     try:
         return pipeline.build().execute(_do_fallback_http)
@@ -284,13 +281,19 @@ def _local_chat(prompt: str, hub_root: Path, model: str | None = None) -> str:
     pipeline = ResiliencePipelineBuilder()
     pipeline.add_timeout(timeout=timeout)
     pipeline.add_retry(
-        max_attempts=2, base_delay=0.5, jitter=0.2,
-        on_retry=lambda evt: print(f"[resilience/local_chat] retry #{evt.attempt}: {evt.detail}"),
+        max_attempts=2,
+        base_delay=0.5,
+        jitter=0.2,
+        on_retry=lambda evt: print(
+            f"[resilience/local_chat] retry #{evt.attempt}: {evt.detail}"
+        ),
     )
     # 添加降级：本地 LLM 调用失败时降级到网关
     pipeline.add_fallback(
         fallback_fn=lambda: chat(prompt, hub_root, fallback=True),
-        on_fallback=lambda evt: print(f"[resilience/local_chat] fallback to gateway: {evt.detail}"),
+        on_fallback=lambda evt: print(
+            f"[resilience/local_chat] fallback to gateway: {evt.detail}"
+        ),
     )
     return pipeline.build().execute(_do_local_http)
 
@@ -333,14 +336,18 @@ def smart_chat(prompt: str, hub_root: str | Path) -> str:
 
     # LM Studio / LLM 健康检测（现役本地端点；变量原名 ollama_* 属退役残名，2026-09-02 清理）
     llm_url = str(local_cfg.get("url", "http://127.0.0.1:1234/v1/chat/completions"))
-    llm_base = llm_url.rsplit("/v1/", 1)[0] if "/v1/" in llm_url else llm_url.rsplit("/", 1)[0]
+    llm_base = (
+        llm_url.rsplit("/v1/", 1)[0] if "/v1/" in llm_url else llm_url.rsplit("/", 1)[0]
+    )
     health_checker = LLMHealthChecker.get_instance(llm_base)
 
     llm_available = health_checker.is_available()
     if not llm_available:
         print("[llm_health] 本地 LLM 不可用，直接使用 OmniRoute 网关")
         return chat(
-            prompt, root, fallback=False,
+            prompt,
+            root,
+            fallback=False,
             model=str(escalation.get("remote_model", "auto/offline")),
         )
 
@@ -388,25 +395,6 @@ def smart_chat(prompt: str, hub_root: str | Path) -> str:
     )
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 def _cmd_chat(args) -> int:
     print(smart_chat(args.prompt, Path(args.root)))
     return 0
@@ -432,16 +420,26 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--root", required=True)
     p.set_defaults(func=cmd_build_vectors)
 
-    p = sub.add_parser("ingest", help="导入暂存区（默认自动跑 post_ingest_hook 同步 INDEX）")
+    p = sub.add_parser(
+        "ingest", help="导入暂存区（默认自动跑 post_ingest_hook 同步 INDEX）"
+    )
     p.add_argument("--root", required=True)
     p.add_argument("--platform", required=True)
-    p.add_argument("--no-index", action="store_true",
-                   help="跳过 INDEX.md 自动同步（默认 ingest 成功后会自动追加 INDEX 条目）")
-    p.add_argument("--strict-lint", action="store_true",
-                   help="L1 门禁：草稿 frontmatter 不合规直接 return 阻断（默认软门禁，只标红）")
+    p.add_argument(
+        "--no-index",
+        action="store_true",
+        help="跳过 INDEX.md 自动同步（默认 ingest 成功后会自动追加 INDEX 条目）",
+    )
+    p.add_argument(
+        "--strict-lint",
+        action="store_true",
+        help="L1 门禁：草稿 frontmatter 不合规直接 return 阻断（默认软门禁，只标红）",
+    )
     p.set_defaults(func=cmd_ingest)
 
-    p = sub.add_parser("confirm", help="确认待人工审核的卡片（按 card.type 路由入权威区）")
+    p = sub.add_parser(
+        "confirm", help="确认待人工审核的卡片（按 card.type 路由入权威区）"
+    )
     p.add_argument("--root", required=True)
     p.add_argument("name")
     p.set_defaults(func=cmd_confirm)
@@ -464,10 +462,12 @@ def main(argv: list[str] | None = None) -> int:
     # T7 (2026-09-07): L2 INDEX 审核
     p = sub.add_parser("audit", help="INDEX 自动审核（orphan/ghost/格式/重复）")
     p.add_argument("--root", required=True)
-    p.add_argument("--report", action="store_true",
-                   help="写 retro/lint-report-YYYYMMDD.md")
-    p.add_argument("--no-fail", action="store_true",
-                   help="发现问题也返回 0（cron 模式）")
+    p.add_argument(
+        "--report", action="store_true", help="写 retro/lint-report-YYYYMMDD.md"
+    )
+    p.add_argument(
+        "--no-fail", action="store_true", help="发现问题也返回 0（cron 模式）"
+    )
     p.set_defaults(func=cmd_audit)
 
     p = sub.add_parser("status", help="一键健康快照")

@@ -75,7 +75,9 @@ def test_ingest_same_name_different_content_no_overwrite(tmp_path):
         "---\ntype: longterm\ntags: [test]\nupdated: 2026-08-17\nstatus: active\nreuse_count: 0\n---\n记录一次排查 Windows 系统崩溃的经验\n",
         encoding="utf-8",
     )
-    _make_draft(root, "trae", "exp-a.md", "如何制作拿铁咖啡的心得体会", ctype="longterm")
+    _make_draft(
+        root, "trae", "exp-a.md", "如何制作拿铁咖啡的心得体会", ctype="longterm"
+    )
     stat = ingest(root, "trae")
     # 权威区内容保持不变（未被草稿覆盖）
     assert "排查 Windows 系统崩溃" in (root / "longterm" / "exp-a.md").read_text(

@@ -358,7 +358,7 @@ def main(argv: list[str] | None = None) -> int:
     root = Path(args.root)
     since = None
     if args.since_days is not None:
-        since = datetime.now(LOCAL_TZ).date() - timedelta(days=args.since_days - 1)
+        since = datetime.now(LOCAL_TZ).date() - timedelta(days=args.since_days)
 
     # P0 自动草稿沉淀模式
     if args.auto_draft:
@@ -388,7 +388,9 @@ def main(argv: list[str] | None = None) -> int:
         print(f"已自动应用: {result['applied_count']} 条")
         print(f"跳过: {result['skipped_count']} 条")
         for item in result["applied"]:
-            print(f"  ✅ {item['query'][:60]}... → {len(item['tags_added'])} 张卡加了 tag")
+            print(
+                f"  ✅ {item['query'][:60]}... → {len(item['tags_added'])} 张卡加了 tag"
+            )
         for item in result["skipped"]:
             print(f"  ⏭️ {item['query'][:40]}... ({item['reason']})")
         # 同时输出候选清单供人工复核
@@ -446,9 +448,11 @@ def auto_create_drafts(
 
     返回操作结果。
     """
-    since = datetime.now(LOCAL_TZ).date() - timedelta(days=since_days - 1)
+    since = datetime.now(LOCAL_TZ).date() - timedelta(days=since_days)
     candidates = aggregate(root, since=since)
-    p0_items = [c for c in candidates if c["stage"] == "P0-新增卡片" and c["count"] >= min_count]
+    p0_items = [
+        c for c in candidates if c["stage"] == "P0-新增卡片" and c["count"] >= min_count
+    ]
 
     drafts_dir = root / ".sync" / "drafts"
     drafts_dir.mkdir(parents=True, exist_ok=True)
@@ -470,7 +474,9 @@ def auto_create_drafts(
         # 检查是否已存在相同查询的草稿
         existing_drafts = list(drafts_dir.glob(f"*-{safe_name}.md"))
         if existing_drafts:
-            skipped.append({"query": query, "reason": f"已存在 {len(existing_drafts)} 个草稿"})
+            skipped.append(
+                {"query": query, "reason": f"已存在 {len(existing_drafts)} 个草稿"}
+            )
             continue
 
         # 生成草稿内容（experience 类型）
@@ -481,22 +487,22 @@ status: pending
 tags: [查询未命中, 待补充, {query[:10]}]
 source: auto-draft
 created: {datetime.now(LOCAL_TZ).isoformat()}
-query_count: {item['count']}
-zero_ratio: {item['zero_ratio']}
+query_count: {item["count"]}
+zero_ratio: {item["zero_ratio"]}
 ---
 
 # 查询未命中：{query}
 
 ## 背景
-该查询在最近 {since_days} 天内共执行 **{item['count']}** 次，
-零命中占比 **{item['zero_ratio']:.0%}**，说明当前知识库可能缺少相关内容。
+该查询在最近 {since_days} 天内共执行 **{item["count"]}** 次，
+零命中占比 **{item["zero_ratio"]:.0%}**，说明当前知识库可能缺少相关内容。
 
 ## 查询详情
 - **查询词**: {query}
-- **查询次数**: {item['count']}
-- **零命中次数**: {item['misses']}
-- **平均命中**: {item['avg_hit']}
-- **来源平台**: {', '.join(item['channels'])}
+- **查询次数**: {item["count"]}
+- **零命中次数**: {item["misses"]}
+- **平均命中**: {item["avg_hit"]}
+- **来源平台**: {", ".join(item["channels"])}
 
 ## 建议
 1. 确认该主题是否应该纳入知识库
@@ -508,11 +514,13 @@ zero_ratio: {item['zero_ratio']}
 """
 
         draft_path.write_text(draft_content, encoding="utf-8")
-        created.append({
-            "query": query,
-            "count": item["count"],
-            "file": draft_path.name,
-        })
+        created.append(
+            {
+                "query": query,
+                "count": item["count"],
+                "file": draft_path.name,
+            }
+        )
 
     return {
         "created_count": len(created),

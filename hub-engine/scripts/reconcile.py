@@ -30,7 +30,9 @@ from pathlib import Path
 def _git(root: Path, *args: str) -> str:
     r = subprocess.run(
         ["git", "-C", str(root), *args],
-        capture_output=True, text=True, encoding="utf-8",
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
     )
     return r.stdout.strip()
 
@@ -41,7 +43,8 @@ def _is_ancestor(root: Path, ancestor: str, descendant: str = "HEAD") -> bool:
         return False
     r = subprocess.run(
         ["git", "-C", str(root), "merge-base", "--is-ancestor", ancestor, descendant],
-        capture_output=True, text=True,
+        capture_output=True,
+        text=True,
     )
     return r.returncode == 0
 
@@ -51,7 +54,8 @@ def _is_valid_sha(root: Path, sha: str) -> bool:
         return False
     r = subprocess.run(
         ["git", "-C", str(root), "cat-file", "-t", sha],
-        capture_output=True, text=True,
+        capture_output=True,
+        text=True,
     )
     return r.returncode == 0
 
@@ -82,25 +86,29 @@ def reconcile(root: Path, dry_run: bool = False) -> dict:
         if not _is_valid_sha(root, new_sha):
             # 新 commit SHA 已被 GC 丢掉
             if parent_sha and _is_valid_sha(root, parent_sha):
-                orphans.append({
-                    "ts": rec["ts"],
-                    "who": rec["who"],
-                    "intent": rec["intent"],
-                    "lost_sha": new_sha,
-                    "parent_sha": parent_sha,
-                })
+                orphans.append(
+                    {
+                        "ts": rec["ts"],
+                        "who": rec["who"],
+                        "intent": rec["intent"],
+                        "lost_sha": new_sha,
+                        "parent_sha": parent_sha,
+                    }
+                )
             continue
 
         if not _is_ancestor(root, parent_sha, new_sha):
             # parent 不是 new 的祖先 → 说明中间有人 reset
-            orphans.append({
-                "ts": rec["ts"],
-                "who": rec["who"],
-                "intent": rec["intent"],
-                "new_sha": new_sha,
-                "parent_sha": parent_sha,
-                "note": "parent not ancestor of new",
-            })
+            orphans.append(
+                {
+                    "ts": rec["ts"],
+                    "who": rec["who"],
+                    "intent": rec["intent"],
+                    "new_sha": new_sha,
+                    "parent_sha": parent_sha,
+                    "note": "parent not ancestor of new",
+                }
+            )
 
     # 尝试 repair：把孤儿 SHA 用 git replace --graft 挂回主链
     if not dry_run and orphans:
@@ -111,7 +119,8 @@ def reconcile(root: Path, dry_run: bool = False) -> dict:
             # 用 replace --graft 重建：把 sha 的 parent 指向当前 HEAD
             r = subprocess.run(
                 ["git", "-C", str(root), "replace", "--graft", sha, "HEAD"],
-                capture_output=True, text=True,
+                capture_output=True,
+                text=True,
             )
             if r.returncode == 0:
                 repaired.append(sha)
