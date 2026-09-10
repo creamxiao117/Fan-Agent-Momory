@@ -7,6 +7,10 @@
 html,body{font-family:'Inter','PingFang SC','Microsoft YaHei','Hiragino Sans GB','Source Han Sans CN','WenQuanYi Micro Hei',system-ui,-apple-system,sans-serif;font-size:14px;background:var(--bg-0);color:var(--text-1);height:100vh;overflow:hidden}
 .app{display:grid;grid-template-columns:200px 1fr;height:100vh}
 nav{background:var(--bg-1);border-right:1px solid var(--border);padding:16px 0;overflow:auto}
+.nav-item{display:flex;align-items:center;gap:8px;padding:10px 16px;cursor:pointer;color:var(--text-2);border-left:2px solid transparent;font-size:13px;transition:background .15s,color .15s,border-color .15s;user-select:none}
+.nav-item:hover{background:var(--bg-2);color:var(--text-1);border-left-color:var(--accent)}
+.nav-item.active{background:var(--bg-2);color:var(--accent-h);border-left-color:var(--accent);font-weight:500}
+.nav-title{padding:8px 16px 12px;font-size:11px;color:var(--text-3);text-transform:uppercase;letter-spacing:.08em;border-bottom:1px solid var(--border);margin-bottom:8px}
 main{overflow:auto;padding:16px}
 header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
 h1{font-size:20px;font-weight:600}
