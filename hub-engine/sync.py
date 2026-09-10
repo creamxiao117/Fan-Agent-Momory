@@ -65,13 +65,16 @@ def append_log(root: Path, op: str, title: str) -> None:
 
 def _authority_cards(root: Path) -> list[Card]:
     cards = []
-    # 仅扫 5 个权威区目录
+    # 仅扫 6 个权威区目录
+    # V1.2 (2026-09-10): 新增 experience/ —— trae-work-ruff-format-batch-bug.md 实证
+    # 经验卡也可被 sync --push 推到各平台（避免 "not-found" 阻断）
     for sub in (
         "rules",
         "blueprints",
         "methodology",
         "longterm",
         "projects",
+        "experience",
     ):
         d = root / sub
         if not d.exists():
