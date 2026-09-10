@@ -3,7 +3,7 @@
 <head><meta charset='utf-8'><title>中枢总控台 v3</title>
 <style>
 :root{
-  --bg-0:#08090a;--bg-1:#0f1011;--bg-2:#191a1b;--bg-3:#222428;--bg-elevated:#1d1e20;
+  --bg-0:#15161a;--bg-1:#1f2125;--bg-2:#28292d;--bg-3:#2f3034;--bg-elevated:#0f1014;--bg-nav:#202125;
   --border:rgba(255,255,255,0.07);--border-h:rgba(255,255,255,0.16);
   --text-1:#f7f8f8;--text-2:#b4b8be;--text-3:#62666d;--text-4:#44464a;
   --accent:#5e6ad2;--accent-h:#7170ff;--accent-dim:rgba(94,106,210,0.12);
@@ -754,11 +754,84 @@ function sendChat() {
   var msg = (input.value || "").trim();
   if (!msg) return;
   if (log.querySelector(".empty")) log.innerHTML = "";
-  log.innerHTML += "<div class='chat-msg'><span class='who'>Fan:</span>" + msg.replace(/</g,"<") + "</div>";
-  log.innerHTML += "<div class='chat-msg'><span class='who'>Hermes:</span>（占位响应：chat 后端未接入，需要 hub_announce MCP 工具）</div>";
+  log.innerHTML += "<div class='chat-msg'><span class='who'>Fan:</span>" + msg + "</div>";
   input.value = "";
   log.scrollTop = log.scrollHeight;
+  // 真实接入：先试 omniroute 网关 (Docker 20128)，fallback 到 LM Studio (1234)，再 fallback 到本地 RAG
+  var promptId = "p" + Date.now();
+  log.innerHTML += "<div class='chat-msg' id='" + promptId + "'><span class='who'>Hermes:</span><span class='thinking'>思考中…</span></div>";
+  log.scrollTop = log.scrollHeight;
+  function setResponse(text, source) {
+    var el = document.getElementById(promptId);
+    if (!el) return;
+    el.innerHTML = "<span class='who'>Hermes <span class='src-tag'>" + source + "</span>:</span>" + text;
+    log.scrollTop = log.scrollHeight;
+  }
+  // 步骤 1：omniroute 网关 (MCP 接入)
+  fetch("http://127.0.0.1:20128/v1/chat/completions", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({
+      model: "qwen/qwen3.5-9b",
+      messages: [
+        {role: "system", content: "你是 Hermes AgentMemoryHub 助手。基于中枢规则/经验/方法论/项目/蓝图 5 类卡片回答。回答简洁 100 字内。"},
+        {role: "user", content: msg}
+      ],
+      max_tokens: 200,
+      temperature: 0.7
+    })
+  })
+  .then(function(r) {
+    if (!r.ok) throw new Error("omniroute " + r.status);
+    return r.json();
+  })
+  .then(function(j) {
+    var ans = j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content;
+    if (!ans) throw new Error("empty");
+    setResponse(ans, "omniroute");
+  })
+  .catch(function() {
+    // 步骤 2：LM Studio 本地 (1234)
+    return fetch("http://127.0.0.1:1234/v1/chat/completions", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({
+        model: "qwen2.5-coder-1.5b-instruct",
+        messages: [
+          {role: "system", content: "你是 Hermes 助手。简洁回答。"},
+          {role: "user", content: msg}
+        ],
+        max_tokens: 200
+      })
+    });
+  })
+  .then(function(r) {
+    if (!r || !r.ok) throw new Error("lmstudio " + (r ? r.status : "no"));
+    return r.json();
+  })
+  .then(function(j) {
+    var ans = j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content;
+    if (!ans) throw new Error("empty");
+    setResponse(ans, "LM Studio");
+  })
+  .catch(function() {
+    // 步骤 3：本地 RAG 兜底
+    fetch("http://127.0.0.1:8765/v1/chat/local-rag", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({q: msg})
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(j) {
+      var ans = j.answer || j.result || "(本地 RAG 兜底：无答案)";
+      setResponse(ans, "本地 RAG");
+    })
+    .catch(function() {
+      setResponse("所有后端均不可用：(1) omniroute (2) LM Studio (3) 本地 RAG。请检查服务状态。", "占位");
+    });
+  });
 }
+
 
 function runCron(id, name) {
   alert("占位：触发 cron " + name + "（" + id + "）。后端需接入。");
