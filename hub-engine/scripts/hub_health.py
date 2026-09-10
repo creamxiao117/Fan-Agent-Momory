@@ -383,7 +383,11 @@ def main():
     parser.add_argument("--days", type=int, default=7, help="统计天数")
     parser.add_argument("--alert", action="store_true", help="运行自监控告警检查")
     parser.add_argument("--alert-days", type=int, default=2, help="告警检查的天数窗口")
-    parser.add_argument("--dashboard-format", action="store_true", help="输出 dashboard 专用格式（hub_health 顶层结构）")
+    parser.add_argument(
+        "--dashboard-format",
+        action="store_true",
+        help="输出 dashboard 专用格式（hub_health 顶层结构）",
+    )
     args = parser.parse_args()
 
     hub_root = Path(args.hub_root).resolve()
@@ -445,8 +449,10 @@ def main():
         hub_health = {
             "overall_score": scores.get("overall", 0),
             "overall_verdict": (
-                "✅ 健康" if scores.get("overall", 0) >= 80
-                else "⚠️ 需关注" if scores.get("overall", 0) >= 60
+                "✅ 健康"
+                if scores.get("overall", 0) >= 80
+                else "⚠️ 需关注"
+                if scores.get("overall", 0) >= 60
                 else "🚨 需修复"
             ),
             "card_health": {
@@ -465,7 +471,11 @@ def main():
                 "deprecated": skill_by_status.get("deprecated", 0),
                 "total": skill_stats.get("total", 0),
                 "skills": [
-                    {"name": s["name"], "status": s["status"], "reuse_count": s.get("reuse_count", 0)}
+                    {
+                        "name": s["name"],
+                        "status": s["status"],
+                        "reuse_count": s.get("reuse_count", 0),
+                    }
                     for s in skill_stats.get("skills", [])[:20]
                 ],
             },
