@@ -244,18 +244,29 @@ ector_bench --real --fail-below 0.8 融合命中率 **67%（4/6）< 80% 门禁�
   全是 Windows 子进程 spawn（17ms/次 × 12 次）⇒ 合并为每仓 2 条命令：
   `status --short --branch`（一条给出 分支/ahead/behind/dirty）+ `log -1 --format=%h<US>%cI<US>%s`
   （一条给出 HEAD/时间/标题）。**222.3 → 80.6ms（2.76×，省 142ms）**，10 字段逐字段等价，9/9 边界用例通过。
-- **任务4 夜间摘要**：**未完成，卡在根因**（下方）。
+- **任务4 夜间摘要**：**已打通**（用户选 ①，授权改 trae work 工作区的 `local_summary.py`）。
 
-### 任务4 根因（已查实，待决策）
-- `local_summary.py`（仅存在于 trae work 工作区 `d:\AIwork\traework\<id>\scripts\`）只读
-  `cfg.batch_model` + `cfg.gateway_url`。
-- OmniRoute（20128／394 模型）**没有任何通往 LM Studio 的路由**；唯一 `offline` 路由 →
-  **502 ECONNREFUSED**（指向已退役后端）；`auto/offline` 实际去调远程 felo/oc → 429。
-- `local_chat`（LM Studio 1234）**实测完全可用**（`qwen/qwen3.5-9b` 被 JIT 解析到已加载模型正常回话），
-  但它与 `gateway_url` 是**同一个配置键**（`engine.py:63` 引擎同用）⇒ 改配置会连引擎一起打歪，
-  **配置层无解**。
-- 两条出路：① 改 `local_summary.py` 走本地端点（约 6 行，属 trae work 工作区，**需授权**）；
-  ② 给 OmniRoute 加 LM Studio provider（配置在容器 `storage.sqlite`，属 docker 基建）。
+### 任务4 实施（两层根因 + 修法）
+- **根因一（网关层）**：`local_summary.py` 只认 `cfg.batch_model` + `cfg.gateway_url`，而 OmniRoute
+  （20128／394 模型）**没有任何通往 LM Studio 的路由**；唯一 `offline` 路由 → **502 ECONNREFUSED**
+  （指向已退役后端）；`auto/offline` 实际调远程 felo/oc → 429。且 `gateway_url` 与 `engine.py:63`
+  引擎网关**同一配置键** ⇒ 配置层无法把摘要指向本机 1234。
+- **根因二（模型层，跑起来才暴露）**：改成直连 LM Studio 后仍返回空摘要——**HTTP 400
+  `No models loaded`**。真因是配置里 `local_chat.model = qwen/qwen3.5-9b` **在 LM Studio 里根本不存在**，
+  即便 JIT 加载开启也无法解析；而真实存在的 `qwen2.5-coder-1.5b-instruct` 立即成功。
+- **修法（最小可逆，改前已备份 `local_summary.py.bak-20260911`）**：
+  1. 新增 `_resolve_target()`：优先 `batch_model + gateway_url`（**原口径完全不变**）；
+     未配置则回退 `local_chat`（本机 LM Studio 直连，离线零 token）。
+  2. 新增 `_pick_local_model()`：从端点 `/v1/models` **动态发现真正可用的对话模型**
+     （优先用配置名；不存在则挑第一个非 嵌入/OCR/重排 模型）⇒ 配置名再失效也能自愈。
+  3. `_chat()` 改为接收**完整端点**；空摘要时把端点与模型名打进日志，便于下次定位。
+- **验证**：`_resolve_target` 三分支单测 **3/3 通过**；真实配置解析 → `qwen2.5-coder-1.5b-instruct`
+  @ `127.0.0.1:1234`；**端到端实跑 1.2s 生成 167~259 字摘要**（正确提取 distill / build-vectors /
+  sleep-consolidate 与 361 个向量）；**幂等**（同日期覆盖不追加，节数恒 1）；**跨 cwd 调用可用**
+  （凌晨 `.cmd` 只做 `cd /d "%ENGINE%"`）；核对 `nightly_consolidate.cmd` 第 27 行确实无参调用本脚本。
+- **遗留提示**：`local_chat.model = qwen/qwen3.5-9b` 这个失效模型名**同时影响 hub-engine 的本地 chat
+  链路**（引擎本地环会失败并落到网关）。本次按"不动引擎配置"处理，仅让摘要脚本自愈；建议另开一轮修。
+- 产物 `.sync/daily_summary.md` 已提交中枢仓（`61d7fde`、`a6cd949`），两仓工作区均干净。
 
 ### 顺带查实的既有问题（非本轮引入）
 - `AgentMemoryHub/skills/` **目录不存在** → `skill_health = 0` → 飞轮总分恒 **29.3** ⇒
