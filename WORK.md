@@ -227,6 +227,48 @@ ector_bench --real --fail-below 0.8 融合命中率 **67%（4/6）< 80% 门禁�
 **长 patch 输入被静默截断**，一次会话命中 4 次——其中 `$("#kpis")` 被削成 `$("kpis")`
 语法完全合法，py/ruff/node 全过，**只有真开浏览器才炸**。故「改完必须真开页面」不是形式主义。
 
+## 本轮 R14（4 项待办收尾 + 8899 重启）
+
+### 完成项
+- **任务1 技能表**：新增 200/500 两档页尺寸。**先度量再决定**——实测分页已把 DOM 限死在 ps 行，
+  157~5000 行渲染恒定 ~1.4~2.1ms、整页 `renderAll()` 1.6ms ⇒ **虚拟滚动不成立，坚决不做**（依据写入 HTML 注释）。
+  ⚠️ 本轮 patch 曾漏掉 `</select></label>`，把告警抽屉整块吞进 `<select>` → 抽屉 0×0 不可见、
+  verify_v5 卡死在 `#dw-copy`。**已修**；并靠「原始 HEAD 基线对照」证明已完全排除。
+- **任务2 告警现读证据**：`alert_detail` 由「只管 hub-writer-lock / git-*」扩到
+  `hub-vector-*` / `flywheel-health-low` / `source-health` / `cron-*` / `backend-*`。
+  顺带修既有 bug：git 分支按「目录名 == 显示名」反查，而主仓目录名是 worktree 名
+  （feat-implement-plan-ZilBmv）而显示名是 Fan-Agent-Momory → 主仓告警现读**恒为空**；
+  改走采集器 `repo_list()` 单一来源按显示名反查。
+- **任务3 collect_git**：**明确不采用缓存**——未暂存改动不触碰 `.git/`，任何基于 `.git` mtime
+  的签名都会漏报 dirty，直接损坏「工作区守护」告警。实测 237ms 中 git 计算量≈0，
+  全是 Windows 子进程 spawn（17ms/次 × 12 次）⇒ 合并为每仓 2 条命令：
+  `status --short --branch`（一条给出 分支/ahead/behind/dirty）+ `log -1 --format=%h<US>%cI<US>%s`
+  （一条给出 HEAD/时间/标题）。**222.3 → 80.6ms（2.76×，省 142ms）**，10 字段逐字段等价，9/9 边界用例通过。
+- **任务4 夜间摘要**：**未完成，卡在根因**（下方）。
+
+### 任务4 根因（已查实，待决策）
+- `local_summary.py`（仅存在于 trae work 工作区 `d:\AIwork\traework\<id>\scripts\`）只读
+  `cfg.batch_model` + `cfg.gateway_url`。
+- OmniRoute（20128／394 模型）**没有任何通往 LM Studio 的路由**；唯一 `offline` 路由 →
+  **502 ECONNREFUSED**（指向已退役后端）；`auto/offline` 实际去调远程 felo/oc → 429。
+- `local_chat`（LM Studio 1234）**实测完全可用**（`qwen/qwen3.5-9b` 被 JIT 解析到已加载模型正常回话），
+  但它与 `gateway_url` 是**同一个配置键**（`engine.py:63` 引擎同用）⇒ 改配置会连引擎一起打歪，
+  **配置层无解**。
+- 两条出路：① 改 `local_summary.py` 走本地端点（约 6 行，属 trae work 工作区，**需授权**）；
+  ② 给 OmniRoute 加 LM Studio provider（配置在容器 `storage.sqlite`，属 docker 基建）。
+
+### 顺带查实的既有问题（非本轮引入）
+- `AgentMemoryHub/skills/` **目录不存在** → `skill_health = 0` → 飞轮总分恒 **29.3** ⇒
+  「飞轮健康度 29.3 分」告警**永远无法消除**（存在两套技能口径：中枢自带注册表 vs `SKILLS_ROOT`）。
+- verify_v5 既有 3 项失败（**原始 HEAD 同样失败**）：技能表总数提示 / 体检 SKILL.md 数量 /
+  `delta == 当前-种子(340)`（服务端历史有行后压过 localStorage 种子 → 期望 ▲31.0 实得 ▲2.0）。
+
+### 验证
+- 页面级：158 条技能**单页放下**；flywheel 6 行现读 / git 6 行 / cron 11 行；force 采集 **408ms**；
+  20 张 KPI；**无 JS 异常**。
+- 回归：**44 通过 / 3 失败**，失败项与原始 HEAD 基线**逐行一致 ⇒ 零回归**；`#dw-copy` 崩溃已消除。
+- `ruff check` + `ruff format --check` 全清；两文件 `py_compile` 通过。
+
 ## 本轮 R13（P3-10 采集器增量 + P2-5 徽章补全 + P1-3 服务端趋势 + 2 个真 bug 修复）
 
 **性能（P3-10 采集器增量）——先度量再优化**：

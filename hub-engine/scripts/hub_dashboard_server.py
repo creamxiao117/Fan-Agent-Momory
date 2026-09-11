@@ -301,6 +301,115 @@ def cron_incidents() -> dict:
         return {"ok": False, "error": str(e)}
 
 
+# ---- 告警详情「现读证据」辅助（按告警类别取实时状态）------------------------
+# 背景：alert_detail 早期只覆盖 hub-writer-lock / git-* 两类，其余「hub 类 / cron 类」
+# 告警点开只有快照里的静态 evidence，看不到「此刻真实值」，Agent 拿到修复包仍要自己再查一遍。
+# 这里按告警类别补齐现读，且每类都来自与快照无关的实时数据源。
+
+
+def _collector():
+    """惰性导入同目录采集器模块 —— 仓库清单/命名口径的单一来源，避免两处分叉。"""
+    here = str(Path(__file__).resolve().parent)
+    if here not in sys.path:
+        sys.path.insert(0, here)
+    import hub_dashboard_collect
+
+    return hub_dashboard_collect
+
+
+def _live_vector() -> list[str]:
+    """现读 .sync/vector.db（绕开快照 TTL，取当前真实值）。"""
+    import sqlite3
+
+    db = STATE["hub_root"] / ".sync" / "vector.db"
+    if not db.exists():
+        return [f"{db} 不存在（向量库尚未建立）"]
+    live = [f"库文件={db}"]
+    try:
+        con = sqlite3.connect(f"file:{db.as_posix()}?mode=ro", uri=True)
+        try:
+            cols = [c[1] for c in con.execute("PRAGMA table_info(docs)")]
+            cards = con.execute("SELECT COUNT(*) FROM docs").fetchone()[0]
+            embedded = (
+                con.execute(
+                    "SELECT COUNT(*) FROM docs WHERE embedding IS NOT NULL"
+                ).fetchone()[0]
+                if "embedding" in cols
+                else 0
+            )
+        finally:
+            con.close()
+        live += [
+            f"卡数={cards}  已嵌入={embedded}  缺失={cards - embedded}",
+            f"库龄={round((time.time() - db.stat().st_mtime) / 60, 1)} 分钟",
+        ]
+    except (OSError, sqlite3.Error) as e:
+        live.append(f"读向量库失败: {e}")
+    return live
+
+
+def _live_flywheel(data: dict) -> list[str]:
+    """现读飞轮健康分子项，说明分数为何低。"""
+    hh = (data.get("hub") or {}).get("health") or {}
+    keys = (
+        "overall_score",
+        "overall_verdict",
+        "card_health",
+        "skill_health",
+        "flywheel_activity",
+    )
+    live = [f"{k}={hh[k]}" for k in keys if k in hh]
+    live += [f"行动建议: {a}" for a in (hh.get("actions") or [])]
+    if hh.get("_cached"):
+        live.append("(注: 该项来自采集缓存，可能滞后一个采集周期)")
+    return live or ["快照未含 hub.health 分子项（该告警由旧快照推导）"]
+
+
+def _live_source_health(data: dict) -> list[str]:
+    """现读数据源体检逐项结果（不通过项带原始 note + 路径）。"""
+    sh = data.get("source_health") or {}
+    live = [f"体检项 {sh.get('total', '?')} 个，不通过 {sh.get('unhealthy', '?')} 个"]
+    for c in sh.get("checks") or []:
+        flag = "OK  " if c.get("ok") else "FAIL"
+        live.append(f"[{flag}] {c.get('name')}（{c.get('kind')}）{c.get('note')}")
+        live.append(f"        路径: {c.get('path')}")
+    return live
+
+
+def _live_cron(alert_id: str) -> list[str]:
+    """现读 cron：任务表 jobs.json + 未处理故障 executions.db（均与快照无关）。"""
+    live: list[str] = []
+    jf = LOCAL_APP / "hermes" / "cron" / "jobs.json"
+    try:
+        if jf.exists():
+            raw = json.loads(jf.read_text(encoding="utf-8"))
+            jobs = raw.get("jobs", raw) if isinstance(raw, dict) else raw
+            live.append(f"任务表 {jf}（实时，共 {len(jobs)} 个）")
+            if alert_id == "cron-never-ran":
+                for j in jobs:
+                    if isinstance(j, dict) and not j.get("last_run_at"):
+                        live.append(
+                            f"[从未执行] {j.get('name') or j.get('id')}"
+                            f"  schedule={j.get('schedule')}  enabled={j.get('enabled')}"
+                            f"  next={j.get('next_run_at')}"
+                        )
+        else:
+            live.append(f"{jf} 不存在")
+    except (OSError, json.JSONDecodeError) as e:
+        live.append(f"读 jobs.json 失败: {e}")
+
+    if alert_id == "cron-incidents":
+        inc = cron_incidents()
+        if inc.get("ok"):
+            rows = inc.get("rows") or []
+            live.append(f"未处理故障 {len(rows)} 条（executions.db 实时）")
+            for r in rows[:8]:
+                live.append("  " + " | ".join(f"{k}={v}" for k, v in r.items()))
+        else:
+            live.append(f"故障明细读取失败: {inc.get('error')}")
+    return live
+
+
 def alert_detail(alert_id: str) -> dict:
     """告警详情 + 现读证据 + 「修复包」文本（一键复制转发给 Agent）。
 
@@ -320,6 +429,8 @@ def alert_detail(alert_id: str) -> dict:
         }
 
     # 现读证据：告警可能是快照采集后新增的，尽量取实时状态
+    # 已覆盖类别：hub-writer-lock / git-* / hub-vector-* / flywheel-health-low /
+    #            source-health / cron-* / backend-*
     live: list[str] = []
     try:
         if alert_id == "hub-writer-lock":
@@ -330,18 +441,42 @@ def alert_detail(alert_id: str) -> dict:
                     f"mtime={datetime.fromtimestamp(lock.stat().st_mtime, CST).isoformat()}"
                 )
         elif alert_id.startswith("git-"):
+            # 用采集器的仓库清单按「显示名」反查路径（目录名 ≠ 显示名，见 repo_list）
             name = alert_id.split("-", 2)[2]
-            for repo in (STATE["repo_root"], STATE["hub_root"]):
-                if repo.name == name:
-                    out = subprocess.run(
-                        ["git", "status", "--short"],
-                        cwd=str(repo),
-                        capture_output=True,
-                        text=True,
-                        timeout=20,
-                        check=False,
+            try:
+                repos = _collector().repo_list(STATE["hub_root"], STATE["repo_root"])
+            except (ImportError, AttributeError):
+                repos = []
+            for rname, rpath in repos:
+                if rname != name:
+                    continue
+                out = subprocess.run(
+                    ["git", "status", "--short", "--branch"],
+                    cwd=str(rpath),
+                    capture_output=True,
+                    text=True,
+                    timeout=20,
+                    check=False,
+                )
+                live += [ln for ln in out.stdout.splitlines()[:15] if ln.strip()]
+        elif alert_id.startswith("hub-vector-"):
+            live += _live_vector()
+        elif alert_id == "flywheel-health-low":
+            live += _live_flywheel(data)
+        elif alert_id == "source-health":
+            live += _live_source_health(data)
+        elif alert_id.startswith("cron-"):
+            live += _live_cron(alert_id)
+        elif alert_id.startswith("backend-"):
+            port = alert_id.split("-", 1)[1]
+            url = f"http://127.0.0.1:{port}/health"
+            try:
+                with urllib.request.urlopen(url, timeout=3) as r:
+                    live.append(
+                        f"{url} → HTTP {r.status}（服务已恢复？请复核告警是否已陈旧）"
                     )
-                    live += [ln for ln in out.stdout.splitlines()[:15] if ln.strip()]
+            except OSError as e:
+                live.append(f"{url} → 仍不可达: {e}")
     except (OSError, subprocess.SubprocessError):
         pass
 

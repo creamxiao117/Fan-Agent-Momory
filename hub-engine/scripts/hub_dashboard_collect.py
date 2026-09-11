@@ -273,28 +273,71 @@ def collect_vector(hub: Path) -> dict:
     return out
 
 
+def _parse_branch_header(header: str) -> tuple[str, int, int]:
+    """解析 `## master...origin/master [ahead 1, behind 2]` → (分支, ahead, behind)。
+
+    降级口径与旧实现一致（旧实现靠 `rev-list @{u}...HEAD` 失败来降级）：
+    无 upstream / `[gone]` / 游离 HEAD → ahead=behind=0。
+    """
+    if not header.startswith("## "):
+        return "", 0, 0
+    rest = header[3:].strip()
+    if rest.startswith(("HEAD (no branch)", "HEAD (detached")):
+        branch = "HEAD"
+    elif rest.startswith("No commits yet on "):
+        branch = rest[len("No commits yet on ") :].strip()
+    else:
+        branch = rest.split("...")[0].split(" ")[0].strip()
+    ahead = behind = 0
+    m = re.search(r"\[(.+?)\]", rest)
+    if m:
+        for part in m.group(1).split(","):
+            part = part.strip()
+            if part.startswith("ahead ") and part.split()[1].isdigit():
+                ahead = int(part.split()[1])
+            elif part.startswith("behind ") and part.split()[1].isdigit():
+                behind = int(part.split()[1])
+    return branch, ahead, behind
+
+
+def repo_list(hub_root: Path, repo_root: Path) -> list[tuple[str, Path]]:
+    """看板监控的仓库清单（显示名, 路径）—— 采集与服务端告警详情共用的单一来源。
+
+    显示名是告警 id 的组成部分（`git-dirty-<显示名>`）。服务端曾用「目录名 == 显示名」
+    反查路径，而主仓目录名是 worktree 名（feat-implement-plan-ZilBmv）、显示名是
+    Fan-Agent-Momory → 永远匹配不上，导致主仓的 git 告警现读证据恒为空。
+    """
+    return [("Fan-Agent-Momory", repo_root), ("AgentMemoryHub", hub_root)]
+
+
 def collect_git(repos: list[tuple[str, Path]]) -> list[dict]:
-    """每个仓库：分支 / 领先落后 / 未提交数 / HEAD / 最近提交时间。"""
+    """每个仓库：分支 / 领先落后 / 未提交数 / HEAD / 最近提交时间。
+
+    每仓只起 2 个 git 子进程（合并策略见下方性能注释）；字段与旧实现逐字段等价。
+    """
     out: list[dict] = []
     for name, path in repos:
         if not (path / ".git").exists():
             out.append({"name": name, "ok": False, "path": str(path)})
             continue
-        branch = _run(["git", "rev-parse", "--abbrev-ref", "HEAD"], path).strip()
-        head = _run(["git", "rev-parse", "--short", "HEAD"], path).strip()
-        dirty = len(
-            [
-                x
-                for x in _run(["git", "status", "--short"], path).splitlines()
-                if x.strip()
-            ]
+        # 性能：Windows 上每条 git 命令的纯 spawn 开销≈17ms（实测 git 计算量≈0）。
+        # 原实现每仓 6 条命令 → 现合并为 2 条（2 仓 12→4 次 spawn，实测 214→~70ms）：
+        #   · status --short --branch 一条同时给出 分支 / ahead / behind / 未提交文件
+        #   · log -1 --format=%h<US>%cI<US>%s 一条同时给出 短 HEAD / 提交时间 / 标题
+        # 不用「缓存 git 结果」的原因：未暂存改动不触碰 .git/ 内部文件，
+        # 任何基于 .git mtime 的签名都会漏报 dirty，导致「工作区守护」告警谎报。
+        st = _run(["git", "status", "--short", "--branch"], path).splitlines()
+        has_header = bool(st) and st[0].startswith("## ")
+        branch, ahead, behind = (
+            _parse_branch_header(st[0]) if has_header else ("", 0, 0)
         )
-        ab = _run(
-            ["git", "rev-list", "--left-right", "--count", "@{u}...HEAD"], path
-        ).split()
-        behind, ahead = (int(ab[0]), int(ab[1])) if len(ab) == 2 else (0, 0)
-        last_ts = _run(["git", "log", "-1", "--format=%cI"], path).strip()
-        subject = _run(["git", "log", "-1", "--format=%s"], path).strip()
+        dirty = len([x for x in (st[1:] if has_header else st) if x.strip()])
+        meta = _run(["git", "log", "-1", "--format=%h%x1f%cI%x1f%s"], path).split(
+            "\x1f"
+        )
+        head = meta[0].strip() if meta else ""
+        last_ts = meta[1].strip() if len(meta) > 1 else ""
+        subject = meta[2].strip() if len(meta) > 2 else ""
         out.append(
             {
                 "name": name,
@@ -1217,7 +1260,7 @@ def collect_all(hub: Path, root: Path) -> dict:
 
     data["runtime"] = {
         "backends": collect_backends(),
-        "git": collect_git([("Fan-Agent-Momory", root), ("AgentMemoryHub", hub)]),
+        "git": collect_git(repo_list(hub, root)),
         "cron": collect_cron(),
     }
     data["activity"] = {
