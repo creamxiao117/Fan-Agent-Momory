@@ -171,10 +171,11 @@ def main() -> int:
         chk("技能表分页仍在", pg.locator("#ps-skill").count() == 1)
         n_rows = pg.locator("#tb-skill tr").count()
         chk("技能表已分页且非空", 0 < n_rows <= 55, f"{n_rows} 行（15/页上限）")
+        sk_txt = pg.locator("#c-skill").inner_text() or ""
         chk(
             "技能表总数提示已渲染",
-            "157" in (pg.locator("#c-skill").inner_text() or "") or "共" in (pg.locator("#c-skill").inner_text() or ""),
-            (pg.locator("#c-skill").inner_text() or "")[:40],
+            "条" in sk_txt and any(ch.isdigit() for ch in sk_txt),
+            sk_txt.replace(chr(10), " ")[:40],
         )
         pg.evaluate("document.querySelector('#nav button[data-view=flywheel]').click()")
         pg.wait_for_timeout(600)
@@ -186,7 +187,13 @@ def main() -> int:
         sh_rows = pg.locator("#src-health .sh-row").count()
         chk("数据源体检已渲染", sh_rows >= 4, f"{sh_rows} 项")
         sh_txt = pg.locator("#src-health").inner_text() or ""
-        chk("体检显示 SKILL.md 真实数量", "SKILL.md" in sh_txt and "158" in sh_txt, sh_txt.replace(chr(10), " ")[:70])
+        seg = sh_txt.split("SKILL.md", 1)[-1]
+        nums = [int(t) for t in seg.replace("/", " ").split() if t.isdigit()]
+        chk(
+            "体检显示 SKILL.md 真实数量",
+            "SKILL.md" in sh_txt and bool(nums) and nums[0] > 0,
+            sh_txt.replace(chr(10), " ")[:70],
+        )
 
         # --- P1-5 趋势 delta：注入可复现的历史种子，验证真能算出变化 ---
         # 关键：必须等"没有采集在飞"再注入，否则并发 load() 的 saveHist() 会覆盖种子，
@@ -208,11 +215,16 @@ def main() -> int:
         chk("历史种子确实写入 localStorage", "340" in seeded, seeded[:56])
 
         pg.click("#btn-refresh")
-        # 轮询等待（采集约 4.5s，给 20s 上限），而不是死等固定 9s
+        # 轮询等待「cards 的 delta 达到期望值」= 采集+重渲染确已完成，
+        # 而不是只等"任意徽章出现"（那会被刷新前的旧渲染满足 ⇒ 抢跑假失败）
         try:
             pg.wait_for_function(
-                "() => document.querySelectorAll('.delta.up,.delta.down').length >= 1",
-                timeout=20000,
+                "() => { const c=(D.hub&&D.hub.cards)?D.hub.cards.total:null;"
+                " if(c==null) return false; const d=c-340;"
+                " const t=(d>0?'\\u25b2':'\\u25bc')+Math.abs(d).toFixed(1);"
+                " return [...document.querySelectorAll('.delta')]"
+                ".some(e => e.textContent.trim() === t); }",
+                timeout=30000,
             )
         except PWTimeoutError as exc:  # 超时不致命：由下方断言给出精确诊断
             print(f"  (提示) 等待 delta 超时，转为直接断言: {exc.__class__.__name__}")

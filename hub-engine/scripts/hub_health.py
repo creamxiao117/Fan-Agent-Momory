@@ -133,24 +133,49 @@ def collect_card_stats(hub_root: Path) -> dict:
     }
 
 
+def _resolve_skills_root(skillhub_root: Path) -> Path | None:
+    """定位真正的技能目录（兼容两种布局 + 容忍调用方重复拼 /skills）。"""
+    if skillhub_root is None:
+        return None
+    for cand in (skillhub_root, skillhub_root / "skills"):
+        if not cand.is_dir():
+            continue
+        if next(cand.rglob("SKILL.md"), None) or next(cand.rglob("skill.yaml"), None):
+            return cand
+    return None
+
+
 def collect_skill_stats(skillhub_root: Path) -> dict:
-    """采集 SkillHub 技能统计。"""
-    skills_root = skillhub_root / "skills"
+    """采集技能统计（同时支持 SkillHub 的 skill.yaml 与 Hermes 的 SKILL.md）。"""
+    skills_root = _resolve_skills_root(skillhub_root)
     status_counts = Counter()
     skills = []
 
-    if not skills_root.is_dir():
-        return {"total": 0, "by_status": {}, "skills": []}
+    if skills_root is None:
+        return {"total": 0, "by_status": {}, "skills": [], "source": "missing"}
 
-    # 遍历所有 skill.yaml
-    for yaml_file in skills_root.rglob("skill.yaml"):
+    # 两种布局都认：SkillHub 的 skill.yaml + Hermes 的 SKILL.md（YAML frontmatter）
+    files = sorted(skills_root.rglob("skill.yaml")) + sorted(
+        skills_root.rglob("SKILL.md")
+    )
+    import yaml
+
+    for yaml_file in files:
         try:
-            import yaml
-
-            with open(yaml_file, encoding="utf-8") as f:
-                data = yaml.safe_load(f) or {}
+            text = yaml_file.read_text(encoding="utf-8")
+            try:
+                if yaml_file.name == "SKILL.md":
+                    fm = re.match(r"^---\s*\n(.*?)\n---", text, re.DOTALL)
+                    data = (yaml.safe_load(fm.group(1)) if fm else None) or {}
+                else:
+                    data = yaml.safe_load(text) or {}
+            except yaml.YAMLError:
+                # frontmatter 损坏也仍登记该技能（按目录名 + active），避免静默少算
+                data = {}
             name = data.get("name", yaml_file.parent.name)
-            status = data.get("status", "unknown")
+            # SKILL.md 无 status 字段 ⇒ 目录内已安装即视为 active
+            # （旧版默认 "unknown" ⇒ active 恒 0 ⇒ 技能分恒 0，属"读不到 0"冒充"真 0"）
+            status = data.get("status") or "active"
             reuse = data.get("reuse_count", 0)
             status_counts[status] += 1
             rel_path = str(yaml_file.parent.relative_to(skills_root))
@@ -162,14 +187,66 @@ def collect_skill_stats(skillhub_root: Path) -> dict:
                     "path": rel_path,
                 }
             )
-        except (OSError, ValueError):
+        except (OSError, ValueError, yaml.YAMLError):
             continue
 
     return {
         "total": len(skills),
         "by_status": dict(status_counts),
         "skills": sorted(skills, key=lambda x: x["name"]),
+        "source": str(skills_root),
     }
+
+
+def collect_flywheel_activity(hub_root: Path, days: int = 7) -> dict:
+    """飞轮活跃度：读真实日志 .sync/state/flywheel-log.json 按「最近运行」打分。
+
+    旧实现数 `.sync/logs/<script>*.log`，本机无该目录 ⇒ 恒 0（假告警，权重 0.2）。
+    打分：100 - 8×距今天数（0 天=100，5 天=60，≥13 天=0）——与中枢既有卡实测口径一致。
+    无日志/无日期 ⇒ available=False，**不冒充 0 分**。
+    """
+    out = {
+        "available": False,
+        "source": ".sync/state/flywheel-log.json",
+        "runs_in_window": 0,
+        "last_run_date": None,
+        "days_since_last": None,
+        "score": None,
+    }
+    log = hub_root / ".sync" / "state" / "flywheel-log.json"
+    if not log.is_file():
+        return out
+    try:
+        entries = json.loads(log.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return out
+    if not isinstance(entries, list) or not entries:
+        return out
+    dates = sorted(
+        {e.get("date") for e in entries if isinstance(e, dict) and e.get("date")}
+    )
+    if not dates:
+        return out
+    try:
+        days_since = (
+            datetime.now(tz=timezone.utc).date()
+            - datetime.fromisoformat(dates[-1]).date()
+        ).days
+    except ValueError:
+        return out
+    cutoff_day = (
+        (datetime.now(tz=timezone.utc) - timedelta(days=days)).date().isoformat()
+    )
+    out.update(
+        {
+            "available": True,
+            "runs_in_window": sum(1 for d in dates if d >= cutoff_day),
+            "last_run_date": dates[-1],
+            "days_since_last": days_since,
+            "score": round(max(0.0, 100.0 - 8.0 * days_since), 1),
+        }
+    )
+    return out
 
 
 def collect_llm_status() -> dict:
@@ -202,27 +279,37 @@ def compute_health_score(
     skill_stats: dict,
     flywheel_stats: dict,
     llm_status: dict | None = None,
+    flywheel_activity: dict | None = None,
 ) -> dict:
-    """计算飞轮健康度评分（0-100）。"""
+    """计算飞轮健康度评分（0-100）。不可用分项记 None 并从权重中剔除。"""
     scores = {}
 
-    # 1. 卡片健康度：active 占比
+    # 1. 卡片健康度：active 占比（无可读卡片 ⇒ None，不冒充 0）
     total_cards = card_stats["total"]
     active_cards = card_stats["by_status"].get("active", 0)
-    card_health = (active_cards / max(total_cards, 1)) * 100
-    scores["card_health"] = round(card_health, 1)
+    scores["card_health"] = (
+        round((active_cards / total_cards) * 100, 1) if total_cards else None
+    )
 
-    # 2. 技能健康度：active 占比
+    # 2. 技能健康度：active 占比（同上）
     total_skills = skill_stats["total"]
     active_skills = skill_stats["by_status"].get("active", 0)
-    skill_health = (active_skills / max(total_skills, 1)) * 100
-    scores["skill_health"] = round(skill_health, 1)
+    scores["skill_health"] = (
+        round((active_skills / total_skills) * 100, 1) if total_skills else None
+    )
 
-    # 3. 飞轮活跃度：最近 7 天有运行过脚本的阶段数
-    active_stages = sum(1 for v in flywheel_stats.values() if v > 0)
-    total_stages = len(FLYWHEEL_STAGES)
-    flywheel_activity = (active_stages / max(total_stages, 1)) * 100
-    scores["flywheel_activity"] = round(flywheel_activity, 1)
+    # 3. 飞轮活跃度：优先用真实日志口径（collect_flywheel_activity）
+    fa = flywheel_activity or {}
+    if fa.get("available") and fa.get("score") is not None:
+        scores["flywheel_activity"] = round(float(fa["score"]), 1)
+    else:
+        # 回退旧的"阶段数"口径：确实数到活动才给分，否则 None
+        active_stages = sum(1 for v in flywheel_stats.values() if v > 0)
+        scores["flywheel_activity"] = (
+            round((active_stages / len(FLYWHEEL_STAGES)) * 100, 1)
+            if active_stages and FLYWHEEL_STAGES
+            else None
+        )
 
     # 4. Ollama 健康度
     llm_health = 100.0  # 默认满分
@@ -240,14 +327,17 @@ def compute_health_score(
                 llm_health = 60.0
     scores["llm_health"] = round(llm_health, 1)
 
-    # 总分
-    overall = (
-        card_health * 0.25
-        + skill_health * 0.35
-        + flywheel_activity * 0.2
-        + llm_health * 0.2
-    )
-    scores["overall"] = round(overall, 1)
+    # 总分：跳过不可用分项并按可用权重归一化（"读不到" ≠ "不健康"）
+    parts = [
+        (scores.get("card_health"), 0.25),
+        (scores.get("skill_health"), 0.35),
+        (scores.get("flywheel_activity"), 0.2),
+        (scores.get("llm_health"), 0.2),
+    ]
+    num = sum(v * w for v, w in parts if v is not None)
+    den = sum(w for v, w in parts if v is not None)
+    scores["overall"] = round(num / den, 1) if den else None
+    scores["_weight_available"] = round(den, 2)
 
     return scores
 
@@ -399,8 +489,9 @@ def main():
     skill_stats = collect_skill_stats(skillhub_root)
     flywheel_stats = count_scripts_run(log_dir, days=args.days)
     llm_status = collect_llm_status()
+    flywheel_activity = collect_flywheel_activity(hub_root, days=args.days)
     health_scores = compute_health_score(
-        card_stats, skill_stats, flywheel_stats, llm_status
+        card_stats, skill_stats, flywheel_stats, llm_status, flywheel_activity
     )
 
     report = {
@@ -447,13 +538,15 @@ def main():
         skill_by_status = skill_stats.get("by_status", {})
 
         hub_health = {
-            "overall_score": scores.get("overall", 0),
+            "overall_score": scores.get("overall"),
             "overall_verdict": (
                 "✅ 健康"
-                if scores.get("overall", 0) >= 80
+                if (scores.get("overall") or 0) >= 80
                 else "⚠️ 需关注"
-                if scores.get("overall", 0) >= 60
+                if (scores.get("overall") or 0) >= 60
                 else "🚨 需修复"
+                if scores.get("overall") is not None
+                else "❓ 数据不足"
             ),
             "card_health": {
                 "score": scores.get("card_health", 0),
@@ -480,7 +573,12 @@ def main():
                 ],
             },
             "flywheel_activity": {
-                "score": scores.get("flywheel_activity", 0),
+                "score": scores.get("flywheel_activity"),
+                "available": flywheel_activity.get("available", False),
+                "source": flywheel_activity.get("source"),
+                "last_run_date": flywheel_activity.get("last_run_date"),
+                "days_since_last": flywheel_activity.get("days_since_last"),
+                "runs_in_window": flywheel_activity.get("runs_in_window", 0),
                 "active_runs": sum(1 for v in flywheel_stats.values() if v > 0),
                 "total": sum(flywheel_stats.values()),
                 "by_stage": flywheel_stats,

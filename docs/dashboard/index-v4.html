@@ -571,9 +571,10 @@ function barFoot(v,good,bad,text){
 /* ---------- P1-5 趋势 delta：与「上次快照」比较 ----------
    数据源：localStorage.hubHist（每次加载成功后写入）。
    颜色语义 = 变好/变差（不是数值升降），所以需要 upIsGood 指明方向。 */
-/* P1-5 趋势 delta —— 与「上一个不同的历史值」比较。
+/* P1-5 趋势 delta —— 与「上一次记录值」比较。
    只存当前值做对比会永远相等（首次渲染即写入），故存历史数组，
-   由近及远找第一个与当前不同的值；从未有过差异则显示「基线」。 */
+   由近及远找第一个与当前不同的值；从未有过差异则显示「基线」。
+   （2026-09-11 修：服务端历史接入后拼接顺序反了 ⇒ delta 恒≈0；见 histSnap。） */
 /* P1-3：趋势历史改以「服务端 JSONL」为主源（跨设备共享、清缓存不丢），
    localStorage 降级为兜底；数据源标记在 body[data-hist-src] 上便于自检。 */
 var SRV_HIST = null;
@@ -596,10 +597,10 @@ function histSnap(){
   Object.keys(loc).forEach(function(k){ keys[k]=1; });
   if(srv) Object.keys(srv).forEach(function(k){ keys[k]=1; });
   Object.keys(keys).forEach(function(k){
-    /* 拼接顺序：本地（较旧）在前、服务端（较新）在后。
-       histPrev 从尾部回溯取「第一个与当前值不同的值」→ 优先采用服务端，
-       本地历史只做「服务端刚上线、历史太短」时的补位，避免趋势被归零。 */
-    out[k] = (loc[k]||[]).slice(-20).concat(srv ? (srv[k]||[]).slice(-40) : []);
+    /* 拼接顺序：服务端（较旧，跨会话历史）在前、本地（末尾是本页刚写入的当前值）在后。
+       顺序不能反 —— histPrev 从尾部回溯，本地末尾是当前值，跳过它才落到「上一次记录值」；
+       若本地在前，服务端最新行会顶到尾部遮蔽它，delta 退化成恒 ≈0（实测 ▲31.0 → ▲2.0）。 */
+    out[k] = (srv ? (srv[k] || []).slice(-40) : []).concat((loc[k] || []).slice(-20));
   });
   src = (srv && Object.keys(loc).length) ? "mixed" : (srv ? "server" : "local");
   try{ document.body.setAttribute("data-hist-src", src); }catch(e){}
@@ -612,6 +613,10 @@ function loadSrvHist(){
 }
 function histPrev(key, cur){
   var arr = histSnap()[key] || [];
+  /* 与「上一次记录值」比较：合并序为「服务端(旧)→本地(新)」，本地数组末尾是本页刚写入的
+     当前值 ⇒ 从尾部回溯会先跳过它，落到上一次记录值。
+     ⚠️ 顺序敏感：若本地数组排在服务端之前，服务端最新行会顶到尾部并"遮蔽"上一记录值，
+     delta 即退化为恒 ≈0（实测 ▲31.0 → ▲2.0）。顺序见 histSnap()。 */
   for(var i=arr.length-1;i>=0;i--){ if(Math.abs(arr[i]-cur) >= 0.05) return arr[i]; }
   return null;
 }
