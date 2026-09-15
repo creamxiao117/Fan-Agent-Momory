@@ -2,8 +2,23 @@ import pytest
 
 from engine import chat, main
 
+_GW_CFG = """
+gateway:
+  url: http://127.0.0.1:9999
+  default_model: auto/offline
+  timeout_seconds: 5
+"""
 
-def test_chat_calls_gateway_and_returns_content(monkeypatch, tmp_path):
+
+def _use_cfg(monkeypatch, tmp_path, text: str) -> None:
+    """用 HUB_CONFIG_PATH 注入配置（load_engine_config 的最高优先级入口）"""
+    cfg = tmp_path / "cfg.yaml"
+    cfg.write_text(text, encoding="utf-8")
+    monkeypatch.setenv("HUB_CONFIG_PATH", str(cfg))
+
+
+def test_chat_calls_gateway_when_configured(monkeypatch, tmp_path):
+    """远程能力保留：**显式配置 gateway_url 时**仍走网关（2026-09-15 移除的是默认兜底）。"""
     captured = {}
 
     class FakeResp:
@@ -18,16 +33,34 @@ def test_chat_calls_gateway_and_returns_content(monkeypatch, tmp_path):
         captured["model"] = json["model"]
         return FakeResp()
 
+    _use_cfg(monkeypatch, tmp_path, _GW_CFG)
     monkeypatch.setattr("requests.post", fake_post)
     out = chat("DLL 被锁怎么办", tmp_path)
     assert "DLL" in out
-    assert captured["url"].endswith("/v1/chat/completions")
+    assert captured["url"] == "http://127.0.0.1:9999/v1/chat/completions"
+
+
+def test_chat_makes_no_http_call_when_gateway_absent(monkeypatch, tmp_path, capsys):
+    """OmniRoute 已从兜底移除：未配置远程 → **一次 HTTP 都不发**，直接本地检索兜底。"""
+    called = {"n": 0}
+
+    def boom(*a, **k):
+        called["n"] += 1
+        raise AssertionError("不应发起任何 HTTP 调用")
+
+    _use_cfg(monkeypatch, tmp_path, "timeout: 30\n")  # 无 gateway_url
+    monkeypatch.setattr("requests.post", boom)
+    out = chat("随便问一句", tmp_path)
+    assert isinstance(out, str) and out  # 不抛异常，返回兜底文本
+    assert called["n"] == 0
+    assert "未配置远程网关" in capsys.readouterr().out
 
 
 def test_chat_falls_back_on_gateway_error(monkeypatch, tmp_path):
     def boom(*a, **k):
         raise RuntimeError("gateway down")
 
+    _use_cfg(monkeypatch, tmp_path, _GW_CFG)  # 配了网关但网关故障
     monkeypatch.setattr("requests.post", boom)
     out = chat("随便问一句", tmp_path)
     assert isinstance(out, str) and out  # 不抛异常，返回兜底文本
@@ -37,9 +70,20 @@ def test_chat_raises_when_fallback_disabled(monkeypatch, tmp_path):
     def boom(*a, **k):
         raise RuntimeError("gateway down")
 
+    _use_cfg(monkeypatch, tmp_path, _GW_CFG)
     monkeypatch.setattr("requests.post", boom)
     with pytest.raises(RuntimeError):
         chat("x", tmp_path, fallback=False)
+
+
+def test_chat_no_gateway_never_raises_even_without_fallback(monkeypatch, tmp_path):
+    """无远程时 fallback=False 也不抛：没有远程可用，只能本地兜底（契约已变，2026-09-15）。"""
+    _use_cfg(monkeypatch, tmp_path, "timeout: 30\n")
+    monkeypatch.setattr(
+        "requests.post", lambda *a, **k: (_ for _ in ()).throw(AssertionError())
+    )
+    out = chat("x", tmp_path, fallback=False)
+    assert isinstance(out, str) and out
 
 
 def _fake_llm_ok(*_a, **_k):

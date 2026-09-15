@@ -3,8 +3,8 @@
 # 模型命名规范：LM Studio 格式 provider/model-name，不用 Ollama 的 model:tag
 # 参考：AgentMemoryHub/experience/lmstudio-local-llm-migration.md
 
-gateway_url: http://127.0.0.1:20128
-default_model: auto/offline
+# gateway_url: http://127.0.0.1:20128   # ← 2026-09-15 用户裁定：OmniRoute 已从兜底移除，勿启用
+# default_model: auto/offline           # ← 仅供远程网关使用，随上注一并停用
 
 # Embedding 后端：直连 LM Studio（不用 OmniRoute，因为 OmniRoute /v1/embeddings
 # 要求 provider/model 格式，而 bge-m3 模型名不带前缀，直连 LM Studio 1234 用短格式可通）
@@ -19,7 +19,7 @@ timeout: 60
 compress: llmlingua
 
 # ── 本地 LLM 优先链（2026-09-11 用户裁定）────────────────────────────
-# 顺序：① LM Studio(1234) ② 本地次选端点（当前为空）③ OmniRoute(20128，即 gateway_url 最后兜底)
+# 顺序：① LM Studio(1234) ② 本地次选端点（当前为空）无远程兜底（OmniRoute 已于 2026-09-15 移除）
 # 检索用 embedding 走 LM Studio 的 bge 系（见 embed 段；两个 bge 模型维度不同，不可混用同一向量库）
 local_chat: # ① 本地首选：LM Studio
   url: http://127.0.0.1:1234/v1/chat/completions

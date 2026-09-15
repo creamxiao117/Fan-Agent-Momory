@@ -1,4 +1,4 @@
-"""omniroute 增强引擎统一入口：chat（检索/归纳/整理均复用此通道）
+"""中枢增强引擎统一入口：chat（检索/归纳/整理均复用此通道；2026-09-15 起本地优先、无 OmniRoute 兜底）
 
 V1.1 (2026-09-07): P1 拆分 — 10 个 _cmd_* 子命令搬到 commands/ 子包，
 本文件仅保留 chat + main() 路由表。子命令处理函数从 commands 包导入。
@@ -55,14 +55,18 @@ from tools.retrieve import retrieve
 def _gateway_kwargs(
     hub_root: Path, model: str | None = None
 ) -> tuple[str, str, str, int, str, int | None]:
-    """返回 (url, model, api_key, timeout, compress)。
-    model 传入则覆盖 default_model（如批次任务抽样本地 MiniCPM 兜底处理模型）。"""
+    """返回 (url, model, api_key, timeout, compress, max_tokens)；**无远程配置则返回 None**。
+
+    2026-09-15 用户裁定：**OmniRoute 从兜底中移除**（长期 401，且会静默吞掉本地结果）。
+    故这里**不再硬编码 127.0.0.1:20128** —— 只有配置里显式给出 `gateway_url` 才返回远程通道，
+    否则返回 None，调用方一律走本地降级，绝不隐式打到一个可能已死的网关上。
+    """
     cfg = load_engine_config()
+    gateway_url = str(cfg.get("gateway_url", "") or "").strip()
+    if not gateway_url:
+        return None
     keys = load_provider_keys(hub_root)
-    url = (
-        cfg.get("gateway_url", "http://127.0.0.1:20128").rstrip("/")
-        + "/v1/chat/completions"
-    )
+    url = gateway_url.rstrip("/") + "/v1/chat/completions"
     model = model or cfg.get("default_model", "auto/offline")
     api_key = keys.get("default", "")
     timeout = int(cfg.get("timeout", 30))
@@ -100,14 +104,19 @@ def chat(
     *,
     model: str | None = None,
 ) -> str:
-    """调用 omniroute 网关；网关不可用则回退到文件关键词/full-text 检索。
-    接入弹性管道：Retry(3次) + Timeout + Fallback(降级到本地检索)。"""
+    """调用远程网关（**仅当配置了 gateway_url**）；不可用则回退本地检索+本地模型兜底。
+
+    2026-09-15：OmniRoute 已从兜底移除 —— 未配置远程时**不做任何 HTTP**，
+    直接走 `_do_fallback`（本地检索 + 本地模型骨架），避免空转到死网关。
+    """
     import requests
 
     hub_root = Path(hub_root)
-    url, model, api_key, timeout, compress, max_tokens = _gateway_kwargs(
-        hub_root, model
-    )
+    gw = _gateway_kwargs(hub_root, model)
+    if gw is None:
+        print("[llm_chain] 未配置远程网关（OmniRoute 已移除）→ 直接走本地兜底")
+        return _do_fallback(prompt, hub_root)
+    url, model, api_key, timeout, compress, max_tokens = gw
     headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
     if compress:
         headers["X-OmniRoute-Compression"] = f"{compress};source=request"
@@ -160,7 +169,7 @@ def _do_fallback(prompt: str, hub_root: Path) -> str:
     """降级逻辑：网关不可用时回退到文件检索 + 本地兜底。"""
     cards = retrieve(hub_root, prompt)
     if not cards:
-        return "（网关不可用且中枢无命中，建议交回用户确认）"
+        return "（本地兜底且中枢无命中，建议交回用户确认）"
     parts = [f"[{c.type}/{c.status}] {c.path.name}" for c in cards[:3]]
     bodies = [c.body.strip() for c in cards[:3]]
     try:
@@ -173,7 +182,7 @@ def _do_fallback(prompt: str, hub_root: Path) -> str:
             + local
         )
     return (
-        "网关不可用，已回退本地检索：\n"
+        "本地检索兜底（无远程网关）：\n"
         + "\n".join(parts)
         + "\n---\n"
         + "\n\n".join(bodies)
@@ -299,9 +308,9 @@ def _resolve_served_model(url: str, timeout: int) -> str:
 
 
 def _local_chain_fallback(prompt: str, hub_root: Path) -> str:
-    """本地模型降级链：LM Studio → 本地次选端点（可空）→ OmniRoute 网关（最后兜底）。
+    """本地模型降级链：LM Studio → 本地次选端点（可空）；**无远程兜底**（OmniRoute 已移除）。
 
-    逐环尝试「健康 + 调用成功」；只有全链失败才落到 chat()（gateway_url = OmniRoute）。
+    逐环尝试「健康 + 调用成功」；全链失败才落到 chat()（无远程配置时即本地检索兜底）。
     """
     import requests
 
@@ -334,7 +343,7 @@ def _local_chain_fallback(prompt: str, hub_root: Path) -> str:
             return text
         except Exception as e:
             print(f"[llm_chain] 本地端点失败，继续降级: {base}: {e}")
-    print("[llm_chain] 本地链全部不可用，降级到 OmniRoute 网关")
+    print("[llm_chain] 本地链全部不可用 → 无远程兜底（OmniRoute 已移除）")
     return chat(prompt, hub_root, fallback=True)
 
 
@@ -395,9 +404,9 @@ def _resolve_served_model(url: str, timeout: int) -> str:
 
 
 def _local_chain_fallback(prompt: str, hub_root: Path) -> str:
-    """本地模型降级链：LM Studio(1234) → local_chat_fallbacks（当前为空）→ OmniRoute 网关（最后兜底）。
+    """本地模型降级链：LM Studio(1234) → local_chat_fallbacks（当前为空）；**无远程兜底**（OmniRoute 已移除）。
 
-    逐环尝试「健康 + 调用成功」；只有全链失败才落到 chat()（gateway_url = OmniRoute）。
+    逐环尝试「健康 + 调用成功」；全链失败才落到 chat()（无远程配置时即本地检索兜底）。
     """
     import requests
 
@@ -430,7 +439,7 @@ def _local_chain_fallback(prompt: str, hub_root: Path) -> str:
             return text
         except Exception as e:
             print(f"[llm_chain] 本地端点失败，继续降级: {base}: {e}")
-    print("[llm_chain] 本地链全部不可用，降级到 OmniRoute 网关")
+    print("[llm_chain] 本地链全部不可用 → 无远程兜底（OmniRoute 已移除）")
     return chat(prompt, hub_root, fallback=True)
 
 
@@ -460,7 +469,7 @@ def _local_chat(prompt: str, hub_root: Path, model: str | None = None) -> str:
     health_checker = LLMHealthChecker.get_instance(llm_base)
 
     if not health_checker.is_available():
-        print("[llm_health] 本地端点不可用，走降级链（次选端点 → OmniRoute 网关）")
+        print("[llm_health] 本地端点不可用，走降级链（仅次选端点，无远程兜底）")
         return _local_chain_fallback(prompt, hub_root)
 
     def _do_local_http() -> str:
@@ -514,7 +523,8 @@ def smart_chat(prompt: str, hub_root: str | Path) -> str:
 
     接入 LLM 健康检测：本地 LLM 不可用时直接跳过本地通道，使用网关。
     去重任务（包含记忆库去重决策器）按决策质量分 + 模型自报 confidence 双重门禁。
-    达不到阈值时升级路径：本地模型 -> OmniRoute auto/offline。
+    升级路径只在本地区间内（2026-09-15 OmniRoute 已从兜底移除）；无可用升级环时，
+    直接采用本地结果，绝不外送。
     """
     root = Path(hub_root)
     cfg = load_engine_config()
@@ -538,13 +548,8 @@ def smart_chat(prompt: str, hub_root: str | Path) -> str:
         for u, _m, _t in _local_endpoint_chain(cfg)[1:]
     )
     if not llm_available:
-        print("[llm_health] 本地 LLM 不可用，直接使用 OmniRoute 网关")
-        return chat(
-            prompt,
-            root,
-            fallback=False,
-            model=str(escalation.get("remote_model", "auto/offline")),
-        )
+        print("[llm_health] 本地 LLM 不可用 → 无远程兜底（OmniRoute 已移除）")
+        return _do_fallback(prompt, root)
 
     # 本地 LLM 可用，走本地通道
     last_text = ""
@@ -565,6 +570,8 @@ def smart_chat(prompt: str, hub_root: str | Path) -> str:
             str(escalation.get("local_model", "qwen3.5:4b")),
         ]
         for upgrade_model in local_upgrade_models:
+            if not str(upgrade_model).strip():
+                continue  # 方案B（2026-09-15）：空名=该环未配置，跳过空转
             try:
                 # 再次检查 LLM 健康状态
                 if not health_checker.is_available():
@@ -581,13 +588,11 @@ def smart_chat(prompt: str, hub_root: str | Path) -> str:
             if score >= min_score and float(parsed.get("confidence", 0.0)) >= min_conf:
                 return upgraded
 
-    # 最终降级：使用 OmniRoute 网关
-    return chat(
-        prompt,
-        root,
-        fallback=False,
-        model=str(escalation.get("remote_model", "auto/offline")),
-    )
+    # 最终兜底（2026-09-15 OmniRoute 已移除）：优先采用已有本地结果，否则本地检索兜底
+    if last_text.strip():
+        print("[llm_chain] 无远程兜底 → 采用本地模型结果（未过质量门禁，谨慎）")
+        return last_text
+    return _do_fallback(prompt, root)
 
 
 def _cmd_chat(args) -> int:
@@ -689,7 +694,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--dry-run", action="store_true")
     p.set_defaults(func=cmd_sync)
 
-    p = sub.add_parser("chat", help="omniroute 问答")
+    p = sub.add_parser("chat", help="本地优先问答（无远程兜底）")
     p.add_argument("--root", required=True)
     p.add_argument("prompt")
     p.set_defaults(func=_cmd_chat)
