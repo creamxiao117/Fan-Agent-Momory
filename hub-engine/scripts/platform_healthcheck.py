@@ -59,9 +59,19 @@ def check_mcp_platform(name, info, hub_root):
         return result
     result["checks"]["config"] = "OK (" + cfg.name + ")"
     try:
-        if info.get("config_format") == "yaml":
+        fmt = str(info.get("config_format") or "").lower()
+        if fmt == "yaml":
             with open(cfg, encoding="utf-8") as fh:
                 d = yaml.safe_load(fh)
+            servers = d.get("mcp_servers", d.get("mcpServers", {}))
+        elif fmt == "toml":
+            # codex 的 MCP 配置是 TOML（[mcp_servers.<name>]）；旧实现在这里落到
+            # else 分支被 json.load 读，必然报 "Expecting value: line 1 column 1"
+            # ——即 2026-09-15 之前 code 平台长期 RED 的真因。
+            import tomllib
+
+            with open(cfg, "rb") as fh:
+                d = tomllib.load(fh)
             servers = d.get("mcp_servers", d.get("mcpServers", {}))
         else:
             with open(cfg, encoding="utf-8") as fh:
