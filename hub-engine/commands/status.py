@@ -459,7 +459,17 @@ def collect_snapshot_alerts(
 
 
 def load_previous_snapshot(root: Path) -> dict | None:
-    """加载昨日快照用于对比。"""
+    """加载昨日快照用于对比。
+
+    兼容两种落盘形态：
+    1. 扁平形态（engine `status --json` 直出，cards/health_scores 在顶层）；
+    2. `patrol_runner.py` 外层包装形态
+       （{"stages": [...], "snapshot": {扁平快照}, "alerts": [...], ...}）。
+
+    2026-09-15 修复：patrol 归档路径与 `--output` 同一文件，落盘的是包装形态；
+    旧实现直接返回顶层 dict，导致 `prev.get("cards")` 恒为空 → 对比里 prev 全 0
+    （日志表现为"卡片 0→87"这种假增量）。
+    """
     retro_dir = root / "retro"
     if not retro_dir.is_dir():
         return None
@@ -468,9 +478,20 @@ def load_previous_snapshot(root: Path) -> dict | None:
     if not snapshot_path.is_file():
         return None
     try:
-        return json.loads(snapshot_path.read_text(encoding="utf-8"))
+        raw = json.loads(snapshot_path.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, OSError):
         return None
+    if not isinstance(raw, dict):
+        return None
+
+    # 解包 patrol 外层包装：取内层扁平快照，并回填仅存在于外层的 alerts
+    inner = raw.get("snapshot")
+    if isinstance(inner, dict):
+        flat = dict(inner)
+        if "alerts" not in flat and isinstance(raw.get("alerts"), list):
+            flat["alerts"] = raw["alerts"]
+        return flat
+    return raw
 
 
 def compare_snapshots(prev: dict, curr: dict) -> dict:

@@ -712,10 +712,13 @@ def _step_freshness_check(root: Path, engine_dir: Path) -> StepResult:
         "SKILLHUB_ROOT", "D:/AIwork/20260821-Fan-SkillHub"
     )
     script = engine_dir / "scripts" / "stale_detect.py"
+    # 注意：StepResult 的 name/stage/status 均为必填，漏传 stage 会抛 TypeError，
+    # 被 _run_step 兜底成 exit_code=999 的假故障（2026-09-15 修复）。
     if not script.exists():
         return StepResult(
             name="freshness_check",
-            status="skipped",
+            stage="新鲜度",
+            status="skip",
             output="stale_detect.py 缺失",
             exit_code=0,
         )
@@ -737,14 +740,16 @@ def _step_freshness_check(root: Path, engine_dir: Path) -> StepResult:
         )
         return StepResult(
             name="freshness_check",
-            status="passed" if r.returncode == 0 else "failed",
+            stage="新鲜度",
+            status="pass" if r.returncode == 0 else "fail",
             output=r.stdout[-300:] + r.stderr[-200:],
             exit_code=r.returncode,
         )
     except subprocess.TimeoutExpired:
         return StepResult(
             name="freshness_check",
-            status="failed",
+            stage="新鲜度",
+            status="fail",
             output="timeout",
             exit_code=1,
         )
@@ -784,13 +789,15 @@ def _step_verify_after_fix(engine_dir: Path, fix_results: dict) -> StepResult:
     if failed:
         return StepResult(
             name="verify_after_fix",
-            status="failed",
+            stage="验证",
+            status="fail",
             output="\n".join(outputs),
             exit_code=1,
         )
     return StepResult(
         name="verify_after_fix",
-        status="passed",
+        stage="验证",
+        status="pass",
         output="\n".join(outputs),
         exit_code=0,
     )
