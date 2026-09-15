@@ -949,7 +949,7 @@ def _generate_suggestions(report: PatrolReport) -> list[str]:
         if rule == "local_llm_unavailable":
             suggestions.append(
                 "🟢 本地 LLM 不可用 → 检查 LM Studio 是否在运行，确认 API 端口 1234 可达；"
-                "或在 hub.config.yaml 中配置 OmniRoute 网关地址作为降级通道"
+                "（OmniRoute 已于 2026-09-15 从兜底移除；本地端点不可用时应人工介入）"
             )
         elif rule == "local_llm_slow":
             suggestions.append(
