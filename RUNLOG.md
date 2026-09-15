@@ -1,3 +1,27 @@
+## [2026-09-15] R15 | star-distill 6 仓 + T1 3 卡 + 待处理四项收口 + 日期纠偏
+
+**PART A star-distill（判级 B+，全部入权威区）**
+- 候选：Macad3D(.NET/CAD 内核) / Pynite(Python 结构 FEA) / TradingAgents(多智能体辩论) / OCRmyPDF(插件流水线) / FastMCP(MCP 框架) / qlib(量化研究平台)
+- 流程：隔离克隆 --depth 1 → 只读盘点 → 静态 T0（清单良构+声明/源码一致）→ 6 张 blueprint 卡 → ingest
+- ingest 结果：`promoted 0 / duplicate 6 / invalid 0` —— 全部降级落 conflicts（根因见下），经 pred.json 判降级误判 + 真实查重后 6 张 `mv` 进 blueprints/，INDEX 登记 6 行
+- 提交：`61c5a04`（6 卡 + T1 回写 + INDEX + retro）· `1a563c5`（配置修法）· `c98f8c2`（日期纠偏）
+
+**PART B T1 验证 3 卡**
+- ✅ `pynite-python-structural-fea-architecture` → active / rc 1：简支梁挠度+弯矩 **0.000%**；悬臂 P-Delta 放大 5.0690 vs 梁柱理论 5.0692（0.004%）；踩坑=节点结果按组合 dict + 读错自由度（DY 轴向 vs DX 横向，误差 96× 自查两轮）
+- ✅ `fastmcp-modular-mcp-server-framework` → active / rc 1：fastmcp 4.0.3 内存 + stdio 双传输全通（list_tools / call_tool `.data`+`structured_content` / resource）
+- ⚠️ `llm-dedup-gateway-degrade-fix` → rc 2：根因=`commands/ingest.py:23` 因缺 `batch_model` 致去重走 `engine.chat`(OmniRoute 直连，池子 429/401/400)→6/6 降级；**已修**（`system/config.yaml` 增 `batch_model: local`，仅配置层）→ 复测产出真实决策 `merge/0.8`
+
+**待处理四项收口**
+1. ✅ 去重本地优先链修法落地+实测（同上）
+2. ✅ `hub audit` 5 项遗留清零（2 orphan 补登 + 3 短描述；我方另补 4 条截断描述）→ audit ✅ 健康（389/213）
+3. ✅ 临时产物清理：`work/star` 21 项 + `F:\AgentMemoryT1` 33 项（du 口径 10.3 GB；df 296→293G，差值=git 硬链接重复计数）→ 51 个小脚本先归档到 `F:\AgentMemoryT1_script-archive_2026-09-15`（56 文件 / 468 KB）
+4. ✅ 中枢仓 push：fetch→rebase 24 commit 无冲突→push→SHA 核验一致
+
+**日期纠偏**：2 处未来日期 `2026-09-21` → `2026-09-15`（三方时间源：本机 date / git 提交日 / GitHub HTTP Date）；`lint` 全绿（213 卡，0 无效、0 幽灵、0 漂移）
+
+**当前状态**：中枢仓 `origin/master = c98f8c2`（工作区干净）；向量库 378→381 张；五权威区 rules 29 / blueprints 93 / methodology 54 / longterm 8 / projects 28
+**遗留**：无阻塞项；主仓他人在制文件（mcp_server.py 等）未认领
+
 # RUNLOG.md（迭代日志 · 只追加 · 最新在前）
 
 ## [2026-08-17] R6 | 中文语义召回增强（jieba 分词 + IDF 加权）
