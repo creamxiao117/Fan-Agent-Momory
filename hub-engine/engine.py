@@ -256,7 +256,11 @@ def _local_endpoint_chain(cfg: dict) -> list[tuple[str, str, int]]:
     chain = [
         (
             str(primary.get("url", "http://127.0.0.1:1234/v1/chat/completions")),
-            str(primary.get("model", cfg.get("default_model", "qwen/qwen3.5-9b"))),
+            str(
+                primary.get(
+                    "model", cfg.get("default_model", "qwen2.5-coder-1.5b-instruct")
+                )
+            ),
             int(primary.get("max_tokens", 2048)),
         )
     ]
@@ -276,8 +280,8 @@ def _local_endpoint_chain(cfg: dict) -> list[tuple[str, str, int]]:
 def _resolve_served_model(url: str, timeout: int) -> str:
     """OpenAI 兼容端点的模型名：GET {base}/v1/models 取首个 id。
 
-    SGLang 的 served_model_name 随看板切换模型而变（Qwen3.5-9B-AWQ /
-    Qwen2.5-3B-Instruct-AWQ），故不硬编码，调用前动态解析。
+    端点内已加载的模型会随看板切换而变（LM Studio 可随时换载），
+    qwen/qwen3.5-9b 亦已退役，故一律不硬编码，调用前动态解析。
     """
     import requests
 
@@ -348,7 +352,11 @@ def _local_endpoint_chain(cfg: dict) -> list[tuple[str, str, int]]:
     chain = [
         (
             str(primary.get("url", "http://127.0.0.1:1234/v1/chat/completions")),
-            str(primary.get("model", cfg.get("default_model", "qwen/qwen3.5-9b"))),
+            str(
+                primary.get(
+                    "model", cfg.get("default_model", "qwen2.5-coder-1.5b-instruct")
+                )
+            ),
             int(primary.get("max_tokens", 2048)),
         )
     ]
@@ -368,8 +376,8 @@ def _local_endpoint_chain(cfg: dict) -> list[tuple[str, str, int]]:
 def _resolve_served_model(url: str, timeout: int) -> str:
     """OpenAI 兼容端点的模型名：GET {base}/v1/models 取首个 id。
 
-    SGLang 的 served_model_name 随看板切换模型而变（Qwen3.5-9B-AWQ /
-    Qwen2.5-3B-Instruct-AWQ），故不硬编码，调用前动态解析。
+    端点内已加载的模型会随看板切换而变（LM Studio 可随时换载），
+    qwen/qwen3.5-9b 亦已退役，故一律不硬编码，调用前动态解析。
     """
     import requests
 
@@ -436,7 +444,7 @@ def _local_chat(prompt: str, hub_root: Path, model: str | None = None) -> str:
     # 本地默认逻辑入口：模型绑定
     url = str(local_cfg.get("url", "http://127.0.0.1:1234/v1/chat/completions"))
     model_name = model or str(
-        local_cfg.get("model", cfg.get("default_model", "qwen/qwen3.5-9b"))
+        local_cfg.get("model", cfg.get("default_model", "qwen2.5-coder-1.5b-instruct"))
     )
     payload = {
         "model": model_name,

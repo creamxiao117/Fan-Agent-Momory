@@ -23,7 +23,9 @@ compress: llmlingua
 # 检索用 embedding 走 LM Studio 的 bge 系（见 embed 段；两个 bge 模型维度不同，不可混用同一向量库）
 local_chat: # ① 本地首选：LM Studio
   url: http://127.0.0.1:1234/v1/chat/completions
-  model: qwen/qwen3.5-9b
+  # 2026-09-11 用户裁定：qwen/qwen3.5-9b 已**退役不再使用**（本机 /v1/models 无此 id ⇒ 调用 400）
+  # 现役对话模型 = qwen2.5-coder-1.5b-instruct（非推理、秒级返回合法 JSON）
+  model: qwen2.5-coder-1.5b-instruct
   max_tokens: 2048
 
 # 2026-09-11 用户裁定：SGLang 不纳入 LLM 降级链（检索走 LM Studio 的 bge 系 embedding）
