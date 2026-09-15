@@ -31,49 +31,9 @@ from mcp.types import (
 
 import tools.mcp_handlers as H
 
-
-# === T3 (2026-09-07): 内置 v2 兼容垫片（替代独立 v2 文件）
-# MCP SDK 1.29.0 不再提供 add_request_handler API，
-# trae work 写的新增 patch 又用 add_request_handler 风格，
-# 此处 monkey-patch 把旧 API 转译到新版装饰器 API。
-def _patched_add_request_handler(self, method_name, params_type, func):
-    if method_name == "tools/list":
-
-        async def new_func():
-            result = await func(None, None)
-            return result.tools if isinstance(result, ListToolsResult) else result
-
-        return self.list_tools()(new_func)
-    if method_name == "tools/call":
-
-        async def new_func(name, arguments):
-            old_params = CallToolRequestParams(name=name, arguments=arguments or {})
-            result = await func(None, old_params)
-            return result.content if isinstance(result, CallToolResult) else result
-
-        return self.call_tool()(new_func)
-    if method_name == "resources/list":
-
-        async def new_func():
-            result = await func(None, None)
-            return (
-                result.resources if isinstance(result, ListResourcesResult) else result
-            )
-
-        return self.list_resources()(new_func)
-    if method_name == "resources/read":
-
-        async def new_func(uri):
-            old_params = ReadResourceRequestParams(uri=uri)
-            result = await func(None, old_params)
-            return result.contents if isinstance(result, ReadResourceResult) else result
-
-        return self.read_resource()(new_func)
-    raise ValueError(f"unsupported method: {method_name}")
-
-
-Server.add_request_handler = _patched_add_request_handler
-# === end T3 patch ===
+# === T3 PATCH REMOVED (2026-09-15): mcp SDK 2.0.0 原生支持 add_request_handler
+# 旧 patch 假设新版 SDK 用装饰器风格（self.list_tools() 等），但 mcp 2.0.0 仍保留
+# add_request_handler(method, params_type, handler) 三参数签名，无需 monkey-patch。
 
 
 HANDLERS = {
