@@ -1259,6 +1259,28 @@ def run_patrol(
                 lambda: _step_freshness_check(root, engine_dir),
             )
         )
+        # A/4：平台层三项并入 6c 一起跑（MCP 块一致性 / 5 平台健康 / 未接入平台提示）
+        stage6c.steps.append(
+            _run_step(
+                "platform_sync",
+                "平台一致性",
+                lambda: _step_platform_sync_check(root, engine_dir),
+            )
+        )
+        stage6c.steps.append(
+            _run_step(
+                "platform_healthcheck",
+                "平台一致性",
+                lambda: _step_platform_healthcheck(root, engine_dir),
+            )
+        )
+        stage6c.steps.append(
+            _run_step(
+                "platform_unregistered",
+                "平台一致性",
+                lambda: _step_platform_unregistered(root, engine_dir),
+            )
+        )
         report.stages.append(stage6c)
 
     # ===== 计算总体退出码 =====
@@ -1280,6 +1302,110 @@ def run_patrol(
     report.suggestions = _generate_suggestions(report)
 
     return report
+
+
+# ============================================================================
+# 平台层步骤（A/4：内联到阶段 6c）
+# ============================================================================
+
+
+def _step_platform_sync_check(root: Path, engine_dir: Path) -> StepResult:
+    """平台 MCP 块一致性（platform_sync.py dry-run）。漂移 → exit 1（告警级，不阻断）。"""
+    script = engine_dir / "scripts" / "platform_sync.py"
+    if not script.exists():
+        return StepResult(
+            name="platform_sync",
+            stage="平台一致性",
+            status="skip",
+            output="platform_sync.py 缺失",
+        )
+    exit_code, stdout, stderr = _run_cmd(
+        [sys.executable, str(script), "--root", str(root)], cwd=engine_dir, timeout=120
+    )
+    lines = [
+        s.strip() for s in ((stdout or "") + (stderr or "")).splitlines() if s.strip()
+    ]
+    drift = [s for s in lines if ("需同步" in s or "❌" in s)]
+    if exit_code == 0:
+        return StepResult(
+            name="platform_sync",
+            stage="平台一致性",
+            status="pass",
+            exit_code=0,
+            output="✅ MCP 块与 platforms.yaml 一致",
+        )
+    return StepResult(
+        name="platform_sync",
+        stage="平台一致性",
+        status="fail",
+        exit_code=1,
+        output="⚠️ 检出漂移: " + " | ".join(drift or lines[-2:])[:300],
+    )
+
+
+def _step_platform_healthcheck(root: Path, engine_dir: Path) -> StepResult:
+    """5+ 平台统一健康检查（platform_healthcheck.py）。非绿 → exit 1。"""
+    script = engine_dir / "scripts" / "platform_healthcheck.py"
+    if not script.exists():
+        return StepResult(
+            name="platform_healthcheck",
+            stage="平台一致性",
+            status="skip",
+            output="platform_healthcheck.py 缺失",
+        )
+    exit_code, stdout, stderr = _run_cmd(
+        [sys.executable, str(script)], cwd=engine_dir, timeout=180
+    )
+    lines = [
+        s.strip() for s in ((stdout or "") + (stderr or "")).splitlines() if s.strip()
+    ]
+    bad = [s for s in lines if ("YELLOW" in s or "RED" in s)]
+    if exit_code == 0:
+        return StepResult(
+            name="platform_healthcheck",
+            stage="平台一致性",
+            status="pass",
+            exit_code=0,
+            output="✅ 平台健康检查全 GREEN",
+        )
+    return StepResult(
+        name="platform_healthcheck",
+        stage="平台一致性",
+        status="fail",
+        exit_code=1,
+        output="⚠️ 非绿平台: " + " | ".join(bad)[:300],
+    )
+
+
+def _step_platform_unregistered(root: Path, engine_dir: Path) -> StepResult:
+    """未接入平台提示（platform_unregistered.py）。纯信息级，恒为 pass。"""
+    script = engine_dir / "scripts" / "platform_unregistered.py"
+    if not script.exists():
+        return StepResult(
+            name="platform_unregistered",
+            stage="平台一致性",
+            status="skip",
+            output="platform_unregistered.py 缺失",
+        )
+    _exit_code, stdout, _stderr = _run_cmd(
+        [sys.executable, str(script), "--root", str(root)], cwd=engine_dir, timeout=120
+    )
+    cand = [s.strip() for s in (stdout or "").splitlines() if s.strip().startswith("•")]
+    if not cand:
+        return StepResult(
+            name="platform_unregistered",
+            stage="平台一致性",
+            status="pass",
+            exit_code=0,
+            output="✅ 无未接入平台候选",
+        )
+    return StepResult(
+        name="platform_unregistered",
+        stage="平台一致性",
+        status="pass",
+        exit_code=0,
+        output=f"ℹ️ {len(cand)} 个候选待接入: " + " | ".join(cand)[:300],
+    )
 
 
 # ============================================================================
