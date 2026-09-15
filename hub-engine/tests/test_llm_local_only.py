@@ -124,3 +124,53 @@ def test_gateway_kwargs_present_when_configured(monkeypatch, tmp_path):
     kwargs = engine._gateway_kwargs(Path(tmp_path))
     assert kwargs is not None
     assert kwargs[0] == "http://127.0.0.1:9999/v1/chat/completions"
+
+
+def test_do_fallback_answers_with_local_llm(monkeypatch, tmp_path):
+    """最后兜底应由**本地模型作答**（而非吐卡片原文）——验证 fallback_chat 段生效。"""
+    from types import SimpleNamespace
+
+    cfg = tmp_path / "cfg.yaml"
+    cfg.write_text(
+        "timeout: 30\n"
+        "fallback_chat:\n"
+        "  url: http://127.0.0.1:1234/v1/chat/completions\n"
+        "  model: fake-fb\n"
+        "  api_key: k\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("HUB_CONFIG_PATH", str(cfg))
+
+    class _H:
+        def is_available(self):
+            return True
+
+    monkeypatch.setattr(
+        engine,
+        "LLMHealthChecker",
+        type("HC", (), {"get_instance": staticmethod(lambda *a, **k: _H())}),
+    )
+    card = SimpleNamespace(
+        type="exp", status="active", path=SimpleNamespace(name="card.md"), body="卡正文"
+    )
+    monkeypatch.setattr(engine, "retrieve", lambda root, q: [card])
+
+    class FakeResp:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {"choices": [{"message": {"content": "本地作答内容"}}]}
+
+    monkeypatch.setattr("requests.post", lambda *a, **k: FakeResp())
+    out = engine._do_fallback("问题", tmp_path)
+    assert "已用本地模型兜底应答" in out
+    assert "本地作答内容" in out
+
+
+def test_shipped_config_has_local_fallback_chat(monkeypatch):
+    """配置契约：仓库配置必须带 fallback_chat，否则无远程兜底时只剩吐卡片原文。"""
+    monkeypatch.delenv("HUB_CONFIG_PATH", raising=False)
+    fb = (load_engine_config() or {}).get("fallback_chat") or {}
+    assert str(fb.get("url", "")).strip()
+    assert str(fb.get("model", "")).strip()
