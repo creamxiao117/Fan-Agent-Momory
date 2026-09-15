@@ -248,7 +248,7 @@ def _endpoint_base(url: str) -> str:
 
 
 def _local_endpoint_chain(cfg: dict) -> list[tuple[str, str, int]]:
-    """本地 LLM 端点链：① LM Studio（local_chat）② local_chat_fallbacks（SGLang 等）。
+    """本地 LLM 端点链：① LM Studio（local_chat）② local_chat_fallbacks（可选，当前为空）。
 
     返回 [(url, model, max_tokens)]；model 为空串 = 调用前动态解析 served model。
     """
@@ -344,7 +344,7 @@ def _endpoint_base(url: str) -> str:
 
 
 def _local_endpoint_chain(cfg: dict) -> list[tuple[str, str, int]]:
-    """本地 LLM 端点链：① LM Studio（local_chat）② local_chat_fallbacks（SGLang 等）。
+    """本地 LLM 端点链：① LM Studio（local_chat）② local_chat_fallbacks（可选，当前为空）。
 
     返回 [(url, model, max_tokens)]；model 为空串 = 调用前动态解析 served model。
     """
@@ -395,7 +395,7 @@ def _resolve_served_model(url: str, timeout: int) -> str:
 
 
 def _local_chain_fallback(prompt: str, hub_root: Path) -> str:
-    """本地模型降级链：LM Studio(1234) → SGLang(30000) → OmniRoute 网关（最后兜底）。
+    """本地模型降级链：LM Studio(1234) → local_chat_fallbacks（当前为空）→ OmniRoute 网关（最后兜底）。
 
     逐环尝试「健康 + 调用成功」；只有全链失败才落到 chat()（gateway_url = OmniRoute）。
     """
@@ -460,7 +460,7 @@ def _local_chat(prompt: str, hub_root: Path, model: str | None = None) -> str:
     health_checker = LLMHealthChecker.get_instance(llm_base)
 
     if not health_checker.is_available():
-        print("[llm_health] LM Studio 不可用，走本地降级链（SGLang → OmniRoute）")
+        print("[llm_health] 本地端点不可用，走降级链（次选端点 → OmniRoute 网关）")
         return _local_chain_fallback(prompt, hub_root)
 
     def _do_local_http() -> str:
@@ -532,7 +532,7 @@ def smart_chat(prompt: str, hub_root: str | Path) -> str:
     )
     health_checker = LLMHealthChecker.get_instance(llm_base)
 
-    # 本地可用性 = 主端点或降级链上任一本地端点健康（2026-09-11：LM Studio → SGLang）
+    # 本地可用性 = 主端点或降级链上任一本地端点健康（2026-09-11：LM Studio → 次选端点，当前为空）
     llm_available = health_checker.is_available() or any(
         LLMHealthChecker.get_instance(_endpoint_base(u)).is_available()
         for u, _m, _t in _local_endpoint_chain(cfg)[1:]

@@ -83,8 +83,13 @@ def read_diff_since(
     return out
 
 
+# 样板标题：这些 H1 是写作规范要求的固定小标题，不是内容摘要，
+# 直接返回会得到 4 字符垃圾描述（如「结论先行」）→ 必须继续找下一段实质内容。
+_BOILERPLATE_HEADINGS = {"结论先行", "一句话结论", "摘要", "概述", "结论", "背景"}
+
+
 def extract_summary(card_path: Path) -> str:
-    """从卡正文提取一句话描述（frontmatter 后首段非标题文本，去掉 markdown 标记）。"""
+    """从卡正文提取一句话描述（跳过样板标题，取首个实质标题或段落）。"""
     if not card_path.exists():
         return ""
     text = card_path.read_text(encoding="utf-8", errors="ignore")
@@ -98,10 +103,13 @@ def extract_summary(card_path: Path) -> str:
             continue
         if not s:
             continue
-        if s.startswith("# "):
-            return s[2:].strip()[:80]
-        if s.startswith("## "):
-            continue
+        if s.startswith("#"):
+            title = s.lstrip("#").strip()
+            if title in _BOILERPLATE_HEADINGS:
+                continue  # 样板标题 → 继续找实质内容
+            if s.startswith("# "):
+                return title[:80]
+            continue  # ## 级小标题跳过
         return re.sub(r"[*_`#\[\]]", "", s)[:80]
     return ""
 
