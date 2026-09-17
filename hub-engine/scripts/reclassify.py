@@ -251,8 +251,8 @@ ATOMS = [
         "ai-model-stack",
         ["user", "tech-stack"],
         "tech-stack",
-        "技术栈：熟悉 GPT/Claude/Grok/MiniMax/DeepSeek v4-flash",
-        r"""Familiar with AI models (GPT, Claude, Grok, MiniMax, DeepSeek v4-flash)（技术栈）。""",
+        "技术栈：熟悉 GPT/Claude/Grok/DeepSeek v4.1-flash",
+        r"""Familiar with AI models (GPT, Claude, Grok, DeepSeek v4.1-flash)（技术栈）。""",
     ),
     (
         "longterm",
