@@ -23,6 +23,48 @@ STALE_DAYS = 180
 # 不与孤儿/陈旧逻辑混算，保持各维度语义独立。
 NON_AUTHORITY_DIRS = ("experience", "notes", "retro")
 
+# 目录 → 该目录期望的 type（2026-09-18 加）。
+# 依据：type 的唯一功能用途是 **sync/confirm 路由**（sync.py 的 TYPE_DIR、
+# engine.py 的 confirm "按 card.type 路由入权威区"），而**目录**才是检索分区
+# （_ACTIVE_DIRS / INDEX / hub_search 都按目录）。二者不一致 ⇒ 卡会被同步/确认
+# 到错误的平台目录。该维度此前 lint 完全不查，只有 pre-commit hook 会报
+# ⇒ **不提交就发现不了**（2026-09-18 实测已积压 60 张）。
+DIR2TYPE = {
+    "rules": "rule",
+    "blueprints": "blueprint",
+    "methodology": "methodology",
+    "longterm": "longterm",
+    "projects": "project",
+    "experience": "exp",
+    "notes": "note",
+    "retro": "retro",
+}
+
+
+def find_type_dir_mismatch(root: Path) -> list[dict]:
+    """type ↔ 目录不一致（目录为准）。
+
+    返回 [{"dir","name","type","expected"}]。坏卡（解析失败）由 schema_drift 维度负责，
+    本维度只比对**可解析卡**的 type。
+    """
+    out = []
+    root = Path(root)
+    for sub, want in DIR2TYPE.items():
+        d = root / sub
+        if not d.is_dir():
+            continue
+        for p in sorted(d.glob("*.md")):
+            if p.name == "log.md" or p.name.startswith("lint-report-"):
+                continue
+            card = try_read_card(p)
+            if card is None:
+                continue
+            if card.type != want:
+                out.append(
+                    {"dir": sub, "name": p.name, "type": card.type, "expected": want}
+                )
+    return out
+
 
 def _all_cards(root: Path) -> list:
     """返回 (dir, Path, Card) 列表；跳过时间线/报告等非卡片文件"""
@@ -168,6 +210,7 @@ def lint(root: Path) -> dict:
         "stale": stale,
         "invalid": invalid,
         "schema_drift": find_schema_drift(root),
+        "type_dir_mismatch": find_type_dir_mismatch(root),
         "notes": f"共检查 {total} 张卡片",
     }
 
