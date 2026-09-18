@@ -51,6 +51,33 @@ def _git(repo: Path, *args: str) -> str:
         raise RuntimeError(f"git 命令失败: {' '.join(cmd)}\n{stderr or e}") from e
 
 
+def _snapshot_dirty(root: Path) -> set[str]:
+    """操作开始前的「他人现场」快照：当前已 dirty 的路径（含未跟踪），供 _commit 豁免。
+
+    V1.3 (2026-09-19): 修 §4 工作区守护缺陷 —— 原 _commit 无条件 `git add -A`，会把
+    操作期间**其它进程/平台**未提交的改动一并卷进本次 commit。实证：ingest 提交
+    f93742e 卷入 nightly.log / retro/log.md / cross-platform-sync-rule.md /
+    candidate-1.md 删除 共 4 项。现改为「只提交本次操作新产生的改动」。
+
+    残留边界（已知，远优于 add -A）：快照之后才被别人改脏的路径仍会被纳入。引擎侧写入
+    都在 _WriteLock 内（其它引擎操作无法并发），故窗口仅剩不持锁的外部编辑器。
+    """
+    # -uall: 未跟踪文件逐条列出（默认会把整个未跟踪目录折叠成 "dir/"，
+    #        那样"本次新产出"落在全新目录里时会算不出差异 → 静默漏提交）
+    out = _git(root, "-c", "core.quotepath=false", "status", "--porcelain", "-uall")
+    dirty: set[str] = set()
+    for line in out.splitlines():
+        if len(line) < 4:
+            continue
+        path = line[3:].strip()
+        if " -> " in path:  # rename 记录形如 "old -> new"
+            old, new = path.split(" -> ", 1)
+            dirty.update({old.strip(), new.strip()})
+        else:
+            dirty.add(path)
+    return dirty
+
+
 def _append_log(root: Path, op: str, title: str) -> None:
     """retro/log.md append-only 时间线：## [YYYY-MM-DD] <op> | <title>"""
     log = root / "retro" / "log.md"
@@ -95,8 +122,12 @@ def _find_duplicate(root: Path, card: Card, threshold: float = 0.7) -> Card | No
     return None
 
 
-def _commit(root: Path, message: str) -> None:
-    """提交变更：无变更可提交时直接跳过；真实 Git 失败透传 stderr
+def _commit(root: Path, message: str, protect: set[str] | None = None) -> None:
+    """提交变更：只提交本次操作新产生的改动；无变更时跳过；Git 失败透传 stderr
+
+    V1.3 (2026-09-19): 新增 protect（_snapshot_dirty 产物）。
+      protect 有值 → 只 `git add` 本次新变化，绝不卷入他人未提交改动
+      protect=None → 兼容旧调用，退回 add -A 并打印告警
 
     V1.1 (2026-09-08): T10 Phase 2 —— commit_ledger 双平台协调。
     每次 commit 前在 .sync/state/commit_ledger.jsonl 写一行：
@@ -108,8 +139,18 @@ def _commit(root: Path, message: str) -> None:
     """
     if not _git(root, "status", "--porcelain").strip():
         return
+    if protect is None:
+        print(
+            "[sync] 警告: _commit 未给 protect 快照, 退回 git add -A（可能卷入他人改动）"
+        )
+        add_args = ["add", "-A"]
+    else:
+        mine = sorted(_snapshot_dirty(root) - protect)
+        if not mine:
+            return
+        add_args = ["add", "--", *mine]
     parent_sha = _git(root, "rev-parse", "HEAD").strip()
-    _git(root, "add", "-A")
+    _git(root, *add_args)
     _git(root, *GIT_ID, "commit", "-m", message)
     new_sha = _git(root, "rev-parse", "HEAD").strip()
     _record_commit(root, parent_sha, new_sha, message)
@@ -301,6 +342,8 @@ def ingest(root: Path, platform: str, chat_fn=None, strict_lint: bool = False) -
     if strict_lint and _lint["errors"]:
         stat["status"] = "lint_blocked"
         return stat
+    # §4 工作区守护（2026-09-19）：先快照"他人现场"，_commit 只 add 本次新变化
+    protect = _snapshot_dirty(root)
     try:
         with _WriteLock(root):
             for p in sorted(drafts.glob("*.md")):
@@ -510,7 +553,7 @@ def ingest(root: Path, platform: str, chat_fn=None, strict_lint: bool = False) -
                             },
                         )
                 p.unlink()
-            _commit(root, f"sync: ingest {platform} draft → hub")
+            _commit(root, f"sync: ingest {platform} draft → hub", protect=protect)
     except RuntimeError as e:
         stat["status"] = str(e)
     return stat
@@ -525,6 +568,7 @@ def confirm_rule(root: Path, name: str) -> Path:
     src = root / ".sync" / "pending" / name
     if not src.exists():
         raise FileNotFoundError(f"待确认文件不存在: {src}")
+    protect = _snapshot_dirty(root)  # §4 工作区守护：只提交本次确认产生的改动
     with _WriteLock(root):
         card = read_card(src)
         card.status = "active"
@@ -536,5 +580,5 @@ def confirm_rule(root: Path, name: str) -> Path:
         dst.write_text(write_card(card), encoding="utf-8")
         src.unlink()
         _append_log(root, "confirm", f"确认卡片：{name} → {dst.parent.name}/")
-        _commit(root, f"sync: confirm {card.type} {name}")
+        _commit(root, f"sync: confirm {card.type} {name}", protect=protect)
     return dst
