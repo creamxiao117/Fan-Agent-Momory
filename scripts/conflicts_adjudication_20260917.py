@@ -121,6 +121,18 @@ def main() -> None:
         )
 
     lines = [
+        "---",
+        "type: retro",
+        "tags:",
+        "- conflicts",
+        "- adjudication",
+        "- hub-maintenance",
+        "- dry-run",
+        "updated: '2026-09-17'",
+        "status: reference",
+        "source: scripts/conflicts_adjudication_20260917.py（Hermes cron dry-run，只读取证）",
+        "---",
+        "",
         "# conflicts 区未决卡裁决清单（dry-run，只读取证）",
         "",
         "- 生成：2026-09-17 · Hermes cron",
