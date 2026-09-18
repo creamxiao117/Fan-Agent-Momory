@@ -47,6 +47,7 @@ def test_lint_returns_full_shape(tmp_path):
         "schema_drift",
         "notes",
         "hooks",
+        "type_dir_mismatch",  # 2026-09-19 补：93590bc 新增 type↔目录一致性维度
     }
     assert isinstance(report["invalid"], int)
 
