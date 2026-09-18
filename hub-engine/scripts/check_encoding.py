@@ -69,8 +69,10 @@ MOJIBAKE_MARKERS = (
     "鐢熸",
 )
 
-# 乱码串豁免：这些文件**按定义**要引用乱码样例（规范文档 / 本脚本），不当 FAIL
+# 乱码串豁免：**按定义**要引用乱码样例的文件，不当 FAIL
+#   ① 规范文档 / 本脚本自身；② 规范技能目录下的任何文件（SKILL.md 等）
 MARKER_EXEMPT_NAMES = {"chinese-text-encoding-discipline.md", "check_encoding.py"}
+MARKER_EXEMPT_DIRS = {"chinese-text-encoding-discipline"}
 
 TEXT_EXTS = {
     ".py",
@@ -132,8 +134,10 @@ def check_file(path: Path) -> None:
     elif expect is False and has_bom:
         _record("WARN", str(path), f"{ext} 含 UTF-8 BOM（建议去除）")
 
-    # 3) 乱码串（规范文档与本脚本自身引用乱码样例，豁免）
-    if path.name not in MARKER_EXEMPT_NAMES:
+    # 3) 乱码串（规范文档 / 本脚本 / 规范技能目录 按定义引用乱码样例，豁免）
+    if path.name not in MARKER_EXEMPT_NAMES and not (
+        MARKER_EXEMPT_DIRS & {p.name for p in path.parents}
+    ):
         hits = sorted({m for m in MOJIBAKE_MARKERS if m in text})
         if hits:
             _record("FAIL", str(path), f"疑似 UTF-8→GBK 误解码残留：{', '.join(hits)}")
