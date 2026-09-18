@@ -386,7 +386,11 @@ A 的**剩余缺口 2 项（均未动）**：
 
 ## 本轮 R17（ABCD 全量执行 · 2026-09-18）
 
-### A. conflicts 区裁决 —— **17 组 → 4 组**
+### A. conflicts 区裁决 —— **17 组 → 4 组 → ✅ 0 组**（2026-09-18 收尾清零）
+- **追加裁决 2 组**（用户裁定「都按 A」）：`agent-trigger-symbols-7state` → 入 `methodology/`（并**接上** exp 卡长期悬空的引用）；`T15-improvement-backlog` → 入 `projects/`
+- 另 2 组由我用实证自裁：`T21`（6/6 条目已在 `platform-backlog-t19-t21`，陈旧重复）· `embassy-rs`（与权威卡 `canonical` 相同 ⇒ 同一张卡，`anti_trigger` 3 条已并入）
+- **意外收获**：入区后修好了一处**长期悬空链接**（exp 卡引用一张只存在于 conflicts 的卡）
+- ⚠️ 门禁暴露**既有**问题：**20 张卡 `type` 与目录不一致**（lint 不查 type↔目录，只有 hook 查）→ 已登记至中枢待办卡 §5
 - **C（根因）先修**：17 组的 `pred.json` 时间戳全在 **09-06~09-16**，即 **09-15 修复之前**；09-16 23:45 的 3 组 deepseek 已拿到真判决（merge/0.9）⇒ **修复早已生效，只是旧产物未被重跑**。
 - **重判**：新增 `scripts/readjudicate_conflicts.py`，用当前本地链（`smart_chat`→LM Studio 1234）重跑 12 组 → 单组实测 0.3~4.3s（embassy → merge/0.95）。
 - **执行**：新增 `scripts/resolve_conflicts_20260918.py`，按可验证规则（R1/R2/R3）**13 组移入 `.sync/conflicts/_resolved_20260918/`**（含 `DECISION.md` 逐组依据）；**4 组保留未决**。
