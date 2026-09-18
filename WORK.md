@@ -452,7 +452,10 @@ A 的**剩余缺口 2 项（均未动）**：
 
 ## 阻塞项
 
+- 🔴 **P0：飞轮日报微信投递失败**（cron `12c532815d47`，`last_status=delivery_failed`）—— iLink `sendmessage rate limited: ret=-2 ... prepare failed`。日报**生成成功但送不到你手上**。归属：**你**（查 iLink 限流或改投递目标）→ 详见 `projects/consolidation-backlog-20260918` §P0-1
 - 无（2026-08-18：源目录 `D:\AIwork\AgentMemoryHub` 已核销清理，原沙箱阻塞解除）。
+
+> 📋 **待办总表**：17 项未完成已按 **P0-P3** 结构化（含归属/前置/预估），单一事实源＝中枢卡 `projects/consolidation-backlog-20260918`（跨平台可见）；本文件 R16/R17 段保留项目级细节。
 
 ## 验证方法
 
