@@ -253,6 +253,45 @@ def _render_section(
     return adapter.render([Entry(title=title, body=body)])
 
 
+def _dominant_newline(target: Path) -> str:
+    """平台文件的主导换行风格（原样保留，避免 push 把整个文件换行重写）。
+
+    V1.2 (2026-09-19)：原 `target.write_text(new_text)` 用默认 newline=None，
+    Windows 下把内存里的 LF 全部翻译成 CRLF ⇒ 单卡 push 让**整文件**换行改写
+    （实证 workbuddy：LF 1119 → CRLF 1236，内容纯追加却报全文变化）。
+    """
+    raw = target.read_bytes()
+    crlf = raw.count(b"\r\n")
+    return "\r\n" if crlf > (raw.count(b"\n") - crlf) else "\n"
+
+
+def _stale_span(text: str, title: str, pushed_prev: set[str]) -> str | None:
+    """在原文中定位「中枢此前推过的同名段」的完整原文（含卡片内部所有子标题）。
+
+    V1.2 (2026-09-19)：修"重复累积"根因——旧逻辑对同名不同正文一律追加
+    `> 中枢权威版（未覆盖本地旧版）`，旧版永不删除 ⇒ 每次改卡重推都多一份副本
+    （实证 workbuddy 同一张卡出现 2 次）。
+    为什么不用 adapter.parse 取同名 entry：解析器按 `## ` 切分，卡片内部的子标题
+    （## 一句话结论 / ## 关联 …）会被切成独立 entry，按标题只能取到第一小段
+    （实测只取到 31 字符）→ 指纹必然对不上。
+    安全性由指纹闸保证：只有整段指纹 ∈ state['pushed']（= 中枢自己推的版本，
+    不是平台本地编辑）才认；边界猜错 → 指纹不符 → 返回 None，退回追加权威版。
+    """
+    lines = text.splitlines(keepends=True)
+    pat_title = re.compile(r"^## " + re.escape(title) + r"\s*$")
+    pat_next = re.compile(r"^## [a-z0-9][a-z0-9-]*\s*$")
+    for i, ln in enumerate(lines):
+        if not pat_title.match(ln.strip()):
+            continue
+        j = i + 1
+        while j < len(lines) and not pat_next.match(lines[j].strip()):
+            j += 1
+        span = "".join(lines[i:j]).strip()
+        if span and fingerprint(span) in pushed_prev:
+            return span
+    return None
+
+
 def _insert_after_instruction(text: str, extra: str) -> str:
     """在注入指令块之后插入 extra；找不到指令块则追加到文末（不触碰平台原有段落）"""
     lines = text.splitlines(keepends=True)
@@ -287,7 +326,7 @@ def push(
 ) -> dict:
     """中枢权威卡片 → 平台记忆文件（默认关闭）；外部改动检测到即中止，绝不覆盖本地旧版"""
     root = Path(root)
-    stat = {"added": 0, "updated": 0, "skipped": 0, "status": "ok"}
+    stat = {"added": 0, "updated": 0, "replaced": 0, "skipped": 0, "status": "ok"}
     target = _target_path(root, platform)
     if not target.is_file():
         stat["status"] = f"平台记忆文件不存在: {target}"
@@ -311,6 +350,8 @@ def push(
     entries = adapter.parse(text)
     existing_bodies = {e.body.strip() for e in entries if e.body.strip()}
     existing_titles = {e.title for e in entries if e.title}
+    pushed_prev = set(state.get("pushed") or [])
+    replacements: list[tuple[str, str]] = []
 
     cards = _authority_cards(root)
     if only_rules:
@@ -337,19 +378,31 @@ def push(
             stat["skipped"] += 1  # 幂等：已推过或平台已有同内容
             continue
         if title in existing_titles:
-            stat["updated"] += 1  # 同标题不同正文 → 追加"中枢权威版"，不覆盖
-            blocks.append(_render_section(adapter, title, body, authority=True))
+            stale = _stale_span(text, title, pushed_prev)
+            if stale:
+                replacements.append((stale, block))
+                stat["replaced"] = stat.get("replaced", 0) + 1
+            else:
+                stat["updated"] += 1
+                blocks.append(_render_section(adapter, title, body, authority=True))
         else:
             stat["added"] += 1
             blocks.append(block)
         pushed_fps.add(fp)
 
-    if dry_run or not blocks:
+    if dry_run or (not blocks and not replacements):
         return stat
     try:
         with _WriteLock(root):
-            new_text = _insert_after_instruction(text, "\n\n".join(blocks))
-            target.write_text(new_text, encoding="utf-8")
+            new_text = text
+            for old_block, new_block in replacements:
+                new_text = new_text.replace(old_block, new_block, 1)
+            if blocks:
+                new_text = _insert_after_instruction(new_text, "\n\n".join(blocks))
+            with target.open(
+                "w", encoding="utf-8", newline=_dominant_newline(target)
+            ) as f:
+                f.write(new_text)
             state["pushed"] = sorted(pushed_fps)
             state["push"] = {
                 "hash": fingerprint(new_text),

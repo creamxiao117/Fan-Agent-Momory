@@ -1,3 +1,6 @@
+CRLF = chr(13) + chr(10)
+
+
 """platform_bridge 单测：Adapter 解析/渲染往返、Pull 去重/幂等/dry-run、Push 安全/外部改动、CLI 接线"""
 
 from pathlib import Path
@@ -300,3 +303,107 @@ def test_cli_sync_unknown_platform_fails(tmp_path, capsys):
     out = capsys.readouterr().out
     assert rc != 0
     assert "未知平台" in out
+
+
+# ---------- 换行风格保持（2026-09-19：push 不再重写整文件换行） ----------
+
+
+LF = chr(10)
+CRLF = chr(13) + chr(10)
+
+
+def test_push_preserves_lf_newlines(tmp_path):
+    """LF 风格的平台文件，push 后必须仍为纯 LF（不得被翻译成 CRLF）。"""
+    root = _root_with_platform(tmp_path)
+    target = tmp_path / "platforms" / "memory.md"
+    target.write_bytes(("## 平台小节" + LF + "原有内容" + LF).encode())  # 强制 LF 落盘
+    _hub_card(root, "新规则", "正文")
+    assert push(root, "testplat")["added"] == 1
+    raw = target.read_bytes()
+    assert raw.count(CRLF.encode()) == 0, "push 把 LF 文件改写成了 CRLF"
+    assert "新规则" in raw.decode("utf-8")  # 卡片确实写入
+    assert "原有内容" in raw.decode("utf-8")  # 平台原内容保留
+
+
+def test_push_preserves_crlf_newlines(tmp_path):
+    """CRLF 风格的平台文件，push 后必须仍为 CRLF，且不产生混编。"""
+    root = _root_with_platform(tmp_path)
+    target = tmp_path / "platforms" / "memory.md"
+    target.write_bytes(("## 平台小节" + CRLF + "原有内容" + CRLF).encode())
+    _hub_card(root, "新规则", "正文")
+    assert push(root, "testplat")["added"] == 1
+    raw = target.read_bytes()
+    assert raw.count(CRLF.encode()) >= 3
+    assert raw.count(LF.encode()) - raw.count(CRLF.encode()) == 0, (
+        "出现裸 LF（换行混编）"
+    )
+
+
+def test_repush_updates_card_in_place_no_duplicate(tmp_path):
+    """中枢改卡后重推：同名段若是中枢此前推过的版本 → 原地替换，不再追加副本。"""
+    root = _root_with_platform(tmp_path)
+    _hub_card(root, "新规则", "第一版正文")
+    assert push(root, "testplat")["added"] == 1
+    _hub_card(root, "新规则", "第二版正文")  # 中枢侧改卡（同标题、正文变化）
+    stat = push(root, "testplat")
+    assert stat["replaced"] == 1
+    assert stat["updated"] == 0
+    text = (tmp_path / "platforms" / "memory.md").read_text(encoding="utf-8")
+    assert "第二版正文" in text
+    assert "第一版正文" not in text  # 旧版被替换，不留残副本
+    assert text.count("## 新规则") == 1  # 无重复段
+    assert "中枢权威版" not in text  # 未走追加路径
+
+
+def test_repush_preserves_local_edit_when_not_hub_pushed(tmp_path):
+    """平台本地自己写的同名段（非中枢推的）→ 仍追加权威版，绝不覆盖本地编辑。"""
+    root = _root_with_platform(
+        tmp_path, content="## 新规则" + LF + "平台本地自己的内容" + LF
+    )
+    _hub_card(root, "新规则", "中枢正文")
+    stat = push(root, "testplat")
+    assert stat["added"] == 0
+    assert stat["updated"] == 1
+    assert stat["replaced"] == 0
+    text = (tmp_path / "platforms" / "memory.md").read_text(encoding="utf-8")
+    assert "平台本地自己的内容" in text  # 本地编辑保留
+    assert "中枢权威版" in text
+    assert "中枢正文" in text
+
+
+def test_repush_handles_card_with_internal_headings(tmp_path):
+    """卡片自带 ## 子标题时也必须整段替换（锁定 parse 按 ## 切分导致的取段过短缺陷）。"""
+    root = _root_with_platform(tmp_path)
+    body1 = (
+        "## 一句话结论"
+        + LF
+        + LF
+        + "第一版正文"
+        + LF
+        + LF
+        + "## 关联"
+        + LF
+        + LF
+        + "- 旧关联"
+    )
+    body2 = (
+        "## 一句话结论"
+        + LF
+        + LF
+        + "第二版正文"
+        + LF
+        + LF
+        + "## 关联"
+        + LF
+        + LF
+        + "- 新关联"
+    )
+    _hub_card(root, "新规则", body1)
+    assert push(root, "testplat")["added"] == 1
+    _hub_card(root, "新规则", body2)
+    stat = push(root, "testplat")
+    assert stat["replaced"] == 1, "含内部子标题的卡片未被整段替换"
+    text = (tmp_path / "platforms" / "memory.md").read_text(encoding="utf-8")
+    assert "第二版正文" in text
+    assert "第一版正文" not in text
+    assert "## 新规则" in text and text.count("## 新规则") == 1
