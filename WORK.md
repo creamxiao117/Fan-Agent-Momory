@@ -354,6 +354,36 @@ delta 逐位一致（▲29.0 / ▲9.2 / ▲43.0 / ▼9.0）。
 
 **待用户决策**：是否接受「用时腾显存」模式（方案 2）？
 
+## 本轮 R16（存量整合 ABC · 2026-09-18）
+
+**A. CadGuiTest 并入收尾** —— 核查确认**并入已由早前会话完成**（真合并 `--allow-unrelated-histories` 零冲突，merge commit `2019e98` 已推 origin；含 263 行合并记录 `b2bc39b`）。`vision/main` 已是 `master` 祖先；`AutoCAD_GUI_Text` 已无独有提交（内容全被吸收）。
+A 的**剩余缺口 2 项（均未动）**：
+1. `master` 领先 `origin/master` **1 个提交**（`bde2745` 段一真机终判 R5~R8）→ 需推送（涉公网上传，待授权）
+2. 冗余克隆 `AutoCAD_GUI_Text`（5.2M，已被完全吸收）→ 可退役；注意 CadGuiTest 已注册 `vision` remote 指向它，退役后应 `git remote remove vision`
+
+**B. 旧代归档** —— 建 `D:/AIwork/_archive/`（**只移不删**，`.git` 完整保留，附 `MANIFEST.md` 台账）：
+- 归档 `20260810-LingGan`（2.3M/16 文件；**零引用**，安全）
+- 归档 `20260728-Bee-Agent`（1.5M/84 文件；被 `BeeAgent-v2`(R21) 取代；仅 md-GuanLi 扫描台账有历史引用）
+- ⚠️ **纠错**：`20260811-Fan-LingGan` **不可归档** —— 它是 `Fan-LingGanPro-V1` 的**活数据源**（Pro README 明写「在现有灵感库 `D:\AIwork\20260811-Fan-LingGan`（R10）上加信号层」）+ `pipeline/config.json` 等 6 处硬引用。
+
+**C. 中枢 projects/ 卡聚类** —— **28 → 19 张**（14 张并为 5 张；原件入 `archive/projects/` 并标 `status: archived` + `superseded_by`）：
+
+| 合并卡 | 压缩 | 原卡 |
+|:--|:--|:--|
+| `cad2020-tu-fen-pipeline` | 4→1 | kplot / pdf-merge / tachart / upload |
+| `omniroute-local-deployment` | 3→1 | gateway / container-networking / local-config |
+| `hermes-desktop-facts` | 3→1 | context-usage / default-project-dir / fan-debug-v1 |
+| `gateway-platforms` | 2→1 | weixin / yuanbao |
+| `memory-hub-facts-and-injection` | 2→1 | facts / inject-targets |
+
+- ⚠️ **纠错**：`cad-plugin-management-platform` **不并入**（主题=Cad 插件管理平台，与拆图无关）
+- ⚠️ **纠错**：3 张大卡（`t1-plan-three-blueprints` 10.6KB / `T21` 9.6KB / `T19` 1.7KB）**暂不合并**（合 22KB 会造巨型卡，待单独评估）
+- INDEX.md 同步；顺带修一处 INDEX 缺陷（`trae-work-ruff-format-batch-bug` 漏登记于 rules 段、错落在目录图例）→ rules 段 29→**30** 条，与磁盘 30 张对齐
+- **验证**：lint 0 孤儿/0 幽灵/0 陈旧/0 无效；build-vectors **417 卡**重建；`retrieve "CAD2020 拆图 PDF 总图 15B 空壳"` **命中合并卡排第 1**
+
+**提交**：中枢 `8f8ce4f`（聚类合并+INDEX）、`6dcdd16`（INDEX 修正）
+**遗留**：`retro/conflicts-adjudication-20260917.md` 仍触发 schema_drift（他方产物，未动）
+
 ## 阻塞项
 
 - 无（2026-08-18：源目录 `D:\AIwork\AgentMemoryHub` 已核销清理，原沙箱阻塞解除）。
