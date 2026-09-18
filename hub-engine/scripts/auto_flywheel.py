@@ -33,10 +33,16 @@ def write_text_utf8(path: Path, text: str) -> None:
 def scan_drafts(root: Path) -> dict[str, list[Path]]:
     """扫描 .sync/drafts/<platform>_draft/ 下的 .md 草稿，按平台分组。
 
-    扫描范围（2026-09-05 扩覆盖 candidates/）：
-    - 根目录 *.md（与 ingest 对齐）
-    - candidates/*.md（审核暂存区，ingest 自动提升或pending，取决于 status 字段）
+    扫描范围（2026-09-05 扩覆盖 candidates/；2026-09-18 补正文档）：
+    - 根目录 *.md（**唯一会被 ingest 提升的位置**，与 sync.py ingest 对齐）
+    - candidates/*.md（审核暂存区：**只统计、不提升**。sync.py 的 ingest 只扫
+      草稿根目录 `drafts.glob("*.md")`，不扫子目录 ⇒ 这些卡会一直留在原地，
+      需人工审核后移入根目录才会被提升。原文档写"ingest 自动提升"与代码不符。）
     - retro/ 子目录 = 复盘归档区，ingest 提升时自动追加，**不作为提升源**。
+
+    ⚠️ 不要改成递归 glob（rglob）：`mavis_draft/topics_demo/` 下是
+    `mavis_hub_bridge mirror` 写的**中枢→mavis 出向镜像**，一旦被当草稿扫到
+    就会「中枢导出→又被导回中枢」形成自噬闭环。
 
     平台判定规则：
     - 若草稿在 .sync/drafts/<platform>_draft/ 下 → 该平台
@@ -138,6 +144,21 @@ def run(args: argparse.Namespace) -> int:
 
     if total_drafts == 0:
         print("无待处理草稿")
+        # 2026-09-18 修：空闲也写日志心跳。
+        # 旧行为只 print 后 return、不写日志 ⇒ 日志停更 ⇒ 采集器把「空闲」读成「停摆」（健康度 0.0）。
+        append_log(
+            root,
+            {
+                "timestamp": datetime.now().astimezone().isoformat(timespec="seconds"),
+                "date": today_iso(),
+                "total_drafts": 0,
+                "platforms": {},
+                "ingest_results": {},
+                "vector_stats": {},
+                "summary": {"promoted": 0, "pending": 0, "duplicate": 0, "invalid": 0},
+                "note": "空闲：无待处理草稿（心跳）",
+            },
+        )
         # 事件触发模式下，输出信号供调用方判断
         if getattr(args, "event_mode", False):
             print("EVENT:NO_DRAFTS")
@@ -154,7 +175,13 @@ def run(args: argparse.Namespace) -> int:
 
     print(f"扫描到 {total_drafts} 张草稿，分布于 {len(platform_drafts)} 个平台：")
     for pf, files in platform_drafts.items():
-        print(f"  - {pf}: {len(files)} 张")
+        n_cand = sum(1 for f in files if "candidates" in f.parts)
+        extra = (
+            f"（其中 {n_cand} 张在 candidates/ 审核暂存区，**不会自动提升**）"
+            if n_cand
+            else ""
+        )
+        print(f"  - {pf}: {len(files)} 张{extra}")
 
     # 路由表同步检查（可选，dry-run 时也执行）
     if getattr(args, "router_sync", False) and getattr(args, "skillhub_root", ""):
