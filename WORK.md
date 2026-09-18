@@ -384,6 +384,62 @@ A 的**剩余缺口 2 项（均未动）**：
 **提交**：中枢 `8f8ce4f`（聚类合并+INDEX）、`6dcdd16`（INDEX 修正）
 **遗留**：`retro/conflicts-adjudication-20260917.md` 仍触发 schema_drift（他方产物，未动）
 
+## 本轮 R17（ABCD 全量执行 · 2026-09-18）
+
+### A. conflicts 区裁决 —— **17 组 → 4 组**
+- **C（根因）先修**：17 组的 `pred.json` 时间戳全在 **09-06~09-16**，即 **09-15 修复之前**；09-16 23:45 的 3 组 deepseek 已拿到真判决（merge/0.9）⇒ **修复早已生效，只是旧产物未被重跑**。
+- **重判**：新增 `scripts/readjudicate_conflicts.py`，用当前本地链（`smart_chat`→LM Studio 1234）重跑 12 组 → 单组实测 0.3~4.3s（embassy → merge/0.95）。
+- **执行**：新增 `scripts/resolve_conflicts_20260918.py`，按可验证规则（R1/R2/R3）**13 组移入 `.sync/conflicts/_resolved_20260918/`**（含 `DECISION.md` 逐组依据）；**4 组保留未决**。
+
+### B. 3 张大卡合并 —— **3 → 2**
+- `T19` + `T21` → **`projects/platform-backlog-t19-t21.md`**（同为「时间窗分桶的后续优化待办」，合流为一张总表：A 短期 / B 一月 / C 长期 / 永远不动 / 已完成）。
+- **不并入**：`t1-plan-three-blueprints`（264 行**未执行**的执行计划，门禁清单全未勾）→ 独立保留，仅加互链。
+- 原件入 `archive/projects/` 标 `superseded_by`；INDEX 同步。
+
+### C. 网关降级根因 —— **确认已修，无需改代码**
+- 根因＝**旧产物未重跑**，非代码缺陷；`config.yaml` 的 `batch_model: local` + `escalation.min_confidence: 0` 已生效。
+- 遗留：1.5b 小模型**主题漂移** 3 例（见待办 1.1）。
+
+### D. A 级剩余 2 项 —— **经核验均「不是重复」，无需合并**
+- `BuildNewTaskOnWB`(项目) vs `BuildNewTask`(**技能包** `name: build-new-task`) → 是「源项目 + 提炼技能」关系，**互补非重复**。
+- `Fan-ComputerUse` 本地 vs GitHub：**两边内容不同**（本地有 `.workbuddy/memory`、`path_b_artifacts` 等；GitHub 有 `cua_src/`、`browser_run.py`、`briefs/` 等）→ 是不同工作副本，**不可归档也不可强合**。
+
+---
+
+## 📋 遗留待办（2026-09-18 登记 · 未完成事项）
+
+### 1. conflicts 区剩余 4 组（**需人工终审**）
+| # | 冲突卡 | 保留原因 |
+|--:|:--|:--|
+| 1.1 | `hermes_T21-5platform-后续优化-待办` | **判决漂移**：target 指向 `hub-engine-push-no-card-scope-filter`（与 5 平台待办无关） |
+| 1.2 | `trae_embassy-rs-embedded-async-blueprint` | **判决漂移**：target 指向 `heapless-...`（应为 `embassy-rs-async-embedded-architecture`） |
+| 1.3 | `deepseek_agent-trigger-symbols-7state` | **低置信 + 无承接物**：权威区无同主题卡，丢弃即丢内容 |
+| 1.4 | `hermes_T15-improvement-backlog` | **低置信 + 无承接物**：backlog 卡无对应权威卡 |
+
+> 1.1/1.2 的漂移根因＝本地 1.5b 模型在「5 候选」场景主题漂移 → 可考虑**候选数上限调低**或**换更大模型**。
+
+### 2. blueprints/ 同主题多份（最隐蔽的一类，未处理）
+| 主题 | 份数 | 成员 |
+|:--|:--|:--|
+| `embassy`（Rust 嵌入式 async） | 3 | `embassy-rs-async-embedded-architecture` + 2 张 trae 冲突卡 |
+| `wasm` 运行时 | 2~3 | `wasmtime-wasm-runtime-multi-backend` + `wasm3`(已裁决) + `wasmer`(已裁决) |
+| `CadAddinManager` | 3 | `cadaddinmanager-hot-reload-architecture` + `-blueprint` + trae 冲突卡(已裁决) |
+| `duckdb` | 2 | `duckdb-analytical-db-architecture` + `duckdb-olap-inprocess-sql-architecture` |
+
+### 3. A 级剩余 / 新发现
+- `20260805-BuildNewTaskOnWB` ↔ `BuildNewTask`：**确认互补**（项目 + 技能包），但 **`build-new-task` 技能未安装**到 `%LOCALAPPDATA%/hermes/skills`（属未发布技能，待决定是否入库）
+- `20260805-Fan-ComputerUse`：本地与 GitHub **内容不一致**（各有所长），待决定「以哪边为主 / 是否补推」
+- `20260810-APIKEY`、`20260812-周期行业研究`、`20260808-KoreaStudy` 等**未纳入整合评估**
+
+### 4. B 级（上轮选项 D，未执行）
+- `Fan-*` 生态 7 仓（SkillHub / PluginHub / VideoHub / SpeechToText / CadGuiTest / ComputerUse / Agent-Memory）**统一 monorepo 可行性评估**
+- ⚠️ 前置：`Fan-SkillHub` 有 **139 个未提交改动**（§4 工作区守护红旗，动前须先 commit/stash）
+
+### 5. 更早遗留
+- **VLM 视觉评审**：显存决策未定（RTX 4070 Ti，LM Studio 占 10.4GB，free 1.6GB）
+- `projects/t1-plan-three-blueprints` 是否并入待办总表（**待你定**，我建议独立）
+- 中枢 `_resolved_20260918` 的 13 组**未做内容级 merge**（按既有 `_resolved_*` 惯例＝只归档）；若需把冲突卡独有内容真正并入权威卡，需另开工单
+
 ## 阻塞项
 
 - 无（2026-08-18：源目录 `D:\AIwork\AgentMemoryHub` 已核销清理，原沙箱阻塞解除）。
