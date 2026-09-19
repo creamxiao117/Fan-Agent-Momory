@@ -16,9 +16,6 @@ from common.config import HubConfig
 from common.frontmatter import Card, parse_card, today_iso, write_card
 from sync import _authority_cards, _find_duplicate, _WriteLock, append_log
 
-# hermes 记忆为 § 分隔纯文本条目；其余平台为 ## Markdown 分段
-_SECT_PLATFORMS = {"hermes"}
-
 # 注入指令块标题标记（与 tools/inject.py 保持一致）；找不到时 Push 退化为文末追加
 _INSTRUCTION_KEY = "统一记忆中枢"
 
@@ -108,13 +105,43 @@ class SectSeparatedAdapter(Adapter):
         return "\n§\n".join(bodies)
 
 
+# 平台 → 适配器类 注册表（**适配器覆盖度的唯一事实来源**）。
+#
+# 谁改这里：新增平台时，同时改 hub.config.yaml 的 platforms 段 + 本表一行。
+# 谁读这里：scripts/router_sync.py 的覆盖度检查必须 import SUPPORTED_PLATFORMS，
+#           禁止自持硬编码清单（2026-09-19 回归教训：router_sync 自带
+#           {"hermes","trae","code","workbuddy"} 死清单，而 mavis/deepseek 早已在
+#           hub.config.yaml 登记、记忆文件也早已由中枢同步维护，检查却持续报
+#           "未实现适配器" → 纯假告警，白白拉低巡检退出码）。
+# 未登记的已配置平台：adapter_for() 走 _DEFAULT_ADAPTER 兜底（不炸历史测试），
+#           但 router_sync 会给出 warn 提示，提醒补登记。
+ADAPTER_REGISTRY: dict[str, type[Adapter]] = {
+    "hermes": SectSeparatedAdapter,  # § 分隔无标题条目
+    "trae": MdSectionAdapter,  # ## 分段
+    "code": MdSectionAdapter,
+    "workbuddy": MdSectionAdapter,
+    "mavis": MdSectionAdapter,  # MiniMax Code（2026-09-19 显式登记）
+    "deepseek": MdSectionAdapter,  # DeepSeek Harness / DSH（2026-09-19 显式登记）
+}
+
+# 已显式登记适配器的平台集合（供 router_sync 等消费方读取）
+SUPPORTED_PLATFORMS: frozenset[str] = frozenset(ADAPTER_REGISTRY)
+
+# 兜底适配器：已配置但未显式登记的平台按 ## 分段处理
+_DEFAULT_ADAPTER: type[Adapter] = MdSectionAdapter
+
+
 def adapter_for(platform: str, cfg: HubConfig | None) -> Adapter:
-    """按平台选适配器：hermes → § 分隔，其余 → ## 分段；未登记平台抛错"""
+    """按平台选适配器：显式登记优先，未登记则兜底 ## 分段；未在 config 登记则抛错。
+
+    平台已在 hub.config.yaml 登记但未进 ADAPTER_REGISTRY 时**不抛错**——
+    platform_bridge 的设计是"登记即可用，默认 ## 分段"，硬抛错会误伤新平台接入。
+    覆盖度缺口由 scripts/router_sync.py 以 warn 形式暴露给维护者。
+    """
     if cfg is not None and platform not in cfg.platforms:
         raise KeyError(f"未知平台: {platform}（hub.config.yaml 未登记）")
-    if platform in _SECT_PLATFORMS:
-        return SectSeparatedAdapter()
-    return MdSectionAdapter()
+    cls = ADAPTER_REGISTRY.get(platform) or _DEFAULT_ADAPTER
+    return cls()
 
 
 def _target_path(root: Path, platform: str) -> Path:

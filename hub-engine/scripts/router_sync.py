@@ -1,7 +1,8 @@
 """router_sync.py — 中枢路由表与平台/工具同步一致性检查
 
 检查项目：
-1. hub.config.yaml 配置的 platforms → platform_bridge.py 适配器覆盖（hermes → §分隔，其余 → ##分段）
+1. hub.config.yaml 配置的 platforms → platform_bridge.py 适配器覆盖
+   （覆盖度事实来源 = platform_bridge.ADAPTER_REGISTRY；hermes → §分隔，其余 → ##分段）
 2. mcp_handlers.py 中声明的 5 个 MCP 工具函数（hub_search/get/index/bootstrap/ingest_candidate）
 3. tools/ 目录中 16 个工具模块是否可导入（无 import 错误）
 4. 各平台记忆文件路径可达性（仅 warn，不 fail）
@@ -29,8 +30,8 @@ if str(_HUB_ENGINE) not in sys.path:
     sys.path.insert(0, str(_HUB_ENGINE))
 
 
-# platform_bridge 适配器已覆盖的平台
-_SUPPORTED_PLATFORMS = {"hermes", "trae", "code", "workbuddy"}
+# 适配器覆盖度事实来源：tools/platform_bridge.ADAPTER_REGISTRY（在 _check_platforms 内惰性导入）
+# ⚠️ 勿在此另立硬编码平台清单 —— 2026-09-19 回归教训见 platform_bridge.ADAPTER_REGISTRY 注释。
 
 # mcp_handlers.py 应暴露的 5 个 MCP 入口函数
 _REQUIRED_MCP_HANDLERS = [
@@ -64,21 +65,29 @@ _TOOLS_EXPECTED = [
 
 def _check_platforms(root: Path) -> tuple[list[str], list[str]]:
     """检查 hub.config.yaml 中 platforms 配置与适配器覆盖一致性。
-    返回 (warnings, infos)。"""
+    返回 (warnings, infos)。
+
+    覆盖度事实来源 = tools/platform_bridge.ADAPTER_REGISTRY（本文件不再自持清单）。
+    """
     warnings, infos = [], []
     try:
         from common.config import HubConfig
+        from tools.platform_bridge import SUPPORTED_PLATFORMS
 
         cfg = HubConfig.load(root)
         platforms = cfg.platforms or {}
+    except ImportError as e:
+        warnings.append(f"platform_bridge 覆盖度检查不可用（导入失败）: {e}")
+        return warnings, infos
     except Exception as e:
         warnings.append(f"hub.config.yaml 加载失败: {e}")
         return warnings, infos
 
     for name, meta in platforms.items():
-        if name not in _SUPPORTED_PLATFORMS:
+        if name not in SUPPORTED_PLATFORMS:
             warnings.append(
-                f"平台 '{name}' 在 hub.config.yaml 中登记，但 platform_bridge 未实现适配器"
+                f"平台 '{name}' 在 hub.config.yaml 中登记，但 platform_bridge 未显式登记适配器"
+                f"（当前兜底走 ## 分段；请在 ADAPTER_REGISTRY 补一行）"
             )
             continue
         # 检查记忆文件路径可达性

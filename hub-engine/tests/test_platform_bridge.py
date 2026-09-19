@@ -11,6 +11,8 @@ from common.frontmatter import parse_card, write_card
 from engine import main
 from scripts.bootstrap_hub import bootstrap
 from tools.platform_bridge import (
+    ADAPTER_REGISTRY,
+    SUPPORTED_PLATFORMS,
     MdSectionAdapter,
     SectSeparatedAdapter,
     adapter_for,
@@ -109,6 +111,31 @@ def test_fingerprint_normalizes_whitespace_and_case():
 def test_adapter_for_hermes_sect_others_md():
     assert isinstance(adapter_for("hermes", None), SectSeparatedAdapter)
     assert isinstance(adapter_for("trae", None), MdSectionAdapter)
+
+
+def test_adapter_for_mavis_deepseek_use_md_sections():
+    """mavis(MiniMax Code) / deepseek(DSH) 走 ## 分段适配器（2026-09-19 显式登记）"""
+    assert isinstance(adapter_for("mavis", None), MdSectionAdapter)
+    assert isinstance(adapter_for("deepseek", None), MdSectionAdapter)
+
+
+def test_mavis_deepseek_adapter_roundtrip():
+    """两个新登记平台的解析→渲染往返必须无损（内容不被吞/不被改写）"""
+    text = "## 卡片甲\n甲正文\n\n## 卡片乙\n乙正文\n"
+    for platform in ("mavis", "deepseek"):
+        adapter = adapter_for(platform, None)
+        first = adapter.parse(text)
+        second = adapter.parse(adapter.render(first))
+        assert [(e.title, e.body) for e in first] == [
+            (e.title, e.body) for e in second
+        ], f"{platform} 往返丢失条目"
+        assert [e.title for e in first] == ["卡片甲", "卡片乙"]
+
+
+def test_adapter_registry_is_coverage_source_of_truth():
+    """注册表与集合视图一致；hermes 必须仍是 § 分隔（防重构误改）"""
+    assert set(ADAPTER_REGISTRY) == set(SUPPORTED_PLATFORMS)
+    assert ADAPTER_REGISTRY["hermes"] is SectSeparatedAdapter
 
 
 # ---------- Pull：去重 / 幂等 / dry-run ----------
