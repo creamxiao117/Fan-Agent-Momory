@@ -186,6 +186,25 @@ ector_bench --real --fail-below 0.8 融合命中率 **67%（4/6）< 80% 门禁�
 
     修复 commit：主仓 retrieve.py（本会话）；中枢仓 2 张卡（本会话）。后续候选：①把「每日 missing_daily 按日归档」纳入日巡检 prompt；②周评测门禁阈值 0.6 的 prompt 与 0.8 口径已记录，若希望统一可改任务定义。
 
+22. **每周召回评测复核（2026-09-19，发现 3 类问题；未改代码，交用户裁定）**：真实回归 **100%（6/6，2026-09-02 基线）→ 50%（3/6）**，`vector_bench --real --fail-below 0.8` 门禁失败（退出码 3）。细项：词袋 3/6、向量 3/6、融合 3/6（cwd=项目根；cwd=hub-engine → 向量 0/6）。
+
+    | 项 | 状态 | 证据与说明 |
+    |:--|:--|:--|
+    | 归因① 基准夹具腐化（2/6，主因） | 🔴 待用户裁定 | 门禁期望目标 `projects/omniroute-gateway.md`、`projects/cad2020-pdf-merge.md` 已被 **2026-09-18 08:26 commit `8f8ce4f`**「聚类合并 14→5 张卡」移入 `archive/projects/`（标注 superseded_by）；`retrieve._ACTIVE_DIRS` 不含 archive 且 `_index` 跳过 `status: archived` → 这 2 张**永不可能命中**，门禁数学上无法达 100%。需把 REAL_QUERIES 改指后继卡（`projects/omniroute-local-deployment.md` / `projects/cad2020-tu-fen-pipeline.md`） |
+    | 归因② 融合通道缺陷（1/6，真问题） | 🟠 待用户裁定 | `experience/query-writeback-dll.md` **词袋通道排第 1**，但 RRF 融合输出 3 张不相关卡把它挤掉 → 融合不是各通道并集，存在「通道 top-1 被丢弃」 |
+    | 归因③ 向量通道 CWD 依赖（真问题，影响生产） | 🔴 待用户裁定 | `vector.db` 的 `path` 列存**相对路径** `AgentMemoryHub\rules\x.md`（build 时用相对 root，`full = str(card.path)`），检索侧 `_norm_path` 用 `Path(p).resolve()` 按**进程 CWD** 解析 → 仅 CWD=项目根时匹配。实测：cwd=项目根 向量 3/6；cwd=hub-engine 或 `C:\Users\Fan-SJSS` 向量 **0/6 静默退化**。生产 MCP 以绝对 `--hub-root` 启动、CWD 继承 Hermes 进程（非项目根）→ **线上向量通道大概率长期静默失效，检索实际只剩词袋通道** |
+    | 归因④ 每日巡检门禁失效 | 🔴 待用户裁定 | `scripts/patrol_runner.py::_step_vector_regression` 只传 `--real <root>`，**丢掉了 `--fail-below 0.8`**；`vector_bench` 该参数默认 `None`（不设阈值）→ 每日「向量回归」步骤恒 exit 0，即使 50% 也判 pass（今日快照 stages 无异常即为此） |
+    | 混检索复核 | ✅ 一致 | `work/bench_recall.py --top-k 3`：char(n=2) 混合 top1 15/21、混合 top3 16/21；word 确定性 12/21、语义 top1 13/21、混合 top1 12/21、混合 top3 12/21（char 仍优于 word） |
+    | 复核① char n 值 | 🟠 需调整 | n=2 → 76%（15/21），**n=3 → 81%（17/21）**，n=4 → 81%（17/21）→ 默认 n=2 在 427 卡规模下**已非最优**（`retrieve.py:325` 注释与 `bench_recall` docstring 仍写「实测 n=2 最优」） |
+    | 复核② jieba 停用词 | 🟠 需调整 | `_EN_STOP` 仅英文停用词 + `len>=2` 过滤，**无中文停用词表**；word 混合 top3 12/21 反低于 char 16/21 → 高频中文词（怎么/什么/如何/批量）带偏命中，历史 `det-overhit-shortcircuit-fallback` 问题在更大语料下复发 |
+    | 复核③ IDF 分层 | ✅ 区分度仍 >0（有边界风险） | `common/vector.py::build_idf` = 单层平滑 `log((1+N)/(1+df))+1`，**无文档频率分层/截断**；df=N 时权重塌到下限 1.0。区分度未归零，但 blueprints 114 张同主题卡抬升 df，或为复核① n=3 反超的诱因 |
+    | 复核④ 向量模型 | 🟠 需用户评估 | 现役 = **`text-embedding-bge-small-zh-v1.5`（512 维，LM Studio 1234）**，**不是任务书假定的 bge-m3**（bge-m3 在 `system/config.yaml::embed_alternatives` 仅备选，1024 维）。427 卡全语料语义-only 实测 4 个可命中目标：small **recall@1 1/4、@3 3/4**；m3 **recall@1 2/4、@3 3/4** → m3 top-1 区分度更优（4 组竞争对 margin：m3 胜 3/4 vs small 胜 1/4），**差距未收窄反而略拉开**；切换须 512→1024 全量重建 vector.db（维度门禁禁止混用） |
+    | 补卡候选（本周缺口） | ✅ 无候选 | 最近 7 份 `missing_daily_*.md`（09-14…09-19）+ 当前 `missing_daily.md` 全部 0 P0 / 0 P1 → 未写 `missing_candidates.md`（无候选）。当日有真实检索流量（09-18 18 条、09-19 8 条且均有 hits），故「0 缺口」非空跑 |
+    | 较上周基线 | ✅ 告警收敛 | 今日快照 exit **0**、`llm_available=true`、仅 1 条 info（`local_llm_slow` 2037ms）；一周前（09-10）exit **2**（lint orphans=2 + `low_flywheel_activity` 14.3%）。active 卡 427 张（rules 31 / blueprints 114 / methodology 57 / longterm 8 / projects 20 / experience 205），archive 26 张不计入，`vector.db` 427 行与 active 数一致 |
+    | 未改代码 | ✅ 遵守 | 本次仅只读评测 + 记录；`vector_bench.py` 夹具、`patrol_runner` 门禁参数、`retrieve._norm_path`、`build_idf` 四项修复均**待用户裁定后**再动 |
+
+    后续 commit（待用户裁定后）：① 修 `vector_bench` REAL_QUERIES 指后继卡（夹具腐化）；② `patrol_runner._step_vector_regression` 补 `--fail-below 0.8`；③ `retrieve._norm_path` 改为「相对 root 解析 + 绝对路径双尝试」（消 CWD 依赖）；④ 评估 RRF 融合保底（通道 top-1 强制入池）；⑤ 评估 embed 切 bge-m3（需重建库）；⑥ 复评 char 默认 n 与中文停用词表。
+
 ## 本轮 R10（check-code-v1 规则门禁 + semgrep/codebase-memory 两仓内化 + vector.db 维度门禁落地）
 
 - **check-code-v1 路径A 注释契约规则回归门禁**（`c:\Users\Fan-SJSS\.trae-cn\skills\check-code-v1`，技能仓非本仓）：新 `scripts/rule_regression.py` + `tests/test_rule_regression.py`——为每类检查器（python/yaml/markdown/json/toml）维护【正样例=应 FAIL + 负样例=应 PASS】合成契约，跑门禁判定 True/False Positive/Negative；正样例遇 SKIP（工具缺失）记为通过不误报。`SKILL.md` 补「第8条」约束：改检查器规则必须先跑门禁，无可回归才交付，新增检查类型先补样例再实现规则。**已借语义检索挂接中枢 `blueprints/semgrep-rules-engine-blueprint`。**
@@ -410,7 +429,39 @@ A 的**剩余缺口 2 项（均未动）**：
 
 ---
 
+## 本轮 R18（P2-6 内容合并 + 平台卡修复 + 本地 AI 栈抢修 · 2026-09-19）
+
+### 交付（均有实证）
+1. **P2-6 完成并端到端验证**：`_resolved_20260918/` **17 张**冲突卡的独有内容接回权威区（11 个目标文件 · 固定章节 `## 合并自 conflicts 区（2026-09-19）`）；提交中枢 `8c7f5c8` + `c01b420`；另 4 张经逐句比对确认无独有内容、未改。**验证**：`retrieve "WASM 运行时 可插拔 编译后端 wasm3 与 wasmer"` → **第 1 命中** `wasmtime-wasm-runtime-multi-backend-blueprint.md`（摘要含来源卡名）
+2. **hermes 平台记忆文件碎片修复**：根因＝`_insert_after_instruction` 停止集含 `§`，但 hermes 卡片区**无 §**、卡片以 body 首行 `# ` 开头 ⇒ 每次 push 把上一条卡的**标题与正文劈开**。**引擎已修**：`platform_bridge.py:22-29` 的 `_STOP_HEADS_SECT = ("# ", "## ", "### ", "§")`。**文件已修并核验**：碎片 0 · §区逐字节不变 · 0 删除/67 新增 · 幂等 PASS · 备份 `MEMORY.md.bak-20260919-pre-repair`
+
+3. **2 处悬空引用修完**（`13ce566`）：`methodology/dual-platform-coordination-3phase` 在权威区**不存在** → `experience/phase-2-3-implementation.md` 与 `experience/write-lock-zombie-detection.md` 改指真实落点
+4. **P3-13 定案**（`abe211c`）：`t1-plan-three-blueprints` **保持独立卡**（264 行**未执行**计划，并入 backlog 会被条目淹没而失去可执行语义）
+5. **🔧 本地 AI 全栈停机抢修**：LM Studio 运行时**今日 14:32 更新 CUDA 12@2.41.0 后任何模型都加载不了**（`llama-server exited before becoming healthy`）⇒ `local_chat` / dedup / embedding / VLM **全部停摆**。回退 2.38.0 **无效** → **切 Vulkan 引擎**（`llama.cpp-win-x86_64-vulkan-avx2@2.38.0`）→ **全恢复**
+
+### 当前状态（单源快照 · 2026-09-19 18:2x）
+- **lint**：孤儿 0 · **幽灵 1**（`workbuddy-host-shim-breaks-child-build-and-services`，**并发工作者在制品**）· 陈旧 0 · 无效 0 · 漂移 0 · type↔目录 0 · **230 张卡**
+- **向量库**：**428 张全量重嵌入**（`inserted/removed: 428`）· embedding **512 维**；后端保护曾正确拦下 `degraded`（**零丢失**）
+- **LM Studio**：1234 · **引擎 = Vulkan@2.38.0**（CUDA 未恢复）· `local_chat.model = qwen3-4b-instruct-2507` · dedup `top_k = 3`
+- **conflicts**：**0 未决**
+- **卡片分布**：blueprints 109 · methodology 57 · projects 20 · rules 31 · longterm 8 · experience 205
+- **健康度**：总分 **83.4** · 飞轮 **57.1**（cron `cfd8cfe6f547` 07:40 已跑通）
+- **并发工作者现场**：中枢仓 **33 个 `M`**（mtime `16:43:41` / `17:45:23` **两批同秒批量改** = 自动化批改）+ 新增 1 幽灵登记 ⇒ §4 判定为其现场，**全程只精确 add 自己的文件**
+
+### 阻塞项（R18）
+- 🔴 **P0-1 日报投递**：`channel_directory.json` = `yuanbao: []` ⇒ **需你先在元宝给 bot 发一条消息**登记通道（此后免扫码）
+- 🟡 **`agent-trigger-symbols-7state` 平台副本暂不推**：实测推它会**越界替换 361 行（删 286）**，边界停在**未闭合代码围栏内**（`_stale_heading_span` 不识别围栏）
+- 🟡 **trae / workbuddy 同步**：被"平台文件已被外部修改"闸拦下 → **绝不覆盖**
+- 🟡 **CUDA 加速未恢复**：现走 Vulkan；恢复需重装 CUDA 运行时
+
+### 下一步（优先级序）
+1. 给 `platform_bridge.py` 边界逻辑加**代码围栏感知**（与已修的 `_STOP_HEADS_SECT` 同源 ⇒ 防将来再吞卡）→ 之后可安全推 7state
+2. 恢复 CUDA 运行时（`lms runtime update` / GUI 重下）
+3. P0-1 元宝通道（待你一条消息）
+
 ## 📋 遗留待办（2026-09-18 登记 · 未完成事项）
+
+> ⚠️ **本段为 2026-09-18 快照，已被上方 R18「当前状态 / 阻塞项」取代**（conflicts 已清零、P2-6/P3-13 等已结案）。单一事实源＝中枢卡 `projects/consolidation-backlog-20260918`；保留本段仅作演进历史。
 
 ### 1. conflicts 区剩余 4 组（**需人工终审**）
 | # | 冲突卡 | 保留原因 |
