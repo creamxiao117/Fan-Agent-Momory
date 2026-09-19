@@ -19,6 +19,15 @@ from sync import _authority_cards, _find_duplicate, _WriteLock, append_log
 # 注入指令块标题标记（与 tools/inject.py 保持一致）；找不到时 Push 退化为文末追加
 _INSTRUCTION_KEY = "统一记忆中枢"
 
+# 插入点停止集：按适配器的**条目边界**给（2026-09-19 修 hermes 结构性破坏）
+_STOP_HEADS_MD = ("## ", "### ", "§")  # MdSection：条目以 `## ` 开头
+_STOP_HEADS_SECT = (
+    "# ",
+    "## ",
+    "### ",
+    "§",
+)  # § 分隔无标题：卡片块以 body 首行 `# ` 开头
+
 # Windows 文件名非法字符
 _ILLEGAL = re.compile(r'[\\/:*?"<>|\r\n\t]+')
 
@@ -292,23 +301,19 @@ def _dominant_newline(target: Path) -> str:
     return "\r\n" if crlf > (raw.count(b"\n") - crlf) else "\n"
 
 
-def _stale_span(text: str, title: str, pushed_prev: set[str]) -> str | None:
-    """在原文中定位「中枢此前推过的同名段」的完整原文（含卡片内部所有子标题）。
+def _span_by_heading(
+    text: str,
+    pat_head: re.Pattern[str],
+    pat_next: re.Pattern[str],
+    pushed_prev: set[str],
+) -> str | None:
+    """段首 = 匹配 pat_head 的行；段尾 = 下一行匹配 pat_next（或 EOF）；指纹闸校验。
 
-    V1.2 (2026-09-19)：修"重复累积"根因——旧逻辑对同名不同正文一律追加
-    `> 中枢权威版（未覆盖本地旧版）`，旧版永不删除 ⇒ 每次改卡重推都多一份副本
-    （实证 workbuddy 同一张卡出现 2 次）。
-    为什么不用 adapter.parse 取同名 entry：解析器按 `## ` 切分，卡片内部的子标题
-    （## 一句话结论 / ## 关联 …）会被切成独立 entry，按标题只能取到第一小段
-    （实测只取到 31 字符）→ 指纹必然对不上。
-    安全性由指纹闸保证：只有整段指纹 ∈ state['pushed']（= 中枢自己推的版本，
-    不是平台本地编辑）才认；边界猜错 → 指纹不符 → 返回 None，退回追加权威版。
+    只有整段指纹 ∈ state['pushed']（= 中枢自己推过的版本）才认，边界猜错即返回 None。
     """
     lines = text.splitlines(keepends=True)
-    pat_title = re.compile(r"^## " + re.escape(title) + r"\s*$")
-    pat_next = re.compile(r"^## [a-z0-9][a-z0-9-]*\s*$")
     for i, ln in enumerate(lines):
-        if not pat_title.match(ln.strip()):
+        if not pat_head.match(ln.strip()):
             continue
         j = i + 1
         while j < len(lines) and not pat_next.match(lines[j].strip()):
@@ -319,8 +324,43 @@ def _stale_span(text: str, title: str, pushed_prev: set[str]) -> str | None:
     return None
 
 
-def _insert_after_instruction(text: str, extra: str) -> str:
-    """在注入指令块之后插入 extra；找不到指令块则追加到文末（不触碰平台原有段落）"""
+def _stale_heading_span(text: str, body: str, pushed_prev: set[str]) -> str | None:
+    """**无标题平台**（hermes § 分隔）的陈旧段定位：段键 = 卡片 body 首行（`# 标题`）。
+
+    V1.2 (2026-09-19)：hermes 条目无 title，`existing_titles` 恒为空集 ⇒ 改卡重推
+    永远走"新增"→ 副本累积（实测：同一张卡重推后文件里出现新旧两份正文）。
+    段尾取下一个 `# ` 或 `§`——与 `_insert_after_instruction(..., stop_heads)` 的边界一致。
+    """
+    head = next((ln.strip() for ln in body.splitlines() if ln.strip()), "")
+    if not head:
+        return None
+    pat_head = re.compile(r"^" + re.escape(head) + r"$")
+    return _span_by_heading(text, pat_head, re.compile(r"^(# |§)"), pushed_prev)
+
+
+def _stale_span(text: str, title: str, pushed_prev: set[str]) -> str | None:
+    """**有标题平台**（MdSection）的陈旧段定位：段键 = `## <卡名>`，段尾 = 下一个卡名式标题。
+
+    为什么不用 adapter.parse 取同名 entry：解析器按 `## ` 切分，卡片内部的子标题
+    （## 一句话结论 / ## 关联 …）会被切成独立 entry，按标题只能取到第一小段
+    （实测只取到 31 字符）→ 指纹必然对不上。
+    """
+    pat_title = re.compile(r"^## " + re.escape(title) + r"\s*$")
+    pat_next = re.compile(r"^## [a-z0-9][a-z0-9-]*\s*$")
+    return _span_by_heading(text, pat_title, pat_next, pushed_prev)
+
+
+def _insert_after_instruction(
+    text: str, extra: str, stop_heads: tuple[str, ...] = ("## ", "### ", "§")
+) -> str:
+    """在注入指令块之后插入 extra；找不到指令块则追加到文末（不触碰平台原有段落）
+
+    V1.2 (2026-09-19) 修 §-分隔平台的结构性破坏：停止集必须**按适配器的条目边界**给。
+    hermes 无标题、卡片块以 body 首行 `# ` 开头，而旧停止集只有 `## `/`§` ⇒ `end`
+    会一路越过卡片标题、停在**别的卡片内部的 `## ` 小标题**上，于是每次 push 都把
+    上一条卡片「标题留上面、正文漂下面」劈开（实测：连推 5 张卡后出现 14 个"只剩标题"
+    碎片，与真实 MEMORY.md 的损坏形态完全一致）。传入含 `# ` 的停止集即可修复。
+    """
     lines = text.splitlines(keepends=True)
     start = next(
         (
@@ -334,7 +374,7 @@ def _insert_after_instruction(text: str, extra: str) -> str:
         base = text.rstrip()
         return (base + "\n\n" + extra + "\n") if base else (extra + "\n")
     end = start + 1
-    while end < len(lines) and not lines[end].lstrip().startswith(("## ", "### ", "§")):
+    while end < len(lines) and not lines[end].lstrip().startswith(stop_heads):
         end += 1
     head = "".join(lines[:end]).rstrip()
     tail = "".join(lines[end:]).rstrip()
@@ -374,6 +414,9 @@ def push(
 
     cfg = HubConfig.load(root)
     adapter = adapter_for(platform, cfg)
+    titleless = isinstance(
+        adapter, SectSeparatedAdapter
+    )  # § 分隔无标题平台：无同名键，走段首行指纹闸
     entries = adapter.parse(text)
     existing_bodies = {e.body.strip() for e in entries if e.body.strip()}
     existing_titles = {e.title for e in entries if e.title}
@@ -404,14 +447,17 @@ def push(
         if fp in pushed_fps or body in existing_bodies:
             stat["skipped"] += 1  # 幂等：已推过或平台已有同内容
             continue
+        stale = None
         if title in existing_titles:
             stale = _stale_span(text, title, pushed_prev)
-            if stale:
-                replacements.append((stale, block))
-                stat["replaced"] = stat.get("replaced", 0) + 1
-            else:
-                stat["updated"] += 1
-                blocks.append(_render_section(adapter, title, body, authority=True))
+        elif titleless:
+            stale = _stale_heading_span(text, body, pushed_prev)
+        if stale:
+            replacements.append((stale, block))
+            stat["replaced"] = stat.get("replaced", 0) + 1
+        elif title in existing_titles:
+            stat["updated"] += 1
+            blocks.append(_render_section(adapter, title, body, authority=True))
         else:
             stat["added"] += 1
             blocks.append(block)
@@ -425,7 +471,10 @@ def push(
             for old_block, new_block in replacements:
                 new_text = new_text.replace(old_block, new_block, 1)
             if blocks:
-                new_text = _insert_after_instruction(new_text, "\n\n".join(blocks))
+                heads = _STOP_HEADS_SECT if titleless else _STOP_HEADS_MD
+                new_text = _insert_after_instruction(
+                    new_text, "\n\n".join(blocks), heads
+                )
             with target.open(
                 "w", encoding="utf-8", newline=_dominant_newline(target)
             ) as f:

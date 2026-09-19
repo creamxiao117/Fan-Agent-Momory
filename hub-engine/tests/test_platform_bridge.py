@@ -434,3 +434,46 @@ def test_repush_handles_card_with_internal_headings(tmp_path):
     assert "第二版正文" in text
     assert "第一版正文" not in text
     assert "## 新规则" in text and text.count("## 新规则") == 1
+
+
+# ---------- hermes（§ 分隔无标题）专测：插入不破坏结构 + 改卡原地替换 ----------
+
+
+def test_hermes_push_does_not_split_existing_cards(tmp_path):
+    """新块插入点必须按 §-平台条目边界（`# `）——不得插进既有卡片内部。"""
+    root = _root_with_platform(
+        tmp_path,
+        platform="hermes",
+        content="【统一记忆中枢（AGENT MEMORY HUB）】执行前先查中枢\n\n§\n\n# 既有卡片标题\n\n## 一句话结论\n\n既有正文（必须保持紧跟标题、不被劈开）。\n\n## 关联\n\n- 无\n",
+    )
+    _hub_card(root, "新规则", "中枢新卡正文")
+    assert push(root, "hermes")["added"] == 1
+    text = (tmp_path / "platforms" / "memory.md").read_text(encoding="utf-8")
+    assert "既有正文（必须保持紧跟标题、不被劈开）。" in text
+    assert ("# 既有卡片标题" + LF + LF + "## 一句话结论") in text, (
+        "既有卡片被劈开（标题与正文之间被插入）"
+    )
+    assert "中枢新卡正文" in text
+
+
+def test_hermes_repush_replaces_in_place_no_duplicate(tmp_path):
+    """hermes 无同名键：靠 body 首行 + 指纹闸原地替换，不得追加旧版副本。"""
+    root = _root_with_platform(
+        tmp_path,
+        platform="hermes",
+        content="【统一记忆中枢（AGENT MEMORY HUB）】执行前先查中枢\n\n§\n\n# 既有卡片标题\n\n## 一句话结论\n\n既有正文（必须保持紧跟标题、不被劈开）。\n\n## 关联\n\n- 无\n",
+    )
+    _hub_card(
+        root, "新规则", "# 新规则" + LF + LF + "## 一句话结论" + LF + LF + "第一版正文"
+    )
+    assert push(root, "hermes")["added"] == 1
+    _hub_card(
+        root, "新规则", "# 新规则" + LF + LF + "## 一句话结论" + LF + LF + "第二版正文"
+    )
+    stat = push(root, "hermes")
+    assert stat["replaced"] == 1, "hermes 改卡重推未原地替换"
+    assert stat["added"] == 0
+    text = (tmp_path / "platforms" / "memory.md").read_text(encoding="utf-8")
+    assert text.count("# 新规则") == 1
+    assert "第二版正文" in text
+    assert "第一版正文" not in text
