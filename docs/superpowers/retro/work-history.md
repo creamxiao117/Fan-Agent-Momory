@@ -527,3 +527,56 @@ A 的**剩余缺口 2 项（均未动）**：
 - `.venv\Scripts\python.exe work\bench_recall.py`（char vs word 召回率对比评测）
 - `python hub-engine\scripts\vector_scale_bench.py --sizes 100 1000 5000 10000`（向量全表余弦耗时 vs 卡数曲线，定切 ANN 阈值）
 - `python hub-engine\scripts\vector_bench.py --real AgentMemoryHub --fail-below 0.8`（真实语料回归门禁：融合命中率低于 0.8 退出码非零，供巡检监控）
+
+---
+
+## 归档：启动链瘦身迭代（`optimize/slim-rules-gates`）· 2026-09-23 迁出
+
+> 来源：WORK.md 的「活跃待办表 / 已完成提交索引 / 每日巡检状态 / T14 双审结论 / 遗留待办」。
+> 迁出理由：该迭代已收口，这些属过程明细；L0 只保留当前态与活跃待办。
+
+### 已完成待办表（A1–B1 + 收口）
+
+| # | 任务 | 结果 |
+| --- | --- | --- |
+| A1 | startup_budget 门禁+单测 | 完成（1b709a0） |
+| A2 | AGENTS 路由+CHARTER 压缩 | 完成（d3b8b3e+ca31e31） |
+| A3 | WORK 当前态+历史归档 | 完成（db3d52e+33659c1） |
+| A4 | INDEX 目录化+experience 拆分 | 完成（外层 da9f3c0 / 中枢 8556c53） |
+| A5 | rules tier+长卡拆分+inject 瘦身 | 完成（外层 6884b9b / 中枢 f5eca53）；T14 双审已过 |
+| B1 | backup+方法论合并+经验去重 | 完成（T15）；220 张 experience 仅 1 组真重复已作废 |
+| 收口 | 预算 PASS + pytest + ruff + 挂巡检 | 完成（T16） |
+
+### 提交索引（外层 `optimize/slim-rules-gates`）
+
+- 计划/spec：d3d633e, bc620e2, 40874f0, e7c05c6, 1315f55, 23e3b60
+- T1–T6：1b709a0, ac132cc, fcfcffe, d3b8b3e, ca31e31, db3d52e, 33659c1, da9f3c0, 6884b9b
+- T14–T16：cb5a982, 42be706, 3088b90, 1797373, f5a555a, 599e7f6, 5ab06d0, 510c2a2, 2599cbb, c6250dc
+- 中枢仓 AgentMemoryHub：8556c53, f5eca53, e462e5b, d4076d5, 68088fa, 217acde, e39127b, c56d7db, e0f70d6, 18d64da
+
+### 每日巡检状态（2026-09-23 修复，此后 exit 0）
+
+- 原 13 处 Lint（invalid 12 + schema_drift 1）与弃用机制**同一根因**：卡首行 `<!-- DEPRECATED -->`
+  使 frontmatter 解析失败 ⇒ 被计入 invalid。改显式 `status: deprecated` 后：invalid→0、
+  schema_drift→0、lint 退出码 2→0。
+- 编码门禁：FAIL 2→0（两份「以乱码为主题」的卡属误报，已加豁免）；BOM WARN 19→0。
+- **根因外的一条**：巡检此前**根本没有计划任务**（`patrol_runner` 未被任何调度引用），
+  快照序列显示 2026-09-05→09-22 **连续 18 天无 lint 数据**。已于 09-23 注册
+  `AgentHub-DailyPatrol`（每日 07:30）。
+
+### T14 双审结论（A5）
+
+- **规格审：通过**。tier iron 3 / task 29 / ref 3；三长卡核心 1303/1058/1140（≤spec 的 1.5K）；
+  inject 只注 L0 铁律+四型路由+检索一句；拆卡内容完整（附录含全部小节）。
+- **质量审：1 缺陷 + 2 隐患，均已修**：
+  1. A5 加 `tier:` 时把 4 张作废卡的 DEPRECATED 注释下移 ⇒ 它们**复活进检索库**。
+     根因「注释在第几行」隐式决定可索引性 ⇒ 重构为显式 `status: deprecated` + `superseded_by`。
+  2. `test_inject` 一处断言测的是**从未存在过的字符串**（永远为真）⇒ 换成真实片段 + 长度帽。
+  3. 两引擎 status 口径不一（项目 `VALID_STATUS` 无 deprecated、只认 archived）⇒ 已统一。
+- 备份：`AgentMemoryHub/.backup/20260923/manifest.txt`；完整性核对：`work/verify_merge_fidelity.py`
+
+### 已核销的遗留项
+
+- 19 个 `.md` 带 BOM 已剥离（`scripts/strip_bom.py`，字节级）；`extract_summary` 已改 `utf-8-sig` 容错。
+- English 长标题类蓝图卡的 INDEX 摘要仍硬切（11 条，无中文可断点）——判定可接受。
+- `slim_index.py` 未接入任何流水线（仅手工工具），已改为边界断句防再次切出半截词。
