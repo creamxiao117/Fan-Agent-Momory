@@ -80,3 +80,56 @@ def test_empty_report_dir_returns_empty_list(monkeypatch, tmp_path):
     """无报告时返回空表（调用方据此降级，不应崩）"""
     _retro(monkeypatch, tmp_path)
     assert ts.load_lint_reports() == []
+
+
+# ──────────────────────── ingest 结果序列（第三数据源）────────────────────────
+
+
+def _retro_log(monkeypatch, tmp_path: Path, body: str) -> None:
+    retro = tmp_path / "retro"
+    retro.mkdir(parents=True, exist_ok=True)
+    (retro / "log.md").write_text(body, encoding="utf-8")
+    monkeypatch.setattr(ts, "RETRO", retro)
+
+
+def test_ingest_outcomes_counts_both_kinds_per_day(monkeypatch, tmp_path):
+    """逐日统计「自动入区」与「重复内容进冲突区」"""
+    _retro_log(
+        monkeypatch,
+        tmp_path,
+        "## [2026-08-20] ingest | 自动入区：a.md\n"
+        "## [2026-08-20] ingest | 自动入区：b.md\n"
+        "## [2026-08-20] ingest | 重复内容进冲突区：c.md\n"
+        "## [2026-08-21] ingest | 重复内容进冲突区：d.md\n",
+    )
+    rows = ts.load_ingest_outcomes()
+    assert [r["date"] for r in rows] == ["2026-08-20", "2026-08-21"]
+    d1, d2 = rows
+    assert (d1["promoted"], d1["conflict"], d1["total"]) == (2, 1, 3)
+    assert abs(d1["conflict_rate"] - 1 / 3) < 1e-9
+    assert (d2["promoted"], d2["conflict"]) == (0, 1)
+    assert d2["conflict_rate"] == 1.0
+
+
+def test_ingest_outcomes_ignores_non_header_lines(monkeypatch, tmp_path):
+    """只认 `## [date] ingest | ...` 叙事标题——审计行 `ingest:promote` 不得被算入
+    （实测两者卡名零重叠，混计会虚构出一个不存在的通道）"""
+    _retro_log(
+        monkeypatch,
+        tmp_path,
+        "## [2026-08-20] ingest | 自动入区：a.md\n"
+        "- 2026-08-20 12:00 ingest:promote b from trae\n"
+        "- ingest：`{'promoted': 1, 'duplicate': 4}`\n",
+    )
+    rows = ts.load_ingest_outcomes()
+    assert len(rows) == 1
+    assert rows[0]["promoted"] == 1, "审计行不得被计入 promoted"
+    assert rows[0]["conflict"] == 0
+
+
+def test_ingest_outcomes_missing_log_returns_empty(monkeypatch, tmp_path):
+    """log.md 不存在时返回空表（不抛）"""
+    retro = tmp_path / "retro"
+    retro.mkdir(parents=True)
+    monkeypatch.setattr(ts, "RETRO", retro)
+    assert ts.load_ingest_outcomes() == []

@@ -22,6 +22,7 @@
 
 from __future__ import annotations
 
+import datetime
 import json
 import re
 import sys
@@ -90,6 +91,48 @@ def load_lint_reports() -> list[dict]:
             elif mm := re.search(rf"- {label}:\n((?:\s+- .+\n)+)", text):
                 rec[key] = len(re.findall(r"^\s+- ", mm.group(1), re.MULTILINE))
         out.append(rec)
+    return out
+
+
+def load_ingest_outcomes() -> list[dict]:
+    """第三序列：`retro/log.md` 的 ingest 结果（08-17~，**定义始终未变**，最宜做趋势）。
+
+    两种叙事标题（逐卡一条、带日期）：
+      - `## [YYYY-MM-DD] ingest | 自动入区：<卡>`         → 晋升（新知识流入）
+      - `## [YYYY-MM-DD] ingest | 重复内容进冲突区：<卡>` → 重复（内容/规则漂移信号）
+
+    为何用叙事标题而非审计行 `ingest:promote`：实测两者卡名**零重叠**，
+    但叙事标题是逐卡一致的流水账（各 118 条）；只看标题可避免双通道重复计数。
+
+    conflict_rate = 重复 / (入区 + 重复)：越高说明**同一知识被反复提交**，即返工/漂移越多。
+    """
+    log_path = RETRO / "log.md"
+    if not log_path.exists():
+        return []
+    per_day: dict[str, dict[str, int]] = {}
+    pat = re.compile(
+        r"^## \[(\d{4}-\d{2}-\d{2})\] ingest \| (自动入区|重复内容进冲突区)"
+    )
+    for line in log_path.read_text(encoding="utf-8-sig", errors="ignore").splitlines():
+        m = pat.match(line)
+        if not m:
+            continue
+        date, kind = m.group(1), m.group(2)
+        rec = per_day.setdefault(date, {"promoted": 0, "conflict": 0})
+        rec["promoted" if kind == "自动入区" else "conflict"] += 1
+    out = []
+    for date in sorted(per_day):
+        rec = per_day[date]
+        tot = rec["promoted"] + rec["conflict"]
+        out.append(
+            {
+                "date": date,
+                "promoted": rec["promoted"],
+                "conflict": rec["conflict"],
+                "total": tot,
+                "conflict_rate": (rec["conflict"] / tot) if tot else 0.0,
+            }
+        )
     return out
 
 
@@ -226,6 +269,50 @@ def main() -> int:
     print("       → 则“改造正面”成立（前提：期间检查维度未变动）")
     print("    ② 反面：任一维度复现非零 → 说明仍有未收敛的漂移源，须定位根因")
     print("    ③ 无效对比：若期间 lint 检查维度变了（如新增 long_desc），须分段比较")
+
+    # ── D. ingest 结果趋势（定义未变，最宜做趋势）──────────────────
+    ing = load_ingest_outcomes()
+    print()
+    print("=" * 78)
+    span = f"{ing[0]['date']} ~ {ing[-1]['date']}" if ing else "-"
+    print(f"D. ingest 结果趋势（{len(ing)} 个有记录的天，{span}）")
+    print("=" * 78)
+    if not ing:
+        print("  （无数据）")
+    else:
+        weeks: dict[str, dict[str, int]] = {}
+        for r in ing:
+            y, m, d = (int(x) for x in r["date"].split("-"))
+            iso = datetime.date(y, m, d).isocalendar()
+            key = f"{iso[0]}-W{iso[1]:02d}"
+            w = weeks.setdefault(key, {"promoted": 0, "conflict": 0})
+            w["promoted"] += r["promoted"]
+            w["conflict"] += r["conflict"]
+        print(f"{'周':12s} {'入区':>5s} {'重复':>5s} {'合计':>5s} {'重复率':>7s}  柱状")
+        print("-" * 66)
+        for k in sorted(weeks):
+            w = weeks[k]
+            tot = w["promoted"] + w["conflict"]
+            rate = (w["conflict"] / tot) if tot else 0.0
+            bar = "█" * round(rate * 30)
+            print(
+                f"{k:12s} {w['promoted']:>5d} {w['conflict']:>5d} {tot:>5d} {rate:>6.0%}  {bar}"
+            )
+
+        tot_p = sum(r["promoted"] for r in ing)
+        tot_c = sum(r["conflict"] for r in ing)
+        tot = tot_p + tot_c
+        if tot:
+            print()
+            print(
+                f"  总计：入区 {tot_p} / 重复 {tot_c} / 合计 {tot} → 总体重复率 {tot_c / tot:.0%}"
+            )
+        n_post = sum(1 for r in ing if r["date"] >= "2026-09-23")
+        print()
+        print(
+            "  读法：重复率高 = 同一知识被反复提交（返工/漂移）；稳定下降说明去重生效。"
+        )
+        print(f"  注：改造日（2026-09-23）之后仅 {n_post} 天——仍不足以断言趋势。")
     return 0
 
 
