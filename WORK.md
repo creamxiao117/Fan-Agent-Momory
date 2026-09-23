@@ -10,7 +10,7 @@
 - 分层：L0 常驻（AGENTS/CHARTER/WORK 当前态/INDEX 目录版）→ L1 按四型（light/code/hub/sync）→ L2 检索。
 - 安全底座常驻：单写者+§4 守护+ledger；query-first+交回用户+回写。
 - 历史轮次：`docs/superpowers/retro/work-history.md`。
-- 本迭代进度：A1 budget 门禁已立（真机仍超标属预期）；A2 AGENTS/CHARTER 已压至 ≤3K；A3 本任务。
+- 本迭代进度：A1 budget 门禁已立（真机仍超标属预期）；A2 AGENTS/CHARTER 已压至 ≤3K；A3 完成（见 db3d52e）。
 
 ## 活跃待办（本迭代）
 
@@ -18,7 +18,7 @@
 | -- | --- | --- |
 | A1 | startup_budget 门禁+单测 | 完成（真机待 A4 后 PASS） |
 | A2 | AGENTS 路由+CHARTER 压缩 | 完成 |
-| A3 | WORK 当前态+历史归档 | 本任务 |
+| A3 | WORK 当前态+历史归档 | 完成（见 db3d52e） |
 | A4 | INDEX 目录化 | 按计划 |
 | A5 | rules tier+长卡拆分+inject 瘦身 | 按计划 |
 | B1 | backup+方法论合并+经验去重 | 按计划 |
