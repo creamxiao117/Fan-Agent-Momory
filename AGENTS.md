@@ -1,38 +1,44 @@
 # AGENTS.md
 
-跨 Agent 平台统一记忆中枢 · AI 协作入口（context-engineering-v1 骨架）。
+跨 Agent 平台统一记忆中枢 · 薄路由入口。细节不常驻，按任务型取 L1/L2。
 
-## 启动顺序
+## 启动顺序（L0，计入 30K 预算）
 
-1. `AGENTS.md`（本文件）
-2. `CHARTER.md` —— 总目标与边界
-3. `WORK.md` —— 当前状态唯一来源
-4. `briefs/*.md` —— 当前/下一轮迭代简报（若有）
-5. 需要时再读 `docs/superpowers/`（历史设计/计划）、相关 methodology 卡片
+1. 本文件（路由 + 铁律）
+2. `CHARTER.md` —— 目标与边界
+3. `WORK.md` —— **仅当前状态/待办**（历史见 `docs/superpowers/retro/work-history.md`）
+4. `AgentMemoryHub/INDEX.md` —— **目录版**（卡名+一行摘要；全文走检索）
+5. 简报 `briefs/*.md` 若有
 
-不依赖历史聊天记录作为主要事实来源。
+不依赖历史聊天；事实来源=WORK 当前态 + 中枢。
 
-## 旧资料事实来源映射
+## L0 铁律（安全底座，永不裁剪）
+
+- 单一写入者（`.sync/locks/writer.lock`）+ 工作区守护（≥3 modified 须分析）+ ledger 审计
+- 执行前先查中枢（INDEX/`engine.py retrieve`/MCP hub_bootstrap），命中再执行
+- 不确定交回用户，不臆测、不捏造历史经验
+- 查询结果回写经验卡（ingest/回写纪律）
+
+## 任务分型 → L1 卡（代码口径 `tools.task_tier.L1_CARDS`）
+
+| 型 | 判定（关键词兜底，判不出=light） | L1 规则卡（只读核心节/全文按需） |
+| --- | --- | --- |
+| light | 默认、问答、查状态 | （无，仅 L0） |
+| code | commit/ruff/pytest/patch/PR/改代码 | chinese-text-encoding-discipline · agent-code-discipline-iron-rule · multi-language-style-config |
+| hub | 中枢/ingest/rules/experience/回写 | dual-platform-coherence-discipline · memory-hub-query-first · memory-hub-distill-last |
+| sync | sync/push/注入/跨平台 | cross-platform-sync-rule · dual-platform-coherence-discipline |
+
+升型廉价：动作变重再补读 L1；只升不降。
+
+## 降级
+
+检索不可用 → 按上表卡名直读 `AgentMemoryHub/rules/<卡名>.md`；仍失败则问用户。
+
+## 事实来源映射
 
 | 内容 | 位置 |
 | --- | --- |
-| 产品设计与技术方案 | `docs/superpowers/specs/` |
-| 分阶段实现计划（14 任务，已完成） | `docs/superpowers/plans/` |
-| 引擎代码（同步器/检索/提炼/整理/Lint/CLI） | `hub-engine/`（`engine.py` 统一入口） |
-| 运行态数据中枢（Obsidian 库，唯一事实源） | `C:\Users\Fan-SJSS\.trae-cn\worktrees\20260817-Fan-Agent-Momory\feat-implement-plan-ZilBmv\AgentMemoryHub` |
-| 跨项目经验/规则（DLL 防锁、查询回写等） | `C:\Users\Fan-SJSS\.trae-cn\worktrees\20260817-Fan-Agent-Momory\feat-implement-plan-ZilBmv\AgentMemoryHub\rules\experience` + INDEX.md |
-
-## 执行前必读（用户既定规则）
-
-<important if="you are starting a task, planning, or planning a plan that touches the hub">
-- 先查统一记忆中枢：读 `C:\Users\Fan-SJSS\.trae-cn\worktrees\20260817-Fan-Agent-Momory\feat-implement-plan-ZilBmv\AgentMemoryHub\INDEX.md` 与 `rules/`、`experience/`，命中再执行。
-- 查询好结果回写为经验卡片（查询产物回写）。
-</important>
-
-<important if="you are in any ambiguous or uncertain situation, or the answer is not found in the hub">
-- 不确定的内容交回用户，不得臆测、不得凭空捏造历史经验。
-</important>
-
-<important if="you need a missing tool, or you are writing or generating code or shell commands">
-- 缺工具就主动找/装；代码注释尽量中文；lint 规范。
-</important>
+| 设计/计划 | `docs/superpowers/specs|plans/`；瘦身设计 `docs/compose/specs/2026-09-23-slim-rules-gates-design.md` |
+| 引擎 | `hub-engine/`（`engine.py`） |
+| 中枢唯一事实源 | `AgentMemoryHub/` |
+| 缺工具/写码 | 主动找装；中文注释；ruff 规范 |
