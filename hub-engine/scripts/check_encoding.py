@@ -71,7 +71,11 @@ MOJIBAKE_MARKERS = (
 
 # 乱码串豁免：**按定义**要引用乱码样例的文件，不当 FAIL
 #   ① 规范文档 / 本脚本自身；② 规范技能目录下的任何文件（SKILL.md 等）
-MARKER_EXEMPT_NAMES = {"chinese-text-encoding-discipline.md", "check_encoding.py"}
+MARKER_EXEMPT_NAMES = {
+    "chinese-text-encoding-discipline.md",
+    "chinese-text-encoding-discipline-appendix.md",
+    "check_encoding.py",
+}
 MARKER_EXEMPT_DIRS = {"chinese-text-encoding-discipline"}
 
 TEXT_EXTS = {

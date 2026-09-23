@@ -55,3 +55,15 @@ def test_inject_new_instruction_mentions_compress_level(tmp_path):
     assert "compress_level" in text
     assert "分级取用" in text
     assert text.count("compress_level") == 1  # 幂等：不重复
+
+
+def test_inject_slim_l0_and_task_tier(tmp_path):
+    target = tmp_path / "AGENTS.md"
+    target.write_text("", encoding="utf-8")
+    inject_instruction(target)
+    text = target.read_text(encoding="utf-8")
+    assert "L0 铁律" in text
+    assert "task_tier" in text
+    assert "单写者" in text
+    # 不再贴长模板
+    assert "compress_level 分级取用说明的长展开" not in text
