@@ -674,28 +674,33 @@ if __name__ == "__main__":
     sys.exit(main())
 ```
 
-- [ ] **Step 4: Run tests + 真机 dry-run 再写入**
+- [ ] **Step 4: Run tests + 真机 dry-run 再写入 + 拆分 experience**
 
 ```bash
 cd hub-engine && python -m pytest tests/test_slim_index.py -v
 python -m scripts.slim_index --path ../AgentMemoryHub/INDEX.md --dry-run
 python -m scripts.slim_index --path ../AgentMemoryHub/INDEX.md
+# 拆分（裁定 2026-09-23）：experience 整区迁 INDEX-experience.md，根 INDEX 只留权威/结构 + 指针
 python -c "from pathlib import Path; print(len(Path('../AgentMemoryHub/INDEX.md').read_text(encoding='utf-8')))"
 ```
-Expected: 测试 PASS；INDEX ≤14000
+Expected: 测试 PASS；**根** INDEX ≤14000；`INDEX-experience.md` 承接 experience 行；根 INDEX 在 experience 分区处留「详见 INDEX-experience.md（L2）」指针（分区头可保留）。
 
 - [ ] **Step 5: 人工抽查 + lint 孤儿/幽灵**
 
 ```bash
 cd hub-engine && python -m engine.py lint --root ../AgentMemoryHub
 ```
-Expected: 无新增孤儿/幽灵（INDEX 行数结构保留）
+Expected: 无新增孤儿/幽灵（experience 卡须仍能被发现：INDEX-experience.md 或 engine lint 口径需覆盖——若 lint 只扫根 INDEX，则 experience 行保留在 INDEX-experience 并确认 engine 孤儿判定策略，必要时在根 INDEX 指针句含目录名 `experience/`）
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 6: Commit（双仓）**
 
 ```bash
-git add hub-engine/scripts/slim_index.py hub-engine/tests/test_slim_index.py AgentMemoryHub/INDEX.md
-git commit -m "refactor(index): 目录化——卡描述截断≤40字，详情只在卡正文（≤14K）"
+# 外层仓
+git add hub-engine/scripts/slim_index.py hub-engine/tests/test_slim_index.py docs/compose
+git commit -m "refactor(index): 目录化脚本+测试；experience 区拆分裁定写入 spec/plan"
+# 嵌套中枢仓（INDEX 在 AgentMemoryHub 内，外层 gitignore）
+git -C AgentMemoryHub add INDEX.md INDEX-experience.md
+git -C AgentMemoryHub commit -m "refactor(index): 目录化截断≤40字 + experience 拆至 INDEX-experience.md（根 INDEX≤14K）"
 ```
 
 ---

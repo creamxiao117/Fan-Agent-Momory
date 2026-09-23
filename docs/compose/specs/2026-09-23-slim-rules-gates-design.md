@@ -64,7 +64,7 @@
 
 1. **AGENTS.md**：重写为任务分型路由表（4 型 × L1 卡名清单，一行一个）；启动顺序指向 WORK 当前态与 INDEX 目录版；保留中枢查询/不确定交回/缺工具自找；铁律以摘要进 L0。预算 ≤3K（见 [S3] 分项帽）。
 2. **WORK.md**：仅保留更新日期、当前状态快照、活跃待办、验收口径；R1 起历史轮次迁 `docs/superpowers/retro/work-history.md`。预算 ≤9K。
-3. **INDEX.md**：每卡一行 `卡名 + ≤40 字摘要`；分区保留；安全底座规则顶部 `★` 标注；**长描述不进 INDEX**，详情以卡自身 frontmatter/正文为唯一源（不再维护第二正文）。预算 ≤14K。
+3. **INDEX.md**：每卡一行 `卡名 + ≤40 字摘要`；分区保留；安全底座规则顶部 `★` 标注；**长描述不进 INDEX**，详情以卡自身 frontmatter/正文为唯一源（不再维护第二正文）。预算 ≤14K。**裁定 2026-09-23**：全卡最紧地板 >14K，故**拆分**——根 INDEX 只留权威/结构分区（rules/methodology/longterm/projects/blueprints/libs/retro/archive + 使用约定），`experience` 整区迁 `INDEX-experience.md`（L2 按需），根 INDEX 留指针；预算只盯根 INDEX。INDEX 在嵌套仓，提交用 `git -C AgentMemoryHub`。
 4. **rules/**：frontmatter 增 `tier: iron | task | ref`（手工标 32 张）；长卡（chinese-text-encoding、multi-language-style-config、rules-routing-table）拆核心（≤1.5K）+ 附录；启动门禁模板进附录。
 5. **methodology/**：INDEX 仅名称+一行；B 步执行 `merge-methodology.py` 4 组合并、`deduplicate-experience.py` 去重（前序 `backup-rules.py` 全量备份）。
 6. **inject.py / 各平台注入**：只注入 L0 底座 6 条（单写者/工作区守护/ledger + query-first/交回用户/回写）+ 按任务型读路由 + 检索一句；不贴规则全文与长模板。
