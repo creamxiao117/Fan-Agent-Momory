@@ -31,15 +31,18 @@ from pathlib import Path
 
 _LOG = logging.getLogger(__name__)
 
-# 镜像 sync.py / INDEX.md 的 section 标题表
+# 分区表收敛到 scripts/index_consistency.py（单一事实源，2026-09-23）
+# 本地曾自持一份 SECTION_TITLES（与 fix_orphans / fix_index_registry 各存一份→共 3~4 份），
+# 拆分 INDEX 后 experience 目标文件变了却只改一处 → 出现“卡被追加回根 INDEX”的 bug。
+# 故此处改为导入契约模块：表与目标文件选择同源。
+from scripts.index_consistency import SECTION_TITLES as _TITLES
+from scripts.index_consistency import index_file_for_dir
+
+# type → 分区标题（在契约表的目录键基础上补两个 type 别名）
 SECTION_TITLES = {
-    "rules": "## 规则（rules/）",
-    "methodology": "## 方法论（methodology/）",
-    "blueprints": "## 技术路径蓝图（blueprints/）",
-    "longterm": "## 长期记忆（longterm/）",
-    "projects": "## 项目记忆（projects/）",
-    "exp": "## 经验（experience/）",  # T1 (2026-09-07): 非权威区 type 也登记 INDEX
-    "note": "## 经验（experience/）",  # 注释类合并入经验区
+    **_TITLES,
+    "exp": _TITLES["experience"],  # 非权威区 type 也登记 INDEX
+    "note": _TITLES["experience"],  # 注释类合并入经验区
     "retro": "## 沉淀通道",  # retro 是 append-only 留痕，不入主索引
 }
 
@@ -239,6 +242,9 @@ def main() -> int:
     if not index_path.exists():
         print(f"INDEX.md 不存在: {index_path}", file=sys.stderr)
         return 2
+    # 注：根 INDEX 只用于前置存在性检查；实际写入目标由
+    #     index_consistency.index_file_for_dir() 按卡所在目录决定
+    #     （experience → INDEX-experience.md）。
     # 优先使用 ingest 传入的精确清单（防历史污染 INDEX）
     target_names = [n.strip() for n in args.names.split(",") if n.strip()]
     if target_names:
@@ -296,15 +302,19 @@ def main() -> int:
         slug = Path(rec["name"]).stem
         card_path = root / after
         summary = extract_summary(card_path)
-        planned.append((section_title, slug, summary))
+        # 按卡所在目录选**目标 INDEX 文件**（2026-09-23 修）：experience 已拆到
+        # INDEX-experience.md（L2），不能再追加回根 INDEX（会白涨 L0）。
+        rel_dir = after.split("/")[0]
+        target_name = index_file_for_dir(rel_dir) or "INDEX.md"
+        planned.append((target_name, section_title, slug, summary))
     if args.dry_run:
         print(f"post_ingest_hook dry-run: 计划登记 {len(planned)} 张")
-        for st, slug, sm in planned:
-            print(f"  → {st} | {slug} | {sm[:60]}")
+        for tn, st, slug, sm in planned:
+            print(f"  → {tn} | {st} | {slug} | {sm[:60]}")
         return 0
     added = []
-    for section_title, slug, summary in planned:
-        if append_to_index(index_path, section_title, slug, summary):
+    for target_name, section_title, slug, summary in planned:
+        if append_to_index(root / target_name, section_title, slug, summary):
             added.append(slug)
     if not added:
         print(

@@ -78,6 +78,33 @@ def test_detect_missing_finds_unregistered_authority_cards(tmp_path):
     assert missing == {"beta"}, f"应只报 beta，实际: {missing}"
 
 
+def test_detect_missing_consults_both_index_files(tmp_path):
+    """回归：已登记于是**任一** INDEX 文件的 slug 都算已登记。
+
+    否则已搬到分册的条目（或错位登记的）会被误报为未登记 → 重复补登。
+    """
+    root = tmp_path / "hub"
+    _card(root, "rules/alpha.md", "Alpha 规则")
+    _index(root, "## 规则（rules/）\n")
+    # alpha 登记在**分册**里（错位登记）——仍应被认为“已登记”，不再重复加入
+    (root / "INDEX-experience.md").write_text(
+        "## 经验（experience/）\n- alpha    Alpha 规则\n", encoding="utf-8"
+    )
+    assert {p.stem for p in detect_missing(root)} == set()
+
+
+def test_experience_is_out_of_scope(tmp_path):
+    """**设计边界**：本工具只扫权威区（rules/methodology/longterm/projects/blueprints），
+    **不扫 experience**（非权威区）——experience 的登记由 post_ingest_hook 负责。
+
+    故：此处即使 experience 卡未登记，也不应被本工具报出。
+    """
+    root = tmp_path / "hub"
+    _card(root, "experience/gamma.md", "Gamma 经验")
+    _index(root, "## 规则（rules/）\n")
+    assert detect_missing(root) == [], "experience 不在权威区扫描范围"
+
+
 def test_main_dry_run_does_not_write(tmp_path, capsys):
     root = tmp_path / "hub"
     _card(root, "rules/alpha.md", "Alpha 规则")
@@ -93,11 +120,13 @@ def test_main_dry_run_does_not_write(tmp_path, capsys):
 def test_main_apply_registers_and_is_idempotent(tmp_path, capsys):
     root = tmp_path / "hub"
     _card(root, "rules/alpha.md", "Alpha 规则")
+    _card(root, "methodology/beta.md", "Beta 方法论")
     idx = _index(root, "## 规则（rules/）\n\n## 方法论（methodology/）\n")
 
     assert main(["--root", str(root), "--apply"]) == 0
     text = idx.read_text(encoding="utf-8")
-    assert "- alpha    Alpha 规则" in text
+    assert "- alpha" in text
+    assert "- beta" in text
     capsys.readouterr()
 
     # 二次运行：应报 0 待补登（幂等）

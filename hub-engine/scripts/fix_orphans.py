@@ -51,6 +51,7 @@ sys.path.insert(0, str(_THIS.parent))  # hub-engine/
 from scripts.index_consistency import (
     AUTHORITY_DIRS,
     SECTION_TITLES,
+    index_file_for_dir,
     registered_slugs,
 )
 from scripts.post_ingest_hook import append_to_index, extract_summary
@@ -60,9 +61,30 @@ from scripts.post_ingest_hook import append_to_index, extract_summary
 #   `_CARD_SECTION_TOKENS`，同一契约两份实现必然漂移（2026-09-23 收敛）。
 
 
-def detect_missing(root: Path, index_path: Path) -> list[Path]:
-    """权威区中未登记 INDEX 的卡文件"""
-    have = registered_slugs(index_path)
+# 所有可能承载卡登记行的 INDEX 文件（experience 已拆到分册，2026-09-23）
+INDEX_FILES = ("INDEX.md", "INDEX-experience.md")
+
+
+def registered_slugs_all(root: Path) -> set[str]:
+    """合并**全部** INDEX 文件的已登记 slug。
+
+    为何要合并：experience 条目住在 `INDEX-experience.md`，若只查根 INDEX，
+    已登记的经验卡会被误报为“未登记”并被重复补登。
+    """
+    out: set[str] = set()
+    for name in INDEX_FILES:
+        p = root / name
+        if p.exists():
+            out |= registered_slugs(p)
+    return out
+
+
+def detect_missing(root: Path, index_path: Path | None = None) -> list[Path]:
+    """权威区中未登记 INDEX 的卡文件
+
+    index_path 参数保留以兼容旧调用，但实际检查**全部** INDEX 文件。
+    """
+    have = registered_slugs_all(root)
     missing: list[Path] = []
     for d in AUTHORITY_DIRS:
         for p in sorted((root / d).glob("*.md")):
@@ -129,9 +151,11 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  [skip] 取不到摘要: {card.name}")
             skipped += 1
             continue
-        print(f"  [+] {card.parent.name:12s} {card.stem:52s} → {summary}")
+        # 写入哪个 INDEX 文件由目录决定（experience → INDEX-experience.md）
+        target_name = index_file_for_dir(card.parent.name) or "INDEX.md"
+        print(f"  [+] {target_name:22s} {card.stem:52s} → {summary}")
         if args.apply:
-            if append_to_index(index_path, section, card.stem, summary):
+            if append_to_index(root / target_name, section, card.stem, summary):
                 added += 1
             else:
                 print("      （append_to_index 未写入：分区缺失或已存在）")

@@ -50,7 +50,7 @@ sys.path.insert(0, str(_THIS.parent))  # hub-engine/
 
 from scripts.audit_index import AUTHORITY_DIRS, INDEX_ENTRY_RE  # single source
 
-# 目录名 → INDEX 分区标题（**唯一定义**；必须与 AgentMemoryHub/INDEX.md 内实际标题一致）
+# 目录名 → INDEX 分区标题（**唯一定义**；必须与目标 INDEX 文件内实际标题一致）
 SECTION_TITLES: dict[str, str] = {
     "rules": "## 规则（rules/）",
     "methodology": "## 方法论（methodology/）",
@@ -59,6 +59,25 @@ SECTION_TITLES: dict[str, str] = {
     "blueprints": "## 技术路径蓝图（blueprints/）",
     "experience": "## 经验（experience/）",
 }
+
+# 分区 → **写入哪个 INDEX 文件**（2026-09-23 裁定）
+#
+# 背景：A4 已把 experience 整区从根 INDEX 拆到 INDEX-experience.md（保 L0 ≤ 14K→20K 帽），
+# 根 INDEX 里只留一句**指针**（“详见 INDEX-experience.md”）。
+# 但两个写入方（`post_ingest_hook` / `fix_orphans`）当时把 index_path 硬编码为
+# `root/INDEX.md` → **experience 卡又被追加回根 INDEX**，既白涨 L0、又把条目放错文件。
+# 实测：2026-09-23 某经验卡被登记到根 INDEX 的 L180（该区本应只有指针）。
+# 本映射即是修复：写入前先按目录选文件。
+INDEX_FILE_FOR_DIR: dict[str, str] = {
+    d: ("INDEX-experience.md" if d == "experience" else "INDEX.md")
+    for d in SECTION_TITLES
+}
+
+
+def index_file_for_dir(dir_name: str) -> str | None:
+    """该目录的 INDEX 条目应写入哪个文件（相对 hub 根）"""
+    return INDEX_FILE_FOR_DIR.get(dir_name)
+
 
 # 卡片清单分区判定用的 token：**从 SECTION_TITLES 派生**，避免手写第二份而漂移。
 # 依据：分区标题里都含 `<目录名>/`（如「## 规则（rules/）」），故 token = "<dir>/"。
@@ -102,8 +121,10 @@ def section_for_dir(dir_name: str) -> str | None:
 __all__ = [
     "AUTHORITY_DIRS",
     "CARD_SECTION_TOKENS",
+    "INDEX_FILE_FOR_DIR",
     "SECTION_TITLES",
     "card_slug",
+    "index_file_for_dir",
     "is_card_section",
     "registered_slugs",
     "section_for_dir",

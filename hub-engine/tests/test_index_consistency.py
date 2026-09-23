@@ -11,8 +11,10 @@ from scripts.audit_index import AUTHORITY_DIRS as AUDIT_AUTHORITY_DIRS
 from scripts.index_consistency import (
     AUTHORITY_DIRS,
     CARD_SECTION_TOKENS,
+    INDEX_FILE_FOR_DIR,
     SECTION_TITLES,
     card_slug,
+    index_file_for_dir,
     is_card_section,
     registered_slugs,
     section_for_dir,
@@ -81,3 +83,24 @@ def test_section_for_dir_covers_all_card_dirs():
     for d in SECTION_TITLES:
         assert section_for_dir(d) == SECTION_TITLES[d]
     assert section_for_dir("不存在目录") is None
+
+
+# ────────────────── 分区 → 目标 INDEX 文件（拆分后路由）──────────────────
+
+
+def test_experience_routes_to_split_file():
+    """experience 必须写入 INDEX-experience.md，而非根 INDEX。
+
+    回归背景：A4 把 experience 整区拆出后，两个写入方仍硬编码 `root/INDEX.md`
+    → 经验卡被追加回根 INDEX（白涨 L0 + 条目放错文件）。
+    实测 2026-09-23：某经验卡被登记到根 INDEX L180，而该区本应只有指针。
+    """
+    assert index_file_for_dir("experience") == "INDEX-experience.md"
+    for d in ("rules", "methodology", "longterm", "projects", "blueprints"):
+        assert index_file_for_dir(d) == "INDEX.md", f"{d} 应写入根 INDEX"
+
+
+def test_index_file_mapping_covers_every_section_dir():
+    """映射必须覆盖全部卡目录——漏一个就会回退到根 INDEX（静默回涨）"""
+    assert set(INDEX_FILE_FOR_DIR) == set(SECTION_TITLES)
+    assert index_file_for_dir("不存在目录") is None
