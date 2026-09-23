@@ -28,12 +28,14 @@ _ACTIVE_DIRS = (
     "experience",
 )
 
-# 不参与检索的卡片状态（两套引擎同口径；中枢侧见 AgentMemoryHub/hub-engine/cards.py）
+# 不参与检索的卡片状态（单一事实源）
 #   archived   —— 已归档
 #   deprecated —— 已作废（内容并入 frontmatter.superseded_by）
 # 2026-09-23：deprecated 改为显式字段。此前靠「DEPRECATED 注释在文件第 1 行 ⇒
 # frontmatter 解析失败 ⇒ 卡被丢弃」被动排除，位置敏感：为加 tier 而把注释下移
 # 会让卡"复活"进检索库（A5 踩坑）。
+# 同日：已删除历史上第二套重复引擎（AgentMemoryHub/hub-engine）——它写过同一个
+# 语义但口径不同，本仓 common/frontmatter.py 的 VALID_STATUS 必须与之保持一致。
 EXCLUDED_STATUSES = frozenset({"archived", "deprecated"})
 
 # 第二层向量融合（方案 A：bge-small-zh + SQLite）

@@ -7,9 +7,13 @@
 为给 frontmatter 加 `tier:` 而把注释下移，作废卡就会"复活"进检索库（A5 踩坑）。
 
 重构后：`status: deprecated` + `superseded_by` 显式表达，且：
-- 两个引擎（中枢 hub-engine/cards.py、项目 hub-engine/tools/retrieve.py）一致排除
+- 引擎一致排除（口径唯一在 `tools/retrieve.EXCLUDED_STATUSES`）
 - frontmatter 合法 ⇒ lint 不再报 invalid
 - 作废状态可被测试证伪（而非依赖字节偏移的副作用）
+
+同日附加：删除了历史上的**第二套重复引擎**（`AgentMemoryHub/hub-engine/`）。
+它实现同一批卡片的解析/检索，口径却不同（无 status 白名单、db_meta 写法不一），
+一整个会话内已因此产生 3 次契约漂移。下方测试看守它不被重新引入。
 """
 
 from pathlib import Path
@@ -102,27 +106,38 @@ def test_candidate_and_reference_remain_retrievable(tmp_path):
 
 def test_project_engine_excluded_statuses_matches_hub_engine():
     """两套引擎的排除集合必须一致——历史上"两套实现各写各的"已多次造成漂移"""
-    import importlib.util
-    import sys
 
+
+# ---------------------------------------------------------------- 架构守卫（防重复实现回流）
+
+
+def test_legacy_duplicate_engine_is_gone():
+    """历史遗留的**第二套引擎**必须保持已删除。
+
+    `AgentMemoryHub/hub-engine/`（8 个模块）曾与 `hub-engine/` 重复实现同一批卡片
+    的解析/向量/同步/MCP，但口径不同。它已无任何消费者：4 个平台的 MCP 配置、
+    仓内 mcp.example.json / platforms.yaml、以及 hub_mcp_launcher 的 5 个候选路径
+    全部指向 `hub-engine/`；且它无测试。2026-09-23 删除。
+
+    本测试防止它被无意重建——重冒两套实现就会重冒契约漂移。
+    """
+    legacy = Path(__file__).resolve().parents[2] / "AgentMemoryHub" / "hub-engine"
+    assert not legacy.exists(), (
+        f"应已删除的重复引擎又出现了: {legacy}\n"
+        "若确需重建，请先移除本测试并在 commit 中说明理由。"
+    )
+
+
+def test_excluded_statuses_covers_documented_states():
+    """排除集合必须覆盖已文档化的两个非活跃状态，且与 VALID_STATUS 不矛盾"""
+    from common.frontmatter import VALID_STATUS
     from tools import retrieve as proj_retrieve
 
-    hub_cards_py = (
-        Path(__file__).resolve().parents[2]
-        / "AgentMemoryHub"
-        / "hub-engine"
-        / "cards.py"
+    excluded = set(proj_retrieve.EXCLUDED_STATUSES)
+    assert {"archived", "deprecated"} <= excluded, f"排除集合缺项: {excluded}"
+    assert excluded <= set(VALID_STATUS), (
+        f"排除集合含未在 VALID_STATUS 声明的状态: {excluded - set(VALID_STATUS)}"
     )
-    assert hub_cards_py.exists(), f"未找到中枢 cards.py: {hub_cards_py}"
-
-    spec = importlib.util.spec_from_file_location("_hub_cards_probe", hub_cards_py)
-    mod = importlib.util.module_from_spec(spec)
-    sys.modules["_hub_cards_probe"] = mod
-    spec.loader.exec_module(mod)
-
-    assert set(proj_retrieve.EXCLUDED_STATUSES) == set(mod.EXCLUDED_STATUSES), (
-        "项目引擎与中枢引擎的排除状态集合不一致："
-        f"{sorted(proj_retrieve.EXCLUDED_STATUSES)} vs {sorted(mod.EXCLUDED_STATUSES)}"
-    )
-    assert "deprecated" in proj_retrieve.EXCLUDED_STATUSES
-    assert "archived" in proj_retrieve.EXCLUDED_STATUSES
+    # 合法但**必须可检索**的状态不得被误排除
+    for keep in ("active", "candidate", "reference"):
+        assert keep not in excluded, f"{keep} 不应被排除"
