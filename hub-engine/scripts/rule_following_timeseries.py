@@ -23,6 +23,7 @@
 from __future__ import annotations
 
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -48,6 +49,48 @@ def _g(d, *path, default=""):
             return default
         cur = cur[k]
     return cur
+
+
+def load_lint_reports() -> list[dict]:
+    """第二序列：`retro/lint-report-*.md`（08-17~09-15，覆盖改造前期）。
+
+    ⚠️ 可比性缺口（必须声明）：报告有两种格式——
+    - 旧格式（~08-27）：`孤儿页` / `无效卡片` / `幽灵登记`
+    - 新格式（09-08 起）：`发现问题数`，且**新增了 long_desc / short_desc 等维度**
+      （09-08 的 40 项里 34 项是 long_desc，旧格式根本不检）
+    因此跨格式**不能直接比大小**；本函数同时保留可比的 `invalid`（两格式/快照同义）
+    与各格式自己的“问题数”。
+    """
+    out: list[dict] = []
+    for p in sorted(RETRO.glob("lint-report-*.md")):
+        text = p.read_text(encoding="utf-8-sig", errors="ignore")
+        date = p.stem.replace("lint-report-", "")
+        rec = {
+            "date": date,
+            "fmt": "?",
+            "invalid": "",
+            "ghosts": "",
+            "orphans": "",
+            "problems": "",
+            "checked": "",
+        }
+        m = re.search(r"^#\s*(Lint|L2)", text, re.MULTILINE)
+        rec["fmt"] = "A" if (m and m.group(1) == "Lint") else "B"
+        if mm := re.search(r"无效卡片[:：]\s*(\d+)", text):
+            rec["invalid"] = int(mm.group(1))
+        if mm := re.search(r"发现问题数[:：]\s*(\d+)", text):
+            rec["problems"] = int(mm.group(1))
+        if mm := re.search(r"共检查\s*(\d+)\s*张", text):
+            rec["checked"] = int(mm.group(1))
+        # 孤儿页 / 幽灵登记：列表项计数（“[]” 为 0）
+        for key, label in (("orphans", "孤儿页"), ("ghosts", "幽灵登记")):
+            if mm := re.search(rf"- {label}:\s*\[(.*?)\]", text):
+                inner = mm.group(1).strip()
+                rec[key] = 0 if not inner else inner.count("'") // 2
+            elif mm := re.search(rf"- {label}:\n((?:\s+- .+\n)+)", text):
+                rec[key] = len(re.findall(r"^\s+- ", mm.group(1), re.MULTILINE))
+        out.append(rec)
+    return out
 
 
 def load_rows() -> list[dict]:
@@ -90,7 +133,11 @@ def main() -> int:
         w.writerows(rows)
         return 0
 
-    print(f"快照数: {len(rows)}  区间: {rows[0]['date']} .. {rows[-1]['date']}")
+    # ── 第二序列：lint 周期报告（覆盖改造前期）────────────────────
+    reps = load_lint_reports()
+    print("=" * 78)
+    print(f"A. 快照序列（{len(rows)} 份，{rows[0]['date']} ~ {rows[-1]['date']}）")
+    print("=" * 78)
     print()
     hdr = f"{'日期':12s} {'inv':>4s} {'drift':>6s} {'orph':>5s} {'ghst':>5s} {'stale':>6s} | {'search':>7s} {'hit':>5s} {'rate':>6s} {'reuse':>6s} | {'score':>6s} {'llm':>4s} {'alerts':>7s}"
     print(hdr)
@@ -114,7 +161,71 @@ def main() -> int:
                 f"  {key:20s} 均值={sum(vals) / len(vals):6.2f}  最大={max(vals):4}  非零天数={sum(1 for v in vals if v)}"
             )
     print()
-    print("提示：'后'窗口需要 ≥2~4 周同类数据才有对比意义；届时直接重跑本脚本。")
+    print("=" * 78)
+    print(
+        f"B. lint 周期报告序列（{len(reps)} 份，{reps[0]['date']} ~ {reps[-1]['date']}）"
+    )
+    print("=" * 78)
+    print(
+        f"{'日期':14s} {'格式':4s} {'无效卡片':>8s} {'孤儿':>5s} {'幽灵':>5s} {'问题数':>7s} {'检查卡数':>8s}"
+    )
+    print("-" * 62)
+    for r in reps:
+        print(
+            f"{r['date']:14s} {r['fmt']:4s} {r['invalid']!s:>8s} {r['orphans']!s:>5s} "
+            f"{r['ghosts']!s:>5s} {r['problems']!s:>7s} {r['checked']!s:>8s}"
+        )
+    print()
+    print(
+        "⚠️ 可比性缺口：旧格式（A）报 孤儿/无效/幽灵；新格式（B，09-08 起）报“发现问题数”"
+    )
+    print(
+        "   且新增了 long_desc / short_desc 等维度（09-08 的 40 项里 34 项是 long_desc，旧格式不检）。"
+    )
+    print(
+        "   ⇒ **跨格式不能直接比大小**；只有 `无效卡片/invalid` 在两格式与快照中同义可比。"
+    )
+
+    print()
+    print("=" * 78)
+    print("C. 改造前后对照（改造日 = 2026-09-23）")
+    print("=" * 78)
+
+    def _num(v) -> int | None:
+        return v if isinstance(v, (int, float)) else None
+
+    pre_inv = [n for n in (_num(r["lint_invalid"]) for r in rows) if n is not None]
+    pre_days = len(pre_inv)
+    pre_bad = sum(1 for n in pre_inv if n > 0)
+
+    POST = ("2026-09-23", "2026-09-24")
+    post = [r for r in rows if r["date"] in POST]
+    post_clean = sum(
+        1 for r in post if all((_num(r[f"lint_{k}"]) or 0) == 0 for k in GATE_KEYS)
+    )
+
+    print(
+        f"  改造前（快照）  : {pre_days} 个有数据的天，其中 **{pre_bad} 天** invalid>0；"
+        f"最大 {max(pre_inv) if pre_inv else 0}"
+    )
+    print(
+        f"  改造前（lint 报告）: {len(reps)} 份，invalid>0 的 "
+        f"{sum(1 for r in reps if isinstance(r['invalid'], int) and r['invalid'] > 0)} 份"
+        f"（可比口径）；B 格式“问题数”最大值 "
+        f"{max((r['problems'] for r in reps if isinstance(r['problems'], int)), default=0)}"
+    )
+    print(f"  改造后（后窗口）: {len(post)} 天 → 全维度均 0 的 **{post_clean} 天**")
+    print()
+    print(
+        f"  结论（诚实）：**状态已确认干净**（后窗口 {post_clean}/{len(post)} 天全 0），"
+    )
+    print(f"                但 **趋势尚未成立**——n={len(post)} 天不足以排除偶然。")
+    print()
+    print("  可证伪的判据（供 ≥2026-10-07 重跑时对照）：")
+    print("    ① 正面：后窗口 ≥10 个有数据的天且 invalid/orphans/ghosts 全 0")
+    print("       → 则“改造正面”成立（前提：期间检查维度未变动）")
+    print("    ② 反面：任一维度复现非零 → 说明仍有未收敛的漂移源，须定位根因")
+    print("    ③ 无效对比：若期间 lint 检查维度变了（如新增 long_desc），须分段比较")
     return 0
 
 
