@@ -313,9 +313,11 @@ def main() -> int:
             print(f"  → {tn} | {st} | {slug} | {sm[:60]}")
         return 0
     added = []
+    written_files: set[str] = set()
     for target_name, section_title, slug, summary in planned:
         if append_to_index(root / target_name, section_title, slug, summary):
             added.append(slug)
+            written_files.add(target_name)
     if not added:
         print(
             "post_ingest_hook: 无 INDEX 变更（可能已存在或无匹配 section）",
@@ -328,13 +330,18 @@ def main() -> int:
     env["GIT_COMMITTER_NAME"] = "AgentMemoryHub"
     env["GIT_COMMITTER_EMAIL"] = "hub@local"
     try:
-        git(root, "add", "INDEX.md", env=env)
+        # 暂存**实际写入过的**索引文件：此前硬编码只 add INDEX.md，
+        # 在 experience 拆到分册后 → 分册的改动从未被暂存 ⇒ commit 无内容 ⇒ 报错退出。
+        # （同一 bug 类的第二处：写入路由改了，暂存路径没改）
+        git(root, "add", *sorted(written_files), env=env)
         msg = f"docs(INDEX): post_ingest_hook 自动登记 {len(added)} 张新卡"
         git(root, "commit", "-m", msg, env=env)
     except RuntimeError as e:
         print(f"commit 失败: {e}", file=sys.stderr)
         return 3
-    print(f"post_ingest_hook: 已登记 {len(added)} 张 → {added}")
+    print(
+        f"post_ingest_hook: 已登记 {len(added)} 张 → {added}（已提交 {sorted(written_files)}）"
+    )
     return 0
 
 
