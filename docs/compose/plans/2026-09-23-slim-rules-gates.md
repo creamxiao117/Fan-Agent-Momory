@@ -35,7 +35,7 @@
 
 **Interfaces:**
 - Consumes: 仓库根目录四文件路径约定
-- Produces: `startup_budget.STARTUP_FILES: list[tuple[str, str, int]]`、`startup_budget.measure(root: Path) -> list[dict]`、`startup_budget.check(texts: dict[str, str]) -> list[str]`（返回违规消息列表，空=通过）、`startup_budget.main(argv: list[str] | None = None) -> int`（0/1）
+- Produces: `startup_budget.LIMITS: list[tuple[str, str, int]]`、`startup_budget.TOTAL_LIMIT = 30_000`、`startup_budget.measure(root: Path) -> list[dict]`、`startup_budget.check(texts: dict[str, int]) -> list[str]`（违规消息，空=通过）、`startup_budget.main(argv: list[str] | None = None) -> int`（0/1）
 
 - [ ] **Step 1: Write the failing test**
 
