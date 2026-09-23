@@ -18,6 +18,16 @@ def test_hub_keywords():
     assert classify("查一下 AgentMemoryHub 的 INDEX") == "hub"
 
 
+def test_sentence_final_pr_is_code():
+    # S2 回归：句末 PR 不再依赖尾随空格
+    assert classify("merge the PR") == "code"
+
+
+def test_bare_rules_is_hub():
+    # S2 回归：裸 rules（非 rules/ 路径）也应命中 hub
+    assert classify("please follow the rules") == "hub"
+
+
 def test_sync_keywords():
     assert classify("sync --push 到四个平台") == "sync"
     assert classify("把指令注入 workbuddy") == "sync"
