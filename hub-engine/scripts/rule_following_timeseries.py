@@ -136,6 +136,47 @@ def load_ingest_outcomes() -> list[dict]:
     return out
 
 
+def load_ingest_verdicts() -> list[dict]:
+    """冲突条目的 **LLM 判决分布**（区分真重复 vs 判重误杀）。
+
+    冲突条目形态：
+      `## [日期] ingest | 重复内容进冲突区：<卡>（LLM 建议 <verdict>，待人工终审）`
+
+    判决→含义（分析关键）：
+      - `merge`  ← **真重复**（LLM 也认为应合并）
+      - `create` ← **误杀**（LLM 认为该新建，却被去重通道拦下）
+      - `review` / `skip` ← 不确定 / 放弃（既非真重复也非误杀）
+      - 无括号注记 ← 早期无 LLM 判决，单列
+
+    为何需要：单看“重复率”无法区分两种性质——
+      真重复上升 = 知识被反复提交（漂移/返工成立）
+      review/create 主导 = **去重门禁判不准**，性质完全不同。
+    """
+    log_path = RETRO / "log.md"
+    if not log_path.exists():
+        return []
+    pat = re.compile(
+        r"^## \[(\d{4}-\d{2}-\d{2})\] ingest \| 重复内容进冲突区："
+        r"([^（(\n]+?)\s*(?:[（(]([^）)]*)[）)]?)?\s*$"
+    )
+    out: list[dict] = []
+    for line in log_path.read_text(encoding="utf-8-sig", errors="ignore").splitlines():
+        m = pat.match(line)
+        if not m:
+            continue
+        note = (m.group(3) or "").strip()
+        if "merge" in note:
+            kind = "真重复"
+        elif "create" in note:
+            kind = "误杀"
+        elif note:
+            kind = "不确定"
+        else:
+            kind = "无注记"
+        out.append({"date": m.group(1), "card": m.group(2).strip(), "kind": kind})
+    return out
+
+
 def load_rows() -> list[dict]:
     rows = []
     for p in sorted(RETRO.glob("snapshot-*.json")):
@@ -313,6 +354,59 @@ def main() -> int:
             "  读法：重复率高 = 同一知识被反复提交（返工/漂移）；稳定下降说明去重生效。"
         )
         print(f"  注：改造日（2026-09-23）之后仅 {n_post} 天——仍不足以断言趋势。")
+
+    # ── D2. 冲突判决分解（回答：重复率上升是「真重复」还是「判重误杀」）──
+    verd = load_ingest_verdicts()
+    if verd:
+        print()
+        print("=" * 78)
+        print(f"E. 冲突判决分解（{len(verd)} 条冲突）")
+        print("=" * 78)
+        print("  为何要看：单看重复率无法区分性质——")
+        print("    真重复↑ → 知识被反复提交（漂移/返工成立）；")
+        print(
+            "    误杀(create) 非零 → **去重通道拦掉了本该新建的内容**（性质完全不同）。"
+        )
+        print()
+        vw: dict[str, dict[str, int]] = {}
+        for r in verd:
+            y, m, d = (int(x) for x in r["date"].split("-"))
+            iso = datetime.date(y, m, d).isocalendar()
+            k = f"{iso[0]}-W{iso[1]:02d}"
+            vw.setdefault(k, {})
+            vw[k][r["kind"]] = vw[k].get(r["kind"], 0) + 1
+        kinds = ("真重复", "误杀", "不确定", "无注记")
+        hdr = (
+            f"  {'周':11s} "
+            + " ".join(f"{k:>6s}" for k in kinds)
+            + f" {'合计':>5s} {'真重复占比':>10s}"
+        )
+        print(hdr)
+        print("  " + "-" * (len(hdr) - 2))
+        for k in sorted(vw):
+            cw = vw[k]
+            tot = sum(cw.values())
+            cells = " ".join(f"{cw.get(x, 0):>6d}" for x in kinds)
+            print(f"  {k:11s} {cells} {tot:>5d} {cw.get('真重复', 0) / tot:>9.0%}")
+
+        from collections import Counter as _C
+
+        overall = _C(r["kind"] for r in verd)
+        print()
+        print(
+            f"  总体：真重复 {overall.get('真重复', 0)} / 误杀 {overall.get('误杀', 0)} / "
+            f"不确定 {overall.get('不确定', 0)} / 无注记 {overall.get('无注记', 0)}（共 {len(verd)}）"
+        )
+        dup_cards = _C(r["card"] for r in verd)
+        rep = sorted(((n, c) for c, n in dup_cards.items() if n > 1), reverse=True)
+        if rep:
+            print(f"  被反复提交的卡（≥2 次，共 {len(rep)} 个）：")
+            for n, c in rep[:5]:
+                print(f"    {n}×  {c}")
+        print()
+        print(
+            "  判据：某周真重复占比高 → 真漂移；误杀非零 → 去重拦掉了本该新建的内容。"
+        )
     return 0
 
 

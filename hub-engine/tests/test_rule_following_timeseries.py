@@ -133,3 +133,49 @@ def test_ingest_outcomes_missing_log_returns_empty(monkeypatch, tmp_path):
     retro.mkdir(parents=True)
     monkeypatch.setattr(ts, "RETRO", retro)
     assert ts.load_ingest_outcomes() == []
+
+
+# ────────────────────── 冲突判决分解（真重复 vs 误杀）──────────────────────
+
+
+def test_verdicts_classify_all_four_kinds(monkeypatch, tmp_path):
+    """四种注记必须分别归类——混淆就会把「误杀」当成「真重复」"""
+    _retro_log(
+        monkeypatch,
+        tmp_path,
+        "## [2026-08-20] ingest | 重复内容进冲突区：a.md（LLM 建议 merge，待人工终审）\n"
+        "## [2026-08-20] ingest | 重复内容进冲突区：b.md（LLM 建议 create，待人工终审）\n"
+        "## [2026-08-20] ingest | 重复内容进冲突区：c.md（LLM 建议 review，待人工终审）\n"
+        "## [2026-08-20] ingest | 重复内容进冲突区：d.md\n",
+    )
+    got = {r["card"]: r["kind"] for r in ts.load_ingest_verdicts()}
+    assert got == {
+        "a.md": "真重复",  # merge
+        "b.md": "误杀",  # create
+        "c.md": "不确定",  # review
+        "d.md": "无注记",  # 早期无判决
+    }
+
+
+def test_verdicts_survive_halfwidth_parens_and_missing_close(monkeypatch, tmp_path):
+    """实测存在 半宽括号 / 缺右括号 的条目，必须仍能解析出卡名与判决"""
+    _retro_log(
+        monkeypatch,
+        tmp_path,
+        "## [2026-08-20] ingest | 重复内容进冲突区：x.md (LLM 建议 merge, 待人工终审)\n"
+        "## [2026-08-21] ingest | 重复内容进冲突区：y.md（LLM 建议 create，待人工终审\n",
+    )
+    rows = ts.load_ingest_verdicts()
+    assert [r["card"] for r in rows] == ["x.md", "y.md"]
+    assert [r["kind"] for r in rows] == ["真重复", "误杀"]
+
+
+def test_verdicts_ignore_non_conflict_headers(monkeypatch, tmp_path):
+    """自动入区 与 ingest 统计块不得混入判决序列"""
+    _retro_log(
+        monkeypatch,
+        tmp_path,
+        "## [2026-08-20] ingest | 自动入区：a.md\n"
+        "- ingest：`{'promoted': 1, 'duplicate': 4}`\n",
+    )
+    assert ts.load_ingest_verdicts() == []
