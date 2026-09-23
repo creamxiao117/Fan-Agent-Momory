@@ -19,7 +19,7 @@
 - 任务型仅 4 型：`light` / `code` / `hub` / `sync`；判不出 → `light`；只升不降。
 - 注入/AGENTS/INDEX 中文表述与既有口径一致；产出面向用户必须中文。
 - 每任务收尾：相关 pytest + `ruff check` + `ruff format --check` 全绿再 commit。
-- Hub 卡变更遵守：先 `scripts/backup-rules.py`（B 步）；不直写 rules 权威区新卡（本计划只改已有卡 frontmatter/拆分正文）。
+- Hub 卡变更遵守：**任何 rules/ 卡修改前**先 `python scripts/backup-rules.py`（预检裁定 2026-09-23：先备份再改卡；Task 6 起执行，Task 7 若当日已备份可跳过或再跑一次）；不直写 rules 权威区新卡（本计划只改已有卡 frontmatter/拆分正文）。
 - 测试在 `hub-engine/` 下跑：`cd hub-engine && python -m pytest ...`。
 - 编码：UTF-8 无 BOM（md/py）；过 pre-commit 编码门禁。
 
@@ -722,6 +722,13 @@ git commit -m "refactor(index): 目录化——卡描述截断≤40字，详情�
 | task | chinese-text-encoding-discipline, agent-code-discipline-iron-rule, multi-language-style-config, cross-platform-sync-rule, rules-routing-table, agent-modify-must-view-page, markdown-revision-style, output-language-rule, context-budget-discipline, reusable-code-header-comment-rule, agent-show-todo-rule, auto-promote-empty-today-rule, requirement-alignment-first, gateway-no-credential-rule, lint-runtime-data-exclude, dsh-patch-driven-plugin, pluginhub-startup-automation-script-registration-standard, dll-version-lock, browser-automation-chrome-preference, text-extraction-priority, pre-uninstall-data-safety-check, trae-work-ruff-format-batch-bug, gh-star-repo-filter-rule, clash-rule-fix-consumption-standard, ollama-retired-lmstudio-takeover, hub-inventory-baseline-audit, code-platform-conventions, context-engineering-skeleton, context-engineering-avoid, global-rules |
 | （已在 iron/task 覆盖全部 32 张；无 ref） | — |
 
+- [ ] **Step 0: 改卡前全量备份（预检裁定：先备份再改卡）**
+
+```bash
+python scripts/backup-rules.py
+```
+Expected: 打印 Found N rule files 与 backup 路径；记下 `.backup/<DATE>/manifest.txt`
+
 - [ ] **Step 1: 批量写入 tier 字段**
 
 ```powershell
@@ -837,10 +844,11 @@ git commit -m "refactor(rules+inject): 32卡tier标注+3长卡核心/附录拆�
 - Consumes: 脚本内硬编码路径与 `MERGE_PAIRS` 四组
 - Produces: `.backup/<DATE>/manifest.txt`；合并目标卡；DEPRECATED 头
 
-- [ ] **Step 1: 全量备份 rules**
+- [ ] **Step 1: 全量备份 rules（若 Task 6 已跑过同日备份，可跳过或再跑一次确认 manifest 存在）**
 
 ```bash
 python scripts/backup-rules.py
+test -f AgentMemoryHub/.backup/*/manifest.txt || ls AgentMemoryHub/.backup/
 ```
 Expected: `Found N rule files` + manifest 路径打印
 
