@@ -1,17 +1,22 @@
 #!/usr/bin/env bash
-# @version V1.1 / 2026-09-19 / Hermes / hub-engine pre-commit 编码+ruff 双门禁钩子
+# @version V1.2 / 2026-09-23 / Hermes + pi / hub-engine 三道提交门禁钩子
 #
-# 作用（两道门禁，先编码后 lint）：
+# 作用（三道门禁，先编码 → 再预算 → 后 lint）：
 #   0) 编码门禁：staged 文本文件跑 check_encoding.py，非 UTF-8 / BOM 不合规 /
 #      乱码串残留 / .vbs 含非 ASCII → 阻断（依据 rules/chinese-text-encoding-discipline v1.0）
+#   0.5) 启动链预算门禁（L0 ≤30K + L1 各任务型 ≤15K）→ 超标阻断
 #   1) ruff check  → 不通过则阻断
 #   2) ruff format --check → 不一致则阻断
 #
 # 触发原因：
 #   - 2026-09-10 trae work ruff format 48 文件 2 天未 commit 未报警（实证）
 #   - 2026-09-19 中文文本/路径乱码规范落地，把「人工跑 check_encoding.py」升级为提交时自动阻断
+#   - 2026-09-23 **预算门禁上提到提交时**。原因：该门禁此前只挂每日巡检 →
+#     超帽改动最长可存活 24h（2026-09-23 实测巡检曾连续 18 天未跑，见
+#     scripts/rule_following_timeseries.py）。原先「怕拖慢提交」的顾虑经实测否定：
+#     预算检查仅 **~84ms**（系统 python）。巡检仍保留该步（双保险）。
 #
-# 安装：cp scripts/pre-commit .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit
+# 安装：cp hub-engine/scripts/pre-commit .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit
 # 绕过：git commit --no-verify（仅在明确知情时使用，并在 commit message 里说明原因）
 #
 # 退出码：
@@ -19,6 +24,7 @@
 #   1 = 阻断（ruff check 报错）
 #   2 = 阻断（ruff format --check 不一致）
 #   4 = 阻断（编码门禁未通过）
+#   5 = 阻断（启动链预算超帽）
 #
 # 兼容：Windows + Linux + macOS（Git Bash）
 
@@ -51,6 +57,25 @@ if [ -f "$ENC_SCRIPT" ]; then
     fi
 else
     echo "[pre-commit] ⚠️ 找不到 $ENC_SCRIPT，跳过编码门禁"
+fi
+
+# ---------- 0.5) 启动链预算门禁（L0 + L1）----------
+# 实测仅 ~84ms，故上提到提交时：避免超帽改动存活到下一次巡检（最长 24h）。
+# 中枢缺失时 startup_budget 自行降级（L1 返回空、不对抗非零），不会误阻。
+BUDGET_SCRIPT="hub-engine/scripts/startup_budget.py"
+if [ -f "$BUDGET_SCRIPT" ]; then
+    if BUDGET_OUT=$(cd hub-engine && python -m scripts.startup_budget 2>&1); then
+        TOTAL_LINE=$(echo "$BUDGET_OUT" | grep -E '^\[TOTAL\]' | head -1 || true)
+        L1_LINE=$(echo "$BUDGET_OUT" | grep -cE '^\[OK\] L1\[' || true)
+        echo "[pre-commit] ✅ 预算门禁通过（${TOTAL_LINE:-L0 OK}；L1 分型 ${L1_LINE} 项）"
+    else
+        echo "$BUDGET_OUT" | grep -E '^\[(OVER|FAIL|TOTAL)\]|^FAIL' || echo "$BUDGET_OUT"
+        echo "[pre-commit] ❌ 启动链预算超帽（L0 总和/分项帽 或 L1 分型/悬空卡名），commit 阻断"
+        echo "[pre-commit] 修法：瘦身对应文件，或按需调整 scripts/startup_budget.py 的 LIMITS/L1_LIMIT"
+        exit 5
+    fi
+else
+    echo "[pre-commit] ⚠️ 找不到 $BUDGET_SCRIPT，跳过预算门禁"
 fi
 
 # ---------- 1) ruff 门禁 ----------

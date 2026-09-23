@@ -1,4 +1,48 @@
 #!/usr/bin/env python3
+# ⚠️ 一次性脚本（已消费）—— 2026-09-23 加护栏，禁止重跑
+#
+# 为什么不删而是加护栏：
+#   WORK.md 的 T15 曾写明「执行 deduplicate-experience.py」，若不拦，
+#   下一个 Agent 会照做并误杀经验卡。
+#
+# 本脚本的问题（2026-09-23 实测确认）：
+#   1. **会误杀**：靠模糊相似度判定重复（标题>0.85 且正文>0.7）。
+#      实证：pluginhub-date-range-picker v1.1 / v1.2 实测为 **0.97 / 0.95**，
+#      会被判为重复并作废 v1.1——而 **v1.1 藏有 v1.2 没有的 4 条教训**
+#      （F811 重复 __init__ / Optional[T] vs T|None / I001 import 排序 / 装饰品 UI），
+#      且这些教训未在别处成卡。→ 跑它 = 直接销毁知识。
+#   2. **marker 目标推导有 bug**：`keep_file = next((k for k in keep if k.stem in old), None)`
+#      找不到就写 `merged into unknown`。实证：本仓
+#      `chrome-proxy-...-2026-09-05.md` 上那行 `unknown` 就是它留下的。
+#   3. **非幂等**：重跑会重复前置 DEPRECATED 注释。
+#   4. 无 dry-run，直接写盘。
+#
+# 现状：经验去重已用**只读分析 + 人工裁定**完成（见 work/analyze_experience_dupes.py）：
+#   220 张中仅一组真重复（ingest-probe-a ≡ cross-repo-index-commit，正文逐字相同）
+#   → 已作废；pluginhub v1.1/v1.2 判定为互补、均保留。
+#
+# 确需再做去重：用 work/analyze_experience_dupes.py 出只读候选清单，逐对人工裁定，
+# 再用 `status: deprecated` + `superseded_by` 显式作废。不要复活本脚本。
+import sys
+
+_REFUSAL = """\
+[REFUSED] deduplicate-experience.py 是一次性脚本，已消费，拒绝执行。
+
+原因：
+  1) 靠模糊相似度（标题>0.85 且正文>0.7）会误杀。实测 pluginhub v1.1/v1.2
+     为 0.97/0.95 会被判重复——但 v1.1 藏有 v1.2 没有的 4 条教训（且未在别处成卡）。
+  2) marker 目标推导有 bug，找不到目标就写 `merged into unknown`。
+  3) 非幂等、无 dry-run，直接写盘。
+
+经验去重已完成（只读分析 + 人工裁定）：220 张中仅 1 组真重复，已作废。
+如需再做：python work/analyze_experience_dupes.py（只读候选）→ 人工裁定
+       → 用 status: deprecated + superseded_by 显式作废。
+"""
+
+print(_REFUSAL, file=sys.stderr)
+sys.exit(2)
+
+# --- 以下为原始实现，仅作历史留存，永不执行 ---
 # Deduplicate experience files
 import hashlib
 from difflib import SequenceMatcher

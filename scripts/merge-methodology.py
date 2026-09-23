@@ -1,6 +1,45 @@
 #!/usr/bin/env python3
-# Merge methodology files
+# ⚠️ 一次性脚本（已消费）—— 2026-09-23 加护栏，禁止重跑
+#
+# 为什么不删而是加护栏：
+#   WORK.md 的 T15 曾写明「执行 python scripts/merge-methodology.py」，若不拦，
+#   下一个 Agent 会照做并破坏已完成的成果。
+#
+# 本脚本的三个问题（已在 2026-09-23 实测确认）：
+#   1. **会截断内容**：用 `content.split("---")` 取正文，而 Markdown 表格分隔行
+#      `|---|` 里就含 `---`，会被切开 → 正文在第 1 个表格处被截断。
+#      （实证：memory-injection-pattern.md 曾因此丢掉「5 平台对照表」与
+#       「## 4. 写入规范」「## 5. 验证清单」两个小节，2026-09-23 已手工补回。）
+#   2. **会覆写目标卡**：直接把合并结果写回 dst → 重跑会抹掉对 dst 的一切修正。
+#   3. **非幂等**：每次运行都再给源卡前置一行 `<!-- DEPRECATED -->`。
+#
+# 现状：4 组合并在 2026-09-21 已完成，且已按新约定改写为
+#   `status: deprecated` + `superseded_by`（不依赖注释位置）。
+#   内容完整性已逐张验证（见 work/verify_merge_fidelity.py，8 张 exact）。
+#
+# 确需再合并新组时：请写新的幂等脚本（默认 dry-run、按 frontmatter 边界取正文、
+# 不覆写已有 dst），不要复活本脚本。
 import sys
+
+_REFUSAL = """\
+[REFUSED] merge-methodology.py 是一次性脚本，已消费，拒绝执行。
+
+原因：
+  1) 会用 `split("---")` 截断正文（Markdown 表格分隔行含 `---`）——
+     实测曾使 memory-injection-pattern.md 丢掉两个小节，已于 2026-09-23 手工修复。
+  2) 会覆写目标卡，重跑将抹掉对目标卡的所有修正。
+  3) 非幂等：会重复给源卡追加 DEPRECATED 注释。
+
+4 组合并均已完成，且已改为 `status: deprecated` + `superseded_by` 显式表达。
+如需核对完整性：python work/verify_merge_fidelity.py
+如需新增合并：请写幂等、默认 dry-run、不覆写 dst 的新脚本。
+"""
+
+print(_REFUSAL, file=sys.stderr)
+sys.exit(2)
+
+# --- 以下为原始实现，仅作历史留存，永不执行 ---
+# Merge methodology files
 from pathlib import Path
 
 import yaml
@@ -80,5 +119,5 @@ def main():
     return count == len(MERGE_PAIRS)
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover - 护栏已在模块顶部 exit
     sys.exit(0 if main() else 1)

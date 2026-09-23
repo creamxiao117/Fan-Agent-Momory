@@ -71,7 +71,17 @@ MOJIBAKE_MARKERS = (
 
 # 乱码串豁免：**按定义**要引用乱码样例的文件，不当 FAIL
 #   ① 规范文档 / 本脚本自身；② 规范技能目录下的任何文件（SKILL.md 等）
-MARKER_EXEMPT_NAMES = {"chinese-text-encoding-discipline.md", "check_encoding.py"}
+#   ③ 以乱码/编码为**主题**的经验卡——它们把乱码作为证据/验证公式引用，
+#      删掉乱码反而会毁掉内容（2026-09-23 实测两份，见下注释）
+MARKER_EXEMPT_NAMES = {
+    "chinese-text-encoding-discipline.md",
+    "chinese-text-encoding-discipline-appendix.md",
+    "check_encoding.py",
+    # 内含验证公式：`'阿里百炼'.encode('utf-8').decode('gbk') == '闃块噷鐧剧偧'`
+    "dotnet-subprocess-utf8-gbk-mojibake.md",
+    # 内含实测日志证据：`日志 "PASS: 19 涓枃浠剁紪鐮佸叏閮ㄥ悎瑙?"`
+    "subprocess-stdout-encoding-ambient-env-leak.md",
+}
 MARKER_EXEMPT_DIRS = {"chinese-text-encoding-discipline"}
 
 TEXT_EXTS = {

@@ -400,6 +400,62 @@ def _step_ruff(engine_dir: Path) -> StepResult:
         )
 
 
+def _step_startup_budget() -> StepResult:
+    """L0 + L1 预算门禁（spec S3 挂巡检；L1 部分 2026-09-23 新增）。
+
+    为什么挂巡检而不挂 pre-commit：该门禁只有「内容变多才超帽」，日常提交基本不触发；
+    挂 pre-commit 会拖慢每次提交，且容易被人用 --no-verify 绕过。
+
+    直接调 `measure()`/`check()` + `measure_tiers()`/`check_tiers()`（只读），
+    不重定向 stdout。不涉 LLM。
+    """
+    from scripts.startup_budget import (
+        TOTAL_LIMIT,
+        _repo_root,
+        check,
+        check_tiers,
+        measure,
+        measure_tiers,
+    )
+
+    root = _repo_root()
+    rows = measure(root)
+    texts = {r["name"]: r["chars"] for r in rows}
+    total = sum(texts.values())
+    l0_detail = " ".join(f"{r['name'].replace('.md', '')}={r['chars']}" for r in rows)
+
+    # L1（按任务型补读）：无 tools 环境时降级为不检，不误报失败
+    try:
+        tier_rows = measure_tiers(root)
+        tier_errs = check_tiers(tier_rows)
+        l1_detail = " ".join(f"{r['tier']}={r['chars']}" for r in tier_rows)
+    except ImportError:
+        tier_rows, tier_errs, l1_detail = [], [], "未检(无法导入 task_tier)"
+
+    errs = check(texts) + tier_errs
+    meta = {"total": total, "limit": TOTAL_LIMIT, "l1": tier_rows, "errors": errs}
+    if errs:
+        return StepResult(
+            name="startup_budget",
+            stage="质量门禁",
+            status="warn",
+            exit_code=1,
+            output=(
+                f"⚠️ 预算超帽 L0 {total}/{TOTAL_LIMIT} [{l0_detail}]"
+                f" | L1 [{l1_detail}]：{'; '.join(errs)}"
+            ),
+            meta=meta,
+        )
+    return StepResult(
+        name="startup_budget",
+        stage="质量门禁",
+        status="pass",
+        exit_code=0,
+        output=f"✅ 预算 L0 {total}/{TOTAL_LIMIT}（{l0_detail}） | L1（{l1_detail}）",
+        meta=meta,
+    )
+
+
 # ----- 阶段 3: 飞轮活跃度 -----
 
 
@@ -1087,6 +1143,9 @@ def run_patrol(
         _run_step("pytest", "质量门禁", lambda: _step_pytest(engine_dir))
     )
     stage2.steps.append(_run_step("ruff", "质量门禁", lambda: _step_ruff(engine_dir)))
+    stage2.steps.append(
+        _run_step("startup_budget", "质量门禁", lambda: _step_startup_budget())
+    )
     report.stages.append(stage2)
 
     # ===== 阶段 3: 飞轮活跃度 =====

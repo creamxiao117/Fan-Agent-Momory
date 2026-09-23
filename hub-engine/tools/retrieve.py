@@ -28,6 +28,16 @@ _ACTIVE_DIRS = (
     "experience",
 )
 
+# 不参与检索的卡片状态（单一事实源）
+#   archived   —— 已归档
+#   deprecated —— 已作废（内容并入 frontmatter.superseded_by）
+# 2026-09-23：deprecated 改为显式字段。此前靠「DEPRECATED 注释在文件第 1 行 ⇒
+# frontmatter 解析失败 ⇒ 卡被丢弃」被动排除，位置敏感：为加 tier 而把注释下移
+# 会让卡"复活"进检索库（A5 踩坑）。
+# 同日：已删除历史上第二套重复引擎（AgentMemoryHub/hub-engine）——它写过同一个
+# 语义但口径不同，本仓 common/frontmatter.py 的 VALID_STATUS 必须与之保持一致。
+EXCLUDED_STATUSES = frozenset({"archived", "deprecated"})
+
 # 第二层向量融合（方案 A：bge-small-zh + SQLite）
 _RRF_K = 60  # RRF rank 常数：rank 分 = 1/(k+rank)，k 越大末位影响越小
 _VEC_POOL = 20  # 融合前每个通道的召回池大小（>top_k，给次要通道上榜机会）
@@ -150,7 +160,10 @@ class _CorpusIndex:
                     continue
                 seen.add(abs_p)
                 c = try_read_card(p)
-                if c is None or c.status == "archived":
+                # 不参与检索的状态：archived（归档）+ deprecated（已作废，内容并入 superseded_by）
+                # 2026-09-23：deprecated 此前靠「注释在文件第 1 行导致 frontmatter 解析失败」
+                # 被动排除——位置敏感且不可测。现改为显式 status，与中枢 cards.EXCLUDED_STATUSES 同口径。
+                if c is None or c.status in EXCLUDED_STATUSES:
                     continue
                 self.cards.append(c)
                 st = p.stat()

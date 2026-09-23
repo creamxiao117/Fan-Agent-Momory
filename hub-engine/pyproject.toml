@@ -28,3 +28,10 @@ testpaths = ["tests"]
 # PLW1510: subprocess.run 有外部 try/except 包装
 # B018: 测试代码临时调试残留，但已在上游修复
 ignore = ['BLE001', 'S110', 'PLW1510', 'B018']
+
+# 脚手架模板豁免：templates/ 是供**拷贝后填写**的骨架，必然含占位导入/变量
+# （如 `args = parser.parse_args()` 只写不读），对它们跑 F401/F841/UP009 必然误报。
+# 注：本仓的 ruff 配置入口是**本文件**（linter.project_root = hub-engine），
+#     根目录 .ruff.toml 不覆盖 hub-engine/ 下的文件——豁免写在那里不生效。
+[tool.ruff.lint.per-file-ignores]
+"templates/*.py" = ["F401", "F841", "UP009"]

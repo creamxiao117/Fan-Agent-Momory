@@ -1,3 +1,10 @@
+## [2026-09-23] R16 | 每日巡检 exit 2（13 Lint）· 修复进行中
+
+- **巡检**（patrol_runner v3，快照 `retro/snapshot-2026-09-23.json`）：⚠️ lint total=13 = invalid 12 + schema_drift 1；auto_fix_lint「无修复」；LM Studio 可用（~2s，info）；missing_query P0/P1=0（已归档 `.sync/state/missing_daily_2026-09-23.md`）；sleep 候选 0
+- **Git**：已提交 `chore: 每日巡检快照 2026-09-23`；commit 后快照被重跑更新（git status 显示该文件 modified）→ 修复完成时一并补提交
+- **Lint 工具定位**（`hub_lint.py` 不存在，勿再找它）：`commands/lint.py` · `scripts/check_card_frontmatter.py` · `scripts/auto_fix_lint.py` · `scripts/lint_report.py` · `tools/lint.py`；巡检明细在 `AgentMemoryHub/retro/log.md`（最新 run 段落）
+- **进行中**：取逐卡错误明细 → 修复 13 处 → 重跑巡检验证 exit → 补提交快照
+
 ## [2026-09-15] R15 | star-distill 6 仓 + T1 3 卡 + 待处理四项收口 + 日期纠偏
 
 **PART A star-distill（判级 B+，全部入权威区）**

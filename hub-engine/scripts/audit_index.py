@@ -18,19 +18,18 @@ _THIS = _P(__file__).resolve().parent
 sys.path.insert(0, str(_THIS.parent))  # hub-engine/
 
 import argparse
-import re
 from datetime import datetime, timezone
 from pathlib import Path
 
-# INDEX 登记行格式：- slug  描述
-# slug 字符集含 CJK（2026-09-11 用户裁定）：中文 slug 卡（如 projects/T21-5platform-后续优化-待办.md）
-# 此前无法被解析 → 恒被误判为「INDEX 未登记」。slug 类仍不含空格，故加 CJK 不会引入贪婪越界。
-_CJK = "\u4e00-\u9fff"
-INDEX_ENTRY_RE = re.compile(
-    rf"^- ([a-zA-Z0-9{_CJK}][a-zA-Z0-9_\-\.{_CJK}]{{0,80}})(?:\s{{2,}}|\s+)(.+)$"
-)
-NESTED_ENTRY_RE = re.compile(
-    rf"^\|- ([a-zA-Z0-9{_CJK}][a-zA-Z0-9_\-\.{_CJK}]{{0,80}})(?:\s{{2,}}|\s+)(.+)$"
+# 登记行正则与权威区清单已上移到契约模块（2026-09-23）。
+# 为何上移：本模块的错位检查要用 index_consistency.expected_index_file()，
+# 而契约模块又需这两个正则 -> 循环导入。契约模块应为**叶子**，故由其持有正则。
+from scripts.index_consistency import (
+    AUTHORITY_DIRS,
+    INDEX_ENTRY_RE,
+    NESTED_ENTRY_RE,
+    SLUG_RE,
+    expected_index_file,
 )
 
 # 描述长度上限：按分区差异化（2026-09-11 用户裁定）
@@ -39,27 +38,20 @@ NESTED_ENTRY_RE = re.compile(
 DESC_LIMIT_DEFAULT = 250
 DESC_LIMIT_BLUEPRINTS = 800
 
+# 被审计的 INDEX 文件（2026-09-23）：根 INDEX + experience 分册。
+# 此前只审根 INDEX，导致分册 216 条完全无人看管，也查不出“登记到了错文件”。
+INDEX_FILES_AUDITED = ("INDEX.md", "INDEX-experience.md")
+
 
 def _desc_limit(section: str) -> int:
     """分区标题 → 描述长度上限（按标题内目录名判定，避免中文标题改写后失效）。"""
     return DESC_LIMIT_BLUEPRINTS if "blueprints" in section else DESC_LIMIT_DEFAULT
 
 
-# 权威区（与 engine.config.yaml authority_dirs 对齐，2026-09-02 调整为 5 目录）
-# 注意：experience/notes/retro 是非权威区，仅参与 INDEX 登记，不参与权威文件扫描
-AUTHORITY_DIRS = (
-    "rules",
-    "methodology",
-    "longterm",
-    "projects",
-    "blueprints",
-)
-
 # _ghost_index 检查时额外纳入非权威区（experience/notes/retro）避免误报
 _ALL_SCAN_DIRS = AUTHORITY_DIRS + ("experience", "notes", "retro")
 
 # slug 格式：允许小写/大写字母、数字、连字符、下划线、点号；2~80 字符
-SLUG_RE = re.compile(rf"^[a-zA-Z0-9{_CJK}][a-zA-Z0-9_\-\.{_CJK}]{{1,79}}$")
 
 
 def _parse_index(index_path: Path) -> tuple[dict[str, list[str]], list[dict]]:
@@ -201,6 +193,37 @@ def audit(root: Path) -> dict:
                     "desc_len": len(desc),
                     "line_no": entry["line_no"],
                     "severity": "low",
+                }
+            )
+
+    # 6) 登记位置错位（misrouted）：条目住在了“不该它住”的 INDEX 文件。
+    #
+    # 为何需要这一维度（2026-09-23 实测踩到）：A4 把 experience 整区从根 INDEX 拆到
+    # INDEX-experience.md（根 INDEX 只留指针）后，两个写入方（post_ingest_hook /
+    # fix_orphans）**没跟着改**，继续把经验卡追加回根 INDEX → **白涨 L0 预算**
+    # 且分册失去意义。而 orphan/ghost/格式/重复四个维度**都查不出**这种错位。
+    # 本条即把“人工撞见”变成“门禁自动发现”。
+    for _fname in INDEX_FILES_AUDITED:
+        _fpath = root / _fname
+        if not _fpath.exists():
+            continue
+        _by, _fentries = _parse_index(_fpath)
+        for _entry in _fentries:
+            _want = expected_index_file(_entry.get("section", ""))
+            if _want is None or _want == _fname:
+                continue
+            issues.append(
+                {
+                    "type": "misrouted_entry",
+                    "msg": (
+                        f"{_fname} 行 {_entry['line_no']}: '{_entry['slug']}' 登记在"
+                        f"'{_entry.get('section', '')}' 分区，但该分区的条目应写入 {_want}"
+                    ),
+                    "slug": _entry["slug"],
+                    "line_no": _entry["line_no"],
+                    "in_file": _fname,
+                    "expected_file": _want,
+                    "severity": "high",
                 }
             )
 
