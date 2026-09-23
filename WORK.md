@@ -1,20 +1,25 @@
 # WORK.md（当前状态 · 唯一来源）
 
-更新于：2026-09-23（启动链与规则门禁分层瘦身 · 分支 `optimize/slim-rules-gates` · **交接给下一 Agent**）
+更新于：2026-09-23（启动链与规则门禁分层瘦身 · 分支 `optimize/slim-rules-gates` · **T14/T15/T16 已完成，待用户验收**）
 
 ## 当前状态快照
 
-- 启动链曾 136K → **现测 17,173/30,000 PASS**（`cd hub-engine && python -m scripts.startup_budget` 退出码 0）。
+- 启动链曾 136K → **现测 23,326/30,000 PASS**（`cd hub-engine && python -m scripts.startup_budget` 退出码 0）。
 - 方案：`docs/compose/specs/2026-09-23-slim-rules-gates-design.md`（S1–S5）；计划：`docs/compose/plans/2026-09-23-slim-rules-gates.md`。
 - 分层：L0（AGENTS/CHARTER/WORK 当前态/根 INDEX 目录版）→ L1 四型（`hub-engine/tools/task_tier.py`）→ L2 检索。
 - 安全底座常驻：单写者+§4 守护+ledger；query-first+交回用户+回写。
 - 历史：`docs/superpowers/retro/work-history.md`；experience 索引：`AgentMemoryHub/INDEX-experience.md`（L2）。
-- 实测分项：AGENTS 1426 / CHARTER 784 / WORK ~1451 / INDEX 13512。
+- 实测分项：AGENTS 1416 / CHARTER 784 / WORK 本文件 / INDEX 18048。
+  - 分项帽已于 2026-09-23 重配平为 AGENTS≤2500 / CHARTER≤1500 / WORK≤5000 / INDEX≤20000
+    （和 29,000 ≤ 总帽 30,000，保持「分项帽之和 ≤ 总帽」不变量）。
+- INDEX 描述已由「机械截断 10 字」改为**卡自身摘要**（边界断句 ≤40 字）；audit 由 27 项问题转为 ✅ 健康。
 
 ## 每日巡检状态（cron，独立于本迭代）
 
-- 2026-09-23：exit 2 —— 13 Lint（invalid 12 + schema_drift 1）**修复进行中**；快照已 commit 又被重跑更新，待补提交。明细见 RUNLOG R16。
-- 工作区 `RUNLOG.md`/`WORK.md` 可能有巡检脏改动——**瘦身收口提交时勿误丢巡检段**，分笔提交。
+- 2026-09-23：**已修复，exit 0（全绿，健康度 92）**。原 13 处 Lint（invalid 12 + schema_drift 1）
+  与弃用机制同一根因：卡首行 `<!-- DEPRECATED -->` 使 frontmatter 解析失败 ⇒ 被计入 invalid。
+  改为显式 `status: deprecated` 后：invalid 8→0、schema_drift 1→0、lint 退出码 2→0。
+- 编码门禁：FAIL 2→0（两份「以乱码为主题」的卡属误报，已加豁免）；BOM WARN 19→0。
 
 ## 活跃待办（本迭代）
 
@@ -24,40 +29,53 @@
 | A2 | AGENTS 路由+CHARTER 压缩 | 完成（d3b8b3e+ca31e31） |
 | A3 | WORK 当前态+历史归档 | 完成（db3d52e+33659c1） |
 | A4 | INDEX 目录化+experience 拆分 | 完成（外层 da9f3c0 / 中枢 8556c53）；根 INDEX≤14K |
-| A5 | rules tier+长卡拆分+inject 瘦身 | **代码/卡已提交未过双审**（外层 6884b9b / 中枢 f5eca53）；任务 T14 待 spec+quality review |
-| B1 | backup+方法论合并+经验去重 | **未开始**（T15）；backup 已于 `.backup/20260923/` |
-| 收口 | 预算 PASS + 全量 pytest + ruff + 挂巡检 | **未开始**（T16）；预算已 PASS，缺挂巡检与全量收口回写 |
+| A5 | rules tier+长卡拆分+inject 瘦身 | **完成**（外层 6884b9b / 中枢 f5eca53）；T14 双审已完成并修复所发现的缺陷 |
+| B1 | backup+方法论合并+经验去重 | **完成**（T15）；合并早已完成且内容完整性已逐张验证；experience 220 张仅 1 组真重复已作废 |
+| 收口 | 预算 PASS + 全量 pytest + ruff + 挂巡检 | **完成**（T16）：预算 23,326/30,000 PASS；pytest 393 通过/0 失败；ruff 绿；巡检已挂 `startup_budget` 步 |
 
-## 已完成提交索引（外层 optimize/slim-rules-gates）
+## 已完成提交索引（外层 `optimize/slim-rules-gates`）
 
 - 计划/spec：d3d633e, bc620e2, 40874f0, e7c05c6, 1315f55, 23e3b60
 - T1–T6：1b709a0, ac132cc, fcfcffe, d3b8b3e, ca31e31, db3d52e, 33659c1, da9f3c0, 6884b9b
-- 中枢仓 AgentMemoryHub：8556c53（INDEX 拆分）, f5eca53（rules tier+拆卡）
+- T14–T16（本轮）：cb5a982（弃用显式化+L1 路由+弃用语义测试）、42be706（INDEX 卡摘要+边界断句+BOM 容错+帽配平）、3088b90（strip_bom+乱码豁免）、1797373（破坏性脚本护栏）
+- 中枢仓 AgentMemoryHub：8556c53（INDEX 拆分）、f5eca53（rules tier+拆卡）、e462e5b+d4076d5（弃用显式化 2 笔）、68088fa（INDEX 卡摘要+补登记）、217acde（巡检产物）、e39127b（剥离 19 个 BOM）、c56d7db（作废 ingest-probe-a）
 
-## 下一 Agent 必做（按序）
+## 遗留待办（不阻塞收口）
+
+- **19 个 .md 曾带 BOM 已剥离**；`extract_summary` 已改 `utf-8-sig` 容错，不会再产生空摘要。
+- English 长标题类蓝图卡的 INDEX 摘要仍会硬切（11 条，无中文可断点）——可接受。
+- `slim_index.py` 未接入任何流水线（仅手工工具），已改为边界断句防再次切出半截词。
+
+## 下一 Agent 必做（本迭代已收口）
 
 1. 读本文件 + spec + plan；确认分支 `optimize/slim-rules-gates`。
-2. **补完 T14 双审**（compose:subagent 规格 Phase1 + 质量）：范围 = 外层 6884b9b + 中枢 f5eca53；已知实现事实见下「T14 交接」。
-3. **T15 B1**：`python scripts/merge-methodology.py` + `deduplicate-experience.py`（同日已 backup）；INDEX 合并对齐再 slim；中枢单独 commit。
-4. **T16 收口**：`startup_budget` 须仍 PASS；`patrol_runner` 挂 `startup_budget` 步（spec S3 挂巡检，plan Task8 Step0.5）；全量 pytest 无新增败（基线 4 败：test_engine status×3 + test_missing_query×1）；ruff 绿；回写本表状态。
-5. 勿提交 `nul`；巡检脏文件单独处理。
+2. 本迭代 T14/T15/T16 已完成，等待用户验收；如需合并回 `master` 请先跑一次
+   `cd hub-engine && python -m pytest`（基线已无失败）+ `python -m scripts.startup_budget`。
+3. **勿执行 `scripts/merge-methodology.py` / `scripts/deduplicate-experience.py`**：
+   两者已加拒绝护栏（实测会截断/误杀，详见脚本头部注释）。
+4. 巡检脏文件（`RUNLOG.md` / `AgentMemoryHub/retro/snapshot-*.json`）单独分笔提交。
+5. 勿提交 `nul`（已清除的幽灵条目）。
 
-## T14 交接（A5 实现事实）
+## T14 双审结论（已审）
 
-- 备份：`AgentMemoryHub/.backup/20260923/manifest.txt`
-- tier：iron 3 / task 29 / ref 3（appendix）
-- 长卡核心 ≤2000：encoding 1303 / multi-lang 1058 / routing 1140；`*-appendix.md` 已建
-- inject 新模板 L0+task_tier+检索；`test_inject` 6/6；ruff 绿
-- `check_encoding.py` 加 appendix 卡名豁免（拆卡配套）
-- 子代理 general-27 被 cancel；**未完成规格/质量评审**——接手后先审再标 T14 done
+- **规格审：通过**。tier iron 3 / task 29 / ref 3；三长卡核心 1303/1058/1140（均 ≤spec 的 1.5K）；
+  inject 只注 L0 铁律+四型路由+检索一句（test_inject 6/6）；拆卡内容完整（附录含全部小节）。
+- **质量审：发现 1 缺陷 + 2 隐患，均已修**：
+  1. A5 加 `tier:` 时把 4 张作废卡的 DEPRECATED 注释下移 ⇒ 它们**复活进检索库**。
+     根因是「注释在第几行」隐式决定可索引性 ⇒ 已重构为显式 `status: deprecated`。
+  2. `test_inject` 一处断言测的是**从未存在过的字符串**（永远为真）⇒ 已换成真实片段+长度帽。
+  3. 两引擎 status 口径不一（项目 `VALID_STATUS` 无 deprecated、只认 archived）⇒ 已统一。
+- 备份：`AgentMemoryHub/.backup/20260923/manifest.txt`；内容完整性核对：`work/verify_merge_fidelity.py`
 
 ## 验收口径
 
-- `python -m scripts.startup_budget` 退出码 0（**当前已满足**）
-- 四文件字符：AGENTS≤3000 CHARTER≤3000 WORK≤9000 INDEX≤14000 总≤30000（**当前已满足**）
-- `cd hub-engine && python -m pytest` 无**新增**失败；ruff 绿
-- L0 六条铁律；INDEX 无长描述；改码型 L1 含编码核心卡名
-- 挂巡检后 `rg startup_budget hub-engine/scripts/patrol_runner.py` 有匹配
+- `python -m scripts.startup_budget` 退出码 0（**已满足**：23,326/30,000）
+- 四文件字符：AGENTS≤2500 CHARTER≤1500 WORK≤5000 INDEX≤20000，**且四者之和 ≤ 总帽 30,000**
+  （已满足；不变量由 `tests/test_startup_budget.py` 看守）
+- `cd hub-engine && python -m pytest`：**393 通过 / 0 失败 / 13 跳过**（基线 4 败已消失）；ruff 绿
+- L0 六条铁律（概念断言已加进 `tests/test_inject.py`）；INDEX 无 10 字半截词；改码型 L1 含编码核心卡名
+- 挂巡检：`rg startup_budget hub-engine/scripts/patrol_runner.py` 有匹配（已满足）
+- 弃用语义：`status: deprecated` 被两引擎一致排除（`tests/test_deprecation_semantics.py`）
 
 ## 上一轮遗留（须人工裁定，非本迭代引入）
 

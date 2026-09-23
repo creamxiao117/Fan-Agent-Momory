@@ -400,6 +400,45 @@ def _step_ruff(engine_dir: Path) -> StepResult:
         )
 
 
+def _step_startup_budget() -> StepResult:
+    """启动链 30K 预算门禁（spec S3 要求挂巡检）。
+
+    为什么挂巡检而不挂 pre-commit：该门禁只有「内容变多才超帽」，日常提交基本不触发；
+    挂 pre-commit 会拖慢每次提交，且容易被人用 --no-verify 绕过。
+
+    直接调 `measure()` + `check()`（只读），不重定向 stdout。不涉 LLM。
+    """
+    from scripts.startup_budget import TOTAL_LIMIT, _repo_root, check, measure
+
+    rows = measure(_repo_root())
+    texts = {r["name"]: r["chars"] for r in rows}
+    errs = check(texts)
+    total = sum(texts.values())
+    detail = " ".join(f"{r['name'].replace('.md', '')}={r['chars']}" for r in rows)
+    if errs:
+        return StepResult(
+            name="startup_budget",
+            stage="质量门禁",
+            status="warn",
+            exit_code=1,
+            output=f"⚠️ 启动链预算超帽 {total}/{TOTAL_LIMIT}：{'; '.join(errs)}",
+            meta={
+                "total": total,
+                "limit": TOTAL_LIMIT,
+                "errors": errs,
+                "detail": detail,
+            },
+        )
+    return StepResult(
+        name="startup_budget",
+        stage="质量门禁",
+        status="pass",
+        exit_code=0,
+        output=f"✅ 启动链预算 {total}/{TOTAL_LIMIT}（{detail}）",
+        meta={"total": total, "limit": TOTAL_LIMIT, "errors": [], "detail": detail},
+    )
+
+
 # ----- 阶段 3: 飞轮活跃度 -----
 
 
@@ -1087,6 +1126,9 @@ def run_patrol(
         _run_step("pytest", "质量门禁", lambda: _step_pytest(engine_dir))
     )
     stage2.steps.append(_run_step("ruff", "质量门禁", lambda: _step_ruff(engine_dir)))
+    stage2.steps.append(
+        _run_step("startup_budget", "质量门禁", lambda: _step_startup_budget())
+    )
     report.stages.append(stage2)
 
     # ===== 阶段 3: 飞轮活跃度 =====
