@@ -4,6 +4,14 @@
 ## 职责（合并后唯一入口）
 把「权威区有卡文件、但 INDEX 未登记」的条目补进 INDEX 对应分区。
 
+## 边界（2026-09-23 裁定：与 fix_index_registry 保持分开）
+本工具只做「**文件有 / INDEX 无**」这一个方向，而且是**纯追加**——
+不修改、不删除任何已有条目或文件。
+反向问题（「INDEX 有 / 文件无」= 幽灵 slug，需改名/纠偏源文件）由
+`fix_index_registry.py` 负责；两者**有意不合并**：后者会动源文件，
+危险等级不同，合成一个 CLI 会让 `--apply` 语义变模糊。
+与其对应的共享契约在 `scripts/index_consistency.py`（所以分开也不会漂移）。
+
 历史上本仓有**两份**做同一件事的脚本：
 - `fix_orphans.py`（V1.0，本文件）——靠 `--list-file`（默认 `tmp/orphan_paths.txt`）喂清单
 - `register_missing_index.py`（2026-09-23 我新增）——自动检测 + 用卡自身摘要

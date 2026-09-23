@@ -19,7 +19,7 @@
 | **T1** | **量「规则遵循/返工」改造前后**——唯一需要真实时间的一条 | **≥2026-10-07** 跑 `python -m scripts.rule_following_timeseries --csv`，对比改造前基线：`lint_invalid` 均值 2.38 / 最大 21、`orphans` 非零 7 天；改造后窗口现为 **0**（改造日=今天，数据未积累）。取 ≥2–4 周再下结论 |
 | T2 | 复核 INDEX 可定位性 | `python -m scripts.index_locatability_bench --rev 68088fa^` —— 当前 18/20 可定位、覆盖 42.5%（改造前 17/20、36.5%）。**该指标是关键词代理，不衡量语义理解** |
 | T3 | 上一轮遗留「待用户裁定」四项 | vector_bench 夹具 / patrol fail-below / `_norm_path` CWD / RRF 保底——非本迭代引入，须人工裁定 |
-| T4 | 幽灵 vs 未登记两工具是否再合并 | 共享契约已收敛到 `scripts/index_consistency.py`；两者方向不同（INDEX 有/文件无 ↔ 文件有/INDEX 无），**暂分** |
+| T4 | ~~幽灵 vs 未登记两工具是否再合并~~ | **已裁定（2026-09-23）：保持分开**。两者是同一问题的两个方向，不是两份实现——`fix_orphans`＝「文件有/INDEX 无」**纯追加**；`fix_index_registry`＝「INDEX 有/文件无」**改名源文件**（危险等级更高）。合并会让 `--apply` 语义模糊（会动源文件吗？）。共享契约已收敛到 `scripts/index_consistency.py`，故分开不再漂移。裁定原文与理由写在 `index_consistency.py` 头部；**若推翻请同步改此行并说明理由** |
 
 ## 门禁（都必须在跑，不只是"代码里有"）
 
