@@ -56,7 +56,7 @@ L1_CARDS: dict[Tier, list[str]] = {
     ],
     "hub": [
         "dual-platform-coherence-discipline",
-        "memory-hub-query-first",
+        "global-rules",
         "memory-hub-distill-last",
     ],
     "sync": [

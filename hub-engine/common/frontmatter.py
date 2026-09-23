@@ -16,8 +16,12 @@ VALID_TYPES = {
     "longterm",
     "blueprint",
 }
-VALID_STATUS = {"active", "archived", "candidate", "reference"}
-KNOWN = {"type", "tags", "updated", "status", "reuse_count"}
+# 合法 status。2026-09-23 新增 "deprecated"：作废卡改用显式字段表达（内容已并入
+# frontmatter.superseded_by），不再靠「DEPRECATED 注释在第 1 行导致 frontmatter 解析
+# 失败」这种位置敏感的隐式手法。TODO：与 AgentMemoryHub/hub-engine/cards.py 的
+# EXCLUDED_STATUSES 保持同口径（两套引擎共用同一批卡）。
+VALID_STATUS = {"active", "archived", "candidate", "reference", "deprecated"}
+KNOWN = {"type", "tags", "updated", "status", "reuse_count", "superseded_by"}
 
 
 def today_date() -> date:

@@ -25,7 +25,7 @@
 | --- | --- | --- |
 | light | 默认、问答、查状态 | （无，仅 L0） |
 | code | commit/ruff/pytest/patch/PR/改代码 | chinese-text-encoding-discipline · agent-code-discipline-iron-rule · multi-language-style-config |
-| hub | 中枢/ingest/rules/experience/回写 | dual-platform-coherence-discipline · memory-hub-query-first · memory-hub-distill-last |
+| hub | 中枢/ingest/rules/experience/回写 | dual-platform-coherence-discipline · global-rules · memory-hub-distill-last |
 | sync | sync/push/注入/跨平台 | cross-platform-sync-rule · dual-platform-coherence-discipline |
 
 升型廉价：动作变重再补读 L1；只升不降。完整关键词见 `hub-engine/tools/task_tier.py`。
