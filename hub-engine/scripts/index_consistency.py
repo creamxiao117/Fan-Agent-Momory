@@ -48,7 +48,36 @@ from pathlib import Path
 _THIS = Path(__file__).resolve().parent
 sys.path.insert(0, str(_THIS.parent))  # hub-engine/
 
-from scripts.audit_index import AUTHORITY_DIRS, INDEX_ENTRY_RE  # single source
+import re
+
+# ── INDEX 登记行正则（**权威定义**，2026-09-23 从 audit_index 上移至此）──
+# 为何上移：`audit_index` 需要本模块的 `expected_index_file()` 做错位检查，
+# 而本模块又需它的正则 → 循环导入。契约模块应当是**叶子**（不依赖任何 script），
+# 故把两者共用的正则/目录清单归到此处，`audit_index` 反过来导入本模块。
+#
+# slug 字符集含 CJK（2026-09-11 用户裁定）：中文 slug 卡此前无法被解析 → 恒被误判
+# 为「INDEX 未登记」。slug 类仍不含空格，故加 CJK 不会引入贪婪越界。
+# 注意：字符集**不含 `/`** —— 这是排除目录图例行（`- rules/  说明`）的机制。
+_CJK = "\u4e00-\u9fff"
+INDEX_ENTRY_RE = re.compile(
+    rf"^- ([a-zA-Z0-9{_CJK}][a-zA-Z0-9_\-." rf"{_CJK}]{{0,80}})(?:\s{{2,}}|\s+)(.+)$"
+)
+NESTED_ENTRY_RE = re.compile(
+    rf"^\|- ([a-zA-Z0-9{_CJK}][a-zA-Z0-9_\-." rf"{_CJK}]{{0,80}})(?:\s{{2,}}|\s+)(.+)$"
+)
+
+# slug 格式校验（原在 audit_index，2026-09-23 一并上移：同样依赖 _CJK）
+SLUG_RE = re.compile(rf"^[a-zA-Z0-9{_CJK}][a-zA-Z0-9_\-." rf"{_CJK}]{{1,79}}$")
+
+# 权威区（与 hub.config.yaml 的 authority_dirs 对齐）
+# 注意：experience/notes/retro 是非权威区，仅参与 INDEX 登记，不参与权威文件扫描
+AUTHORITY_DIRS = (
+    "rules",
+    "methodology",
+    "longterm",
+    "projects",
+    "blueprints",
+)
 
 # 目录名 → INDEX 分区标题（**唯一定义**；必须与目标 INDEX 文件内实际标题一致）
 SECTION_TITLES: dict[str, str] = {
@@ -118,12 +147,34 @@ def section_for_dir(dir_name: str) -> str | None:
     return SECTION_TITLES.get(dir_name)
 
 
+def dir_for_section(heading: str) -> str | None:
+    """分区标题 → 目录名（反向查找；与 `SECTION_TITLES` 同源，不另维表）。
+
+    用于审计“某条目登记到了哪个文件”——标题在两个 INDEX 文件里是同一套。
+    """
+    for d, title in SECTION_TITLES.items():
+        if title == heading:
+            return d
+    return None
+
+
+def expected_index_file(heading: str) -> str | None:
+    """该分区标题下的条目**应该**住在哪个 INDEX 文件。
+
+    返回 None 表示该标题不是卡片清单分区（如说明性分区）。
+    """
+    d = dir_for_section(heading)
+    return INDEX_FILE_FOR_DIR.get(d) if d else None
+
+
 __all__ = [
     "AUTHORITY_DIRS",
     "CARD_SECTION_TOKENS",
     "INDEX_FILE_FOR_DIR",
     "SECTION_TITLES",
     "card_slug",
+    "dir_for_section",
+    "expected_index_file",
     "index_file_for_dir",
     "is_card_section",
     "registered_slugs",
