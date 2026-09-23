@@ -113,5 +113,32 @@ def try_read_card(path: Path) -> Card | None:
         return None
 
 
+def card_title(path: Path) -> str | None:
+    """卡的**标题**：frontmatter `title:` → 首个 H1 → None。
+
+    与 `extract_summary` 用途不同，两者不可互换：
+    - 本函数取**身份**（用于幽灵 slug ↔ 卡的匹配、按标题查找）
+    - `extract_summary` 取**摘要内容**（用于 INDEX 描述；会跳过样板标题、读正文段落）
+    2026-09-23：原 `fix_index_registry._card_title` 是这份逻辑的私有副本，已上提此处
+    成为单一来源（合并时曾误以为它与 extract_summary 重复而删掉，被测试拦住）。
+    """
+    try:
+        text = path.read_text(encoding="utf-8-sig")
+    except OSError:
+        return None
+    if text.startswith("---"):
+        parts = text.split("---", 2)
+        if len(parts) >= 3:
+            for raw in parts[1].splitlines():
+                if raw.strip().startswith("title:"):
+                    val = raw.split(":", 1)[1].strip().strip("\"'")
+                    if val:
+                        return val
+    for raw in text.splitlines():
+        if raw.startswith("# "):
+            return raw[2:].strip()
+    return None
+
+
 def save_card(card: Card, path: Path) -> None:
     path.write_text(write_card(card), encoding="utf-8")

@@ -31,60 +31,42 @@ _HUB_ENGINE = Path(__file__).resolve().parent.parent
 if str(_HUB_ENGINE) not in sys.path:
     sys.path.insert(0, str(_HUB_ENGINE))
 
+from common.frontmatter import card_title
 from scripts.audit_index import (
     _ALL_SCAN_DIRS,
     AUTHORITY_DIRS,
     _authority_files,
     _parse_index,
 )
+from scripts.index_consistency import is_card_section
+
+# 分区判定 / 标题 / 摘要统一到共享位置（2026-09-23）：
+#   本文件原自带 `_CARD_SECTION_TOKENS` + `_is_card_section`（第二套分区机制）、
+#   与 `_card_title`（取卡标题的私有副本）。同一契约多份实现必然漂移，已收敛：
+#     - 分区判定 → scripts/index_consistency.is_card_section
+#               （token 由 SECTION_TITLES 派生，不再手写第二份列表）
+#     - 卡标题   → common.frontmatter.card_title（frontmatter title → H1）
+#
+#  注：**不要**把卡标题换成 post_ingest_hook.extract_summary——两者用途不同：
+#      card_title 取“身份”（用于幽灵 slug 匹配），extract_summary 取“摘要内容”
+#      （跳过样板标题读正文，结果往往不等于标题）。换错会让幽灵纠偏失效。
+
 
 _CRLF = "\r\n"
-
-# 卡片清单分区（INDEX 里按目录分节）；只有这些分区内的 `- slug` 才是登记行
-_CARD_SECTION_TOKENS = (
-    "rules/",
-    "methodology/",
-    "longterm/",
-    "projects/",
-    "experience/",
-    "blueprints/",
-)
-
-
-def _is_card_section(heading: str) -> bool:
-    """该 `## ` 分区是否是卡片清单分区（排除使用约定/沉淀通道等说明性分区）"""
-    return any(tok in heading for tok in _CARD_SECTION_TOKENS)
-
-
-def _card_title(path: Path) -> str | None:
-    """卡片的 frontmatter title；无则取首个 H1 标题"""
-    try:
-        text = path.read_text(encoding="utf-8-sig")
-    except OSError:
-        return None
-    if text.startswith("---"):
-        parts = text.split("---", 2)
-        if len(parts) >= 3:
-            for raw in parts[1].splitlines():
-                if raw.strip().startswith("title:"):
-                    return raw.split(":", 1)[1].strip().strip("\"'")
-    for raw in text.splitlines():
-        if raw.startswith("# "):
-            return raw[2:].strip()
-    return None
 
 
 def _candidates(ghost: str, files: dict[str, Path], root: Path) -> list[str]:
     """幽灵 slug 的候选文件名 stem（唯一才可用）。
 
-    注意 rel 是相对路径，读文件必须拼回 root，否则 _card_title 会静默读不到（实测踩坑）。
+    注意 rel 是相对路径，读文件必须拼回 root，否则取不到标题（实测踩坑）。
+    标题统一用 common.frontmatter.card_title（原 _card_title 是其私有副本，已上提）。
     """
     hits = []
     for slug, rel in files.items():
         if slug.endswith("-" + ghost):
             hits.append(slug)
             continue
-        title = _card_title(root / rel)
+        title = card_title(root / rel)
         if title and title == ghost:
             hits.append(slug)
     return sorted(set(hits))
@@ -107,7 +89,7 @@ def scan(root: Path) -> dict:
         if ln.startswith("## "):
             section = ln
             continue
-        if not _is_card_section(section) or not ln.startswith("- ") or "  " in ln:
+        if not is_card_section(section) or not ln.startswith("- ") or "  " in ln:
             continue
         token = ln[2:].strip()
         if token.startswith("*") or "：" in token or "。" in token:

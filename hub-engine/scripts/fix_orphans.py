@@ -34,45 +34,22 @@
 from __future__ import annotations
 
 import argparse
-import re
 import sys
 from pathlib import Path
 
 _THIS = Path(__file__).resolve().parent
 sys.path.insert(0, str(_THIS.parent))  # hub-engine/
 
+from scripts.index_consistency import (
+    AUTHORITY_DIRS,
+    SECTION_TITLES,
+    registered_slugs,
+)
 from scripts.post_ingest_hook import append_to_index, extract_summary
 
-SECTION_TITLES = {
-    "rules": "## 规则（rules/）",
-    "methodology": "## 方法论（methodology/）",
-    "longterm": "## 长期记忆（longterm/）",
-    "projects": "## 项目记忆（projects/）",
-    "blueprints": "## 技术路径蓝图（blueprints/）",
-    "experience": "## 经验（experience/）",
-}
-
-AUTHORITY_DIRS = ("rules", "methodology", "longterm", "projects", "blueprints")
-
-# 卡行：`- slug` 或 `- **slug**`，后跟 2+ 空格与描述。
-# **slug 字符集不允许 `/`** —— 这是排除目录图例行（`- rules/   权威规则说明`）的关键；
-# 口径与 `scripts/audit_index.py` 的 CARD_RE 保持一致（否则两处对"什么算一条登记"判断不一）。
-_CARD_LINE = re.compile(r"^- (?:\*\*)?([A-Za-z0-9_\-.\u4e00-\u9fff]+?)(?:\*\*)?\s{2,}")
-
-
-def registered_slugs(index_path: Path) -> set[str]:
-    """INDEX 中已登记的 slug 集合。
-
-    按行解析而非子串匹配——原实现的 `f"- {slug}" in text` 会把 `- foobar`
-    误判为已登记 `foo`，造成静默漏登（2026-09-23 修正）。
-    """
-    text = index_path.read_text(encoding="utf-8-sig", errors="ignore")
-    out: set[str] = set()
-    for line in text.splitlines():
-        m = _CARD_LINE.match(line)
-        if m:
-            out.add(m.group(1))
-    return out
+# 卡行解析 / 分区表统一在 scripts/index_consistency.py（单一事实源）：
+#   此前本文件自带 `SECTION_TITLES`、`fix_index_registry` 另带一套
+#   `_CARD_SECTION_TOKENS`，同一契约两份实现必然漂移（2026-09-23 收敛）。
 
 
 def detect_missing(root: Path, index_path: Path) -> list[Path]:

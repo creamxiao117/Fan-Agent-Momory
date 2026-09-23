@@ -33,11 +33,23 @@ def _card(root: Path, rel: str, title: str) -> Path:
 
 
 def test_registered_slugs_parses_lines(tmp_path):
+    idx = _index(tmp_path, "## 规则（rules/）\n- alpha    描述一\n- beta    描述二\n")
+    assert registered_slugs(idx) == {"alpha", "beta"}
+
+
+def test_registered_slugs_ignores_bold_note_lines(tmp_path):
+    """加粗行不是卡登记，而是注释行——真实 INDEX 里唯一加粗行就是这种：
+    `- **各平台内容先写入** .sync/drafts/<platform>_draft/，…`
+
+    权威正则 `audit_index.INDEX_ENTRY_RE` 的 slug 字符集不含 `*`，故加粗天然不匹配。
+    （曾有一段时间 experience 分区有 4 条**加粗式卡登记**，已由 regen_index_desc
+    规范化为普通形式；契约以 audit 为准。）
+    """
     idx = _index(
         tmp_path,
-        "## 规则（rules/）\n- alpha    描述一\n- **beta**    描述二\n",
+        "## 规则（rules/）\n- **各平台内容先写入** 说明文字\n- alpha    描述\n",
     )
-    assert registered_slugs(idx) == {"alpha", "beta"}
+    assert registered_slugs(idx) == {"alpha"}
 
 
 def test_registered_slugs_does_not_prefix_match(tmp_path):
