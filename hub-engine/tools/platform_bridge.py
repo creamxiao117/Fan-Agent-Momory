@@ -301,22 +301,46 @@ def _dominant_newline(target: Path) -> str:
     return "\r\n" if crlf > (raw.count(b"\n") - crlf) else "\n"
 
 
+def _is_fence(line: str) -> bool:
+    """代码围栏行：``` 或 ~~~ 开头（可带语言标识）。
+
+    V1.3 (2026-09-19)：围栏内的行不参与标题边界判定——卡片示例/脚本里的
+    `# ` 注释、`## ` 小标题都不是真标题（实证：跨平台同步纪律卡内的
+    bash 示例 `# 1. 入库后先 lint...` 被当成 hermes 卡片边界，推 7state
+    越界替换 361 行、删 286 行）。
+    """
+    return line.lstrip()[:3] in ("```", "~~~")
+
+
 def _span_by_heading(
     text: str,
     pat_head: re.Pattern[str],
     pat_next: re.Pattern[str],
     pushed_prev: set[str],
 ) -> str | None:
-    """段首 = 匹配 pat_head 的行；段尾 = 下一行匹配 pat_next（或 EOF）；指纹闸校验。
+    """段首 = 匹配 pat_head 的**围栏外**行；段尾 = 下一行匹配 pat_next（或 EOF）；指纹闸校验。
 
     只有整段指纹 ∈ state['pushed']（= 中枢自己推过的版本）才认，边界猜错即返回 None。
+    V1.3 (2026-09-19)：围栏感知——围栏内的行既不充当段首也不充当段尾
+    （段体本身完整包含围栏，替换时整段替换不丢围栏内容）。
     """
     lines = text.splitlines(keepends=True)
+    fence_now = False  # 外层扫描：当前行是否在围栏内
     for i, ln in enumerate(lines):
-        if not pat_head.match(ln.strip()):
+        if _is_fence(ln):
+            fence_now = not fence_now
+            continue
+        if fence_now or not pat_head.match(ln.strip()):
             continue
         j = i + 1
-        while j < len(lines) and not pat_next.match(lines[j].strip()):
+        fence_in_span = False  # 段内围栏跟踪：围栏内的 # 注释/标题不充当段尾
+        while j < len(lines):
+            if _is_fence(lines[j]):
+                fence_in_span = not fence_in_span
+                j += 1
+                continue  # 围栏行本身（含闭合行）始终属于段体
+            if not fence_in_span and pat_next.match(lines[j].strip()):
+                break
             j += 1
         span = "".join(lines[i:j]).strip()
         if span and fingerprint(span) in pushed_prev:

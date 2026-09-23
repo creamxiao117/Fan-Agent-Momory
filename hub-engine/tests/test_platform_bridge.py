@@ -477,3 +477,45 @@ def test_hermes_repush_replaces_in_place_no_duplicate(tmp_path):
     assert text.count("# 新规则") == 1
     assert "第二版正文" in text
     assert "第一版正文" not in text
+
+
+def test_hermes_repush_fence_aware_no_cross_fence_replace(tmp_path):
+    """围栏内的 `# ` 注释不得被当成 hermes 卡片边界（R18 教训：越界替换 361 行/删 286 行）。
+
+    卡片正文含 bash 示例围栏（首行即 `# 1. ...` 注释）：改卡重推时
+    替换区间必须完整覆盖围栏 + 围栏之后的正文，且围栏内注释保持原样。
+    """
+    fence_example = (
+        "```"
+        + LF
+        + "# 1. 入库后先 lint + build-vectors"
+        + LF
+        + "# 2. dry-run 逐平台预检"
+        + LF
+        + "```"
+    )
+    body1 = (
+        "# 同步纪律"
+        + LF
+        + LF
+        + "正文第一段。"
+        + LF
+        + LF
+        + fence_example
+        + LF
+        + LF
+        + "正文第二段（围栏后，越界替换会把它吞掉）。"
+    )
+    body2 = body1 + LF + LF + "## 升级记录" + LF + LF + "- V1.1 新增围栏感知说明"
+    root = _root_with_platform(tmp_path, platform="hermes", content="【指令】\n\n§\n\n")
+    _hub_card(root, "sync-discipline", body1)
+    assert push(root, "hermes")["added"] == 1
+    _hub_card(root, "sync-discipline", body2)
+    stat = push(root, "hermes")
+    assert stat["replaced"] == 1, "围栏感知下仍未原地替换（指纹闸未通过？）"
+    text = (tmp_path / "platforms" / "memory.md").read_text(encoding="utf-8")
+    assert text.count("# 同步纪律") == 1
+    assert "# 1. 入库后先 lint + build-vectors" in text  # 围栏内注释完整保留
+    assert "正文第二段（围栏后，越界替换会把它吞掉）。" in text  # 围栏后正文未被吞
+    assert "- V1.1 新增围栏感知说明" in text  # 第二版已替换进来
+    assert text.count("```") == 2  # 围栏成对、未被劈开
