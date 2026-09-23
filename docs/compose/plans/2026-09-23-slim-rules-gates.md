@@ -910,6 +910,17 @@ git commit -m "refactor(hub): backup+方法论4组合并+经验去重；INDEX �
 - Consumes: Task 1–7 产物
 - Produces: 验收证据（命令输出摘要）
 
+- [ ] **Step 0.5: 挂巡检（闭合 S3「挂巡检」；只新增步骤，不改既有 patrol/vector/pre-commit 行为）**
+
+在 `hub-engine/scripts/patrol_runner.py` 增加一步（模式对齐现有 `_step_*`）：调用 `python -m scripts.startup_budget`，退出码非 0 按巡检既有告警口径记录（勿静默）。
+
+```bash
+cd hub-engine && python -m pytest tests/test_startup_budget.py -v
+# 手动冒烟：python -m scripts.startup_budget 应与巡检步骤同一入口
+```
+
+Expected: 预算门禁出现在巡检步骤列表；`rg startup_budget hub-engine/scripts/patrol_runner.py` 有匹配。
+
 - [ ] **Step 1: 预算门禁必须 PASS**
 
 ```bash
