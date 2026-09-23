@@ -8,9 +8,14 @@
 
 # Embedding 后端：直连 LM Studio（不用 OmniRoute，因为 OmniRoute /v1/embeddings
 # 要求 provider/model 格式，而 bge-m3 模型名不带前缀，直连 LM Studio 1234 用短格式可通）
+#    2026-09-23 收敛：现役索引模型 = text-embedding-bge-m3（**1024 维**），
+#    与 AgentMemoryHub/.sync/vector.db 的 db_meta 一致（Hub 侧 system/config.yaml 同日已同步）。
+#    历史漂移记录（教训）：曾声明 text-embedding-bge-small-zh-v1.5，但该模型在 LM Studio 已不存在
+#    （POST /v1/embeddings 返回 400），而库内实际是 nomic(768) ⇒ 查询侧嵌入静默失败，语义通道坏掉不可见。
+#    规矩：换索引模型必须「改全链路配置 + 全量 build-vectors」两件一起做，缺一即悄悄坏。
 embed:
   url: http://127.0.0.1:1234/v1/embeddings
-  model: text-embedding-bge-small-zh-v1.5
+  model: text-embedding-bge-m3
   api_key: lm-studio
   timeout: 30
 # 超时 60s：真实 dedup prompt(4.4k 字符)下 1.5b 实测 18.7s、9b 推理模型 38.3s，
