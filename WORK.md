@@ -69,12 +69,18 @@
 
 ## 验收口径
 
-- `python -m scripts.startup_budget` 退出码 0（**已满足**：23,326/30,000）
-- 四文件字符：AGENTS≤2500 CHARTER≤1500 WORK≤5000 INDEX≤20000，**且四者之和 ≤ 总帽 30,000**
+- `python -m scripts.startup_budget` 退出码 0（**已满足**：L0 24,402/30,000）
+- **L0 四文件字符**：AGENTS≤2500 CHARTER≤1500 WORK≤5000 INDEX≤20000，**且四者之和 ≤ 总帽 30,000**
   （已满足；不变量由 `tests/test_startup_budget.py` 看守）
-- `cd hub-engine && python -m pytest`：**393 通过 / 0 失败 / 13 跳过**（基线 4 败已消失）；ruff 绿
+- **L1 二任务型补读量 ≤15,000**（2026-09-23 新增门禁；spec S2 曾声明但无人看守）：
+  实测 light 0 / code 8,663 / hub 8,814 / sync 6,874，均 OK；
+  **L1 卡名解析不到文件也算违规**（路由悬空比超预算更危险）
+- `cd hub-engine && .venv\Scripts\python.exe -m pytest`：**402 通过 / 4 跳过 / 0 失败**（基线 4 败已消失）
+- ruff 绿
 - L0 六条铁律（概念断言已加进 `tests/test_inject.py`）；INDEX 无 10 字半截词；改码型 L1 含编码核心卡名
-- 挂巡检：`rg startup_budget hub-engine/scripts/patrol_runner.py` 有匹配（已满足）
+- **门禁必须真的在跑**（不只是"代码里有"）：定时任务 `AgentHub-DailyPatrol` 每日 07:30
+  跑 `scripts/run_patrol.cmd` → `patrol_runner`；已实测触发成功（LastTaskResult=0，
+  日志内可见 `✅ startup_budget`）
 - 弃用语义：`status: deprecated` 被两引擎一致排除（`tests/test_deprecation_semantics.py`）
 
 ## 上一轮遗留（须人工裁定，非本迭代引入）
@@ -83,5 +89,11 @@
 
 ## 环境备忘
 
-- 系统 python 跑 pytest/ruff（.venv 缺依赖会假绿）；LM Studio 1234 / embed 对齐 bge 配置以 config 为准。
-- 基线全量 4 败非本迭代引入；`AgentMemoryHub` 为嵌套 git 且被外层 gitignore——中枢卡必须 `git -C AgentMemoryHub` 提交。
+- **解释器：必须用 `.venv\Scripts\python.exe` 跑 pytest（重要，与旧备注相反）**。
+  2026-09-23 实测：系统 python **缺 jieba**，会让 9 个检索/分词测试**静默跳过**——
+  即「假绿」。对比：系统 python `393 passed / 13 skipped` vs `.venv` **`402 passed / 4 skipped`**；
+  剩下的 4 个 skip 是 mcp 未装，与本议题无关。
+  巡检启动器（`scripts/run_patrol.cmd`）已硬编码 `.venv`，并会在缺失时以 127 退出。
+- LM Studio 1234 / embed 对齐 bge 配置以 `AgentMemoryHub/system/config.yaml` 为准（它是生效单源；
+  `hub-engine/config/engine.config.yaml` 仅兜底，改它看不到效果）。
+- `AgentMemoryHub` 为嵌套 git 且被外层 gitignore——中枢卡必须 `git -C AgentMemoryHub` 提交。
