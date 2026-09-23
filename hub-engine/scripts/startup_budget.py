@@ -10,11 +10,21 @@ from pathlib import Path
 TOTAL_LIMIT = 30_000
 
 # (显示名, 相对仓库根路径, 单文件帽)
+#
+# 设计不变量：**分项帽之和 ≤ TOTAL_LIMIT**（否则总闸永远先于分项帽触发，
+# 分项帽失去「防单点回潮」意义）。本组合计 29_000，留 1K 余量（同 spec S3）。
+#
+# 2026-09-23 重新配平：INDEX 帽 14_000 → 20_000（A4 当时为压到 14K 曾用
+# `slim_index --max-desc 10` 机械截断描述，INDEX 里 239/251 条变成读不懂的
+# 半截词如「GitHub 仓库选…」——**省了字符但丢了信息**）。
+# 现改为用卡自身摘要（scripts/regen_index_desc.py，边界断句 ≤40 字），
+# INDEX 自然涨到 ~18K。为保证不变量，其余三项帽相应收紧，
+# 但均仍高于实际值：AGENTS 1.4K<2.5K / CHARTER 0.8K<1.5K / WORK 3.1K<5K。
 LIMITS: list[tuple[str, str, int]] = [
-    ("AGENTS.md", "AGENTS.md", 3_000),
-    ("CHARTER.md", "CHARTER.md", 3_000),
-    ("WORK.md", "WORK.md", 9_000),
-    ("INDEX.md", "AgentMemoryHub/INDEX.md", 14_000),
+    ("AGENTS.md", "AGENTS.md", 2_500),
+    ("CHARTER.md", "CHARTER.md", 1_500),
+    ("WORK.md", "WORK.md", 5_000),
+    ("INDEX.md", "AgentMemoryHub/INDEX.md", 20_000),
 ]
 
 

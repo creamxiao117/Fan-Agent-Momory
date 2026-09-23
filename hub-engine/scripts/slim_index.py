@@ -1,7 +1,14 @@
 # hub-engine/scripts/slim_index.py
-"""INDEX 目录化：卡行描述截断 ≤40 字，标题/注释/目录说明行保留。
+"""INDEX 目录化：卡行描述裁到 ≤max_desc 字符，标题/注释/目录说明行保留。
 
 详情以卡 frontmatter/正文为唯一源（spec S3）；本脚本幂等可重跑。
+
+2026-09-23 变更：改用**子句边界断句**（。，、；等），不再 `desc[:N]` 硬切。
+旧行为会切出读不懂的半截词（实测 `--max-desc 10` 下 239/251 条变成
+「GitHub 仓库选…」），虽省字符但丢了信息。
+
+注意：本脚本只做「截短」；需要**提升可读性**应改用
+`scripts/regen_index_desc.py`（用卡自身摘要重建描述列）。
 """
 
 from __future__ import annotations
@@ -10,6 +17,10 @@ import argparse
 import re
 import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from scripts.post_ingest_hook import cut_at_boundary
 
 # 卡行：`- 卡名` + 2+ 空格 + 描述。卡名允许点号/中文/加粗包裹（真实 INDEX 形态）。
 _CARD = re.compile(r"^(- \S+?)(\s{2,})(.+)$")
@@ -28,11 +39,12 @@ def slim_line(line: str, max_desc: int = 40) -> str:
     name, _sp, desc = m.group(1), m.group(2), m.group(3).strip()
     if len(desc) <= max_desc:
         return line
-    cut = desc[:max_desc].rstrip()
+    # 子句边界断句（无边界时退到空格/硬切，由 cut_at_boundary 兜底）
+    cut = cut_at_boundary(desc, max_desc)
     if not cut:
         # max_desc=0（或截断后全空）：退化为纯卡名行，不留分隔符/省略号
         return f"{name}\n" if line.endswith("\n") else name
-    return f"{name}    {cut}…\n" if line.endswith("\n") else f"{name}    {cut}…"
+    return f"{name}{_sp}{cut}\n" if line.endswith("\n") else f"{name}{_sp}{cut}"
 
 
 def slim_text(text: str, max_desc: int = 40) -> str:
