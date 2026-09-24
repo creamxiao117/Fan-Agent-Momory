@@ -321,11 +321,17 @@ def _step_lint(root: Path) -> StepResult:
 
 
 def _step_pytest(engine_dir: Path) -> StepResult:
-    """运行 pytest。始终执行，不依赖 LLM。"""
+    """运行 pytest。始终执行，不依赖 LLM。
+
+    超时从 120s 提到 420s（2026-09-23）：套件实测约 104s，已贴在旧阀值
+    120s 边缘，导致 2026-09-23 合并到 master 后的巡检直接
+    `pytest 失败: 超时 (120s)` → 总体退出码 2。
+    跳过比超时更不可接受（测试是回归网），故给足余量（锁余 ≈4x）。
+    """
     exit_code, stdout, stderr = _run_cmd(
         [sys.executable, "-m", "pytest", "-q"],
         cwd=engine_dir,
-        timeout=120,
+        timeout=420,
     )
     last_line = (
         (stdout or stderr or "(无输出)").strip().splitlines()[-1]
@@ -902,7 +908,9 @@ def _step_auto_pytest_fix(root: Path, engine_dir: Path) -> StepResult:
     exit_code, stdout, stderr = _run_cmd(
         [sys.executable, str(fix_script), "--root", str(root)],
         cwd=engine_dir,
-        timeout=120,
+        # 外层超时必须 **大于** 脚本内部的 pytest 超时（auto_pytest_env_fix.py 用 180s），
+        # 否则外层永远先超时（2026-09-23 实测：外层 120s vs 内层 180s）。
+        timeout=420,
     )
     text = (stdout or stderr or "").strip()
     return StepResult(
