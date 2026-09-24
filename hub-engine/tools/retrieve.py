@@ -380,6 +380,37 @@ def semantic_retrieve(
     return [c for c, _ in _semantic_scored(root, query, top_k, n, mode)]
 
 
+def _norm_card_path(p: object, root: Path) -> str:
+    r"""归一为绝对小写路径（Windows 大小写不敏感），**不依赖进程 CWD**。
+
+    ⚠️ 相对路径必须按 `root` 解析，不能靠 `Path.resolve()` 的隐式 CWD。
+
+    历史 bug（2026-09-23 记录）：建库侧存的是 `str(card.path)`，若建库时 `--root` 是
+    相对路径，库里就落下相对路径；而检索侧只 `Path(p).resolve()`，按**进程 CWD** 解析
+    ⇒ 仅当 CWD 恰好是项目根时才匹配。实测：cwd=项目根 向量 3/6；
+    cwd=hub-engine 或 `C:\Users\<user>` 向量 **0/6 静默退化**。
+    生产 MCP 以绝对 `--hub-root` 启动、CWD 继承父进程 ⇒ 向量通道可能长期静默失效。
+
+    建库侧已于 2026-09-24 改为存绝对路径（`semsearch.build`）；此处再加一层防御：
+    相对路径按 `root` 解析，并兼容「含 `AgentMemoryHub` 前缀」等历史形态（即相对的是
+    root 的父目录）。旧实现是 `semantic_vector_retrieve` 内的闭包，无法单测；
+    上提为模块级以便对 CWD 独立性做回归测试。
+    """
+    pp = Path(p) if not isinstance(p, Path) else p
+    if not pp.is_absolute():
+        cand = Path(root) / pp
+        if not cand.exists():
+            # 兼容库里存的是「相对 root 的父目录」（如 AgentMemoryHub\\rules\\x.md）
+            alt = Path(root).parent / pp
+            if alt.exists():
+                cand = alt
+        pp = cand
+    try:
+        return str(pp.resolve()).lower()
+    except OSError:
+        return str(pp).replace("\\", "/").lower()
+
+
 def semantic_vector_retrieve(
     root: Path, query: str, top_k: int = 5
 ) -> list[tuple[Card, float]]:
@@ -394,17 +425,10 @@ def semantic_vector_retrieve(
     if qv is None:
         return []
 
-    def _norm_path(p) -> str:
-        # 统一为绝对路径 + 小写：兼容 build 侧存绝对路径、检索侧 Path 为相对路径的差异（Windows 大小写不敏感）
-        try:
-            return str(Path(p).resolve()).lower()
-        except OSError:
-            return str(p).replace("\\", "/").lower()
-
-    path_to_card = {_norm_path(c.path): c for c in _index(root).cards}
+    path_to_card = {_norm_card_path(c.path, root): c for c in _index(root).cards}
     out = []
     for p, s in semsearch.vector_scores(root, qv, top_k=top_k):
-        c = path_to_card.get(_norm_path(p))
+        c = path_to_card.get(_norm_card_path(p, root))
         if c is not None:
             out.append((c, s))
     return out

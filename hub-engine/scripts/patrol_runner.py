@@ -557,7 +557,13 @@ def _step_vector_regression(root: Path, engine_dir: Path) -> StepResult:
             output="⏭️ vector_bench.py 不存在，跳过",
         )
     exit_code, stdout, stderr = _run_cmd(
-        [sys.executable, str(bench_script), "--real", str(root)],
+        # `--fail-below 0.8`：**此前被遗漏**，导致本步骤恒 exit 0（即使命中率 50% 也判 pass，
+        # 即 2026-09-23 记录的「每日巡检门禁失效」归因）。
+        #
+        # ⚠️ 阈值必须先修好夹具才能加（2026-09-24 已一并修）：夹具曾指向两张已归档卡，
+        # 上限卡在 4/6=67% ⇒ 若当时就加 0.8，本步骤会**永久红灯**。
+        # 夹具改正后实测融合命中率 100%，阀値 0.8 留有 1 条余量。
+        [sys.executable, str(bench_script), "--real", str(root), "--fail-below", "0.8"],
         cwd=engine_dir,
         timeout=120,
     )

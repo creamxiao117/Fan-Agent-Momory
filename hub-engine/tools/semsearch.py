@@ -359,7 +359,17 @@ def build(root: Path) -> dict:
         now = time.time()
 
         for card in _scan_cards(root):
-            full = str(card.path)
+            # ⚠️ 必须存**绝对路径**（2026-09-24 修复）：旧代码存 `str(card.path)`，
+            # 若建库时 `--root` 是相对路径（如 `../AgentMemoryHub`），库里就落下相对路径；
+            # 检索侧 `_norm_path` 的 `Path.resolve()` 按**进程 CWD** 解析 ⇒ 仅当 CWD 恰好
+            # 是项目根时才匹配，其它 CWD 下向量通道**静默退化为 0 命中**
+            # （2026-09-23 实测：cwd=项目根 向量 3/6，cwd=hub-engine 0/6）。
+            # 存绝对路径后，检索不再依赖 CWD。
+            full = str(
+                card.path
+                if card.path.is_absolute()
+                else (Path(root) / card.path).resolve()
+            )
             current.add(full)
             sig = _sig(card.path)
             old = existing.get(full)

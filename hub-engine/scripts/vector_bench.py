@@ -147,11 +147,20 @@ def _channels(root: Path, query: str, top_k: int) -> tuple[set, set, set]:
 
 # 真实中枢回归查询集：(查询, 期望命中文件名)。名称必须匹配 AgentMemoryHub 真实存在的卡，
 # 语料随时间增长，用于回归门禁：返回融合命中率作为健康信号（而非精确断言）。
+# 夹具：查询→期望卡名。**必须指向活卡**——期望卡一旦归档，该条永不可能命中，
+# 门禁数学上就无法达标（2026-09-23 记录的「夹具腐化」归因，即：
+# `omniroute-gateway.md` / `cad2020-pdf-merge.md` 被 commit `8f8ce4f` 聚类合并后移入
+# `archive/projects/`，而 `retrieve._ACTIVE_DIRS` 不含 archive ⇒ 两条恒 miss，上限 4/6=67%）。
+#
+# 2026-09-24 裁定修复：改指**后继卡**（取自中枢卡自身的 `superseded_by` 字段，非人工猜测）：
+#   omniroute-gateway.md   → omniroute-local-deployment.md
+#   cad2020-pdf-merge.md   → cad2020-tu-fen-pipeline.md
+# 经验：夹具里的期望卡名会随卡片生命周期漂移。**归档时必须同步检查引用它的夹具**。
 REAL_QUERIES = [
     ("如何避免 AutoCAD 锁住 DLL", "dll-version-lock.md"),
     ("github 账号是什么", "github-account.md"),
-    ("omniroute 网关怎么配置", "omniroute-gateway.md"),
-    ("CAD 批量出图转 PDF", "cad2020-pdf-merge.md"),
+    ("omniroute 网关怎么配置", "omniroute-local-deployment.md"),
+    ("CAD 批量出图转 PDF", "cad2020-tu-fen-pipeline.md"),
     ("代理守卫会冲掉 IE 代理覆盖", "proxy-guard-ie-override.md"),
     ("查询结论怎么回写成经验卡", "query-writeback-dll.md"),
 ]
