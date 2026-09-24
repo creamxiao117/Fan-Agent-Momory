@@ -434,6 +434,45 @@ def semantic_vector_retrieve(
     return out
 
 
+def _det_is_decisive(query: str, cards: list[Card]) -> bool:
+    """确定性结果是否「足以定论」（可短路、不必走语义/向量通道）。
+
+    判定：是否存在一张命中卡**覆盖了查询的全部词**（或整句命中 type/tag）。
+
+    为何必须加这道门（2026-09-24 修复）：旧代码是 `if hits:` —— **只要有命中就短路**。
+    而 `deterministic_retrieve` 在 word 模式下按「查询词 ⊂ tag」匹配，
+    **部分词命中也算命中**，于是：
+
+    - 「写锁 僵尸」→ 某卡 tag 叫 `写锁`（只命中 1/2 词）→ 返回 1 张 → **短路**
+    - 「embedding model switch drift」→ 英文查询阈值为 2，只有 tag `model-switch`
+      命中 2 词 → 返回 `deepseek-peak-offpeak-scheduler` → **短路**
+
+    结果：好通道（词袋 + 向量，纯 RRF 下目标卡均在**第 1 名**）全被跳过。
+    实测生产模式（word）recall@1 **75% → 5%**。
+
+    弱信号不再短路，而是交给语义通道；强信号（全部词命中）仍走快路径。
+    """
+    q = query.strip().lower()
+    if not q:
+        return False
+    words = [
+        w for w in tokenize(query, mode="word") if len(w) >= 2 and w not in _EN_STOP
+    ]
+    for c in cards:
+        tags = [str(t).lower() for t in (getattr(c, "tags", None) or [])]
+        ctype = str(getattr(c, "type", "") or "").lower()
+        # 强信号 1：整句命中 type
+        if ctype and q in ctype:
+            return True
+        # 强信号 2：整句命中某个 tag（如查询就是 "写锁"）
+        if any(q in t for t in tags):
+            return True
+        # 强信号 3：**全部**查询词都命中该卡 tag（部分命中不算）
+        if words and all(any(w in t for t in tags) for w in words):
+            return True
+    return False
+
+
 def _rrf_fuse(
     word_scored, vec_scored, top_k: int, k: int = _RRF_K
 ) -> list[tuple[Card, float]]:
@@ -493,18 +532,23 @@ def retrieve_with_meta(
     query: str,
     top_k: int = 5,
     n: int = 2,
-    mode: str = "char",
+    mode: str = "word",
     tags: list[str] | None = None,
 ) -> tuple[str, list[tuple[Card, float | None]]]:
     """混合检索入口，带通道与分数：返回 (channel, [(card, score|None)])
 
     channel: "empty"（空查询）| "deterministic"（确定性命中，score=None）| "semantic"
     tags: 可选「叠加标签」AND 路由过滤（次路由知识导航），透传给确定性通道
+
+    mode 默认由 `char` 改为 `word`（2026-09-24）：此前 MCP（`word`）与 CLI（`word`）
+    都是 word，而**函数默认是 char**，三处不一致。实测（20 条金标准 recall@5）：
+    word **100%** / char 90%（recall@1：80% / 75%）—— 旧的「char 更优」结论
+    （docstring 里的 2026-08-31 记录）是在短路 bug 存在时得出的，已被推翻。
     """
     if not query.strip():
         return "empty", []
     hits = deterministic_retrieve(root, query, mode, tags=tags)
-    if hits:
+    if hits and _det_is_decisive(query, hits):
         return "deterministic", [(c, None) for c in hits]
     return "semantic", _fused_semantic(root, query, top_k, n, mode)
 
@@ -514,7 +558,7 @@ def retrieve(
     query: str,
     top_k: int = 5,
     n: int = 2,
-    mode: str = "char",
+    mode: str = "word",
     tags: list[str] | None = None,
 ) -> list[Card]:
     """混合检索入口（兼容旧接口，仅返回卡片列表）
@@ -522,6 +566,8 @@ def retrieve(
     n: 字符 n-gram 长度（char 模式），默认 2
     mode: "word"（默认，jieba 分词 + IDF）或 "char"（字符 n-gram，零依赖回退）
     tags: 可选「叠加标签」AND 路由过滤——多标签组合精确定位（次路由知识导航）
+
+    默认由 `char` 改为 `word`（2026-09-24，同 `retrieve_with_meta`）。
     """
     _, scored = retrieve_with_meta(root, query, top_k, n, mode, tags=tags)
     return [c for c, _ in scored]
