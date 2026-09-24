@@ -49,3 +49,44 @@
 ## 执行结果
 
 见外层仓提交 `chore(cleanup): 移除 work/ 下历史基准夹具（1,553 MB）`。
+
+---
+
+# 清理记录：`.mimocode/node_modules`（2026-09-24）
+
+## 是什么
+
+项目内的 npm 依赖目录（`.mimocode/package.json` → `@mimo-ai/plugin@0.1.15`）。
+**不是本项目代码**，不被任何仓内配置或定时任务引用。
+
+## 删了什么 / 保留了什么
+
+| 项 | 体积 | 处置 |
+|:--|--:|:--|
+| `.mimocode/node_modules/` | 48.75 MB / 3,449 文件 | **已删** |
+| `.mimocode/package.json` + `package-lock.json` | 50 KB | **保留**（复原凭据） |
+| `.mimocode/.cron-lock` | — | 保留（其记录的 PID 52084 **已不存在**，属残留锁） |
+
+**为何只删 `node_modules` 而非整个 `.mimocode/`**：整目录仅多省 50 KB，却会失去
+`npm install` 一句话复原的能力。**体积收益 99.9% 已到手，不取那 0.1% 的风险。**
+
+## 取证（删前确认无活消费者）
+
+1. **无进程引用**：枚举全部 `node.exe` 的命令行，`mimocode` 匹配 **0 个**
+   （在跑的 node 进程是 MCP servers：github / filesystem / browser-use，及 pi 本体）
+2. **无调度引用**：Windows 定时任务中无匹配；仓内无任何配置引用 `.mimocode`
+3. **锁已失效**：`.cron-lock` 指向 PID 52084，该进程不存在（锁时间 2026-09-23 18:04）
+4. **自管声明**：`.mimocode/.gitignore` 自身即把 `node_modules` / `package.json` /
+   `package-lock.json` / `.cron-lock` 列为该工具自管项
+5. **git 无关**：0 个被跟踪文件，`.gitignore:34` 已忽略 ⇒ 删除不动任何 git 历史
+
+## 如何复原
+
+```bash
+cd .mimocode && npm install    # 依据 package-lock.json 还原 @mimo-ai/plugin 0.1.15
+```
+
+## 执行结果
+
+实测释放 **54.49 MB**（含文件系统开销）；`.mimocode/` 由 48.8 MB 降至 **13.6 KB**。
+未提交（该目录全部被 gitignore）。
