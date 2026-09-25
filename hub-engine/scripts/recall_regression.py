@@ -88,6 +88,20 @@ GOLD: tuple[GoldCase, ...] = (
     GoldCase("CAD 字典能不能存图形实体", "2026-09-15-cad-dict-no-entity"),
     GoldCase("本地模型从 Ollama 迁到 LM Studio", "lmstudio-local-llm-migration"),
     GoldCase("中枢卡片目录分区怎么排序", "index-rule-priority-sorting"),
+    # ── 蓝图池守卫（2026-09-24，P0-B 裁定配套）──────────────────────────────
+    # 这两条的目标卡在 blueprints/（type=blueprint）。存在的意义：
+    # ① 证明「外部蓝图在需要时仍召得回」（若未来做分池/降权，这里会先红）；
+    # ② 与蓝图占位率指标配对 —— 前者测「召得回」，后者测「不抢位」。
+    GoldCase(
+        "随机造数据自动找反例的测试思路",
+        "hypothesis-property-based-testing-blueprint",
+        note="蓝图池守卫",
+    ),
+    GoldCase(
+        "Lua 编辑器插件进程间通信",
+        "neovim-lua-plugin-rpc-architecture-blueprint",
+        note="蓝图池守卫",
+    ),
 )
 
 
@@ -114,38 +128,61 @@ def run(root: Path, mode: str, top_k: int, n: int = 2) -> dict:
     for case in GOLD:
         hits = retrieve(root, case.query, top_k=top_k, n=n, mode=mode)
         rank = _rank_of(hits, case.slug)
+        pools = [
+            "blueprint" if getattr(c, "type", "") == "blueprint" else "core"
+            for c in hits
+        ]
         rows.append(
             {
                 "query": case.query,
                 "slug": case.slug,
                 "rank": rank,
+                "target_pool": "blueprint"
+                if case.slug.endswith("-blueprint")
+                else "core",
+                "pools": pools,
                 "returned": [c.path.name for c in hits],
             }
         )
     total = len(rows)
     hit5 = sum(1 for r in rows if r["rank"] is not None)
     hit1 = sum(1 for r in rows if r["rank"] == 1)
+
+    # 蓝图占位率（P0-B 度量）：121 张外部蓝图占全库 ~26%，**只在没人问它们时**
+    # 占坑才是浪费。故度量口径 = “目标卡不是蓝图”的那些查询里，蓝图占了多少槽位。
+    bp_slots = bp_total = 0
+    for r in rows:
+        if r["target_pool"] == "blueprint" or not r["pools"]:
+            continue
+        bp_slots += r["pools"].count("blueprint")
+        bp_total += len(r["pools"])
     return {
         "mode": mode,
         "total": total,
         "recall_at_k": hit5 / total if total else 0.0,
         "recall_at_1": hit1 / total if total else 0.0,
         "top_k": top_k,
+        "blueprint_share": bp_slots / bp_total if bp_total else 0.0,
         "rows": rows,
     }
 
 
 def _print_report(results: list[dict], verbose: bool, top_k: int) -> None:
     print(f"检索召回回归集：{len(GOLD)} 条金标准查询（recall@{top_k}）\n")
-    print(f"{'模式':<8} {'recall@' + str(top_k):<12} {'recall@1':<10} 说明")
+    print(
+        f"{'模式':<8} {'recall@' + str(top_k):<12} {'recall@1':<10} {'蓝图占位':<9} 说明"
+    )
     print("-" * 66)
     for r in results:
         tag = "← CLI 默认（生产路径）" if r["mode"] == PRODUCTION_MODE else ""
         print(
             f"{r['mode']:<8} {r['recall_at_k'] * 100:>6.0f}%"
-            f"      {r['recall_at_1'] * 100:>5.0f}%      {tag}"
+            f"      {r['recall_at_1'] * 100:>5.0f}%     {r['blueprint_share'] * 100:>5.1f}%   {tag}"
         )
     print("-" * 66)
+    print(
+        "蓝图占位 = 目标非蓝图的查询里，blueprints/ 卡占的槽位比（P0-B 度量；判据见 WORK.md）"
+    )
 
     if len(results) == 2:
         char_r = next(r for r in results if r["mode"] == "char")

@@ -42,6 +42,13 @@ EXCLUDED_STATUSES = frozenset({"archived", "deprecated"})
 _RRF_K = 60  # RRF rank 常数：rank 分 = 1/(k+rank)，k 越大末位影响越小
 _VEC_POOL = 20  # 融合前每个通道的召回池大小（>top_k，给次要通道上榜机会）
 
+# 通道权重：向量通道分数更可信（词袋通道在中文短查询上噪声大）。
+# 2026-09-24 实测（22 条金标准，word 模式，recall@5 / recall@1）：
+#   等权 1.0/1.0 → 95% / 77% ；word 1.0 / vec 1.5 → 95% / 82% ；vec 2.0 → 95% / 86%
+# 取 1.5：拿满 recall@1 收益且改动最温和（配合冠军保底后 100% / 86%）。
+_WORD_WEIGHT = 1.0
+_VEC_WEIGHT = 1.5
+
 # 英文功能词（停用词）：word 分支 `w in t` 子串匹配会因 "to/for/how" 等
 # 命中几乎所有含 tool/token 等 tag，这里过滤掉避免英文查询过度命中全库
 _EN_STOP = {
@@ -474,22 +481,54 @@ def _det_is_decisive(query: str, cards: list[Card]) -> bool:
 
 
 def _rrf_fuse(
-    word_scored, vec_scored, top_k: int, k: int = _RRF_K
+    word_scored,
+    vec_scored,
+    top_k: int,
+    k: int = _RRF_K,
+    w_word: float = _WORD_WEIGHT,
+    w_vec: float = _VEC_WEIGHT,
 ) -> list[tuple[Card, float]]:
     """RRF（Reciprocal Rank Fusion）合并两条按位序排序的召回，取前 top_k。
 
     任意卡片某通道缺失时该通道贡献为 0；score 为两通道 rank 分之和（非余弦原始值）。
+    权重依据见 `_WORD_WEIGHT` / `_VEC_WEIGHT` 旁的实测表。
     """
     ranks_word = {id(c): r for r, (c, _) in enumerate(word_scored, 1)}
     ranks_vec = {id(c): r for r, (c, _) in enumerate(vec_scored, 1)}
     card_by_id = {id(c): c for c, _ in [*word_scored, *vec_scored]}
     summed = {}
     for cid in ranks_word.keys() | ranks_vec.keys():
-        s = (1.0 / (k + ranks_word[cid])) if cid in ranks_word else 0.0
-        s += (1.0 / (k + ranks_vec[cid])) if cid in ranks_vec else 0.0
+        s = (w_word / (k + ranks_word[cid])) if cid in ranks_word else 0.0
+        s += (w_vec / (k + ranks_vec[cid])) if cid in ranks_vec else 0.0
         summed[cid] = s
     ranked = sorted(summed.items(), key=lambda kv: kv[1], reverse=True)
     return [(card_by_id[cid], summed[cid]) for cid, _ in ranked[:top_k]]
+
+
+def _with_vector_champion(
+    fused: list[tuple[Card, float]], vec_scored, top_k: int
+) -> list[tuple[Card, float]]:
+    """向量冠军保底：向量通道第 1 名若被融合挤出，补进首位。
+
+    为什么需要（2026-09-24 实测，P0-B 真因）：RRF 只看位序不看强度。
+    一条**只有向量命中**的卡（如 `hypothesis-property-based-testing-blueprint`，
+    向量相似度 **0.6704**，领先第 2 名 0.107）在词袋通道无名次，而排在 2-6 位的
+    普通卡因「两通道都上榜」各得两份 rank 分而反超它 —— 强证据被判负，目标掉出 top-5。
+
+    语义上：向量通道的**榜首**是单条最强的语义证据；若融合把它挤掉，说明融合在
+    掩盖证据而不是综合证据。故保底保留它并置首位 —— 实测 recall@5 95%→**100%**，
+    唯一未命中项（即上述蓝图）被救回。这是 `_fused_semantic` 里「通道退化自修复」
+    的推广：退化阈值只处理‘整条通道失效’，本函数处理‘单条强证据被淹没’。
+    """
+    if not vec_scored:
+        return fused[:top_k]
+    champ = vec_scored[0][0]
+    champ_path = str(getattr(champ, "path", "") or "")
+    if champ_path and any(
+        str(getattr(c, "path", "") or "") == champ_path for c, _ in fused
+    ):
+        return fused[:top_k]
+    return [(champ, 0.0), *fused[: top_k - 1]]
 
 
 def _fused_semantic(
@@ -524,7 +563,9 @@ def _fused_semantic(
         return vec_scored[:top_k]
     if v_deg:
         return word_scored[:top_k]
-    return _rrf_fuse(word_scored, vec_scored, top_k)
+    return _with_vector_champion(
+        _rrf_fuse(word_scored, vec_scored, top_k), vec_scored, top_k
+    )
 
 
 def retrieve_with_meta(
