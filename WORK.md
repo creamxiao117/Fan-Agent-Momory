@@ -1,6 +1,6 @@
 # WORK.md（当前状态 · 唯一来源）
 
-更新于：2026-09-25 · **审计 P1 六项 + P2 六小项 + 重构 A–D 均已收口**；只剩 T1（时间门）与 `sync.ingest` 拆分（待专项）
+更新于：2026-09-25 · **审计 P1 六项 / P2 六小项 / 重构 A–D / SPLIT 均收口；重评 7.7 → 8.5/10**；只剩 T1（时间门）与「提高 scripts/ 覆盖」
 
 > 过程明细：`docs/superpowers/retro/work-history.md`｜T1 基线：`docs/compose/metrics/2026-09-23-t1-baseline.md`｜清理留档：`docs/compose/cleanup/`｜**全面分析：`docs/compose/reports/2026-09-25-project-audit.md`**
 
@@ -10,16 +10,17 @@
 - 分层：L0（AGENTS / CHARTER / **本文件** / 根 INDEX 目录版）→ L1 四型（`hub-engine/tools/task_tier.py`）→ L2 检索
 - 安全底座常驻：单写者+§4 守护+ledger；query-first + 交回用户 + 回写
 - 分项帽：AGENTS≤2500 / CHARTER≤1500 / WORK≤5000 / INDEX≤20000（和 29,000 ≤ 总帽 30,000；不变量有测试看守）
-- **测试 565 passed / 4 skipped / 0 failed**；**ruff 新规则集（B/SIM/UP/C901）全绿**；lint 干净；**巡检 24 步 exit 0**（健康 92/100）
-- **检索 recall@5 100% / recall@1 86%**（22 条金标准）；向量回归 100%；**检索稳态延迟 340 → 138 ms**（P2-e）
-- **覆盖率基线 40.0%**（生产代码；tools/ 84.3% · scripts/ 23.6%）；**两仓均已推送 origin**；`work/` 只剩 `_archive/`
+- **测试 579 passed / 4 skipped / 0 failed**；**ruff 新规则集（B/SIM/UP/C901）全绿**；lint 干净；**巡检 24 步 exit 0**（健康 92/100）
+- **检索 recall@5 100% / recall@1 86%**（22 条金标准）；向量回归 100%；**检索稳态延迟 ~138 ms**（P2-e）
+- **覆盖率 43.8%**（生产代码；tools/ 84.9% · common/ 90.8% · **scripts/ 26.9%**）；**两仓均已推送 origin**；`work/` 只剩 `_archive/`；**审计重评 8.5/10**
 
 ## 活跃待办
 
 | # | 任务 | 触发 / 做法 |
 | -- | --- | --- |
 | **T1** | 量「规则遵循/返工」改造前后 | **重跑 ≥2026-10-07**：`python -m scripts.rule_following_timeseries`；判据见下 |
-| **SPLIT** | `sync.py::ingest`（229 行）拆分 | **需先补 fixture 级测试再动**：它是写入路径（单写者 + 判重 + 冲突区），高风险低收益；`C901` 基线为它留着记录 |
+| **COV** | `scripts/` 覆盖率 26.9% → ≥40% | 挑 3–5 个高频脚本补端到端用例（`pytest --cov=. --cov-report=term:skip-covered` 验收益） |
+| **SPLIT2** | 拆 C901 基线里的 11 个函数 | **有测试的优先**；`>100 行` 函数现 15 个（`build_timeline_html` 225 等） |
 
 ### T1 重跑判据（可证伪）
 
@@ -52,7 +53,9 @@
 - **审计 P2 六小项**：P2-a `lint_report` argparse、P2-b 拆超长函数（`run_patrol` 319→57、`auto_flywheel.run` 220→109）、P2-c 卡片去重裁定（pluginhub v1.1 的 3 条教训并入 v1.2）、P2-d 路径写全与空目录定去留、P2-e 延迟剖析（**340→138 ms**）、P2-f markdownlint 挂门禁
 - **重构 A–D**：A 巡检器拆分（9 个 `_stage_*`）· B 仪表盘单一化（v4 归归档，保留巡检产物 + 手动 HTML）· C 删 `node_modules/` + `.tools/`（≈12.8 MB）· D `work/` 定为只读归档区（97 件归档）
 - **历史遗留文件清理**：逐项取证（untracked 归档/删除、tracked 记 blob SHA）；留档 `docs/compose/cleanup/2026-09-25-legacy-files-and-work-disposition.md`
-- **secret_sentry** 26 误报 → 0；**审计总分 5.9 → 7.7/10**
+- **SPLIT 收口**：`sync.py::ingest` **229 → 54 行**（先补 **14 例分支级 fixture 测试**，再抽 5 个具名函数；拆分前后同一套测试全绿）
+- **重评（§10）**：同一口径重测 → **加权 7.7 → 8.5/10**；扣分最重的代码卫生 6.0→8.0、可维护性 6.0→8.2
+- **secret_sentry** 26 误报 → 0；**首评总分 5.9 → 7.7（整改前） → 8.5（整改后）**
 
 ## 禁止 / 注意
 
