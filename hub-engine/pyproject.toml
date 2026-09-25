@@ -14,7 +14,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0"]
+dev = ["pytest>=8.0", "pytest-cov>=7.0"]
 
 [tool.setuptools.packages.find]
 include = ["common*", "tools*"]
@@ -22,6 +22,19 @@ include = ["common*", "tools*"]
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]
+
+# 覆盖率口径（审计 2026-09-25 · I-3：原本无任何覆盖率度量，28% 只是"测试行数"代理）
+# 用法：`.venv\Scripts\python.exe -m pytest --cov=. --cov-report=term:skip-covered`
+# 基线（2026-09-25 首测）：**生产代码 40.0%**（11568 语句 / 未覆盖 6933；含 tests/ 时为 55.1%，属虚高）
+#   分区：tools/ 84.3% · common/ 90.8% · commands/ 62.9% · 顶层（engine/sync/mcp_server）64.3%
+#         · **scripts/ 23.6%**（大量 CLI 包装，含 flywheel.py 597 语句 0%）
+# 暂**不设 fail_under**（避免假红）；目标：tools/ ≥ 90%、scripts/ ≥ 40%。
+[tool.coverage.run]
+source = ["."]
+omit = ["tests/*", "templates/*"]
+
+[tool.coverage.report]
+exclude_lines = ["pragma: no cover", "if __name__ == .__main__.:", "raise NotImplementedError"]
 
 [tool.ruff]
 # 行宽与既有格式化口径一致（⚠️ 根目录 .ruff.toml **不覆盖** hub-engine/ 下的文件，
