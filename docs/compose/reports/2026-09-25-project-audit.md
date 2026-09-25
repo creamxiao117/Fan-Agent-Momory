@@ -148,12 +148,12 @@
 
 | # | 动作 | 估时 |
 |:--|:--|:--|
-| P2-a | `lint_report.py` 加 argparse（`--root`）+ 全仓 CLI 参数一致性抽查 | 2 h |
-| P2-b | 拆 `run_patrol`(319) / `auto_flywheel.run`(250) / `sync.ingest`(248)：步骤注册表化 + 阶段函数化 | 0.5 天 |
-| P2-c | 3 对高相似卡逐对人工裁定（收敛/转发/不动的理由 + sha256） | 1 h |
-| P2-d | WORK.md 5 处简写路径写全；`notes/`/`archive/` 空目录决定去留 | 0.5 h |
-| P2-e | 检索延迟剖析：`retrieve` 首次调用的索引/向量开销，评估"预热 + 进程内缓存" | 2 h（剖析） |
-| P2-f | **markdownlint 挂门禁**（pre-commit 或巡检步骤）+ 对 2 份历史文档加基线豁免（新文档已 0 违规） | 1 h |
+| P2-a | `lint_report.py` 加 argparse（`--root`）+ 全仓 CLI 参数一致性抽查 | ✅ **已完成**（`b8e8fa4`） | 2 h |
+| P2-b | 拆 `run_patrol`(319) / `auto_flywheel.run`(250) / `sync.ingest`(248) | ✅ **2/3 完成**：`run_patrol` 319→**57**（`63c42d1`，抽 9 个 `_stage_*`）、`auto_flywheel.run` 220→**109**（`ab9071b`，抽掉两份 55 行重复块）；⚠️ **`sync.ingest` 229 行未动**（写入路径 + 单写者/判重/冲突区，拆分需先补 fixture 级测试 ⇒ 高风险低收益，待专项） | 0.5 天 |
+| P2-c | 3 对高相似卡逐对人工裁定 | ✅ **已完成**：前两对**早已裁定**（`chrome-proxy-*` 与 `ingest-probe-a` 均已 `status: deprecated` + `superseded_by`）；pluginhub 对是真缺口 —— v1.1 的 3 条独有教训（F811 / `Optional[T]` vs `T\|None` / I001）已并入 v1.2，v1.1 转 deprecated（hub `769df1c`） | 1 h |
+| P2-d | WORK.md 路径写全；`notes/`、`archive/` 空目录定去留 | ✅ 路径已写全（`7cdd03a`）；`notes/` 保留（INDEX 使用约定声明）、`archive/` 保留（本次归档仪表盘 v4 就用了它） | 0.5 h |
+| P2-e | 检索延迟剖析 | ✅ **已完成且顺手提速 2.5×**（`049d283`）：剖出「缓存命中的 `_index()` 仍要 60 ms」的根因（每文件 `Path.resolve()`），改 `os.scandir` + `abspath` → 稳态 **340 → 138 ms**；首调 4.9 s 属进程级一次性，未做预热 | 2 h |
+| P2-f | markdownlint 挂门禁 | ✅ **已完成**（`b8e8fa4`）：pre-commit 第 0.8 道（exit 3），历史文档基线豁免；冒烟验证「违规被拦 / 修好放行」 | 1 h |
 
 ---
 
@@ -233,4 +233,11 @@ cmd /c scripts\run_patrol.cmd                              # exit 0（198s）
 | **I-5**（P1-f） | `local_summary` **自愈** `.internal\temp` 缺失（解析报错 → 建回 → 重试一次；严格只认 `lmstudio-chat-template*` 形态） | +4 例测试；下次该故障从“每晚静默为空”变为自动恢复 |
 | **I-6**（P1-e） | 外层与中枢**均推送** origin（中枢 rebase 了 `skillhub-bot` 的 1 笔自动同步） | 两仓 ahead = 0；中枢 rebase 后 lint 245 卡 0 问题 |
 
-**仍然开放**（不是 Important）：P2 六小项（`lint_report` argparse / 拆超长函数 / 3 对相似卡裁定 / 检索延迟剖析 / markdownlint 挂门禁）与重构候选 A–D（**需人工拍板**）。
+**仍然开放**（不是 Important）：
+
+- **`sync.py::ingest` 拆分**（229 行）：它是中枢**写入路径**（单写者 + 判重 + 冲突区），
+  拆分需先补 fixture 级测试再动刀 ⇒ 高风险低收益，**本次不碰**；`C901` 基线里为它留着记录。
+- **重构候选 A–D**：✅ 已全部落地 —— A 巡检器拆分（`63c42d1`）、B 仪表盘单一化（`235e2eb`）、
+  C `.tools/` 删除（+`node_modules/`，合计释放 ≈12.8 MB，留档 `cleanup/2026-09-25-legacy-files-and-work-disposition.md`）、
+  D `work/` 定为只读归档区（97 件归档，根目录只剩 `_archive/`）。
+- **T1**（量「规则遵循/返工」）：时间门 **≥2026-10-07**，未到点。

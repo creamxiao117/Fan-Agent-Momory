@@ -1,6 +1,6 @@
 # WORK.md（当前状态 · 唯一来源）
 
-更新于：2026-09-25 · **审计 P1 六项已全部收口（I-1…I-6）**；下一条待办 = T1（时间门 ≥2026-10-07）与 P2 六小项
+更新于：2026-09-25 · **审计 P1 六项 + P2 六小项 + 重构 A–D 均已收口**；只剩 T1（时间门）与 `sync.ingest` 拆分（待专项）
 
 > 过程明细：`docs/superpowers/retro/work-history.md`｜T1 基线：`docs/compose/metrics/2026-09-23-t1-baseline.md`｜清理留档：`docs/compose/cleanup/`｜**全面分析：`docs/compose/reports/2026-09-25-project-audit.md`**
 
@@ -11,20 +11,15 @@
 - 安全底座常驻：单写者+§4 守护+ledger；query-first + 交回用户 + 回写
 - 分项帽：AGENTS≤2500 / CHARTER≤1500 / WORK≤5000 / INDEX≤20000（和 29,000 ≤ 总帽 30,000；不变量有测试看守）
 - **测试 565 passed / 4 skipped / 0 failed**；**ruff 新规则集（B/SIM/UP/C901）全绿**；lint 干净；**巡检 24 步 exit 0**（健康 92/100）
-- **检索 recall@5 100% / recall@1 86%**（22 条金标准）；向量回归 100%
-- **覆盖率基线 40.0%**（生产代码；tools/ 84.3% · scripts/ 23.6%）；**两仓均已推送 origin**
+- **检索 recall@5 100% / recall@1 86%**（22 条金标准）；向量回归 100%；**检索稳态延迟 340 → 138 ms**（P2-e）
+- **覆盖率基线 40.0%**（生产代码；tools/ 84.3% · scripts/ 23.6%）；**两仓均已推送 origin**；`work/` 只剩 `_archive/`
 
 ## 活跃待办
 
 | # | 任务 | 触发 / 做法 |
 | -- | --- | --- |
 | **T1** | 量「规则遵循/返工」改造前后 | **重跑 ≥2026-10-07**：`python -m scripts.rule_following_timeseries`；判据见下 |
-| P2-a | `hub-engine/scripts/lint_report.py` 加 argparse | 现无参数解析，传 `--root` 会把 `--root` 当目录建出来（实测复现过） |
-| P2-b | 拆超长函数 | 1,359 个函数中 24 个 >100 行：`run_patrol` 319 / `auto_flywheel.run` 250 / `sync.ingest` 248；`C901` 基线 16 处已登记 |
-| P2-c | 3 对高相似卡逐对裁定 | 0.90–0.97：`chrome-proxy-clash-*` 双卡、`pluginhub-date-range-picker v1.1/v1.2`、`cross-repo-index-commit`↔`ingest-probe-a`；**禁自动删** |
-| P2-e | 检索延迟剖析 | 首调 0.38–2.09 s（进程内 3 次均值）；评估预热/缓存 |
-| P2-f | markdownlint 挂门禁 | 配置齐备但无门禁；存量 7 处违规集中在 2 份历史文档（建议豁免而非改写历史） |
-| **重构** | 候选 A–D | **需你拍板**：**A 巡检器拆分**（有 24 步契约测试兜底，建议先做）／B 仪表盘单一化／C `.tools/` 去留／D `work/` 定位 |
+| **SPLIT** | `sync.py::ingest`（229 行）拆分 | **需先补 fixture 级测试再动**：它是写入路径（单写者 + 判重 + 冲突区），高风险低收益；`C901` 基线为它留着记录 |
 
 ### T1 重跑判据（可证伪）
 
@@ -54,6 +49,9 @@
 - **P0-A** 检索召回 5%→80%（`2a22648`）；**P0-B** 蓝图配额证伪，改冠军保底+通道加权 → **100%/86%**（`9c7f79f`）
 - **P1-1** 脚本迁入（`ee4af05`）+ 三定时任务统一指本检出 + 24 步巡检契约测试（`703ce45`，+73 例）
 - **P2** 死代码/仪表盘处置 + **T2** INDEX 可定位性复核（17/20→18/20、36.5%→42.5%）+ **T3** 四项待裁定
+- **审计 P2 六小项**：P2-a `lint_report` argparse、P2-b 拆超长函数（`run_patrol` 319→57、`auto_flywheel.run` 220→109）、P2-c 卡片去重裁定（pluginhub v1.1 的 3 条教训并入 v1.2）、P2-d 路径写全与空目录定去留、P2-e 延迟剖析（**340→138 ms**）、P2-f markdownlint 挂门禁
+- **重构 A–D**：A 巡检器拆分（9 个 `_stage_*`）· B 仪表盘单一化（v4 归归档，保留巡检产物 + 手动 HTML）· C 删 `node_modules/` + `.tools/`（≈12.8 MB）· D `work/` 定为只读归档区（97 件归档）
+- **历史遗留文件清理**：逐项取证（untracked 归档/删除、tracked 记 blob SHA）；留档 `docs/compose/cleanup/2026-09-25-legacy-files-and-work-disposition.md`
 - **secret_sentry** 26 误报 → 0；**审计总分 5.9 → 7.7/10**
 
 ## 禁止 / 注意
