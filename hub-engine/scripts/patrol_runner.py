@@ -776,10 +776,22 @@ def _step_freshness_check(root: Path, engine_dir: Path) -> StepResult:
     import os
     import subprocess
 
-    skillhub_root_str = os.environ.get(
-        "SKILLHUB_ROOT", "D:/AIwork/20260821-Fan-SkillHub"
+    # SkillHub 检出根：env → hub.config.yaml:external_paths.skillhub → 内置默认（单点在 common.config）
+    # 未配置时不猜路径，直接跳过并把原因写进巡检报告（原为写死个人盘符路径）
+    from common.config import external_path
+
+    skillhub = external_path("skillhub", root)
+    skillhub_root_str = os.environ.get("SKILLHUB_ROOT") or (
+        str(skillhub) if skillhub else ""
     )
     script = engine_dir / "scripts" / "stale_detect.py"
+    if not skillhub_root_str:
+        return StepResult(
+            name="freshness_check",
+            stage="新鲜度",
+            status="skip",
+            output="SkillHub 根未配置（设 SKILLHUB_ROOT 或 hub.config.yaml:external_paths.skillhub）",
+        )
     # 注意：StepResult 的 name/stage/status 均为必填，漏传 stage 会抛 TypeError，
     # 被 _run_step 兜底成 exit_code=999 的假故障（2026-09-15 修复）。
     if not script.exists():

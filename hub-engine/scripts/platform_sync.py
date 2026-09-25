@@ -37,8 +37,16 @@ except ImportError:  # pragma: no cover - yaml 是中枢引擎既有依赖
     sys.exit(2)
 
 DEFAULT_HUB_ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_PYTHON = (
-    r"C:/Users/Fan-SJSS/AppData/Local/hermes/hermes-agent/venv/Scripts/python.exe"
+# hermes 自己的 venv：从家目录推导（换机可用；可用 --python 覆盖）
+DEFAULT_PYTHON = str(
+    Path.home()
+    / "AppData"
+    / "Local"
+    / "hermes"
+    / "hermes-agent"
+    / "venv"
+    / "Scripts"
+    / "python.exe"
 )
 PLATFORMS_REL = "system/platforms.yaml"
 DEFAULT_SERVER_KEY = "agent-memory-hub"

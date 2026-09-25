@@ -17,27 +17,29 @@ from pathlib import Path
 
 CST = timezone(timedelta(hours=8))
 
+# 各平台配置位置：均从家目录推导（换机可用）；本检出的 launcher 由 __file__ 推导
+_REPO = Path(__file__).resolve().parents[2]
+_HOME = Path.home()
+
 PLATFORMS = {
     "hermes": {
-        "config": Path(r"C:/Users/Fan-SJSS/AppData/Local/hermes/config.yaml"),
+        "config": _HOME / "AppData" / "Local" / "hermes" / "config.yaml",
         "mcp_path_field": "args",
         "format": "yaml_block",
     },
     "trae": {
-        "config": Path(r"C:/Users/Fan-SJSS/.trae-cn/mcp.json"),
+        "config": _HOME / ".trae-cn" / "mcp.json",
         "mcp_path_field": "mcpServers.agent-memory-hub.args",
         "format": "json",
     },
     "workbuddy": {
-        "config": Path(r"C:/Users/Fan-SJSS/.workbuddy/mcp.json"),
+        "config": _HOME / ".workbuddy" / "mcp.json",
         "mcp_path_field": "mcpServers.agent-memory-hub.args",
         "format": "json",
     },
 }
 
-LAUNCHER = Path(
-    r"C:/Users/Fan-SJSS/.trae-cn/worktrees/20260817-Fan-Agent-Momory/feat-implement-plan-ZilBmv/hub-engine/scripts/hub_mcp_launcher.py"
-)
+LAUNCHER = _REPO / "hub-engine" / "scripts" / "hub_mcp_launcher.py"
 
 
 def check_platform(name: str, info: dict) -> dict:

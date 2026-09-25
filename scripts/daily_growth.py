@@ -16,7 +16,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-WORKSPACE = Path(r"D:\AIwork\20260817-Fan-Agent-Momory")
+WORKSPACE = Path(__file__).resolve().parents[1]
 HUB = WORKSPACE / "AgentMemoryHub"
 ENGINE = WORKSPACE / "hub-engine" / "engine.py"
 SANDBOX_ROOT = Path(r"F:\AgentMemoryT1")

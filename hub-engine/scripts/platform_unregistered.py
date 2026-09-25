@@ -13,7 +13,7 @@ from pathlib import Path
 
 import yaml
 
-_HUB_DEFAULT = r"C:\Users\Fan-SJSS\.trae-cn\worktrees\20260817-Fan-Agent-Momory\feat-implement-plan-ZilBmv\AgentMemoryHub"
+_HUB_DEFAULT = str(Path(__file__).resolve().parents[2] / "AgentMemoryHub")
 
 # 候选位置（相对 HOME）：覆盖 trae/codex/workbuddy/cursor/claude/gemini/qwen/windsurf/vscode/continue/opencode 等
 _CANDIDATES = (

@@ -11,8 +11,9 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-# DSH 平台配置（从 system/platforms.yaml 读取；硬编码 fallback 便于 DSH 机器上直接跑）
-DEFAULT_HUB_ROOT_STR = "C:/Users/Fan-SJSS/.trae-cn/worktrees/20260817-Fan-Agent-Momory/feat-implement-plan-ZilBmv/AgentMemoryHub"
+# DSH 平台配置（从 system/platforms.yaml 读取；自解析 fallback 使任意检出/任意目录调用都能跑）
+# 2026-09-25：原为写死本 worktree 的绝对路径 → 换检出即静默失效，改由脚本位置推导
+DEFAULT_HUB_ROOT_STR = str(Path(__file__).resolve().parents[2] / "AgentMemoryHub")
 DSH_PLATFORM = "dsh"
 DSH_DRAFT_SUBDIR = "deepseek_draft"
 

@@ -15,7 +15,7 @@ from __future__ import annotations
 import shutil
 from pathlib import Path
 
-HUB = Path("C:/Users/Fan-SJSS/.trae-cn/worktrees/20260817-Fan-Agent-Momory/feat-implement-plan-ZilBmv/AgentMemoryHub")
+HUB = Path(__file__).resolve().parents[1] / "AgentMemoryHub"
 CONF = HUB / ".sync" / "conflicts"
 DEST = CONF / "_resolved_20260918"
 

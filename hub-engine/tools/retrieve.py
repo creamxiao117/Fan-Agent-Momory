@@ -395,7 +395,7 @@ def _norm_card_path(p: object, root: Path) -> str:
     历史 bug（2026-09-23 记录）：建库侧存的是 `str(card.path)`，若建库时 `--root` 是
     相对路径，库里就落下相对路径；而检索侧只 `Path(p).resolve()`，按**进程 CWD** 解析
     ⇒ 仅当 CWD 恰好是项目根时才匹配。实测：cwd=项目根 向量 3/6；
-    cwd=hub-engine 或 `C:\Users\<user>` 向量 **0/6 静默退化**。
+    cwd=hub-engine 或**任何非项目根目录**时，向量 **0/6 静默退化**（路径按进程 CWD 解不开）。
     生产 MCP 以绝对 `--hub-root` 启动、CWD 继承父进程 ⇒ 向量通道可能长期静默失效。
 
     建库侧已于 2026-09-24 改为存绝对路径（`semsearch.build`）；此处再加一层防御：

@@ -48,9 +48,8 @@ import hashlib
 from difflib import SequenceMatcher
 from pathlib import Path
 
-EXP_PATH = Path(
-    r"C:/Users/Fan-SJSS/.trae-cn/worktrees/20260817-Fan-Agent-Momory/feat-implement-plan-ZilBmv/AgentMemoryHub/experience"
-)
+# 本仓路径自解析（原为写死 worktree 绝对路径）
+EXP_PATH = Path(__file__).resolve().parents[1] / "AgentMemoryHub" / "experience"
 
 
 def similarity(a, b):

@@ -12,7 +12,7 @@ import json
 import re
 from pathlib import Path
 
-HUB = Path("C:/Users/Fan-SJSS/.trae-cn/worktrees/20260817-Fan-Agent-Momory/feat-implement-plan-ZilBmv/AgentMemoryHub")
+HUB = Path(__file__).resolve().parents[1] / "AgentMemoryHub"
 CONFLICTS = HUB / ".sync" / "conflicts"
 AUTHORITY = ["rules", "blueprints", "methodology", "longterm", "projects"]
 NON_AUTH = ["experience", "notes"]

@@ -12,15 +12,19 @@ import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+from common.config import external_path
+
 CST = timezone(timedelta(hours=8))
 BACKUP_DIR_NAME = "mcp_backups"
 
+# 搜索根：本检出由 __file__ 推导；他机路径用 Path.home()；仓外项目走 external_path()
+_REPO = Path(__file__).resolve().parents[2]
+_SKILLHUB = external_path("skillhub", _REPO / "AgentMemoryHub")
+
 DEFAULT_SEARCH_ROOTS = [
-    Path(
-        r"C:/Users/Fan-SJSS/.trae-cn/worktrees/20260817-Fan-Agent-Momory/feat-implement-plan-ZilBmv/hub-engine"
-    ),
-    Path(r"C:/Users/Fan-SJSS/AppData/Local/hermes/hub-engine"),
-    Path(r"D:/AIwork/20260821-Fan-SkillHub/hub-engine"),
+    _REPO / "hub-engine",
+    Path.home() / "AppData" / "Local" / "hermes" / "hub-engine",
+    *([_SKILLHUB / "hub-engine"] if _SKILLHUB else []),
     Path.home() / "projects" / "hub-engine",
     Path("/opt/hub-engine"),
 ]

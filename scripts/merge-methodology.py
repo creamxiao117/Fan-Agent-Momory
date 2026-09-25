@@ -44,9 +44,8 @@ from pathlib import Path
 
 import yaml
 
-METHODOLOGY_PATH = Path(
-    r"C:/Users/Fan-SJSS/.trae-cn/worktrees/20260817-Fan-Agent-Momory/feat-implement-plan-ZilBmv/AgentMemoryHub/methodology"
-)
+# 本仓路径自解析（原为写死 worktree 绝对路径）
+METHODOLOGY_PATH = Path(__file__).resolve().parents[1] / "AgentMemoryHub" / "methodology"
 
 MERGE_PAIRS = [
     ("first-principles.md", "occam-razor.md", "thinking-principles.md"),

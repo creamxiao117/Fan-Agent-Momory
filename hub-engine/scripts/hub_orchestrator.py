@@ -10,6 +10,14 @@ import subprocess
 import sys
 from pathlib import Path
 
+from common.config import external_path
+
+# SkillHub 检出根：env SKILLHUB_ROOT → hub.config.yaml:external_paths.skillhub → 内置默认
+# （原为在 3 条命令里各写死一次盘符路径；收敛为**单点**，换机只改一处）
+_REPO = Path(__file__).resolve().parents[2]
+_SKILLHUB = external_path("skillhub", _REPO / "AgentMemoryHub")
+SKILLHUB_ROOT = str(_SKILLHUB) if _SKILLHUB else ""
+
 # 工具清单（task_name, subprocess args list, timeout_seconds）
 TASKS = [
     (
@@ -49,7 +57,7 @@ TASKS = [
             "--hub-root",
             ".",
             "--skillhub-root",
-            "D:/AIwork/20260821-Fan-SkillHub",
+            SKILLHUB_ROOT,
             "--days",
             "60",
         ],
@@ -75,7 +83,7 @@ TASKS = [
             "--hub-root",
             ".",
             "--skillhub-root",
-            "D:/AIwork/20260821-Fan-SkillHub",
+            SKILLHUB_ROOT,
             "--threshold",
             "3",
         ],
@@ -89,7 +97,7 @@ TASKS = [
             "--hub-root",
             ".",
             "--skillhub-root",
-            "D:/AIwork/20260821-Fan-SkillHub",
+            SKILLHUB_ROOT,
             "--days",
             "90",
         ],

@@ -13,8 +13,9 @@ import sys
 import time
 from pathlib import Path
 
-ROOT = Path("C:/Users/Fan-SJSS/.trae-cn/worktrees/20260817-Fan-Agent-Momory/feat-implement-plan-ZilBmv/AgentMemoryHub")
-ENGINE = Path("C:/Users/Fan-SJSS/.trae-cn/worktrees/20260817-Fan-Agent-Momory/feat-implement-plan-ZilBmv/hub-engine")
+_REPO = Path(__file__).resolve().parents[1]
+ROOT = _REPO / "AgentMemoryHub"
+ENGINE = _REPO / "hub-engine"
 sys.path.insert(0, str(ENGINE))
 
 from common.frontmatter import read_card

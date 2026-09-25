@@ -65,20 +65,23 @@ sync:
   log_file: retro/log.md
 platforms:
   trae:
-    memory_dir: "C:/Users/Fan-SJSS/.trae-cn/memory"
+    memory_dir: "{home}/.trae-cn/memory"
     target_file: "user_profile.md"
   code:
-    memory_dir: "C:/Users/Fan-SJSS/.codex"
+    memory_dir: "{home}/.codex"
     target_file: "AGENTS.md"
   hermes:
-    memory_dir: "C:/Users/Fan-SJSS/AppData/Local/hermes/memories"
+    memory_dir: "{home}/AppData/Local/hermes/memories"
     target_file: "MEMORY.md"
   workbuddy:
-    memory_dir: "C:/Users/Fan-SJSS/.workbuddy"
+    memory_dir: "{home}/.workbuddy"
     target_file: "MEMORY.md"
 engine:
   provider_keys: provider_keys.yaml
 """
+
+# 模板里的 {home} 在写盘时替换为当前机器的家目录（换机重跑 bootstrap 即正确）
+_HOME_POSIX = Path.home().as_posix()
 
 DEFAULT_LOG = "# 时间线\n\n"
 
@@ -97,7 +100,9 @@ def bootstrap(root: str | Path) -> Path:
             DEFAULT_LOG + f"## [{today_iso()}] init | 中枢初始化\n", encoding="utf-8"
         )
     if not (root / "hub.config.yaml").exists():
-        (root / "hub.config.yaml").write_text(CONFIG_TEMPLATE, encoding="utf-8")
+        (root / "hub.config.yaml").write_text(
+            CONFIG_TEMPLATE.replace("{home}", _HOME_POSIX), encoding="utf-8"
+        )
     if not (root / "provider_keys.yaml").exists():
         (root / "provider_keys.yaml").write_text(
             "# 各免费模型 Key（独立文件，勿提交 Git）\ndefault: sk-REPLACE_WITH_YOUR_KEY\n",

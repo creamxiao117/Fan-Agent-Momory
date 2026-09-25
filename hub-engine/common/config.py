@@ -102,3 +102,48 @@ def _load_engine_config_raw(config_path: str | Path | None = None) -> dict:
 def load_provider_keys(hub_root: str | Path) -> dict:
     """读取中枢根下的 provider_keys.yaml（Key 独立文件）"""
     return load_yaml(Path(hub_root) / "provider_keys.yaml")
+
+
+# 外部项目默认位置：**全仓唯一**的盘符路径字面量（换机/换盘只改这里或用 env 覆盖）。
+# 为什么允许它存在：外部项目（如 SkillHub）不在本仓内，无法从 __file__ 推导；
+# 散落在 20+ 个文件里才是病，收敛到一个常量 + 可覆盖是正解。
+_EXTERNAL_DEFAULTS: dict[str, tuple[str, str]] = {
+    "skillhub": ("SKILLHUB_ROOT", "D:/AIwork/20260821-Fan-SkillHub"),
+}
+
+
+def external_path(
+    name: str, hub_root: str | Path | None = None, *, must_exist: bool = False
+) -> Path | None:
+    """解析仓外项目根目录：**env 优先 → `<hub>/hub.config.yaml: external_paths.<name>` → 内置默认**。
+
+    返回 None 表示三者皆无（或 must_exist=True 且路径不存在）——调用方应当
+    明确跳过并报告，而不是静默拿一个错的路径去跑子进程。
+    """
+    env_key, builtin = _EXTERNAL_DEFAULTS.get(name, ("", ""))
+
+    def _ok(p: Path | None) -> Path | None:
+        if p is None:
+            return None
+        p = Path(p).expanduser()
+        if must_exist and not p.exists():
+            return None
+        return p
+
+    import os
+
+    if env_key:
+        raw = os.environ.get(env_key, "").strip()
+        if raw:
+            return _ok(Path(raw))
+
+    if hub_root:
+        cfg_file = Path(hub_root) / "hub.config.yaml"
+        try:
+            ext = (load_yaml(cfg_file) or {}).get("external_paths") or {}
+            if isinstance(ext, dict) and ext.get(name):
+                return _ok(Path(str(ext[name])))
+        except (OSError, ValueError, TypeError):
+            pass  # 配置缺失/损坏 → 继续回落内置默认
+
+    return _ok(Path(builtin)) if builtin else None

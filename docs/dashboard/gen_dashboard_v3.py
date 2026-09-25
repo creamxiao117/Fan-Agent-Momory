@@ -12,10 +12,11 @@ V3 features (preserved):
 - "Run cron" with confirm()
 - 60s auto-refresh (relies on data update)
 """
+
 import json
 import pathlib
 
-BASE = pathlib.Path(r"C:\Users\Fan-SJSS\.trae-cn\worktrees\20260817-Fan-Agent-Momory\feat-implement-plan-ZilBmv")
+BASE = pathlib.Path(__file__).resolve().parents[2]  # 本仓根（原为写死 worktree 绝对路径）
 DASH = BASE / "work" / "dashboard"
 data = json.loads((DASH / "dashboard-data.json").read_text(encoding="utf-8"))
 
@@ -217,36 +218,66 @@ parts.append("<main>")
 parts.append("<header><h2 id='page-title'>总控台</h2>")
 parts.append("<div class='actions'>")
 parts.append("<button class='btn' onclick='location.reload()'>🔄 刷新</button>")
-parts.append("<button class='btn btn-primary' onclick='setStatus(\"yellow\",\"需要后端 trigger\")'>⚡ 立即收集</button>")
+parts.append(
+    "<button class='btn btn-primary' onclick='setStatus(\"yellow\",\"需要后端 trigger\")'>⚡ 立即收集</button>"
+)
 parts.append("</div></header>")
 # Main panel
 parts.append("<div class='panel active' id='panel-main'>")
 parts.append("<div class='grid'>")
-parts.append("<div class='card' id='c-health'><span class='dot d-gray'></span><div class='card-title'>总体健康</div><div class='metric-big' id='m-health'>--</div><div class='metric-sub' id='m-health-sub'>--</div></div>")
-parts.append("<div class='card' id='c-gap'><div class='card-title'>知识缺口 · 24h</div><div class='metric-big' id='m-gap'>--</div><div class='metric-sub' id='m-gap-sub'>--</div></div>")
-parts.append("<div class='card' id='c-todos'><div class='card-title'>待人工处理</div><div class='metric-big' id='m-todos'>--</div><div class='metric-sub' id='m-todos-sub'>--</div></div>")
+parts.append(
+    "<div class='card' id='c-health'><span class='dot d-gray'></span><div class='card-title'>总体健康</div><div class='metric-big' id='m-health'>--</div><div class='metric-sub' id='m-health-sub'>--</div></div>"
+)
+parts.append(
+    "<div class='card' id='c-gap'><div class='card-title'>知识缺口 · 24h</div><div class='metric-big' id='m-gap'>--</div><div class='metric-sub' id='m-gap-sub'>--</div></div>"
+)
+parts.append(
+    "<div class='card' id='c-todos'><div class='card-title'>待人工处理</div><div class='metric-big' id='m-todos'>--</div><div class='metric-sub' id='m-todos-sub'>--</div></div>"
+)
 parts.append("</div>")
 parts.append("<div class='card' style='margin-bottom:12px'><div class='card-title'>5 平台连接</div>")
-parts.append("<table><thead><tr><th>状态</th><th>名称</th><th>类型</th></tr></thead><tbody id='tbl-platforms'></tbody></table></div>")
+parts.append(
+    "<table><thead><tr><th>状态</th><th>名称</th><th>类型</th></tr></thead><tbody id='tbl-platforms'></tbody></table></div>"
+)
 parts.append("<div class='card' style='margin-bottom:12px'><div class='card-title'>6 面板自检 · 06:00 巡检</div>")
-parts.append("<table><thead><tr><th>面板</th><th>状态</th><th>详情</th></tr></thead><tbody id='tbl-panels'></tbody></table></div>")
+parts.append(
+    "<table><thead><tr><th>面板</th><th>状态</th><th>详情</th></tr></thead><tbody id='tbl-panels'></tbody></table></div>"
+)
 parts.append("<div class='card' style='margin-bottom:12px'><div class='card-title'>Cron 任务 · 点击「立即跑」</div>")
-parts.append("<table><thead><tr><th>ID</th><th>名称</th><th>调度</th><th>状态</th><th>最近</th><th>动作</th></tr></thead><tbody id='tbl-cron'></tbody></table></div>")
+parts.append(
+    "<table><thead><tr><th>ID</th><th>名称</th><th>调度</th><th>状态</th><th>最近</th><th>动作</th></tr></thead><tbody id='tbl-cron'></tbody></table></div>"
+)
 parts.append("<div class='card' style='margin-bottom:12px'><div class='card-title'>中枢卡片 · 按类型</div>")
 parts.append("<div id='cards-grid' style='display:grid;grid-template-columns:repeat(6,1fr);gap:8px'></div></div>")
 parts.append("<div class='grid-2'>")
-parts.append("<div class='card'><div class='card-title'>三仓 Git 同步</div><table><tbody id='tbl-sync'></tbody></table></div>")
-parts.append("<div class='card'><div class='card-title'>最近 commit_ledger</div><table><tbody id='tbl-ledger'></tbody></table></div>")
+parts.append(
+    "<div class='card'><div class='card-title'>三仓 Git 同步</div><table><tbody id='tbl-sync'></tbody></table></div>"
+)
+parts.append(
+    "<div class='card'><div class='card-title'>最近 commit_ledger</div><table><tbody id='tbl-ledger'></tbody></table></div>"
+)
 parts.append("</div>")
-parts.append("<div class='card' style='margin-top:12px'><div class='card-title'>最近 ingest</div><table><tbody id='tbl-ingest'></tbody></table></div>")
-parts.append("<div class='card' style='margin-top:12px'><div class='card-title'>关键告警</div><div id='alerts'></div></div>")
+parts.append(
+    "<div class='card' style='margin-top:12px'><div class='card-title'>最近 ingest</div><table><tbody id='tbl-ingest'></tbody></table></div>"
+)
+parts.append(
+    "<div class='card' style='margin-top:12px'><div class='card-title'>关键告警</div><div id='alerts'></div></div>"
+)
 parts.append("</div>")  # panel-main
-parts.append("<div class='panel' id='panel-flywheel'><div class='card'><div class='card-title'>飞轮详情（占位）</div><div class='empty'>该 tab 后续接入「T15 飞轮编排」或自建飞轮详情页</div></div></div>")
-parts.append("<div class='panel' id='panel-skillhub'><div class='card'><div class='card-title'>SkillHub（占位）</div><div class='empty'>该 tab 后续接入 SkillHub 技能浏览/路由详情</div></div></div>")
-parts.append("<div class='panel' id='panel-platforms'><div class='card'><div class='card-title'>平台健康（占位）</div><div class='empty'>该 tab 后续接入「platform_healthcheck」详细页</div></div></div>")
+parts.append(
+    "<div class='panel' id='panel-flywheel'><div class='card'><div class='card-title'>飞轮详情（占位）</div><div class='empty'>该 tab 后续接入「T15 飞轮编排」或自建飞轮详情页</div></div></div>"
+)
+parts.append(
+    "<div class='panel' id='panel-skillhub'><div class='card'><div class='card-title'>SkillHub（占位）</div><div class='empty'>该 tab 后续接入 SkillHub 技能浏览/路由详情</div></div></div>"
+)
+parts.append(
+    "<div class='panel' id='panel-platforms'><div class='card'><div class='card-title'>平台健康（占位）</div><div class='empty'>该 tab 后续接入「platform_healthcheck」详细页</div></div></div>"
+)
 parts.append("<div class='panel' id='panel-hermes'>")
 parts.append("<div class='card'><div class='card-title'>Hermes Chat（占位 UI）</div>")
-parts.append("<div class='chat-log' id='chat-log'><div class='empty'>在下方输入问题，按 Enter 发送<br>（注：当前为占位 UI，后端 trigger 待接入）</div></div>")
+parts.append(
+    "<div class='chat-log' id='chat-log'><div class='empty'>在下方输入问题，按 Enter 发送<br>（注：当前为占位 UI，后端 trigger 待接入）</div></div>"
+)
 parts.append("<div class='chat-input'>")
 parts.append("<input type='text' id='chat-msg' placeholder='问 Hermes...（按 Enter 发送）'>")
 parts.append("<button class='btn btn-primary' onclick='sendChat()'>发送</button>")
@@ -262,5 +293,5 @@ parts.append("</html>")
 html = "\n".join(parts)
 out = DASH / "index-v3.html"
 out.write_text(html, encoding="utf-8")
-print(f"v3 size: {len(html)} chars, {html.count(chr(10))+1} lines")
+print(f"v3 size: {len(html)} chars, {html.count(chr(10)) + 1} lines")
 print("written:", out)

@@ -7,24 +7,35 @@ V1.0 (2026-09-09): 任务 5 (T5) — 每天 7:00 跑:
 3. 复制 data 到 T4 目录
 注: T4 的 JS 已集成在 T1 mockup 阶段; 此脚本只更新数据。
 """
+
+import os
 import shutil
 import subprocess
 import sys
 from pathlib import Path
 
-BASE = Path(r"C:/Users/Fan-SJSS/.trae-cn/worktrees/20260817-Fan-Agent-Momory/feat-implement-plan-ZilBmv")
+# 本仓根自解析（原为写死 worktree 绝对路径）
+BASE = Path(__file__).resolve().parents[3]
 SLOTS = BASE / "work/dashboard/slots"
 T1 = SLOTS / "T1-mockup"
 T3 = SLOTS / "T3-collect"
 T4 = SLOTS / "T4-integration"
 
+
 def main():
     # 1. 跑 T3 数据采集
     r = subprocess.run(
-        [sys.executable, str(T3 / "dashboard_collect.py"),
-         "--hub-root", str(BASE / "AgentMemoryHub"),
-         "--skillhub-root", r"D:/AIwork/20260821-Fan-SkillHub"],
-        capture_output=True, text=True
+        [
+            sys.executable,
+            str(T3 / "dashboard_collect.py"),
+            "--hub-root",
+            str(BASE / "AgentMemoryHub"),
+            "--skillhub-root",
+            os.environ.get("SKILLHUB_ROOT", ""),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
     )
     if r.returncode != 0:
         print(f"T3 failed: {r.stderr}", file=sys.stderr)
@@ -35,6 +46,7 @@ def main():
     # 注：T4 已自包含 data URL 嵌入，regen 只更新 data 文件
     print(f"dashboard regenerated at {T4 / 'dashboard.html'}")
     return 0
+
 
 if __name__ == "__main__":
     sys.exit(main())

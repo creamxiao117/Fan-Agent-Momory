@@ -198,7 +198,8 @@ def collect_all(hub_root: Path, skillhub_root: Path | None = None) -> dict:
     try:
         import subprocess
 
-        skillhub = skillhub_root or Path("C:/Users/Fan-SJSS/AppData/Local/hermes/skills")
+        # hermes skills 目录：从家目录推导（原为写死个人绝对路径）
+        skillhub = skillhub_root or Path.home() / "AppData" / "Local" / "hermes" / "skills"
         result = subprocess.run(
             [
                 sys.executable,

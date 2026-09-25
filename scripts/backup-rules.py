@@ -3,16 +3,11 @@ import shutil
 import time
 from pathlib import Path
 
-SOURCE_PATH = Path(
-    r"C:/Users/Fan-SJSS/.trae-cn/worktrees/20260817-Fan-Agent-Momory/feat-implement-plan-ZilBmv/AgentMemoryHub/rules"
-)
+# 本仓路径：由脚本位置推导（原为写死 worktree 绝对路径）
+_REPO = Path(__file__).resolve().parents[1]
+SOURCE_PATH = _REPO / "AgentMemoryHub" / "rules"
 DATE = time.strftime("%Y%m%d")
-BACKUP_PATH = (
-    Path(
-        r"C:/Users/Fan-SJSS/.trae-cn/worktrees/20260817-Fan-Agent-Momory/feat-implement-plan-ZilBmv/AgentMemoryHub/.backup"
-    )
-    / DATE
-)
+BACKUP_PATH = _REPO / "AgentMemoryHub" / ".backup" / DATE
 
 
 def backup_rules():

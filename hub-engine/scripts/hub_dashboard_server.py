@@ -738,10 +738,7 @@ def detect_hub_root() -> Path:
         if (c / "INDEX.md").exists() and (c / ".sync").is_dir():
             return c
 
-    return Path(
-        r"C:\Users\Fan-SJSS\.trae-cn\worktrees\20260817-Fan-Agent-Momory"
-        r"\feat-implement-plan-ZilBmv\AgentMemoryHub"
-    )
+    return here.parents[2] / "AgentMemoryHub"
 
 
 def main() -> int:

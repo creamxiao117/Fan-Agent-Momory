@@ -17,23 +17,30 @@ CLI:
 
 import argparse
 import json
+import os
 import subprocess
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 MAVIS_PLATFORM = "mavis"
-DEFAULT_HUB_ROOT = r"C:\Users\Fan-SJSS\.trae-cn\worktrees\20260817-Fan-Agent-Momory\feat-implement-plan-ZilBmv\AgentMemoryHub"
-DEFAULT_MAVIS_DATA = r"C:\Users\Fan-SJSS\AppData\Roaming\MiniMax"
-DEFAULT_SIGN_SCRIPT = r"C:\Users\Fan-SJSS\.trae-cn\worktrees\20260817-Fan-Agent-Momory\feat-implement-plan-ZilBmv\hub-engine\scripts\platform_sign.py"
-DEFAULT_PLATFORMS_YAML = r"C:\Users\Fan-SJSS\.trae-cn\worktrees\20260817-Fan-Agent-Momory\feat-implement-plan-ZilBmv\AgentMemoryHub\system\platforms.yaml"
-
-# Mavis 3 层接入验证点
-L1_HOOK_PATH = (
-    r"C:\Users\Fan-SJSS\AppData\Roaming\MiniMax\agents\mavis\hooks\startup-gate.js"
+# 本检出路径：由脚本位置推导（原为写死 worktree 绝对路径，换检出即静默失效）
+_REPO = Path(__file__).resolve().parents[2]
+DEFAULT_HUB_ROOT = str(_REPO / "AgentMemoryHub")
+# Mavis（MiniMax Code）自己的数据目录：从家目录推导，可用 env MAVIS_DATA 覆盖
+DEFAULT_MAVIS_DATA = str(
+    Path(
+        os.environ.get("MAVIS_DATA") or Path.home() / "AppData" / "Roaming" / "MiniMax"
+    )
 )
-L2_TOPIC_DIR = r"C:\Users\Fan-SJSS\AppData\Roaming\MiniMax\agents\mavis\memory\topics"
-L3_WORKSPACE_GEN = r"C:\Users\Fan-SJSS\AppData\Roaming\MiniMax\bin\gen_agents_md.py"
+DEFAULT_SIGN_SCRIPT = str(_REPO / "hub-engine" / "scripts" / "platform_sign.py")
+DEFAULT_PLATFORMS_YAML = str(_REPO / "AgentMemoryHub" / "system" / "platforms.yaml")
+
+# Mavis 3 层接入验证点（均在 MAVIS_DATA 下）
+_MAVIS_HOME = Path(DEFAULT_MAVIS_DATA)
+L1_HOOK_PATH = str(_MAVIS_HOME / "agents" / "mavis" / "hooks" / "startup-gate.js")
+L2_TOPIC_DIR = str(_MAVIS_HOME / "agents" / "mavis" / "memory" / "topics")
+L3_WORKSPACE_GEN = str(_MAVIS_HOME / "bin" / "gen_agents_md.py")
 
 CST = timezone(timedelta(hours=8))
 

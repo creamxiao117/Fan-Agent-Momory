@@ -23,7 +23,7 @@ CST = timezone(timedelta(hours=8))
 PLATFORMS_YAML = Path("system/platforms.yaml")
 DASHBOARD_MD = Path("system/run/platform-dashboard.md")
 LEDGER_PATH = Path(".sync/state/platform-health.jsonl")
-HUB_ROOT_DEFAULT = r"C:\Users\Fan-SJSS\.trae-cn\worktrees\20260817-Fan-Agent-Momory\feat-implement-plan-ZilBmv\AgentMemoryHub"
+HUB_ROOT_DEFAULT = str(Path(__file__).resolve().parents[2] / "AgentMemoryHub")
 LAUNCHER = Path("hub-engine/scripts/hub_mcp_launcher.py")
 
 
