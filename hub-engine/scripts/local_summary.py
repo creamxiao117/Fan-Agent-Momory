@@ -134,7 +134,45 @@ def _candidates(cfg: dict, keys: dict) -> list[tuple[str, str, str]]:
     return out
 
 
-def _chat(model: str, prompt: str, url: str, api_key: str) -> str:
+def _heal_missing_temp_dir(body: str) -> bool:
+    """自愈：LM Studio 因临时目录缺失而加载失败时，把目录建回来并请求重试。
+
+    背景（2026-09-25 审计 I-5）：LM Studio 家目录下的 `.internal\\temp` 一旦缺失
+    （重启/升级后未重建、或被“清临时文件”的例程带走），**任何模型都会被 400 拒**：
+
+        Failed to load model "<id>". Error: ENOENT: no such file or directory,
+        mkdtemp '<LMSTUDIO_HOME>\\.internal\temp\\lmstudio-chat-template-XXXXXX'
+
+    实测影响：夜间摘要恒空（exit=2）而无人知晓，需人工排查才定位。本函数把该故障
+    变成**自愈**：从错误体里解析出目标目录 → 建回来 → 调用方重试一次。
+
+    返回 True 表示"已修好，可以重试"；无法识别/创建失败则 False（保持原行为）。
+    """
+    import re
+
+    m = re.search(r"mkdtemp '([^']+)'", body or "")
+    if not m:
+        return False
+    target = Path(m.group(1))
+    # 只认 LM Studio 的 chat-template 临时名（报错路径形如
+    # <home>\.internal\temp\lmstudio-chat-template-XXXXXX）：
+    # 目录本身是 mkdtemp 的**父目录**（XXXXXX 是待建名）⇒ 只往上回退一级，
+    # 且**绝不**把家目录或其 `.internal` 当成临时目录建出来。
+    if not target.name.lower().startswith("lmstudio-chat-template"):
+        return False
+    cand = target.parent
+    if not cand.name or cand.name == ".internal":
+        return False
+    try:
+        cand.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:  # pragma: no cover - 权限/磁盘类环境错误
+        print(f"[warn] 自愈失败（{cand}）: {exc}")
+        return False
+    print(f"[heal] 已补建 LM Studio 临时目录: {cand}（自愈后重试一次）")
+    return True
+
+
+def _chat(model: str, prompt: str, url: str, api_key: str, *, _retry: bool = True) -> str:
     """调本机 OpenAI 兼容端点（非流式）返回文本；失败返回空串（不抛错）。
 
     url 必须是完整的 chat/completions 地址（由候选列表拼好）。
@@ -176,6 +214,9 @@ def _chat(model: str, prompt: str, url: str, api_key: str) -> str:
         if body:
             detail = " | body=" + body.strip().replace("\n", " ")[:300]
         print(f"[warn] 端点调用失败 {url}: {type(exc).__name__}: {exc}{detail}")
+        # 自愈：临时目录缺失导致的全模型 400 → 建回目录并重试一次（见 _heal_missing_temp_dir）
+        if _retry and _heal_missing_temp_dir(body):
+            return _chat(model, prompt, url, api_key, _retry=False)
         return ""
     choice = (data.get("choices") or [{}])[0]
     msg = choice.get("message") or {}
