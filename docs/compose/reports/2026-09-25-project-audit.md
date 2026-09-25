@@ -103,7 +103,7 @@
 | I-1 | **lint 规则集形同虚设**：`.ruff.toml` 只有 `line-length=120` + `extend-exclude`，未选任何规则族（ruff 默认仅 E4/E7/E9/F） | `.ruff.toml` 全文 4 行 | 拼写错误、未用导入之外的**真实缺陷类**（bugbear B、复杂度过高 C901、过期写法 UP、简化 SIM）无护栏 |
 | I-2 | **22 个 tracked `.py` 含 47 处个人绝对路径**（`C:\Users\Fan-SJSS\...`、`D:/AIwork\...`）：`mavis_hub_bridge.py`(7)、`reclassify.py`(7)、`bootstrap_hub.py`(4)、`mcp_healthcheck.py`(4)、`hub_mcp_launcher.py`(3)、`hub_orchestrator.py`(3)… | 正则扫描 tracked `*.py` | 与刚修完的 P1-1 同一缺陷类：换机/移 worktree 即静默失效（且这些是**启动类**脚本） |
 | I-3 | **无覆盖率度量**：pytest-cov / coverage 未安装 | `python -c "import pytest_cov"` 失败 | 28% 测试行数只是代理指标；"哪些核心路径无测试"无从知晓 |
-| I-4 | **仍在用的能力放在未纳管的 `work/`**：`audit_dead_modules.py`（P2 复审用它）、`_t1_precheck.py`/`write_t1_*.py`（T1 派生）、`bench_recall.py` | `git ls-files work/*` = 0 且 `work/` 在 .gitignore | 换机或清 worktree 即失；本次已出现"文档引用未跟踪脚本"的悬空引用 |
+| I-4 | ~~仍在用的能力放在未纳管的 `work/`~~ | **已修（2026-09-25）**：`audit_dead_modules.py` 迁入 `hub-engine/scripts/`（V2.0 路径自解析）；`bench_recall.py` 与 T1 一次性脚本归档至 `work/_archive/oneoffs-20260925/`（能力已被 `recall_regression` 取代，T1 重跑靠仓内命令）；留档 `docs/compose/cleanup/2026-09-25-dead-scripts-and-dashboard.md` §3 |
 | I-5 | **单点依赖叠加**：本地 LLM（且 `F:\lmstudio-home\.internal\temp` 一旦缺失 → 全模型 400）+ 网关 `127.0.0.1:20128` + 本机计划任务 + 无 CI | 09-24 实盘故障复现；`LastTaskResult` 全绿但常驻任务只在 **1 台机器**上 | 机器/模型不可用时，夜间摘要、蒸馏、向量更新**静默降级**（虽有 exit≠0，但没人看日志就不知道） |
 | I-6 | **备份缺口**：外层 **10 笔**、中枢 **4 笔**未推送 origin | `git rev-list --count origin/master..master` = 10；中枢 = 4 | 本地磁盘故障即失（中枢是"唯一事实源"） |
 
@@ -137,7 +137,7 @@
 | P1-a | **ruff 规则集升级**：`select = ["E","F","W","I","UP","B","SIM","C901"]`（`mccabe.max-complexity=15`），先跑一次全量统计把违规**按文件**列入 `per-file-ignores` 基线，再逐批清 | 0.5–1 天 | 补齐真实缺陷类护栏（含 M-2 的复杂度） | 与 I-1 直接对应；建议同时把 `ruff format --check` 纳入巡检（已纳入 pre-commit） |
 | P1-b | **装 pytest-cov 并立覆盖率基线**：`--cov=hub-engine --cov-report=term-missing`，把**核心路径**（`tools/retrieve.py`、`sync.py`、`scripts/patrol_runner.py`）单列阈值 | 0.5 天 | 从"测试行数代理"升级为真度量 | 对应 I-3；先立基线不加硬门禁，避免假红 |
 | P1-c | **硬编码路径清零 + 加护栏测试**：22 文件 47 处改为 `Path(__file__).resolve().parents[n]` 自解析（或 env 覆盖，参照 `run_patrol.cmd`/`nightly_consolidate.cmd`）；新增测试禁止 tracked `.py` 出现 `C:\Users\`/`D:/AIwork` | 1 天 | 消除换机失效类缺陷 | 对应 I-2；**优先 `bootstrap_hub.py`/`hub_mcp_launcher.py`/`mcp_healthcheck.py` 三个启动链文件** |
-| P1-d | **把 `work/` 仍在用的脚本迁入仓库**：`audit_dead_modules.py`（审计器）、`bench_recall.py`、T1 派生脚本 `_t1_precheck.py`/`write_t1_*.py` → `hub-engine/scripts/`（或 `scripts/`），并更新 WORK.md 引用 | 0.5 天 | 消除"文档引用未跟踪文件"的悬空风险 | 对应 I-4；与 T1（10-07 重跑）强相关，**建议在重跑前完成** |
+| P1-d | ~~把 `work/` 仍在用的脚本迁入仓库~~ | **已完成（2026-09-25）**：审计器迁入 + 5 个一次性脚本归档（见 cleanup 留档 §3） | 0.5 天 | 消除"文档引用未跟踪文件"的悬空风险 | 对应 I-4 |
 | P1-e | **推送补上 + 备份策略**：外层 10 笔、中枢 4 笔推 origin；给中枢加"每日推送"或纳入夜间任务（失败即非零） | 0.5 天 | 唯一事实源离开单机 | 对应 I-6；推送需你点头（本分析未擅自执行） |
 | P1-f | **单点降级实测**：LM Studio 停掉时跑一遍"检索（向量通道退化）+ 夜间链路"，确认降级路径是**可诊断**而非静默；给夜间任务加"`.internal/temp` 不存在则建"的一行兜底 | 0.5 天 | 把 09-24 那次"全模型 400"变成自愈 | 对应 I-5；经验卡已入库，兜底尚未落代码 |
 
@@ -170,7 +170,7 @@
 ```bash
 # 规模 / 结构
 git ls-files 'hub-engine/*.py' | ...                      # 分模块行数
-python work/audit_dead_modules.py                          # 零引用模块（结果：5，含 1 假阳性）
+python -m scripts.audit_dead_modules                         # 零引用模块（需人工复查：本工具会假阳性）
 
 # 质量门禁
 cd hub-engine && ../.venv/Scripts/python.exe -m pytest -q  # 558 passed / 4 skipped

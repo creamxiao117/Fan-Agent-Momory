@@ -11,6 +11,10 @@ __pycache__/
 *.pyc
 .next/
 coverage/
+# P1-b 立覆盖率基线后产生：coverage.py 的数据文件（运行态，不进版本控制）
+.coverage
+.coverage.*
+htmlcov/
 
 # 运行产物 / 工具 / 缓存（ruff 等工具据此跳过）
 .venv/

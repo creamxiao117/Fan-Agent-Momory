@@ -5,7 +5,8 @@
 
 ## 0. 复审方法
 
-`python work/audit_dead_modules.py`（判据：被 .py 导入 / 被编排器按文件名调用 /
+`python -m scripts.audit_dead_modules`（**2026-09-25 已迁入仓库**，在 `hub-engine/` 下跑；
+此前位于 gitignore 的 `work/`，被本文件与审计报告引用 ⇒ 换机即断链。判据：被 .py 导入 / 被编排器按文件名调用 /
 被 .md·.yaml·.cmd·pre-commit 提及 / 被计划任务引用 —— 任一命中即算"有引用"）。
 
 **首轮结果：零引用模块 5 个**（WORK.md 记录的历史值是 8 个，已收敛）。逐个人工复查后
@@ -53,7 +54,20 @@ git cat-file -p <blob SHA> > hub-engine/scripts/<文件名>.py
   已校验条目数）；随后删除 `work/dashboard/`
 - **恢复**：`Expand-Archive work\_archive\dashboard-20260925.zip -DestinationPath work`
 
-## 3. 验收
+## 3. 仍在用的 `work/` 脚本处置（2026-09-25 追加）
+
+`work/` 在 `.gitignore` 里，但其中的脚本会被文档引用（P1-d / 审计 I-4）。本次处置：
+
+| 脚本 | 处置 | 理由 |
+|:--|:--|:--|
+| `audit_dead_modules.py` | **迁入仓库** → `hub-engine/scripts/audit_dead_modules.py`（V2.0，路径自解析） | 死代码审计是 P2 类工作的常备工具，且被 cleanup 留档与审计报告引用 |
+| `bench_recall.py` | 归档 → `work/_archive/oneoffs-20260925/` | 能力已被 `hub-engine/scripts/recall_regression.py` 取代（22 条金标准 + 阀值门禁 + 蓝图占位率）；`RUNLOG.md` 的 2 处引用是**历史记录**，保留不改 |
+| `_t1_precheck.py`、`write_t1_{method,results,v2_results}.py` | 归档 → 同上目录 | 一次性卡回写/预检脚本，产物已落卡与 `docs/compose/metrics/`；T1 重跑靠仓内的 `scripts.rule_following_timeseries` |
+| 旧 `work/audit_dead_modules.py` | 归档（已被迁入版取代） | 避免两份并存 |
+
+恢复：直接从 `work/_archive/oneoffs-20260925/` 拷回（未进版本控制的那几个仍只存在于此）。
+
+## 4. 验收
 
 - 删除后全量 `pytest`：**558 passed / 4 skipped / 0 failed**（无测试/导入引用被删脚本）
 - `ruff check .` 通过
