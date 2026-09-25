@@ -28,9 +28,7 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 _HERE = Path(__file__).resolve()
-sys.path.insert(
-    0, str(_HERE.parents[1])
-)  # hub-engine 加入 path，保证单独运行可导入 tools
+sys.path.insert(0, str(_HERE.parents[1]))  # hub-engine 加入 path，保证单独运行可导入 tools
 
 from tools.retrieve import (
     retrieve_with_meta,
@@ -102,9 +100,7 @@ def snapshot_path(root: Path) -> Path:
     return Path(root) / SNAPSHOT
 
 
-def persist_snapshot(
-    root: Path, items: list[dict], refreshed: str | None = None
-) -> None:
+def persist_snapshot(root: Path, items: list[dict], refreshed: str | None = None) -> None:
     d = Path(root) / SNAPSHOT.parent
     d.mkdir(parents=True, exist_ok=True)
     payload = {
@@ -112,9 +108,7 @@ def persist_snapshot(
         "queries": items,
     }
     payload_path = d / SNAPSHOT.name
-    payload_path.write_text(
-        json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"
-    )
+    payload_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 def load_snapshot(root: Path) -> list[dict] | None:
@@ -129,11 +123,7 @@ def load_snapshot(root: Path) -> list[dict] | None:
     queries = payload.get("queries")
     if not isinstance(queries, list):
         return None
-    return [
-        {"query": str(it.get("query") or ""), "count": int(it.get("count") or 0)}
-        for it in queries
-        if it
-    ]
+    return [{"query": str(it.get("query") or ""), "count": int(it.get("count") or 0)} for it in queries if it]
 
 
 def snapshot_age_days(root: Path, today: date | None = None) -> int | None:
@@ -201,13 +191,9 @@ def gate_failed(hit_ratio: float | None, fail_below: float | None) -> bool:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="real-query-regression", description=__doc__)
     ap.add_argument("--root", required=True, help="中枢根目录")
-    ap.add_argument(
-        "--model", default=DEFAULT_MODEL, help="HF 向量模型 id（与建库一致）"
-    )
+    ap.add_argument("--model", default=DEFAULT_MODEL, help="HF 向量模型 id（与建库一致）")
     ap.add_argument("--min-count", type=int, default=2, help="作为 canary 的最低频次")
-    ap.add_argument(
-        "--max-age-days", type=int, default=7, help="固定集超龄天数触发重建"
-    )
+    ap.add_argument("--max-age-days", type=int, default=7, help="固定集超龄天数触发重建")
     ap.add_argument("--top-k", type=int, default=5, help="检索 top_k")
     ap.add_argument(
         "--fail-below",
@@ -215,9 +201,7 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="命中率低于该值判失败（默认全未命中才判失败）",
     )
-    ap.add_argument(
-        "--refresh", action="store_true", help="强制从 query.log 重建固定集"
-    )
+    ap.add_argument("--refresh", action="store_true", help="强制从 query.log 重建固定集")
     args = ap.parse_args(argv)
 
     root = Path(args.root)
@@ -230,9 +214,7 @@ def main(argv: list[str] | None = None) -> int:
         args.refresh,
     )
     if not items:
-        print(
-            "检索回归门禁：无「高频未命中」断言样本（检索健康），跳过（无法断言待补卡缺口）。"
-        )
+        print("检索回归门禁：无「高频未命中」断言样本（检索健康），跳过（无法断言待补卡缺口）。")
         return 0
 
     def hit_fn(q: str) -> bool:
@@ -242,18 +224,12 @@ def main(argv: list[str] | None = None) -> int:
     stats = gate_stats(items, hit_fn)
     ratio = stats["hit_ratio"]
     source = "（本次从 query.log 重建）" if from_log else "（读取固定集缓存）"
-    print(
-        f"检索回归 canary {source}: 命中 {stats['hits']}/{stats['total']} = {ratio:.0%}"
-    )
+    print(f"检索回归 canary {source}: 命中 {stats['hits']}/{stats['total']} = {ratio:.0%}")
     if stats["miss_queries"]:
         print("  未命中断言样本: " + ", ".join(stats["miss_queries"]))
 
     if gate_failed(ratio, args.fail_below):
-        reason = (
-            "全未命中"
-            if args.fail_below is None
-            else f"命中率 {ratio:.0%} < 阈值 {args.fail_below:.0%}"
-        )
+        reason = "全未命中" if args.fail_below is None else f"命中率 {ratio:.0%} < 阈值 {args.fail_below:.0%}"
         print(f"【告警】检索回归门禁未过：{reason}——词袋+向量融合管线疑似退化。")
         return 3  # 专用退出码：回归门禁未通过
     return 0

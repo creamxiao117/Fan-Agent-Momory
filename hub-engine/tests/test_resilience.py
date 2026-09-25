@@ -12,6 +12,8 @@ _ENGINE_DIR = Path(__file__).resolve().parent.parent
 if str(_ENGINE_DIR) not in sys.path:
     sys.path.insert(0, str(_ENGINE_DIR))
 
+import contextlib
+
 import pytest
 
 from tools.resilience import (
@@ -27,11 +29,7 @@ class TestRetryStrategy:
 
     def test_retry_success_first_attempt(self):
         """首次尝试成功直接返回。"""
-        pipeline = (
-            ResiliencePipelineBuilder()
-            .add_retry(max_attempts=3, base_delay=0.01, jitter=0)
-            .build()
-        )
+        pipeline = ResiliencePipelineBuilder().add_retry(max_attempts=3, base_delay=0.01, jitter=0).build()
         result = pipeline.execute(lambda: "ok")
         assert result == "ok"
         # 只有 execute 事件，无 retry 事件
@@ -48,11 +46,7 @@ class TestRetryStrategy:
                 raise ConnectionError(f"失败第 {call_count} 次")
             return "ok"
 
-        pipeline = (
-            ResiliencePipelineBuilder()
-            .add_retry(max_attempts=5, base_delay=0.01, jitter=0)
-            .build()
-        )
+        pipeline = ResiliencePipelineBuilder().add_retry(max_attempts=5, base_delay=0.01, jitter=0).build()
         result = pipeline.execute(flaky)
         assert result == "ok"
         assert call_count == 3  # 第 3 次成功
@@ -62,11 +56,7 @@ class TestRetryStrategy:
 
     def test_retry_all_attempts_fail(self):
         """所有重试耗尽，抛出最后异常。"""
-        pipeline = (
-            ResiliencePipelineBuilder()
-            .add_retry(max_attempts=3, base_delay=0.01, jitter=0)
-            .build()
-        )
+        pipeline = ResiliencePipelineBuilder().add_retry(max_attempts=3, base_delay=0.01, jitter=0).build()
         with pytest.raises(ValueError, match="持续失败"):
             pipeline.execute(lambda: (_ for _ in ()).throw(ValueError("持续失败")))
         # 3 次尝试全失败：attempt 1 失败->retry, attempt 2 失败->retry, attempt 3 失败->抛异常
@@ -109,16 +99,14 @@ class TestCircuitBreakerStrategy:
 
     def test_circuit_opens_after_failures(self):
         """连续失败达阈值后熔断。"""
-        cb = CircuitBreakerStrategy(
-            failure_threshold=2, cooldown=10.0, half_open_max_calls=1
-        )
+        cb = CircuitBreakerStrategy(failure_threshold=2, cooldown=10.0, half_open_max_calls=1)
         # 手动构建管道
 
         def always_fail():
             raise ConnectionError("连接失败")
 
         # 执行 2 次，应在第 2 次进入 open
-        for i in range(2):
+        for _i in range(2):
             try:
                 cb.wrap(always_fail, ResilienceContext())()
             except ConnectionError:
@@ -132,19 +120,15 @@ class TestCircuitBreakerStrategy:
 
     def test_circuit_half_open_recovers(self):
         """冷却时间后进入 half-open，成功后恢复 closed。"""
-        cb = CircuitBreakerStrategy(
-            failure_threshold=2, cooldown=0.05, half_open_max_calls=1
-        )
+        cb = CircuitBreakerStrategy(failure_threshold=2, cooldown=0.05, half_open_max_calls=1)
 
         def always_fail():
             raise ConnectionError("连接失败")
 
         # 触发 open
-        for i in range(2):
-            try:
+        for _i in range(2):
+            with contextlib.suppress(ConnectionError, CircuitBreakerOpenError):
                 cb.wrap(always_fail, ResilienceContext())()
-            except (ConnectionError, CircuitBreakerOpenError):
-                pass
 
         assert cb.state == "open"
 
@@ -152,26 +136,24 @@ class TestCircuitBreakerStrategy:
         time.sleep(0.1)
 
         # 成功调用应恢复
-        ok_fn = lambda: "ok"
+        def ok_fn():
+            return "ok"
+
         result = cb.wrap(ok_fn, ResilienceContext())()
         assert result == "ok"
         assert cb.state == "closed"
 
     def test_circuit_half_open_fails_back_to_open(self):
         """Half-Open 失败回到 Open。"""
-        cb = CircuitBreakerStrategy(
-            failure_threshold=2, cooldown=0.05, half_open_max_calls=1
-        )
+        cb = CircuitBreakerStrategy(failure_threshold=2, cooldown=0.05, half_open_max_calls=1)
 
         def always_fail():
             raise ConnectionError("连接失败")
 
         # 触发 open
-        for i in range(2):
-            try:
+        for _i in range(2):
+            with contextlib.suppress(ConnectionError, CircuitBreakerOpenError):
                 cb.wrap(always_fail, ResilienceContext())()
-            except (ConnectionError, CircuitBreakerOpenError):
-                pass
 
         # 等待冷却
         time.sleep(0.1)
@@ -188,9 +170,7 @@ class TestFallbackStrategy:
 
     def test_fallback_value(self):
         """所有前置失败后返回 fallback_value。"""
-        pipeline = (
-            ResiliencePipelineBuilder().add_fallback(fallback_value="降级结果").build()
-        )
+        pipeline = ResiliencePipelineBuilder().add_fallback(fallback_value="降级结果").build()
         # Fallback 策略捕获异常并返回 fallback_value，不抛异常
         result = pipeline.execute(lambda: (_ for _ in ()).throw(RuntimeError("失败")))
         assert result == "降级结果"
@@ -200,19 +180,13 @@ class TestFallbackStrategy:
 
     def test_fallback_fn(self):
         """使用 fallback_fn 替代。"""
-        pipeline = (
-            ResiliencePipelineBuilder()
-            .add_fallback(fallback_fn=lambda: "替代结果")
-            .build()
-        )
+        pipeline = ResiliencePipelineBuilder().add_fallback(fallback_fn=lambda: "替代结果").build()
         result = pipeline.execute(lambda: (_ for _ in ()).throw(RuntimeError("失败")))
         assert result == "替代结果"
 
     def test_fallback_on_success(self):
         """正常成功时不触发降级。"""
-        pipeline = (
-            ResiliencePipelineBuilder().add_fallback(fallback_value="降级").build()
-        )
+        pipeline = ResiliencePipelineBuilder().add_fallback(fallback_value="降级").build()
         result = pipeline.execute(lambda: "正常结果")
         assert result == "正常结果"
 
@@ -258,11 +232,7 @@ class TestPipelineComposition:
 
     def test_pipeline_as_decorator(self):
         """管道可作为装饰器使用。"""
-        pipeline = (
-            ResiliencePipelineBuilder()
-            .add_retry(max_attempts=3, base_delay=0.01, jitter=0)
-            .build()
-        )
+        pipeline = ResiliencePipelineBuilder().add_retry(max_attempts=3, base_delay=0.01, jitter=0).build()
 
         @pipeline
         def my_func():
@@ -282,11 +252,7 @@ class TestPipelineComposition:
                 raise ConnectionError("失败")
             return "ok"
 
-        pipeline = (
-            ResiliencePipelineBuilder()
-            .add_retry(max_attempts=3, base_delay=0.01, jitter=0)
-            .build()
-        )
+        pipeline = ResiliencePipelineBuilder().add_retry(max_attempts=3, base_delay=0.01, jitter=0).build()
         pipeline.execute(flaky)
         events = pipeline.events
         assert len(events) > 0
@@ -301,12 +267,7 @@ class TestBuilder:
     def test_builder_fluent(self):
         """Builder 支持流式链式调用。"""
         builder = ResiliencePipelineBuilder()
-        result = (
-            builder.add_retry(max_attempts=3)
-            .add_timeout(timeout=30)
-            .add_fallback(fallback_value="ok")
-            .build()
-        )
+        result = builder.add_retry(max_attempts=3).add_timeout(timeout=30).add_fallback(fallback_value="ok").build()
         assert result is not None
         # 执行一次确保可用
         exec_result = result.execute(lambda: "test")

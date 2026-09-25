@@ -15,9 +15,7 @@ from scripts.missing_query import LOG, aggregate, to_markdown
 def _write_log(root, records):
     p = root / LOG
     p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(
-        "\n".join(json.dumps(r, ensure_ascii=False) for r in records), encoding="utf-8"
-    )
+    p.write_text("\n".join(json.dumps(r, ensure_ascii=False) for r in records), encoding="utf-8")
 
 
 def _search(query, hit_count, channel="semantic"):
@@ -57,8 +55,7 @@ def _seed_card(root: Path, name: str, tags: list[str], body: str) -> Path:
     p = root / "rules" / name
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(
-        f"---\ntype: rule\ntags: {tags}\nupdated: '2026-08-17'\n"
-        f"status: active\nreuse_count: 0\n---\n{body}\n",
+        f"---\ntype: rule\ntags: {tags}\nupdated: '2026-08-17'\nstatus: active\nreuse_count: 0\n---\n{body}\n",
         encoding="utf-8",
     )
     subprocess.run(["git", "-C", str(root), "add", "-A"], check=True)
@@ -85,10 +82,7 @@ def _p1_log(root: Path, query: str, hits: list[int]) -> None:
     """按给定命中序列造 P1 日志（avg_hit<3 且非零命中主导）。"""
     _write_log(
         root,
-        [
-            _search(query, h, "deterministic" if i % 2 == 0 else "semantic")
-            for i, h in enumerate(hits)
-        ],
+        [_search(query, h, "deterministic" if i % 2 == 0 else "semantic") for i, h in enumerate(hits)],
     )
 
 
@@ -246,9 +240,7 @@ def test_main_since_days_ok(tmp_path, capsys):
     from scripts.missing_query import main
 
     # 用「今天-1」确保 7 天窗口内永远能命中
-    yesterday = (datetime.now(timezone.utc) - timedelta(days=1)).strftime(
-        "%Y-%m-%dT02:00:00Z"
-    )
+    yesterday = (datetime.now(timezone.utc) - timedelta(days=1)).strftime("%Y-%m-%dT02:00:00Z")
     _write_log(tmp_path, [{**_search("缺口A", 0), "ts": yesterday}])
     assert main(["--root", str(tmp_path), "--since-days", "7"]) == 0
     assert "缺口A" in capsys.readouterr().out

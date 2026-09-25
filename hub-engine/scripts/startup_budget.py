@@ -78,9 +78,7 @@ def measure_tiers(root: Path | None = None) -> list[dict]:
                 missing.append(s)
                 continue
             total += len(p.read_text(encoding="utf-8-sig"))
-        rows.append(
-            {"tier": tier, "chars": total, "count": len(slugs), "missing": missing}
-        )
+        rows.append({"tier": tier, "chars": total, "count": len(slugs), "missing": missing})
     return rows
 
 

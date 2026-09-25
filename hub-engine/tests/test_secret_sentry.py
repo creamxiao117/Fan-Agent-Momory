@@ -79,23 +79,15 @@ def test_real_leak_in_archive_zone_is_low(tmp_path: Path) -> None:
     """非权威区（归档）同一泄漏 → 低危、退出码 1。"""
     root = _make_hub(
         tmp_path,
-        {
-            ".sync/conflicts/_resolved/old.md": (
-                "- Bearer API Key（8081/8082 /v1）：Zx9Qw2Er7Ty4Ui8Op5As3Df6Gh1Jk0Lm\n"
-            )
-        },
+        {".sync/conflicts/_resolved/old.md": ("- Bearer API Key（8081/8082 /v1）：Zx9Qw2Er7Ty4Ui8Op5As3Df6Gh1Jk0Lm\n")},
     )
     assert main(["--root", str(root), "--quiet"]) == 1
 
 
 def test_known_key_exact_match_is_high(tmp_path: Path) -> None:
     """provider_keys.yaml 的真值出现在任意卡片 → 高危（最高精度通道）。"""
-    root = _make_hub(
-        tmp_path, {"experience/card.md": "# 卡\n\n值 = sk-proj-REALKEY1234567890abcd\n"}
-    )
-    (root / "provider_keys.yaml").write_text(
-        "default: sk-proj-REALKEY1234567890abcd\n", encoding="utf-8"
-    )
+    root = _make_hub(tmp_path, {"experience/card.md": "# 卡\n\n值 = sk-proj-REALKEY1234567890abcd\n"})
+    (root / "provider_keys.yaml").write_text("default: sk-proj-REALKEY1234567890abcd\n", encoding="utf-8")
     assert main(["--root", str(root), "--quiet"]) == 2
 
 

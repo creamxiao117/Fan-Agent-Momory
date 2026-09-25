@@ -34,9 +34,7 @@ def test_ghost_fixed_via_frontmatter_title(tmp_path):
         )
     ]
     assert apply_ghost_fixes(tmp_path, res["ghost_fixable"]) == 1
-    assert "- 2026-09-10-refactor-judgment-fanout-not-loc" in (
-        tmp_path / "INDEX.md"
-    ).read_text(encoding="utf-8")
+    assert "- 2026-09-10-refactor-judgment-fanout-not-loc" in (tmp_path / "INDEX.md").read_text(encoding="utf-8")
 
 
 def test_ghost_fixed_via_date_prefix(tmp_path):
@@ -58,8 +56,7 @@ def test_candidate_already_registered_is_manual(tmp_path):
     """候选 stem 已被登记 → 只报告，不猜（避免变成两条同 slug）"""
     _card(
         tmp_path / "methodology" / "2026-09-10-x-not-loc.md",
-        "type: methodology\ntags: [x]\nupdated: '2026-09-10'\nstatus: active\n"
-        "reuse_count: 0\ntitle: x-and-y-not-loc",
+        "type: methodology\ntags: [x]\nupdated: '2026-09-10'\nstatus: active\nreuse_count: 0\ntitle: x-and-y-not-loc",
     )
     _index(
         tmp_path,

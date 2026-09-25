@@ -10,7 +10,7 @@ import yaml
 def load_yaml(path: Path) -> dict:
     """读取 YAML，失败返回空 dict"""
     try:
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             return yaml.safe_load(f) or {}
     except (OSError, yaml.YAMLError):
         return {}
@@ -84,18 +84,14 @@ def _load_engine_config_raw(config_path: str | Path | None = None) -> dict:
         return load_yaml(Path(env_path))
     # 尝试中枢 system/config.yaml（统一配置入口）
     try:
-        hub_root_candidate = (
-            Path(__file__).resolve().parent.parent.parent / "AgentMemoryHub"
-        )
+        hub_root_candidate = Path(__file__).resolve().parent.parent.parent / "AgentMemoryHub"
         system_cfg = hub_root_candidate / "system" / "config.yaml"
         if system_cfg.exists():
             return load_yaml(system_cfg)
     except (OSError, FileNotFoundError):
         pass
     # 回退到旧路径
-    config_path = (
-        Path(__file__).resolve().parent.parent / "config" / "engine.config.yaml"
-    )
+    config_path = Path(__file__).resolve().parent.parent / "config" / "engine.config.yaml"
     return load_yaml(Path(config_path))
 
 
@@ -112,9 +108,7 @@ _EXTERNAL_DEFAULTS: dict[str, tuple[str, str]] = {
 }
 
 
-def external_path(
-    name: str, hub_root: str | Path | None = None, *, must_exist: bool = False
-) -> Path | None:
+def external_path(name: str, hub_root: str | Path | None = None, *, must_exist: bool = False) -> Path | None:
     """解析仓外项目根目录：**env 优先 → `<hub>/hub.config.yaml: external_paths.<name>` → 内置默认**。
 
     返回 None 表示三者皆无（或 must_exist=True 且路径不存在）——调用方应当

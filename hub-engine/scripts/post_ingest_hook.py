@@ -49,15 +49,11 @@ SECTION_TITLES = {
 
 def git(repo: Path, *args: str, env: dict | None = None) -> str:
     cmd = ["git", "-C", str(repo), *args]
-    r = subprocess.run(
-        cmd, check=True, capture_output=True, text=True, encoding="utf-8", env=env
-    )
+    r = subprocess.run(cmd, check=True, capture_output=True, text=True, encoding="utf-8", env=env)
     return r.stdout or ""
 
 
-def read_diff_since(
-    root: Path, since_ts: float | None, max_records: int = 200
-) -> list[dict]:
+def read_diff_since(root: Path, since_ts: float | None, max_records: int = 200) -> list[dict]:
     """读 memory_diff.jsonl，过滤本轮新增（before is None）的 add/move 记录。
 
     安全保护：不传 since_ts 时只取最近 max_records 条，防止历史污染 INDEX。
@@ -130,9 +126,7 @@ def cut_at_boundary(text: str, max_len: int) -> str:
     window = text[:max_len]
     # 优先：窗口内存在不闭合的开括号 → 切在开括号之前（整段括注宁可不写）
     for i in range(len(window) - 1, -1, -1):
-        if window[i] in _OPEN_BRACKETS and not any(
-            c in _CLOSE_BRACKETS for c in window[i:]
-        ):
+        if window[i] in _OPEN_BRACKETS and not any(c in _CLOSE_BRACKETS for c in window[i:]):
             cut = window[:i].rstrip()
             if cut:
                 return cut
@@ -191,9 +185,7 @@ def extract_summary(card_path: Path, max_len: int = _SUMMARY_MAX) -> str:
     return ""
 
 
-def append_to_index(
-    index_path: Path, section_title: str, slug: str, summary: str
-) -> bool:
+def append_to_index(index_path: Path, section_title: str, slug: str, summary: str) -> bool:
     """在指定 section 末尾（下一个 ## 之前）追加一行；幂等：已存在则跳过。"""
     text = index_path.read_text(encoding="utf-8")
     if f"- {slug}    " in text or f"- {slug}  " in text:
@@ -339,9 +331,7 @@ def main() -> int:
     except RuntimeError as e:
         print(f"commit 失败: {e}", file=sys.stderr)
         return 3
-    print(
-        f"post_ingest_hook: 已登记 {len(added)} 张 → {added}（已提交 {sorted(written_files)}）"
-    )
+    print(f"post_ingest_hook: 已登记 {len(added)} 张 → {added}（已提交 {sorted(written_files)}）")
     return 0
 
 

@@ -22,9 +22,7 @@ from tools.platform_bridge import (
 )
 
 
-def _register_platform(
-    root: Path, name: str, mem_dir: Path, target: str = "memory.md"
-) -> None:
+def _register_platform(root: Path, name: str, mem_dir: Path, target: str = "memory.md") -> None:
     """在测试中枢的 hub.config.yaml 登记一个指向临时目录的平台"""
     cfg_path = root / "hub.config.yaml"
     data = yaml.safe_load(cfg_path.read_text(encoding="utf-8")) or {}
@@ -32,9 +30,7 @@ def _register_platform(
         "memory_dir": str(mem_dir),
         "target_file": target,
     }
-    cfg_path.write_text(
-        yaml.safe_dump(data, allow_unicode=True, sort_keys=False), encoding="utf-8"
-    )
+    cfg_path.write_text(yaml.safe_dump(data, allow_unicode=True, sort_keys=False), encoding="utf-8")
 
 
 def _root_with_platform(
@@ -126,9 +122,7 @@ def test_mavis_deepseek_adapter_roundtrip():
         adapter = adapter_for(platform, None)
         first = adapter.parse(text)
         second = adapter.parse(adapter.render(first))
-        assert [(e.title, e.body) for e in first] == [
-            (e.title, e.body) for e in second
-        ], f"{platform} 往返丢失条目"
+        assert [(e.title, e.body) for e in first] == [(e.title, e.body) for e in second], f"{platform} 往返丢失条目"
         assert [e.title for e in first] == ["卡片甲", "卡片乙"]
 
 
@@ -196,9 +190,7 @@ def test_pull_dry_run_writes_nothing(tmp_path):
 
 
 def test_pull_sect_separated_platform(tmp_path):
-    root = _root_with_platform(
-        tmp_path, platform="hermes", content="条目一\n§\n条目二\n"
-    )
+    root = _root_with_platform(tmp_path, platform="hermes", content="条目一\n§\n条目二\n")
     stat = pull(root, "hermes")
     assert stat["pulled"] == 2
 
@@ -258,9 +250,7 @@ def test_push_dry_run_writes_nothing(tmp_path):
     _hub_card(root, "新规则", "正文")
     stat = push(root, "testplat", dry_run=True)
     assert stat["added"] == 1
-    assert "新规则" not in (tmp_path / "platforms" / "memory.md").read_text(
-        encoding="utf-8"
-    )
+    assert "新规则" not in (tmp_path / "platforms" / "memory.md").read_text(encoding="utf-8")
 
 
 def test_push_only_rules_skips_experience(tmp_path):
@@ -318,9 +308,7 @@ def test_cli_sync_default_is_pull_not_push(tmp_path, capsys):
     rc = main(["sync", "--root", str(root), "--platform", "testplat"])
     out = capsys.readouterr().out
     assert rc == 0
-    assert "新规则" not in (tmp_path / "platforms" / "memory.md").read_text(
-        encoding="utf-8"
-    )
+    assert "新规则" not in (tmp_path / "platforms" / "memory.md").read_text(encoding="utf-8")
     assert "pulled" in out
 
 
@@ -361,9 +349,7 @@ def test_push_preserves_crlf_newlines(tmp_path):
     assert push(root, "testplat")["added"] == 1
     raw = target.read_bytes()
     assert raw.count(CRLF.encode()) >= 3
-    assert raw.count(LF.encode()) - raw.count(CRLF.encode()) == 0, (
-        "出现裸 LF（换行混编）"
-    )
+    assert raw.count(LF.encode()) - raw.count(CRLF.encode()) == 0, "出现裸 LF（换行混编）"
 
 
 def test_repush_updates_card_in_place_no_duplicate(tmp_path):
@@ -384,9 +370,7 @@ def test_repush_updates_card_in_place_no_duplicate(tmp_path):
 
 def test_repush_preserves_local_edit_when_not_hub_pushed(tmp_path):
     """平台本地自己写的同名段（非中枢推的）→ 仍追加权威版，绝不覆盖本地编辑。"""
-    root = _root_with_platform(
-        tmp_path, content="## 新规则" + LF + "平台本地自己的内容" + LF
-    )
+    root = _root_with_platform(tmp_path, content="## 新规则" + LF + "平台本地自己的内容" + LF)
     _hub_card(root, "新规则", "中枢正文")
     stat = push(root, "testplat")
     assert stat["added"] == 0
@@ -401,30 +385,8 @@ def test_repush_preserves_local_edit_when_not_hub_pushed(tmp_path):
 def test_repush_handles_card_with_internal_headings(tmp_path):
     """卡片自带 ## 子标题时也必须整段替换（锁定 parse 按 ## 切分导致的取段过短缺陷）。"""
     root = _root_with_platform(tmp_path)
-    body1 = (
-        "## 一句话结论"
-        + LF
-        + LF
-        + "第一版正文"
-        + LF
-        + LF
-        + "## 关联"
-        + LF
-        + LF
-        + "- 旧关联"
-    )
-    body2 = (
-        "## 一句话结论"
-        + LF
-        + LF
-        + "第二版正文"
-        + LF
-        + LF
-        + "## 关联"
-        + LF
-        + LF
-        + "- 新关联"
-    )
+    body1 = "## 一句话结论" + LF + LF + "第一版正文" + LF + LF + "## 关联" + LF + LF + "- 旧关联"
+    body2 = "## 一句话结论" + LF + LF + "第二版正文" + LF + LF + "## 关联" + LF + LF + "- 新关联"
     _hub_card(root, "新规则", body1)
     assert push(root, "testplat")["added"] == 1
     _hub_card(root, "新规则", body2)
@@ -450,9 +412,7 @@ def test_hermes_push_does_not_split_existing_cards(tmp_path):
     assert push(root, "hermes")["added"] == 1
     text = (tmp_path / "platforms" / "memory.md").read_text(encoding="utf-8")
     assert "既有正文（必须保持紧跟标题、不被劈开）。" in text
-    assert ("# 既有卡片标题" + LF + LF + "## 一句话结论") in text, (
-        "既有卡片被劈开（标题与正文之间被插入）"
-    )
+    assert ("# 既有卡片标题" + LF + LF + "## 一句话结论") in text, "既有卡片被劈开（标题与正文之间被插入）"
     assert "中枢新卡正文" in text
 
 
@@ -463,13 +423,9 @@ def test_hermes_repush_replaces_in_place_no_duplicate(tmp_path):
         platform="hermes",
         content="【统一记忆中枢（AGENT MEMORY HUB）】执行前先查中枢\n\n§\n\n# 既有卡片标题\n\n## 一句话结论\n\n既有正文（必须保持紧跟标题、不被劈开）。\n\n## 关联\n\n- 无\n",
     )
-    _hub_card(
-        root, "新规则", "# 新规则" + LF + LF + "## 一句话结论" + LF + LF + "第一版正文"
-    )
+    _hub_card(root, "新规则", "# 新规则" + LF + LF + "## 一句话结论" + LF + LF + "第一版正文")
     assert push(root, "hermes")["added"] == 1
-    _hub_card(
-        root, "新规则", "# 新规则" + LF + LF + "## 一句话结论" + LF + LF + "第二版正文"
-    )
+    _hub_card(root, "新规则", "# 新规则" + LF + LF + "## 一句话结论" + LF + LF + "第二版正文")
     stat = push(root, "hermes")
     assert stat["replaced"] == 1, "hermes 改卡重推未原地替换"
     assert stat["added"] == 0
@@ -485,15 +441,7 @@ def test_hermes_repush_fence_aware_no_cross_fence_replace(tmp_path):
     卡片正文含 bash 示例围栏（首行即 `# 1. ...` 注释）：改卡重推时
     替换区间必须完整覆盖围栏 + 围栏之后的正文，且围栏内注释保持原样。
     """
-    fence_example = (
-        "```"
-        + LF
-        + "# 1. 入库后先 lint + build-vectors"
-        + LF
-        + "# 2. dry-run 逐平台预检"
-        + LF
-        + "```"
-    )
+    fence_example = "```" + LF + "# 1. 入库后先 lint + build-vectors" + LF + "# 2. dry-run 逐平台预检" + LF + "```"
     body1 = (
         "# 同步纪律"
         + LF

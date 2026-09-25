@@ -23,15 +23,46 @@ include = ["common*", "tools*"]
 pythonpath = ["."]
 testpaths = ["tests"]
 
+[tool.ruff]
+# 行宽与既有格式化口径一致（⚠️ 根目录 .ruff.toml **不覆盖** hub-engine/ 下的文件，
+# 本文件才是本目录的配置入口；两者曾不一致：格式化按 120、lint 按默认 88 → 519 条假 E501）
+line-length = 120
+extend-exclude = ["templates/**"]
+
 [tool.ruff.lint]
+# 2026-09-25（审计 I-1）启用：原配置**只设 ignore、不设 select** ⇒ 实际只有 ruff 默认的
+# E4/E7/E9/F，B（bugbear）/SIM/UP/C901 等真实缺陷类无护栏。现显式选族。
+select = ["E4", "E7", "E9", "F", "W", "I", "UP", "B", "SIM", "C901"]
 # BLE001/S110: 中枢全链路防御性 catch（resilience pattern，设计决策）
 # PLW1510: subprocess.run 有外部 try/except 包装
 # B018: 测试代码临时调试残留，但已在上游修复
-ignore = ['BLE001', 'S110', 'PLW1510', 'B018']
+# E402: 本仓脚本统一采用 `sys.path.insert(...)` 后再导入的加载模式（62 个脚本的入口约定），
+#       改成包内相对导入会牵动全部入口 → 保留为**显式豁免**并在此写明理由
+ignore = ['BLE001', 'S110', 'PLW1510', 'B018', 'E402']
+
+# 原默认 10；取 15 是“先立基线”的折中（现存 16 处 >15 已按文件登记，见下）
+[tool.ruff.lint.mccabe]
+max-complexity = 15
 
 # 脚手架模板豁免：templates/ 是供**拷贝后填写**的骨架，必然含占位导入/变量
 # （如 `args = parser.parse_args()` 只写不读），对它们跑 F401/F841/UP009 必然误报。
 # 注：本仓的 ruff 配置入口是**本文件**（linter.project_root = hub-engine），
 #     根目录 .ruff.toml 不覆盖 hub-engine/ 下的文件——豁免写在那里不生效。
+#
+# ── E501/C901 基线（2026-09-25 启用规则族时登记，**每项都是待还的债，不是永久豁免**；
+#    清空后请删掉对应行。当时总量：E501 81 处 / C901 16 处）──
 [tool.ruff.lint.per-file-ignores]
 "templates/*.py" = ["F401", "F841", "UP009"]
+# E501（81）：内容型长行——卡片正文 / 内嵌 HTML 模板 / 测试夹具长字符串，重排会损可读性
+"scripts/{reclassify,flywheel_runlog}.py" = ["E501"]
+"tests/*" = ["E501"]
+"scripts/{auto_process_sleep,auto_pytest_env_fix,check_encoding,flywheel,hub_daily_report,hub_dashboard_collect,hub_health,hub_mcp_launcher,rule_following_timeseries,secret_sentry}.py" = ["E501"]
+"commands/ingest.py" = ["E501"]
+"mcp_server.py" = ["E501"]
+"tools/inject.py" = ["E501"]
+# C901（16）：超复杂函数，需重构而非压制——已列入审计 P2-b（拆超长函数）
+"commands/status.py" = ["C901"]
+"scripts/{audit_index,auto_fix_lint,auto_flywheel,flywheel,hub_daily_report,hub_health,post_ingest_hook,rule_following_timeseries}.py" = ["C901"]
+"scripts/{hub_dashboard_collect,patrol_runner}.py" = ["C901"]
+"tools/platform_bridge.py" = ["C901"]
+"sync.py" = ["E501", "C901"]

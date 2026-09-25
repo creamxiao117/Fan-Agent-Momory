@@ -38,16 +38,7 @@ except ImportError:  # pragma: no cover - yaml 是中枢引擎既有依赖
 
 DEFAULT_HUB_ROOT = Path(__file__).resolve().parents[2]
 # hermes 自己的 venv：从家目录推导（换机可用；可用 --python 覆盖）
-DEFAULT_PYTHON = str(
-    Path.home()
-    / "AppData"
-    / "Local"
-    / "hermes"
-    / "hermes-agent"
-    / "venv"
-    / "Scripts"
-    / "python.exe"
-)
+DEFAULT_PYTHON = str(Path.home() / "AppData" / "Local" / "hermes" / "hermes-agent" / "venv" / "Scripts" / "python.exe")
 PLATFORMS_REL = "system/platforms.yaml"
 DEFAULT_SERVER_KEY = "agent-memory-hub"
 SERVER_KEY_ALIASES = ("agent-memory-hub", "agent_memory_hub")
@@ -98,9 +89,7 @@ def expected_argv(platform: str, cfg: Path, hub_root: Path, launcher: Path) -> l
     ]
 
 
-def expected_block(
-    platform: str, cfg: Path, hub_root: Path, launcher: Path, python: str, fmt: str
-) -> dict:
+def expected_block(platform: str, cfg: Path, hub_root: Path, launcher: Path, python: str, fmt: str) -> dict:
     block = {
         "command": _p(python),
         "args": expected_argv(platform, cfg, hub_root, launcher),
@@ -165,19 +154,13 @@ def _dump_yaml_block(block: dict, indent: int) -> str:
         indent=2,
     )
     pad = " " * indent
-    return "".join(
-        pad + line if line.strip() else line for line in text.splitlines(True)
-    )
+    return "".join(pad + line if line.strip() else line for line in text.splitlines(True))
 
 
 def write_yaml(cfg: Path, server_key: str, block: dict, indent: int) -> None:
     lines = cfg.read_text(encoding="utf-8").splitlines(True)
-    rendered = _dump_yaml_block(block, indent).replace(
-        "agent-memory-hub:", f"{server_key}:", 1
-    )
-    idx = next(
-        (i for i, ln in enumerate(lines) if re.match(r"^mcp_servers:\s*$", ln)), None
-    )
+    rendered = _dump_yaml_block(block, indent).replace("agent-memory-hub:", f"{server_key}:", 1)
+    idx = next((i for i, ln in enumerate(lines) if re.match(r"^mcp_servers:\s*$", ln)), None)
     if idx is None:
         cfg.write_text(
             "".join(lines).rstrip("\n") + "\nmcp_servers:\n" + rendered,
@@ -197,9 +180,7 @@ def write_yaml(cfg: Path, server_key: str, block: dict, indent: int) -> None:
         cfg.write_text("".join(lines), encoding="utf-8")
         return
     end = start + 1
-    while end < len(lines) and (
-        not lines[end].strip() or lines[end].startswith("    ")
-    ):
+    while end < len(lines) and (not lines[end].strip() or lines[end].startswith("    ")):
         end += 1
     lines[start:end] = [rendered]
     cfg.write_text("".join(lines), encoding="utf-8")
@@ -219,9 +200,7 @@ def write_toml(cfg: Path, server_key: str, block: dict) -> None:
     rendered = "\n".join(block_lines)
     # 行锚定 + 负向断言：只吃到"下一个以 [ 开头的表头行"之前，绝不跨行吞掉后续段落
     # （旧写法 `(?:[^\[].*\n?)*` 里的 `[^\[].` 会跨换行匹配，曾把块后的 [desktop] 段整段吃掉）
-    pattern = re.compile(
-        rf"^{re.escape(header)}[ \t]*\n(?:(?!^\[)[^\n]*\n?)*", re.MULTILINE
-    )
+    pattern = re.compile(rf"^{re.escape(header)}[ \t]*\n(?:(?!^\[)[^\n]*\n?)*", re.MULTILINE)
     if pattern.search(text):
         text = pattern.sub(rendered + "\n", text, count=1)
     else:
@@ -237,11 +216,7 @@ def write_json(cfg: Path, server_key: str, block: dict) -> None:
                 data = json.load(fh)
         except json.JSONDecodeError:
             data = {}
-    root_key = (
-        "mcpServers"
-        if ("mcpServers" in data or "mcp_servers" not in data)
-        else "mcp_servers"
-    )
+    root_key = "mcpServers" if ("mcpServers" in data or "mcp_servers" not in data) else "mcp_servers"
     servers = data.setdefault(root_key, {})
     existing = _find_server_key(servers)
     if existing:
@@ -258,9 +233,7 @@ WRITERS = {"yaml": write_yaml, "toml": write_toml, "json": write_json}
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description="platforms.yaml → 各平台 MCP 配置单点同步")
-    ap.add_argument(
-        "--root", required=True, help="中枢根目录（含 system/platforms.yaml）"
-    )
+    ap.add_argument("--root", required=True, help="中枢根目录（含 system/platforms.yaml）")
     ap.add_argument("--platform", action="append", help="只处理指定平台（可重复）")
     ap.add_argument("--apply", action="store_true", help="写回（默认 dry-run）")
     ap.add_argument(
@@ -274,9 +247,7 @@ def main(argv=None) -> int:
     hub_root = Path(args.root).resolve()
     project_root = hub_root.parent
     data = load_platforms(hub_root)
-    launcher_rel = (data.get("global") or {}).get(
-        "launcher"
-    ) or "hub-engine/scripts/hub_mcp_launcher.py"
+    launcher_rel = (data.get("global") or {}).get("launcher") or "hub-engine/scripts/hub_mcp_launcher.py"
     launcher = hub_root / launcher_rel
     if not launcher.is_file():
         launcher = project_root / launcher_rel
@@ -306,9 +277,7 @@ def main(argv=None) -> int:
             continue
         cfg = resolve_config_path(info["mcp_config_path"])
         expected = expected_block(name, cfg, hub_root, launcher, args.python, fmt)
-        server_key, current = read_current(
-            fmt, cfg, info.get("server_key") or DEFAULT_SERVER_KEY
-        )
+        server_key, current = read_current(fmt, cfg, info.get("server_key") or DEFAULT_SERVER_KEY)
         if block_matches(current, expected):
             entry["status"] = "ok"
             entry["detail"] = f"一致（{cfg.name}）"
@@ -317,9 +286,7 @@ def main(argv=None) -> int:
             entry["status"] = "drift"
             entry["detail"] = f"需同步（{cfg.name}，server_key={server_key}）"
             if args.apply:
-                backup = cfg.with_name(
-                    cfg.name + ".bak-" + time.strftime("%Y%m%d-%H%M%S")
-                )
+                backup = cfg.with_name(cfg.name + ".bak-" + time.strftime("%Y%m%d-%H%M%S"))
                 if cfg.is_file():
                     shutil.copy2(cfg, backup)
                 try:

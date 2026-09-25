@@ -47,11 +47,7 @@ def cmd_ingest(args) -> int:
         if (moved + promoted) > 0:
             moved_names = stat.get("moved_names", []) + stat.get("promoted_names", [])
             if moved_names:
-                hook_py = (
-                    Path(__file__).resolve().parent.parent
-                    / "scripts"
-                    / "post_ingest_hook.py"
-                )
+                hook_py = Path(__file__).resolve().parent.parent / "scripts" / "post_ingest_hook.py"
                 python_exe = sys.executable
                 try:
                     r = subprocess.run(

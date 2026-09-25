@@ -182,9 +182,7 @@ def _chat(model: str, prompt: str, url: str, api_key: str) -> str:
     text = str(msg.get("content") or "").strip()
     if not text:
         # 不静默：把“为何空”打出来（推理预算耗尽 / 模型返回异常）
-        rt = ((data.get("usage") or {}).get("completion_tokens_details") or {}).get(
-            "reasoning_tokens"
-        )
+        rt = ((data.get("usage") or {}).get("completion_tokens_details") or {}).get("reasoning_tokens")
         print(
             f"[warn] content 为空：{url} model={model} "
             f"finish_reason={choice.get('finish_reason')} reasoning_tokens={rt} "
@@ -254,9 +252,7 @@ def main(argv: list[str] | None = None) -> int:
         if body:
             break
     if not body:
-        print(
-            f"[{today}] 本地摘要为空（候选端点均不可用：{' | '.join(tried)}），跳过写盘。"
-        )
+        print(f"[{today}] 本地摘要为空（候选端点均不可用：{' | '.join(tried)}），跳过写盘。")
         return 2
     _upsert_daily(out, today, body)
     print(f"[{today}] 已更新 {out.name}（{len(body)} 字）")

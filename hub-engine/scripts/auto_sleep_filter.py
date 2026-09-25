@@ -131,9 +131,7 @@ def filter_proposal(proposal_path: Path) -> dict:
         "noise_filtered": len(noise),
         "noise_reasons": [c["_verdict"] for c in noise],
     }
-    proposal_path.write_text(
-        json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
-    )
+    proposal_path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
     # 写 IGNORED.md 记录被过滤的
     if noise:
@@ -178,13 +176,9 @@ def main() -> int:
         result = filter_proposal(p)
         total_noise += result["noise"]
         total_real += result["real"]
-        print(
-            f"[auto_sleep_filter] {p.parent.name}: 过滤 {result['noise']} noise, 保留 {result['real']} real"
-        )
+        print(f"[auto_sleep_filter] {p.parent.name}: 过滤 {result['noise']} noise, 保留 {result['real']} real")
 
-    print(
-        f"\n[auto_sleep_filter] 总计: {total_noise} noise 已自动忽略, {total_real} real 保留"
-    )
+    print(f"\n[auto_sleep_filter] 总计: {total_noise} noise 已自动忽略, {total_real} real 保留")
     return 0
 
 

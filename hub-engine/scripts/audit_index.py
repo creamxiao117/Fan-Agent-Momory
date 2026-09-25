@@ -75,15 +75,11 @@ def _parse_index(index_path: Path) -> tuple[dict[str, list[str]], list[dict]]:
             continue
         slug, desc = m.group(1), m.group(2).strip()
         by_slug.setdefault(slug, []).append(desc)
-        entries.append(
-            {"slug": slug, "desc": desc, "line_no": line_no, "section": section}
-        )
+        entries.append({"slug": slug, "desc": desc, "line_no": line_no, "section": section})
     return by_slug, entries
 
 
-def _authority_files(
-    root: Path, dirs: tuple[str, ...] | None = None
-) -> dict[str, Path]:
+def _authority_files(root: Path, dirs: tuple[str, ...] | None = None) -> dict[str, Path]:
     """权威区文件 → 相对路径。dirs=None 时用 AUTHORITY_DIRS。"""
     out: dict[str, Path] = {}
     scan_dirs = dirs if dirs is not None else AUTHORITY_DIRS
@@ -106,9 +102,7 @@ def audit(root: Path) -> dict:
 
     index_path = root / "INDEX.md"
     if not index_path.exists():
-        issues.append(
-            {"type": "missing_index", "msg": f"INDEX.md 不存在: {index_path}"}
-        )
+        issues.append({"type": "missing_index", "msg": f"INDEX.md 不存在: {index_path}"})
         return {"issues": issues, "stats": stats}
 
     by_slug, entries = _parse_index(index_path)
@@ -285,18 +279,14 @@ def main() -> int:
     stats = result["stats"]
 
     # 控制台报告
-    print(
-        f"[L2] INDEX 条目 {stats['total_index_entries']} / 权威区文件 {stats['total_files']}"
-    )
+    print(f"[L2] INDEX 条目 {stats['total_index_entries']} / 权威区文件 {stats['total_files']}")
     if not issues:
         print("[L2] ✅ 健康")
     else:
         print(f"[L2] ⚠️ {len(issues)} 项问题：")
         # 按 severity 高→低
         sev_order = {"high": 0, "medium": 1, "low": 2, "?": 3}
-        issues_sorted = sorted(
-            issues, key=lambda x: sev_order.get(x.get("severity", "?"), 9)
-        )
+        issues_sorted = sorted(issues, key=lambda x: sev_order.get(x.get("severity", "?"), 9))
         for it in issues_sorted[:30]:  # 控制台最多列 30
             print(f"  [{it.get('severity', '?')}] {it['msg']}")
         if len(issues_sorted) > 30:
@@ -306,10 +296,7 @@ def main() -> int:
     if args.report:
         report_dir = root / "retro"
         report_dir.mkdir(parents=True, exist_ok=True)
-        report_path = (
-            report_dir
-            / f"lint-report-{datetime.now(timezone.utc).date().isoformat()}.md"
-        )
+        report_path = report_dir / f"lint-report-{datetime.now(timezone.utc).date().isoformat()}.md"
         report_path.write_text(render_report(result, root), encoding="utf-8")
         print(f"[L2] 报告已写: {report_path}")
 

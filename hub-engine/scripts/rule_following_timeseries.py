@@ -110,9 +110,7 @@ def load_ingest_outcomes() -> list[dict]:
     if not log_path.exists():
         return []
     per_day: dict[str, dict[str, int]] = {}
-    pat = re.compile(
-        r"^## \[(\d{4}-\d{2}-\d{2})\] ingest \| (自动入区|重复内容进冲突区)"
-    )
+    pat = re.compile(r"^## \[(\d{4}-\d{2}-\d{2})\] ingest \| (自动入区|重复内容进冲突区)")
     for line in log_path.read_text(encoding="utf-8-sig", errors="ignore").splitlines():
         m = pat.match(line)
         if not m:
@@ -246,13 +244,9 @@ def main() -> int:
             )
     print()
     print("=" * 78)
-    print(
-        f"B. lint 周期报告序列（{len(reps)} 份，{reps[0]['date']} ~ {reps[-1]['date']}）"
-    )
+    print(f"B. lint 周期报告序列（{len(reps)} 份，{reps[0]['date']} ~ {reps[-1]['date']}）")
     print("=" * 78)
-    print(
-        f"{'日期':14s} {'格式':4s} {'无效卡片':>8s} {'孤儿':>5s} {'幽灵':>5s} {'问题数':>7s} {'检查卡数':>8s}"
-    )
+    print(f"{'日期':14s} {'格式':4s} {'无效卡片':>8s} {'孤儿':>5s} {'幽灵':>5s} {'问题数':>7s} {'检查卡数':>8s}")
     print("-" * 62)
     for r in reps:
         print(
@@ -260,15 +254,9 @@ def main() -> int:
             f"{r['ghosts']!s:>5s} {r['problems']!s:>7s} {r['checked']!s:>8s}"
         )
     print()
-    print(
-        "⚠️ 可比性缺口：旧格式（A）报 孤儿/无效/幽灵；新格式（B，09-08 起）报“发现问题数”"
-    )
-    print(
-        "   且新增了 long_desc / short_desc 等维度（09-08 的 40 项里 34 项是 long_desc，旧格式不检）。"
-    )
-    print(
-        "   ⇒ **跨格式不能直接比大小**；只有 `无效卡片/invalid` 在两格式与快照中同义可比。"
-    )
+    print("⚠️ 可比性缺口：旧格式（A）报 孤儿/无效/幽灵；新格式（B，09-08 起）报“发现问题数”")
+    print("   且新增了 long_desc / short_desc 等维度（09-08 的 40 项里 34 项是 long_desc，旧格式不检）。")
+    print("   ⇒ **跨格式不能直接比大小**；只有 `无效卡片/invalid` 在两格式与快照中同义可比。")
 
     print()
     print("=" * 78)
@@ -284,9 +272,7 @@ def main() -> int:
 
     POST = ("2026-09-23", "2026-09-24")
     post = [r for r in rows if r["date"] in POST]
-    post_clean = sum(
-        1 for r in post if all((_num(r[f"lint_{k}"]) or 0) == 0 for k in GATE_KEYS)
-    )
+    post_clean = sum(1 for r in post if all((_num(r[f"lint_{k}"]) or 0) == 0 for k in GATE_KEYS))
 
     print(
         f"  改造前（快照）  : {pre_days} 个有数据的天，其中 **{pre_bad} 天** invalid>0；"
@@ -300,9 +286,7 @@ def main() -> int:
     )
     print(f"  改造后（后窗口）: {len(post)} 天 → 全维度均 0 的 **{post_clean} 天**")
     print()
-    print(
-        f"  结论（诚实）：**状态已确认干净**（后窗口 {post_clean}/{len(post)} 天全 0），"
-    )
+    print(f"  结论（诚实）：**状态已确认干净**（后窗口 {post_clean}/{len(post)} 天全 0），")
     print(f"                但 **趋势尚未成立**——n={len(post)} 天不足以排除偶然。")
     print()
     print("  可证伪的判据（供 ≥2026-10-07 重跑时对照）：")
@@ -336,23 +320,17 @@ def main() -> int:
             tot = w["promoted"] + w["conflict"]
             rate = (w["conflict"] / tot) if tot else 0.0
             bar = "█" * round(rate * 30)
-            print(
-                f"{k:12s} {w['promoted']:>5d} {w['conflict']:>5d} {tot:>5d} {rate:>6.0%}  {bar}"
-            )
+            print(f"{k:12s} {w['promoted']:>5d} {w['conflict']:>5d} {tot:>5d} {rate:>6.0%}  {bar}")
 
         tot_p = sum(r["promoted"] for r in ing)
         tot_c = sum(r["conflict"] for r in ing)
         tot = tot_p + tot_c
         if tot:
             print()
-            print(
-                f"  总计：入区 {tot_p} / 重复 {tot_c} / 合计 {tot} → 总体重复率 {tot_c / tot:.0%}"
-            )
+            print(f"  总计：入区 {tot_p} / 重复 {tot_c} / 合计 {tot} → 总体重复率 {tot_c / tot:.0%}")
         n_post = sum(1 for r in ing if r["date"] >= "2026-09-23")
         print()
-        print(
-            "  读法：重复率高 = 同一知识被反复提交（返工/漂移）；稳定下降说明去重生效。"
-        )
+        print("  读法：重复率高 = 同一知识被反复提交（返工/漂移）；稳定下降说明去重生效。")
         print(f"  注：改造日（2026-09-23）之后仅 {n_post} 天——仍不足以断言趋势。")
 
     # ── D2. 冲突判决分解（回答：重复率上升是「真重复」还是「判重误杀」）──
@@ -364,9 +342,7 @@ def main() -> int:
         print("=" * 78)
         print("  为何要看：单看重复率无法区分性质——")
         print("    真重复↑ → 知识被反复提交（漂移/返工成立）；")
-        print(
-            "    误杀(create) 非零 → **去重通道拦掉了本该新建的内容**（性质完全不同）。"
-        )
+        print("    误杀(create) 非零 → **去重通道拦掉了本该新建的内容**（性质完全不同）。")
         print()
         vw: dict[str, dict[str, int]] = {}
         for r in verd:
@@ -376,11 +352,7 @@ def main() -> int:
             vw.setdefault(k, {})
             vw[k][r["kind"]] = vw[k].get(r["kind"], 0) + 1
         kinds = ("真重复", "误杀", "不确定", "无注记")
-        hdr = (
-            f"  {'周':11s} "
-            + " ".join(f"{k:>6s}" for k in kinds)
-            + f" {'合计':>5s} {'真重复占比':>10s}"
-        )
+        hdr = f"  {'周':11s} " + " ".join(f"{k:>6s}" for k in kinds) + f" {'合计':>5s} {'真重复占比':>10s}"
         print(hdr)
         print("  " + "-" * (len(hdr) - 2))
         for k in sorted(vw):
@@ -404,9 +376,7 @@ def main() -> int:
             for n, c in rep[:5]:
                 print(f"    {n}×  {c}")
         print()
-        print(
-            "  判据：某周真重复占比高 → 真漂移；误杀非零 → 去重拦掉了本该新建的内容。"
-        )
+        print("  判据：某周真重复占比高 → 真漂移；误杀非零 → 去重拦掉了本该新建的内容。")
     return 0
 
 

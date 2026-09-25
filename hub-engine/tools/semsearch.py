@@ -25,9 +25,7 @@ _model = None
 _tok = None
 
 # 可注入的 embed 实现（测试用 monkeypatch 替换；生产为 _embed_text）
-embed: Callable[[str], list[float] | None] = (
-    None  # 类型标注，实际赋值见 set_embed_backend
-)
+embed: Callable[[str], list[float] | None] = None  # 类型标注，实际赋值见 set_embed_backend
 
 
 # ---- HTTP embed 后端（OpenAI 兼容 /v1/embeddings，本机为 LM Studio + bge-m3）----
@@ -123,9 +121,7 @@ def _embed_text(text: str) -> list[float] | None:
     try:
         import torch
 
-        inp = tok(
-            text, return_tensors="pt", padding=True, truncation=True, max_length=512
-        )
+        inp = tok(text, return_tensors="pt", padding=True, truncation=True, max_length=512)
         with torch.no_grad():
             out = model(**inp)
         v = out.last_hidden_state[:, 0].float()  # CLS
@@ -237,9 +233,7 @@ _META_MODEL = "embed_model"
 def _stored_dim(conn: sqlite3.Connection) -> int | None:
     """从 db_meta 读已存向量维度；无 meta（含旧库无 db_meta 表）则从现有一行向量探测。"""
     try:
-        row = conn.execute(
-            "SELECT value FROM db_meta WHERE key=?", (_META_DIM,)
-        ).fetchone()
+        row = conn.execute("SELECT value FROM db_meta WHERE key=?", (_META_DIM,)).fetchone()
     except sqlite3.OperationalError:
         row = None  # 旧库尚无 db_meta 表
     if row and row[0]:
@@ -247,9 +241,7 @@ def _stored_dim(conn: sqlite3.Connection) -> int | None:
             return int(row[0])
         except ValueError:
             return None
-    hit = conn.execute(
-        "SELECT embedding FROM docs WHERE embedding IS NOT NULL LIMIT 1"
-    ).fetchone()
+    hit = conn.execute("SELECT embedding FROM docs WHERE embedding IS NOT NULL LIMIT 1").fetchone()
     if hit is None or hit[0] is None:
         return None
     import numpy as np
@@ -281,9 +273,7 @@ def _probe_min_dim(conn: sqlite3.Connection) -> int | None:
     import numpy as np
 
     sizes = set()
-    for (blob,) in conn.execute(
-        "SELECT embedding FROM docs WHERE embedding IS NOT NULL"
-    ).fetchall():
+    for (blob,) in conn.execute("SELECT embedding FROM docs WHERE embedding IS NOT NULL").fetchall():
         try:
             sizes.add(int(np.frombuffer(blob, dtype=np.float32).size))
         except Exception:  # noqa: S112 - 单行损坏则跳过该行，维度以其余行为准
@@ -325,9 +315,7 @@ def build(root: Path) -> dict:
         _ensure_schema(conn)
         # ---- 后端保护：后端不可用且库内已有有效向量时，保留旧库，绝不落 NULL 污染 ----
         if not _backend_ok():
-            n_valid = conn.execute(
-                "SELECT COUNT(*) FROM docs WHERE embedding IS NOT NULL"
-            ).fetchone()[0]
+            n_valid = conn.execute("SELECT COUNT(*) FROM docs WHERE embedding IS NOT NULL").fetchone()[0]
             if n_valid > 0:
                 return {
                     "reused": 0,
@@ -339,9 +327,7 @@ def build(root: Path) -> dict:
                     "note": f"embed 后端不可用，保留 {n_valid} 条有效向量，未覆盖",
                 }
         # 探测库内已存维度；若模型名变了且维度不同 → 全量重建
-        stored_model = conn.execute(
-            "SELECT value FROM db_meta WHERE key=?", (_META_MODEL,)
-        ).fetchone()
+        stored_model = conn.execute("SELECT value FROM db_meta WHERE key=?", (_META_MODEL,)).fetchone()
         active_model = _active_model_id()  # 实际生效后端（HTTP 优先）：供比较与落库
         rebuild = False
         if stored_model and stored_model[0] != active_model:
@@ -351,8 +337,7 @@ def build(root: Path) -> dict:
         if rebuild:
             conn.execute("DELETE FROM docs")
         existing = {
-            r[1]: (r[0], r[2], r[3], r[4])
-            for r in conn.execute("SELECT id, path, mtime, size, synced_at FROM docs")
+            r[1]: (r[0], r[2], r[3], r[4]) for r in conn.execute("SELECT id, path, mtime, size, synced_at FROM docs")
         }
         stats = {"reused": 0, "inserted": 0, "updated": 0, "removed": 0, "embedded": 0}
         current: set[str] = set()
@@ -365,11 +350,7 @@ def build(root: Path) -> dict:
             # 是项目根时才匹配，其它 CWD 下向量通道**静默退化为 0 命中**
             # （2026-09-23 实测：cwd=项目根 向量 3/6，cwd=hub-engine 0/6）。
             # 存绝对路径后，检索不再依赖 CWD。
-            full = str(
-                card.path
-                if card.path.is_absolute()
-                else (Path(root) / card.path).resolve()
-            )
+            full = str(card.path if card.path.is_absolute() else (Path(root) / card.path).resolve())
             current.add(full)
             sig = _sig(card.path)
             old = existing.get(full)
@@ -453,9 +434,7 @@ def scan_stale(root: Path) -> dict:
             _ensure_schema(conn)  # 旧库无 synced_at 列时幂等补齐（真机读侧安全）
             synced = {
                 str(r[0]): r[1] or 0.0
-                for r in conn.execute(
-                    "SELECT path, synced_at FROM docs WHERE embedding IS NOT NULL"
-                ).fetchall()
+                for r in conn.execute("SELECT path, synced_at FROM docs WHERE embedding IS NOT NULL").fetchall()
             }
         finally:
             conn.close()
@@ -474,9 +453,7 @@ def scan_stale(root: Path) -> dict:
     return {"stale_by_dir": stale_by_dir, "total": total, "path_examples": examples}
 
 
-def vector_scores(
-    root: Path, query_vec: list[float], top_k: int = 5
-) -> list[tuple[str, float]]:
+def vector_scores(root: Path, query_vec: list[float], top_k: int = 5) -> list[tuple[str, float]]:
     """query 向量与库内每卡向量点积（余弦，均为 L2 归一化）→ [(path, score)] 降序。
 
     库不存在或空 → 返回 []。
@@ -491,9 +468,7 @@ def vector_scores(
         stored_dim = _stored_dim(conn)
         if stored_dim is not None and len(query_vec) != stored_dim:
             return []
-        rows = conn.execute(
-            "SELECT path, embedding FROM docs WHERE embedding IS NOT NULL"
-        ).fetchall()
+        rows = conn.execute("SELECT path, embedding FROM docs WHERE embedding IS NOT NULL").fetchall()
     finally:
         conn.close()
     if not rows:

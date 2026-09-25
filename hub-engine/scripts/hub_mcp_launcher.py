@@ -67,9 +67,7 @@ def can_self_heal_today(platform: str, config_path: Path) -> bool:
     if not backup_root.exists():
         return True
     today = today_cst_str()
-    today_count = sum(
-        1 for f in backup_root.glob(f"{platform}-*.json") if today in f.name
-    )
+    today_count = sum(1 for f in backup_root.glob(f"{platform}-*.json") if today in f.name)
     return today_count < 1
 
 
@@ -158,9 +156,7 @@ def heal(platform: str, config_path: Path, hub_root: str) -> bool:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description="hub_mcp_launcher")
-    ap.add_argument(
-        "--platform", required=True, choices=["hermes", "trae", "workbuddy", "code"]
-    )
+    ap.add_argument("--platform", required=True, choices=["hermes", "trae", "workbuddy", "code"])
     ap.add_argument("--config", required=True, help="mcp.json 路径")
     ap.add_argument("--hub-root", required=True)
     ap.add_argument("--server-path", help="显式 mcp_server.py 路径")

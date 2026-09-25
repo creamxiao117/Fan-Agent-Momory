@@ -100,9 +100,7 @@ def bootstrap(root: str | Path) -> Path:
             DEFAULT_LOG + f"## [{today_iso()}] init | 中枢初始化\n", encoding="utf-8"
         )
     if not (root / "hub.config.yaml").exists():
-        (root / "hub.config.yaml").write_text(
-            CONFIG_TEMPLATE.replace("{home}", _HOME_POSIX), encoding="utf-8"
-        )
+        (root / "hub.config.yaml").write_text(CONFIG_TEMPLATE.replace("{home}", _HOME_POSIX), encoding="utf-8")
     if not (root / "provider_keys.yaml").exists():
         (root / "provider_keys.yaml").write_text(
             "# 各免费模型 Key（独立文件，勿提交 Git）\ndefault: sk-REPLACE_WITH_YOUR_KEY\n",
@@ -115,9 +113,7 @@ def bootstrap(root: str | Path) -> Path:
 def _run_git(cmd: list[str]) -> None:
     """运行 git 子命令；失败时透传真实 stderr，避免裸 traceback"""
     try:
-        subprocess.run(
-            cmd, check=True, capture_output=True, text=True, encoding="utf-8"
-        )
+        subprocess.run(cmd, check=True, capture_output=True, text=True, encoding="utf-8")
     except subprocess.CalledProcessError as e:
         stderr = (e.stderr or "").strip()
         raise RuntimeError(f"git 命令失败: {' '.join(cmd)}\n{stderr or e}") from e

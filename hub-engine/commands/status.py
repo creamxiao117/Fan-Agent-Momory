@@ -91,9 +91,7 @@ def cmd_status(args) -> int:
     data["health_scores"] = health_scores
 
     # === 5. 自监控告警 ===
-    alerts = collect_snapshot_alerts(
-        report, llm_status, today_metrics, health_scores, pending
-    )
+    alerts = collect_snapshot_alerts(report, llm_status, today_metrics, health_scores, pending)
     data["alerts"] = alerts
 
     # === 6. 与昨日快照对比 ===
@@ -136,9 +134,7 @@ def collect_llm_status() -> dict:
             "model_count": len(status.models),
             "response_time_ms": round(status.response_time * 1000, 1),
             "last_check": (
-                datetime.fromtimestamp(status.last_check, tz=timezone.utc).isoformat()
-                if status.last_check
-                else None
+                datetime.fromtimestamp(status.last_check, tz=timezone.utc).isoformat() if status.last_check else None
             ),
             "last_error": status.last_error,
         }
@@ -263,9 +259,7 @@ def estimate_hub_tool_capacity(root: Path) -> float:
 
         sys.path.insert(0, str(engine_dir))
         mod = importlib.import_module("tools.mcp_handlers")
-        present = sum(
-            1 for fn in mcp_handlers if hasattr(mod, fn) and callable(getattr(mod, fn))
-        )
+        present = sum(1 for fn in mcp_handlers if hasattr(mod, fn) and callable(getattr(mod, fn)))
         score += present * 6  # 上限 30
     except Exception:
         pass
@@ -356,12 +350,7 @@ def compute_snapshot_health_scores(
         else:
             llm_health = 60.0
 
-    overall = (
-        card_health * 0.25
-        + skill_health * 0.35
-        + flywheel_activity * 0.20
-        + llm_health * 0.20
-    )
+    overall = card_health * 0.25 + skill_health * 0.35 + flywheel_activity * 0.20 + llm_health * 0.20
 
     return {
         "card_health": round(card_health, 1),
@@ -563,22 +552,13 @@ def print_snapshot_report(data: dict, report: dict, pending: list):
         f"🔍 Lint: 孤儿 {data['lint']['orphans']} · 幽灵 {data['lint']['ghosts']} "
         f"· hook {data['lint']['hooks']} · 陈旧 {data['lint']['stale']} · 无效 {report['invalid']}"
     )
-    print(
-        f"📋 待人工确认: {data['pending']}"
-        + (f" → {data['pending_first']}" if data["pending_first"] else "")
-    )
+    print(f"📋 待人工确认: {data['pending']}" + (f" → {data['pending_first']}" if data["pending_first"] else ""))
 
     fresh = data.get("fresh", {})
     fresh_total = fresh.get("stale_total", -1)
     if fresh_total >= 0:
-        fresh_txt = (
-            " · ".join(f"{k}={v}" for k, v in fresh.get("stale_by_dir", {}).items())
-            or "无"
-        )
-        print(
-            f"💾 向量待重建(freshness): {fresh_total} 张"
-            + (f" ({fresh_txt})" if fresh_total > 0 else "")
-        )
+        fresh_txt = " · ".join(f"{k}={v}" for k, v in fresh.get("stale_by_dir", {}).items()) or "无"
+        print(f"💾 向量待重建(freshness): {fresh_total} 张" + (f" ({fresh_txt})" if fresh_total > 0 else ""))
     print(f"📦 最近提交: {data['last_commit']}")
 
     # 变量去 ollama 残名；`data.get("ollama")` 键读取保留（兼容历史快照字段名）
@@ -587,13 +567,10 @@ def print_snapshot_report(data: dict, report: dict, pending: list):
         models_str = ", ".join(llm_health.get("models", [])[:3])
         print(
             f"🦙 本地 LLM 健康 (LM Studio): ✅ 可用 · {llm_health.get('model_count', 0)} 模型"
-            f" · 响应 {llm_health.get('response_time_ms', 0)}ms"
-            + (f" · 模型: {models_str}" if models_str else "")
+            f" · 响应 {llm_health.get('response_time_ms', 0)}ms" + (f" · 模型: {models_str}" if models_str else "")
         )
     else:
-        print(
-            f"🦙 本地 LLM 健康 (LM Studio): ❌ 不可用 · 错误: {llm_health.get('last_error', '未知')}"
-        )
+        print(f"🦙 本地 LLM 健康 (LM Studio): ❌ 不可用 · 错误: {llm_health.get('last_error', '未知')}")
 
     scores = data.get("health_scores", {})
     if scores:
@@ -644,9 +621,7 @@ def print_snapshot_report(data: dict, report: dict, pending: list):
             elif area == "health_scores":
                 for k, v in changes.items():
                     arrow = "📈" if v["delta"] > 0 else "📉"
-                    print(
-                        f"  {arrow} 健康分 {k}: {v['prev']} → {v['curr']} ({v['delta']:+.1f})"
-                    )
+                    print(f"  {arrow} 健康分 {k}: {v['prev']} → {v['curr']} ({v['delta']:+.1f})")
             elif area == "llm_status":
                 print(f"  ⚡ 本地 LLM: {changes['prev']} → {changes['curr']}")
             elif area == "alerts":

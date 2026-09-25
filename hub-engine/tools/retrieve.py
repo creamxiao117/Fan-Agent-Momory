@@ -11,6 +11,7 @@
 - 退化：向量后端未装/未建库 → 通道返回空 → 融合等价单通道，0 行为回归
 """
 
+import contextlib
 from collections import Counter
 from pathlib import Path
 
@@ -128,11 +129,7 @@ def _anti_triggers(card: Card) -> set[str]:
     raw = card.extra.get("anti_trigger")
     if not raw:
         return set()
-    atoms = (
-        raw
-        if isinstance(raw, list)
-        else str(raw).replace(",", " ").replace("|", " ").split()
-    )
+    atoms = raw if isinstance(raw, list) else str(raw).replace(",", " ").replace("|", " ").split()
     out: set[str] = set()
     for a in atoms:
         for t in tokenize(str(a), mode="word"):
@@ -153,9 +150,7 @@ class _CorpusIndex:
     def __init__(self, root: Path) -> None:
         self.cards: list[Card] = []
         self._paths: dict[str, tuple[int, int]] = {}  # abs_path -> (mtime_ns, size)
-        self._counts: dict[
-            tuple[str, str, int], object
-        ] = {}  # (abs_path, mode, n) -> Counter
+        self._counts: dict[tuple[str, str, int], object] = {}  # (abs_path, mode, n) -> Counter
         seen: set[str] = set()
         for sub in _ACTIVE_DIRS:
             d = root / sub
@@ -183,10 +178,9 @@ class _CorpusIndex:
         if cached is not None:
             return cached
         vec = vector(_card_text(card), n=n, mode=mode)
-        try:
+        # path 不可哈希时放弃缓存，退化为逐次计算
+        with contextlib.suppress(TypeError):
             self._counts[key] = vec
-        except TypeError:
-            pass  # path 不可哈希时放弃缓存，退化为逐次计算
         return vec
 
 
@@ -264,9 +258,7 @@ def _filter_cards_by_tags(cards: list[Card], tags: list[str] | None) -> list[Car
     return out
 
 
-def deterministic_retrieve(
-    root: Path, query: str, mode: str = "word", tags: list[str] | None = None
-) -> list[Card]:
+def deterministic_retrieve(root: Path, query: str, mode: str = "word", tags: list[str] | None = None) -> list[Card]:
     """确定性通道：query 命中 type 或 tag 即返回（走倒排索引，O(命中)）。
 
     - char 模式：整句包含（原行为）
@@ -309,17 +301,13 @@ def deterministic_retrieve(
         if q_words:
             hits = sum(1 for w in q_words if w in t)
             hit_words = [w for w in q_words if w in t]
-            hit_english = any(
-                not all("\u4e00" <= ch <= "\u9fff" for ch in w) for w in hit_words
-            )
+            hit_english = any(not all("\u4e00" <= ch <= "\u9fff" for ch in w) for w in hit_words)
             threshold = (
                 2
                 if (
                     hit_english
                     and len(q_words) >= 2
-                    and all(
-                        not all("\u4e00" <= ch <= "\u9fff" for ch in w) for w in q_words
-                    )
+                    and all(not all("\u4e00" <= ch <= "\u9fff" for ch in w) for w in q_words)
                 )
                 else 1
             )
@@ -358,9 +346,7 @@ def _semantic_scored(
     qv = vector(query, n=n, mode=mode, idf=idf)
     # 反触发：word 模式下取查询词集，供逐卡判是否命中其 anti_trigger（降权）
     q_tokens = (
-        {t for t in tokenize(query, mode="word") if len(t) >= 2 and t not in _EN_STOP}
-        if mode == "word"
-        else set()
+        {t for t in tokenize(query, mode="word") if len(t) >= 2 and t not in _EN_STOP} if mode == "word" else set()
     )
     scored = []
     for c in idx.cards:
@@ -380,9 +366,7 @@ def _semantic_scored(
     return [(c, sim) for sim, c in scored[:top_k]]
 
 
-def semantic_retrieve(
-    root: Path, query: str, top_k: int = 5, n: int = 2, mode: str = "char"
-) -> list[Card]:
+def semantic_retrieve(root: Path, query: str, top_k: int = 5, n: int = 2, mode: str = "char") -> list[Card]:
     """语义通道：对 body+tags 做 token 余弦相似度召回 top-k（兼容旧接口）"""
     return [c for c, _ in _semantic_scored(root, query, top_k, n, mode)]
 
@@ -418,9 +402,7 @@ def _norm_card_path(p: object, root: Path) -> str:
         return str(pp).replace("\\", "/").lower()
 
 
-def semantic_vector_retrieve(
-    root: Path, query: str, top_k: int = 5
-) -> list[tuple[Card, float]]:
+def semantic_vector_retrieve(root: Path, query: str, top_k: int = 5) -> list[tuple[Card, float]]:
     """向量通道（第二层）：embed(query) 与库内每卡向量点积(余弦) 召回 top_k [(card, score)]。
 
     仅做读库，不触发 build（建库由独立 build 流程负责）。
@@ -462,9 +444,7 @@ def _det_is_decisive(query: str, cards: list[Card]) -> bool:
     q = query.strip().lower()
     if not q:
         return False
-    words = [
-        w for w in tokenize(query, mode="word") if len(w) >= 2 and w not in _EN_STOP
-    ]
+    words = [w for w in tokenize(query, mode="word") if len(w) >= 2 and w not in _EN_STOP]
     for c in cards:
         tags = [str(t).lower() for t in (getattr(c, "tags", None) or [])]
         ctype = str(getattr(c, "type", "") or "").lower()
@@ -505,9 +485,7 @@ def _rrf_fuse(
     return [(card_by_id[cid], summed[cid]) for cid, _ in ranked[:top_k]]
 
 
-def _with_vector_champion(
-    fused: list[tuple[Card, float]], vec_scored, top_k: int
-) -> list[tuple[Card, float]]:
+def _with_vector_champion(fused: list[tuple[Card, float]], vec_scored, top_k: int) -> list[tuple[Card, float]]:
     """向量冠军保底：向量通道第 1 名若被融合挤出，补进首位。
 
     为什么需要（2026-09-24 实测，P0-B 真因）：RRF 只看位序不看强度。
@@ -524,16 +502,12 @@ def _with_vector_champion(
         return fused[:top_k]
     champ = vec_scored[0][0]
     champ_path = str(getattr(champ, "path", "") or "")
-    if champ_path and any(
-        str(getattr(c, "path", "") or "") == champ_path for c, _ in fused
-    ):
+    if champ_path and any(str(getattr(c, "path", "") or "") == champ_path for c, _ in fused):
         return fused[:top_k]
     return [(champ, 0.0), *fused[: top_k - 1]]
 
 
-def _fused_semantic(
-    root: Path, query: str, top_k: int = 5, n: int = 2, mode: str = "char"
-) -> list[tuple[Card, float]]:
+def _fused_semantic(root: Path, query: str, top_k: int = 5, n: int = 2, mode: str = "char") -> list[tuple[Card, float]]:
     """词袋 + 向量双路 RRF 融合，带通道退化自修复（方案 A，2026-08-31）。
 
     当某通道严重退化（返回数 < pool 的 10%）时直接返回另一通道结果，
@@ -563,9 +537,7 @@ def _fused_semantic(
         return vec_scored[:top_k]
     if v_deg:
         return word_scored[:top_k]
-    return _with_vector_champion(
-        _rrf_fuse(word_scored, vec_scored, top_k), vec_scored, top_k
-    )
+    return _with_vector_champion(_rrf_fuse(word_scored, vec_scored, top_k), vec_scored, top_k)
 
 
 def retrieve_with_meta(

@@ -79,9 +79,7 @@ _PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     # Authorization 后必须跟真值（旧实现只匹配字段名，任何文档都命中）
     (
         "authorization",
-        re.compile(
-            r"(?i)\bauthorization\s*[:=]\s*[\"']?(?:bearer\s+)?([A-Za-z0-9_\-.]{20,})"
-        ),
+        re.compile(r"(?i)\bauthorization\s*[:=]\s*[\"']?(?:bearer\s+)?([A-Za-z0-9_\-.]{20,})"),
     ),
     # api_key/apiKey/api-key = 值（值须像密钥；厂商名如 duoyuanx 不算）
     (
@@ -287,18 +285,12 @@ def _render(root: Path, high: list[dict], low: list[dict]) -> str:
         lines.append(f"【高危】{len(high)} 处（权威区命中即可被检索，视为真实泄漏）")
         for item in high[:30]:
             rel = item["file"].relative_to(root)
-            lines.append(
-                f"  ! [{item['kind']}] {rel}:{item['line']} 命中 {item['match']}"
-            )
+            lines.append(f"  ! [{item['kind']}] {rel}:{item['line']} 命中 {item['match']}")
     if low:
-        lines.append(
-            f"\n【低危】{len(low)} 处（归档区 / 本地嵌入 key，不构成即时风险）"
-        )
+        lines.append(f"\n【低危】{len(low)} 处（归档区 / 本地嵌入 key，不构成即时风险）")
         for item in low[:20]:
             rel = item["file"].relative_to(root)
-            lines.append(
-                f"  ~ [{item['kind']}] {rel}:{item['line']} 命中 {item['match']}"
-            )
+            lines.append(f"  ~ [{item['kind']}] {rel}:{item['line']} 命中 {item['match']}")
     return "\n".join(lines) + "\n"
 
 

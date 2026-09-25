@@ -72,9 +72,7 @@ def _update_card_tags(card_path: Path, new_tags: list[str]) -> list[str]:
 
 def _generate_p0_draft(root: Path, query: str, keywords: list[str]) -> Path:
     """为 P0 候选生成草稿卡。"""
-    slug = (
-        re.sub(r"[^a-z0-9]+", "-", query.lower()).strip("-")[:60] or "sleep-candidate"
-    )
+    slug = re.sub(r"[^a-z0-9]+", "-", query.lower()).strip("-")[:60] or "sleep-candidate"
     now = datetime.now(_LOCAL_TZ).date().isoformat()
     frontmatter = (
         "---\n"
@@ -104,9 +102,7 @@ def _generate_p0_draft(root: Path, query: str, keywords: list[str]) -> Path:
     return draft_path
 
 
-def _process_proposal(
-    proposal_path: Path, root: Path, *, dry_run: bool = False
-) -> dict:
+def _process_proposal(proposal_path: Path, root: Path, *, dry_run: bool = False) -> dict:
     """处理单个 proposal.json。"""
     data = json.loads(proposal_path.read_text(encoding="utf-8"))
     cands = data.get("candidates", [])
@@ -185,9 +181,7 @@ def main() -> int:
             if not ts_match:
                 continue
             try:
-                ts = datetime.strptime(sub.name, "%Y%m%d-%H%M%S").replace(
-                    tzinfo=_LOCAL_TZ
-                )
+                ts = datetime.strptime(sub.name, "%Y%m%d-%H%M%S").replace(tzinfo=_LOCAL_TZ)
             except ValueError:
                 continue
             if ts >= cutoff:

@@ -46,13 +46,9 @@ class ResilienceContext:
         self.metadata.clear()
         self.events.clear()
 
-    def add_event(
-        self, stage: str, attempt: int, elapsed: float, ok: bool, detail: str = ""
-    ) -> PipelineEvent:
+    def add_event(self, stage: str, attempt: int, elapsed: float, ok: bool, detail: str = "") -> PipelineEvent:
         """添加事件到上下文（供管道收集）。"""
-        evt = PipelineEvent(
-            stage=stage, attempt=attempt, elapsed=elapsed, ok=ok, detail=detail
-        )
+        evt = PipelineEvent(stage=stage, attempt=attempt, elapsed=elapsed, ok=ok, detail=detail)
         self.events.append(evt)
         return evt
 
@@ -261,9 +257,7 @@ class CircuitBreakerStrategy(ResilienceStrategy):
 
                 if strategy._state == "half_open":
                     if strategy._half_open_calls >= strategy.half_open_max_calls:
-                        raise CircuitBreakerOpenError(
-                            "熔断器 Half-Open 状态，当前探测请求已满"
-                        )
+                        raise CircuitBreakerOpenError("熔断器 Half-Open 状态，当前探测请求已满")
                     strategy._half_open_calls += 1
 
             try:
@@ -272,10 +266,7 @@ class CircuitBreakerStrategy(ResilienceStrategy):
                 with strategy._lock:
                     strategy._failure_count += 1
                     strategy._last_failure_time = time.time()
-                    if (
-                        strategy._state == "half_open"
-                        or strategy._failure_count >= strategy.failure_threshold
-                    ):
+                    if strategy._state == "half_open" or strategy._failure_count >= strategy.failure_threshold:
                         strategy._transition("open")
                 raise
 

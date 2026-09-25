@@ -78,9 +78,7 @@ def check_file(root: Path, raw: str) -> tuple[list[str], list[str]]:
     errors = [f"{rel}: {e}" for e in validate_card(card)]
     warnings = []
     if expected and card.type != expected and not errors:
-        warnings.append(
-            f"{rel}: type={card.type} 与目录 '{rel.split('/')[0]}/' 期望 {expected} 不一致"
-        )
+        warnings.append(f"{rel}: type={card.type} 与目录 '{rel.split('/')[0]}/' 期望 {expected} 不一致")
     return errors, warnings
 
 
@@ -106,17 +104,11 @@ def main() -> int:
     for w in all_warnings:
         print(f"[hub-cards] ⚠️  {w}")
     if all_errors:
-        print(
-            f"[hub-cards] ❌ {len(all_errors)} 处 frontmatter 不合规（已检查 {checked} 张卡）："
-        )
+        print(f"[hub-cards] ❌ {len(all_errors)} 处 frontmatter 不合规（已检查 {checked} 张卡）：")
         for e in all_errors:
             print(f"  - {e}")
-        print(
-            "[hub-cards] 修复：python hub-engine/scripts/fix_card_schema_drift.py --root <Hub> --apply"
-        )
-        print(
-            "[hub-cards] 说明：schema 合法值见 common/frontmatter.py 的 VALID_TYPES / VALID_STATUS"
-        )
+        print("[hub-cards] 修复：python hub-engine/scripts/fix_card_schema_drift.py --root <Hub> --apply")
+        print("[hub-cards] 说明：schema 合法值见 common/frontmatter.py 的 VALID_TYPES / VALID_STATUS")
         return 1
     print(f"[hub-cards] ✅ {checked} 张卡 frontmatter 通过")
     return 0

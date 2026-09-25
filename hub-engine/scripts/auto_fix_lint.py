@@ -100,10 +100,7 @@ def run_fix(root: Path, *, dry_run: bool = False) -> dict:
             if card is None:
                 continue
             # rule/methodology 跳过自动修复（高风险，frontmatter 改动也需人工）
-            if (
-                card.type in HUMAN_REQUIRED_TYPES
-                or _dir_to_type(sub) in HUMAN_REQUIRED_TYPES
-            ):
+            if card.type in HUMAN_REQUIRED_TYPES or _dir_to_type(sub) in HUMAN_REQUIRED_TYPES:
                 failed_list.append(str(md.relative_to(root)))
                 continue
             errs = validate_card(card)
@@ -184,9 +181,7 @@ def main() -> int:
         print(f"[auto_fix_lint] {result.get('message', '无修复')}")
     else:
         mode = "DRY-RUN" if args.dry_run else "APPLIED"
-        print(
-            f"[auto_fix_lint] [{mode}] 修复 {result['fixed']} 张卡, 失败 {result['failed']} 张"
-        )
+        print(f"[auto_fix_lint] [{mode}] 修复 {result['fixed']} 张卡, 失败 {result['failed']} 张")
         for path, fixes in result.get("details", []):
             print(f"  {path}")
             for f in fixes:

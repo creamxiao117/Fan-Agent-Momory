@@ -12,9 +12,7 @@ def test_audit_id_shape():
 
 def test_append_query_log_writes_line(tmp_path):
     root = bootstrap(tmp_path)
-    append_query_log(
-        root, {"audit_id": "a1", "action": "search", "platform": "trae", "ok": True}
-    )
+    append_query_log(root, {"audit_id": "a1", "action": "search", "platform": "trae", "ok": True})
     files = query_log_files(root)
     assert files, "应至少有一个 query.log 文件"
     # 取最新（按日切分的今日文件）

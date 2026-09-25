@@ -17,9 +17,7 @@ def _run(single: int, fail_above: float | None) -> subprocess.CompletedProcess:
     cmd = [sys.executable, str(SCRIPT), "--single", str(single), "--repeat", "3"]
     if fail_above is not None:
         cmd += ["--fail-above", str(fail_above)]
-    return subprocess.run(
-        cmd, capture_output=True, text=True, encoding="utf-8", check=False
-    )
+    return subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", check=False)
 
 
 def test_single_mode_exit_zero_with_loose_gate():
@@ -56,9 +54,7 @@ def test_full_curve_path_still_exits_zero():
         "--fail-above",
         "999999",
     ]
-    r = subprocess.run(
-        cmd, capture_output=True, text=True, encoding="utf-8", check=False
-    )
+    r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", check=False)
     assert r.returncode == 0, r.stderr
     assert "单点" not in r.stdout  # 非单点模式
     assert "50" in r.stdout and "100" in r.stdout

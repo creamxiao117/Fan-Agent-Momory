@@ -100,9 +100,7 @@ def test_index_categories(tmp_path):
 def test_bootstrap_groups_by_kind(tmp_path):
     root = bootstrap(tmp_path)
     _seed(root)
-    res = hub_bootstrap(
-        root, "dll", context="改了 DLL 被 AutoCAD 锁住", platform="trae"
-    )
+    res = hub_bootstrap(root, "dll", context="改了 DLL 被 AutoCAD 锁住", platform="trae")
     assert res["ok"] and res["task_kind"] == "dll"
     kinds = {b["kind"] for b in res["blocks"]}
     assert kinds == {"rules", "projects"}
@@ -120,27 +118,19 @@ def test_bootstrap_unknown_kind_falls_back(tmp_path):
 
 def test_ingest_candidate_writes_draft(tmp_path):
     root = bootstrap(tmp_path)
-    (root / "hub.config.yaml").write_text(
-        "platforms:\n  trae: {memory_dir: x, target_file: y}\n", encoding="utf-8"
-    )
-    res = hub_ingest_candidate(
-        root, platform="trae", title="测试经验", body="某条经验。"
-    )
+    (root / "hub.config.yaml").write_text("platforms:\n  trae: {memory_dir: x, target_file: y}\n", encoding="utf-8")
+    res = hub_ingest_candidate(root, platform="trae", title="测试经验", body="某条经验。")
     assert res["ok"] and res["deduped"] is False
     p = root / ".sync" / "drafts" / "trae_draft" / "测试经验.md"
     assert p.exists() or (root / ".sync" / "drafts" / "trae_draft").exists()
-    text = (root / ".sync" / "drafts" / "trae_draft" / f"{res['slug']}.md").read_text(
-        encoding="utf-8"
-    )
+    text = (root / ".sync" / "drafts" / "trae_draft" / f"{res['slug']}.md").read_text(encoding="utf-8")
     assert "type: exp" in text
     assert "status: candidate" in text
 
 
 def test_ingest_candidate_dedup(tmp_path):
     root = bootstrap(tmp_path)
-    (root / "hub.config.yaml").write_text(
-        "platforms:\n  trae: {memory_dir: x, target_file: y}\n", encoding="utf-8"
-    )
+    (root / "hub.config.yaml").write_text("platforms:\n  trae: {memory_dir: x, target_file: y}\n", encoding="utf-8")
     hub_ingest_candidate(root, platform="trae", title="T", body="相同正文")
     res = hub_ingest_candidate(root, platform="trae", title="T", body="相同正文")
     assert res["deduped"] is True
@@ -148,9 +138,7 @@ def test_ingest_candidate_dedup(tmp_path):
 
 def test_ingest_candidate_rule_forbidden(tmp_path):
     root = bootstrap(tmp_path)
-    (root / "hub.config.yaml").write_text(
-        "platforms:\n  trae: {memory_dir: x, target_file: y}\n", encoding="utf-8"
-    )
+    (root / "hub.config.yaml").write_text("platforms:\n  trae: {memory_dir: x, target_file: y}\n", encoding="utf-8")
     res = hub_ingest_candidate(root, platform="trae", title="R", body="b", type_="rule")
     assert res["ok"] is False and res["error"] == "type_forbidden"
 
@@ -215,9 +203,7 @@ def test_record_reuse_skips_archived_and_missing_field(tmp_path):
     )
     r = record_reuse(root, ["rules/old.md", "rules/noreuse.md"])
     assert r["counted"] == 0 and r["archived_skipped"] == 1
-    assert "reuse_count" not in (root / "rules" / "noreuse.md").read_text(
-        encoding="utf-8"
-    )
+    assert "reuse_count" not in (root / "rules" / "noreuse.md").read_text(encoding="utf-8")
 
 
 def test_reuse_bump_minimal_diff(tmp_path):

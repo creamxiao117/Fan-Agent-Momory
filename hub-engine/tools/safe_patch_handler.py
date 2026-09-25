@@ -57,8 +57,8 @@ def _assess_risk(old: str, new: str) -> tuple[int, str]:
     for line in old_lines + new_lines:
         if len(line) > MAX_PATCH_CHARS:
             return 2, f"行过长（{len(line)} > {MAX_PATCH_CHARS}）"
-    old_indents = [_detect_indent(l) for l in old_lines if l.strip()]
-    new_indents = [_detect_indent(l) for l in new_lines if l.strip()]
+    old_indents = [_detect_indent(line) for line in old_lines if line.strip()]
+    new_indents = [_detect_indent(line) for line in new_lines if line.strip()]
     if old_indents and new_indents and max(new_indents) > max(old_indents):
         return (
             1,

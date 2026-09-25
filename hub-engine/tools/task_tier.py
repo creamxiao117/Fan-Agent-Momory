@@ -38,10 +38,7 @@ _KEYWORDS: dict[Tier, tuple[str, ...]] = {
 def _hit(kw: str, text: str) -> bool:
     # 纯 ASCII 单词关键词用词边界匹配：覆盖句末 PR / 裸 rules，且不误伤嵌入词（如 approve）
     if kw.isascii() and kw.isalnum():
-        return (
-            re.search(rf"(?<![A-Za-z0-9]){re.escape(kw)}(?![A-Za-z0-9])", text)
-            is not None
-        )
+        return re.search(rf"(?<![A-Za-z0-9]){re.escape(kw)}(?![A-Za-z0-9])", text) is not None
     return kw in text
 
 

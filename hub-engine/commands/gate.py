@@ -74,11 +74,7 @@ def cmd_gate(args) -> int:
             if not args.keep_going:
                 return fail
 
-    print(
-        (f"[gate] 结果：fail_code={fail}（keep_going={args.keep_going}）")
-        if fail
-        else "[gate] 结果：全绿 (0)"
-    )
+    print((f"[gate] 结果：fail_code={fail}（keep_going={args.keep_going}）") if fail else "[gate] 结果：全绿 (0)")
     for k, v in results.items():
         print(f"   {k}: exit={v}")
     return fail

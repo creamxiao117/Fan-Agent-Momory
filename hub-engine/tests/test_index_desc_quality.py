@@ -80,9 +80,7 @@ def test_extract_summary_preserves_underscores_in_identifiers(tmp_path):
 
 def test_extract_summary_skips_table_and_code_lines(tmp_path):
     """首行是表格/代码围栏时不当作摘要（否则会取到 `|` 或 ``` 垃圾）"""
-    p = _card(
-        tmp_path / "tbl.md", "| a | b |\n|---|---|\n| 1 | 2 |\n\n真正的结论段落。\n"
-    )
+    p = _card(tmp_path / "tbl.md", "| a | b |\n|---|---|\n| 1 | 2 |\n\n真正的结论段落。\n")
     assert extract_summary(p) == "真正的结论段落。"
 
 

@@ -66,18 +66,14 @@ def detect_stale_cards(hub_root: Path, *, days: int = DEFAULT_DAYS_STALE) -> lis
                         "name": f.stem,
                         "type": fm.get("type", sub),
                         "updated": str(upd),
-                        "age_days": (
-                            dt.datetime.now(tz=dt.timezone.utc).date() - upd
-                        ).days,
+                        "age_days": (dt.datetime.now(tz=dt.timezone.utc).date() - upd).days,
                         "reuse_count": rc,
                     }
                 )
     return out
 
 
-def detect_stale_skills(
-    skillhub_root: Path, *, days: int = DEFAULT_DAYS_STALE
-) -> list[dict]:
+def detect_stale_skills(skillhub_root: Path, *, days: int = DEFAULT_DAYS_STALE) -> list[dict]:
     """扫描 SkillHub，标记 stale 技能。"""
     out: list[dict] = []
     cutoff = dt.datetime.now(tz=dt.timezone.utc).date() - dt.timedelta(days=days)
@@ -99,9 +95,7 @@ def detect_stale_skills(
                         "path": str(f.relative_to(skillhub_root)),
                         "name": data.get("name", f.parent.name),
                         "updated": str(upd),
-                        "age_days": (
-                            dt.datetime.now(tz=dt.timezone.utc).date() - upd
-                        ).days,
+                        "age_days": (dt.datetime.now(tz=dt.timezone.utc).date() - upd).days,
                         "reuse_count": rc,
                     }
                 )

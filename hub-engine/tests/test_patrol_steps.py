@@ -92,9 +92,7 @@ class FakeCmd:
         self.calls: list[dict] = []
 
     def __call__(self, argv, cwd=None, timeout=300):
-        self.calls.append(
-            {"argv": [str(a) for a in argv], "cwd": cwd, "timeout": timeout}
-        )
+        self.calls.append({"argv": [str(a) for a in argv], "cwd": cwd, "timeout": timeout})
         return self.rc, self.out, self.err
 
     @property
@@ -105,9 +103,7 @@ class FakeCmd:
 class FakeRun:
     """`subprocess.run` 的替身（freshness_check / verify_after_fix 直接调它）。"""
 
-    def __init__(
-        self, rc: int = 0, out: str = "", err: str = "", raise_timeout: bool = False
-    ):
+    def __init__(self, rc: int = 0, out: str = "", err: str = "", raise_timeout: bool = False):
         self.rc, self.out, self.err = rc, out, err
         self.raise_timeout = raise_timeout
         self.calls: list[dict] = []
@@ -115,12 +111,8 @@ class FakeRun:
     def __call__(self, argv, **kwargs):
         self.calls.append({"argv": [str(a) for a in argv], "kwargs": kwargs})
         if self.raise_timeout:
-            raise subprocess.TimeoutExpired(
-                cmd=str(argv), timeout=kwargs.get("timeout", 0)
-            )
-        return types.SimpleNamespace(
-            returncode=self.rc, stdout=self.out, stderr=self.err
-        )
+            raise subprocess.TimeoutExpired(cmd=str(argv), timeout=kwargs.get("timeout", 0))
+        return types.SimpleNamespace(returncode=self.rc, stdout=self.out, stderr=self.err)
 
 
 # ---------------------------------------------------------------------------
@@ -171,9 +163,7 @@ def test_step_table_covers_every_registered_step():
     """任何新增的巡检步骤都必须有测试条目（漏了这里会红）。"""
     registered = set(_registered_step_names())
     covered = {name for name, _ in _STEP_CALLS}
-    assert registered - covered == set(), (
-        f"新增步骤未覆盖: {sorted(registered - covered)}"
-    )
+    assert registered - covered == set(), f"新增步骤未覆盖: {sorted(registered - covered)}"
     assert len(registered) >= 24, f"注册步骤数异常: {len(registered)}"
 
 
@@ -204,18 +194,14 @@ def test_step_contract(patrol_tree, monkeypatch, name, call):
         lambda root: {"orphans": [], "ghosts": [], "stale": [], "invalid": 0},
     )
     # 不碰真实 LM Studio
-    monkeypatch.setattr(
-        "tools.llm_health.LLMHealthChecker.get_instance", classmethod(_boom)
-    )
+    monkeypatch.setattr("tools.llm_health.LLMHealthChecker.get_instance", classmethod(_boom))
 
     result = patrol._run_step(name, "(契约)", lambda: call(hub, engine))
 
     assert result.name == name
     assert result.status in _VALID_STATUS, f"{name} 状态非法: {result.status}"
     assert result.exit_code >= 0, f"{name} 退出码为负: {result.exit_code}"
-    assert result.error is None or result.status != "pass", (
-        f"{name} 带 error 却判 pass: {result.error}"
-    )
+    assert result.error is None or result.status != "pass", f"{name} 带 error 却判 pass: {result.error}"
 
 
 # ---------------------------------------------------------------------------
@@ -224,9 +210,7 @@ def test_step_contract(patrol_tree, monkeypatch, name, call):
 
 
 def test_run_step_skip_when_precheck_fails():
-    r = patrol._run_step(
-        "x", "s", lambda: pytest.fail("不应执行"), pre_check=lambda: False
-    )
+    r = patrol._run_step("x", "s", lambda: pytest.fail("不应执行"), pre_check=lambda: False)
     assert r.status == "skip" and r.exit_code == 0
 
 
@@ -242,9 +226,7 @@ def test_run_step_exception_becomes_fail_999():
 
 def test_run_step_keeps_registered_name_over_function_default():
     """步骤函数里写死的 name 不允许覆盖注册名（否则报告里会出现两个名字）。"""
-    r = patrol._run_step(
-        "registered", "s", lambda: patrol.StepResult(name="inner", status="pass")
-    )
+    r = patrol._run_step("registered", "s", lambda: patrol.StepResult(name="inner", status="pass"))
     assert r.name == "registered"
 
 
@@ -255,9 +237,7 @@ def test_run_step_keeps_registered_name_over_function_default():
 
 def test_llm_check_degrades_to_warn_without_blocking(monkeypatch):
     """LM Studio 不可用 ⇒ warn 且 exit_code=0（v3 起不阻塞整体巡检）。"""
-    monkeypatch.setattr(
-        "tools.llm_health.LLMHealthChecker.get_instance", classmethod(_boom)
-    )
+    monkeypatch.setattr("tools.llm_health.LLMHealthChecker.get_instance", classmethod(_boom))
     r = patrol._llm_pre_check()
     assert r.status == "warn" and r.exit_code == 0 and "不可用" in r.output
 
@@ -330,9 +310,7 @@ def test_pytest_exit_code_mapping(patrol_tree, monkeypatch, rc, status):
 def test_pytest_flags_import_error_for_autofix(patrol_tree, monkeypatch):
     """meta.has_import_error 决定 auto_pytest_env_fix 是否值得跑。"""
     _, engine = patrol_tree
-    monkeypatch.setattr(
-        patrol, "_run_cmd", FakeCmd(1, "", "ModuleNotFoundError: No module named 'x'")
-    )
+    monkeypatch.setattr(patrol, "_run_cmd", FakeCmd(1, "", "ModuleNotFoundError: No module named 'x'"))
     assert patrol._step_pytest(engine).meta["has_import_error"] is True
 
 
@@ -373,9 +351,7 @@ def test_startup_budget_runs_against_real_repo():
     ("rc", "status", "exit_code"),
     [(0, "pass", 0), (2, "warn", 2), (5, "fail", 5)],
 )
-def test_build_vectors_exit_code_mapping(
-    patrol_tree, monkeypatch, rc, status, exit_code
-):
+def test_build_vectors_exit_code_mapping(patrol_tree, monkeypatch, rc, status, exit_code):
     hub, engine = patrol_tree
     monkeypatch.setattr(patrol, "_run_cmd", FakeCmd(rc, "{'inserted': 1}"))
     r = patrol._step_build_vectors(hub, engine)
@@ -460,9 +436,7 @@ def test_status_snapshot_requires_valid_json(patrol_tree, monkeypatch):
 
 def test_archive_snapshot_writes_retro_file(patrol_tree, monkeypatch):
     hub, engine = patrol_tree
-    monkeypatch.setattr(
-        patrol, "_run_cmd", FakeCmd(0, json.dumps({"cards": {"rules": 3}}))
-    )
+    monkeypatch.setattr(patrol, "_run_cmd", FakeCmd(0, json.dumps({"cards": {"rules": 3}})))
     r = patrol._save_snapshot_archive(hub, engine)
     today = datetime.now(_CN_TZ).date().isoformat()
     snap = hub / "retro" / f"snapshot-{today}.json"
@@ -475,9 +449,7 @@ def test_archive_snapshot_no_overwrite_is_idempotent(patrol_tree, monkeypatch):
     hub, engine = patrol_tree
     today = datetime.now(_CN_TZ).date().isoformat()
     snap = hub / "retro" / f"snapshot-{today}.json"
-    snap.write_text(
-        json.dumps({"generated_at": f"{today}T08:00:00+08:00"}), encoding="utf-8"
-    )
+    snap.write_text(json.dumps({"generated_at": f"{today}T08:00:00+08:00"}), encoding="utf-8")
 
     fake = FakeCmd(0, json.dumps({"cards": {}}))
     monkeypatch.setattr(patrol, "_run_cmd", fake)
@@ -576,9 +548,7 @@ def test_freshness_check_result_always_carries_stage(patrol_tree, monkeypatch):
     hub, engine = patrol_tree
     _touch(engine, "stale_detect.py")
     monkeypatch.setattr(subprocess, "run", FakeRun(0, "0 张陈旧"))
-    r = patrol._run_step(
-        "freshness_check", "新鲜度", lambda: patrol._step_freshness_check(hub, engine)
-    )
+    r = patrol._run_step("freshness_check", "新鲜度", lambda: patrol._step_freshness_check(hub, engine))
     assert r.exit_code == 0 and r.status == "pass" and r.stage == "新鲜度"
 
 

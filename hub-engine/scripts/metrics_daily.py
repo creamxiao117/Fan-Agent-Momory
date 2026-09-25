@@ -166,14 +166,10 @@ def append(root: Path, row: dict) -> None:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="metrics-daily", description=__doc__)
     ap.add_argument("--root", required=True, help="中枢根目录")
-    ap.add_argument(
-        "--date", default=None, help="要聚合的本地日期 YYYY-MM-DD（默认今天）"
-    )
+    ap.add_argument("--date", default=None, help="要聚合的本地日期 YYYY-MM-DD（默认今天）")
     ap.add_argument("--json", action="store_true", help="只输出本次行，不落盘")
     ap.add_argument("--no-append", action="store_true", help="聚合但不写 metrics.jsonl")
-    ap.add_argument(
-        "--series", action="store_true", help="E2：输出全量日命中率时间序列（只读）"
-    )
+    ap.add_argument("--series", action="store_true", help="E2：输出全量日命中率时间序列（只读）")
     args = ap.parse_args(argv)
 
     root = Path(args.root)

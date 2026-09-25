@@ -36,14 +36,10 @@ from common.constants import HUMAN_REQUIRED_TYPES as _HUMAN_REQUIRED_TYPES
 def _extract_card_type_from_review_line(line: str) -> str | None:
     """从 review_today.md 的一行中提取卡片 type。"""
     # 格式示例：- [rule] rules/xxx.md  或  - rules/xxx.md
-    m = re.search(
-        r"\[(rule|methodology|exp|note|project|retro|blueprint|longterm)\]", line
-    )
+    m = re.search(r"\[(rule|methodology|exp|note|project|retro|blueprint|longterm)\]", line)
     if m:
         return m.group(1)
-    m = re.search(
-        r"(rules|methodology|experience|longterm|projects|blueprints|notes)/", line
-    )
+    m = re.search(r"(rules|methodology|experience|longterm|projects|blueprints|notes)/", line)
     if m:
         dir_to_type = {
             "rules": "rule",
@@ -116,7 +112,7 @@ def run_review(root: Path, *, dry_run: bool = False) -> dict:
     return {
         "auto_pass": len(parsed["auto_pass"]),
         "human_keep": len(parsed["human_keep"]),
-        "human_details": [(l.strip(), t) for l, t in parsed["human_keep"]],
+        "human_details": [(desc.strip(), t) for desc, t in parsed["human_keep"]],
         "dry_run": dry_run,
     }
 
@@ -135,9 +131,7 @@ def main() -> int:
         return 0
 
     mode = "DRY-RUN" if args.dry_run else "APPLIED"
-    print(
-        f"[auto_review_today] [{mode}] 自动过审 {result['auto_pass']} 条, 留人工 {result['human_keep']} 条"
-    )
+    print(f"[auto_review_today] [{mode}] 自动过审 {result['auto_pass']} 条, 留人工 {result['human_keep']} 条")
     for line, ctype in result.get("human_details", []):
         print(f"  HUMAN | [{ctype}] {line}")
 

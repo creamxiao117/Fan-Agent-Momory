@@ -88,9 +88,7 @@ def _iso_or_none(text: str) -> str | None:
         return None
 
 
-def repair(
-    path: Path, dir_type: str | None, apply: bool, today: str
-) -> tuple[list[str], str | None]:
+def repair(path: Path, dir_type: str | None, apply: bool, today: str) -> tuple[list[str], str | None]:
     """返回 (修复动作, 跳过原因)；跳过原因非空表示需人工"""
     with open(path, encoding="utf-8-sig", newline="") as fh:
         lines = fh.read().splitlines(keepends=True)
@@ -128,9 +126,7 @@ def repair(
         value = created or today
         eol = _eol(lines[end])
         lines.insert(last_insert + 1, f"updated: '{value}'{eol}")
-        actions.append(
-            f"updated: 补 {value}" + ("" if created else "（无 created，用今天）")
-        )
+        actions.append(f"updated: 补 {value}" + ("" if created else "（无 created，用今天）"))
 
     if actions and apply:
         with open(path, "w", encoding="utf-8", newline="") as fh:
@@ -138,9 +134,7 @@ def repair(
     return actions, None
 
 
-def run_fix(
-    root: Path, *, apply: bool = False, include_high_risk: bool = False
-) -> dict:
+def run_fix(root: Path, *, apply: bool = False, include_high_risk: bool = False) -> dict:
     """扫描并（可选）修复；返回统计与明细"""
     today = today_date().isoformat()
     fixed: list[tuple[str, list[str]]] = []
@@ -158,16 +152,12 @@ def run_fix(
             if md.name.startswith("."):
                 continue
             # 高风险类型（rule/methodology）默认跳人工；--include-high-risk 才动
-            if not include_high_risk and (
-                dir_type in HUMAN_REQUIRED_TYPES or sub in ("rules", "methodology")
-            ):
+            if not include_high_risk and (dir_type in HUMAN_REQUIRED_TYPES or sub in ("rules", "methodology")):
                 continue
             rel = str(md.relative_to(root))
             with open(md, encoding="utf-8-sig", newline="") as fh:
                 head = fh.read(4000)
-            if not head.startswith("---") and not head.lstrip("\ufeff").startswith(
-                "---"
-            ):
+            if not head.startswith("---") and not head.lstrip("\ufeff").startswith("---"):
                 skipped.append((rel, "frontmatter 不在文件起始处（可能有游离前置行）"))
                 continue
             card = try_read_card(md)

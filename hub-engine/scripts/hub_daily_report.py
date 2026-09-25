@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import subprocess
 import sys
@@ -128,9 +129,7 @@ def _format_6panel_section(panel: dict | None) -> list[str]:
     if lr.get("ok"):
         stdout = lr.get("info", {}).get("stdout", "")
         if "hits: []" in stdout:
-            lines.append(
-                "  🟡 LLM 路由：fallback 可用但 LLM 决策无命中（可能是离线或无可用模型）"
-            )
+            lines.append("  🟡 LLM 路由：fallback 可用但 LLM 决策无命中（可能是离线或无可用模型）")
         else:
             lines.append(f"  ✅ LLM 路由：{stdout[:60]}")
 
@@ -222,9 +221,7 @@ ALERT_ICON = {"critical": "🚨", "warning": "⚠️", "info": "ℹ️"}
 def _collect_snapshot(hub_root: Path, skillhub_root: Path) -> dict:
     """调 hub_health.py 现场生成快照 JSON。"""
     script = Path(__file__).parent / "hub_health.py"
-    with tempfile.NamedTemporaryFile(
-        suffix=".json", delete=False, mode="w", encoding="utf-8"
-    ) as fh:
+    with tempfile.NamedTemporaryFile(suffix=".json", delete=False, mode="w", encoding="utf-8") as fh:
         out_path = fh.name
     try:
         result = subprocess.run(
@@ -245,18 +242,14 @@ def _collect_snapshot(hub_root: Path, skillhub_root: Path) -> dict:
             timeout=180,
         )
         if result.returncode != 0:
-            raise RuntimeError(
-                f"hub_health.py 退出码 {result.returncode}: {result.stderr[-500:]}"
-            )
+            raise RuntimeError(f"hub_health.py 退出码 {result.returncode}: {result.stderr[-500:]}")
         report = Path(out_path)
         if not report.exists() or report.stat().st_size == 0:
             raise RuntimeError("hub_health.py 未产出快照文件")
         return json.loads(report.read_text(encoding="utf-8"))
     finally:
-        try:
+        with contextlib.suppress(OSError):
             Path(out_path).unlink(missing_ok=True)
-        except OSError:
-            pass
 
 
 def _local_now_iso(utc_iso: str) -> str:
@@ -318,18 +311,12 @@ def format_report(data: dict) -> str:
 
     # 分项
     lines.append("【健康分项】")
-    lines.append(
-        f"  🗂 卡片健康  {card_health:.1f}  {_score_bar(card_health)}  {_verdict(card_health)}"
-    )
-    lines.append(
-        f"  🧩 技能健康  {skill_health:.1f}  {_score_bar(skill_health)}  {_verdict(skill_health)}"
-    )
+    lines.append(f"  🗂 卡片健康  {card_health:.1f}  {_score_bar(card_health)}  {_verdict(card_health)}")
+    lines.append(f"  🧩 技能健康  {skill_health:.1f}  {_score_bar(skill_health)}  {_verdict(skill_health)}")
     lines.append(
         f"  🔄 飞轮活跃  {flywheel_activity:.1f}  {_score_bar(flywheel_activity)}  {_verdict(flywheel_activity)}"
     )
-    lines.append(
-        f"  🦙 LLM 健康  {llm_health:.1f}  {_score_bar(llm_health)}  {_verdict(llm_health)}"
-    )
+    lines.append(f"  🦙 LLM 健康  {llm_health:.1f}  {_score_bar(llm_health)}  {_verdict(llm_health)}")
     lines.append("")
 
     # 卡片统计
@@ -358,9 +345,7 @@ def format_report(data: dict) -> str:
     lines.append("【技能统计】")
     s_total = skill_stats.get("total", 0)
     s_status = skill_stats.get("by_status", {})
-    lines.append(
-        f"  共 {s_total} 个 · 生效 {s_status.get('active', 0)} · 参考 {s_status.get('reference', 0)}"
-    )
+    lines.append(f"  共 {s_total} 个 · 生效 {s_status.get('active', 0)} · 参考 {s_status.get('reference', 0)}")
     lines.append("")
 
     # 飞轮五档
@@ -388,9 +373,7 @@ def format_report(data: dict) -> str:
         resp = llm_status.get("response_time_ms", 0)
         resp_str = f"{resp:.0f}ms" if isinstance(resp, (int, float)) else str(resp)
         state_line = (
-            f"  🟢 在线 · {model_count} 个模型 · 响应 {resp_str}"
-            if available
-            else "  🔴 离线（LLM 服务未就绪）"
+            f"  🟢 在线 · {model_count} 个模型 · 响应 {resp_str}" if available else "  🔴 离线（LLM 服务未就绪）"
         )
         # 响应过慢提示
         if available and isinstance(resp, (int, float)) and resp > 2000:

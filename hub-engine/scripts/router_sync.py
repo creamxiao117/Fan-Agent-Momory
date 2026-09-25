@@ -96,9 +96,7 @@ def _check_platforms(root: Path) -> tuple[list[str], list[str]]:
         if mem_dir and target:
             full = Path(mem_dir) / target
             if not full.is_file():
-                infos.append(
-                    f"平台 '{name}' 记忆文件不可达: {full}（平台可能未配置或未登录）"
-                )
+                infos.append(f"平台 '{name}' 记忆文件不可达: {full}（平台可能未配置或未登录）")
     return warnings, infos
 
 
@@ -156,11 +154,7 @@ def _run(root: Path) -> dict:
     # 实际存在的 handler 数
     try:
         mod = importlib.import_module("tools.mcp_handlers")
-        present = sum(
-            1
-            for fn in _REQUIRED_MCP_HANDLERS
-            if hasattr(mod, fn) and callable(getattr(mod, fn))
-        )
+        present = sum(1 for fn in _REQUIRED_MCP_HANDLERS if hasattr(mod, fn) and callable(getattr(mod, fn)))
     except ImportError:
         present = 0
     result["mcp_handlers"]["present"] = present
@@ -214,9 +208,7 @@ def main() -> int:
     print("=" * 60)
 
     # 平台
-    print(
-        f"\n🔧 platforms ({len(result['platforms']['warnings'])} warn, {len(result['platforms']['infos'])} info):"
-    )
+    print(f"\n🔧 platforms ({len(result['platforms']['warnings'])} warn, {len(result['platforms']['infos'])} info):")
     for w in result["platforms"]["warnings"]:
         print(f"  ⚠️ {w}")
     for i in result["platforms"]["infos"]:

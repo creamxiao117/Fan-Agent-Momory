@@ -145,9 +145,7 @@ def check_file(path: Path) -> None:
         _record("WARN", str(path), f"{ext} 含 UTF-8 BOM（建议去除）")
 
     # 3) 乱码串（规范文档 / 本脚本 / 规范技能目录 按定义引用乱码样例，豁免）
-    if path.name not in MARKER_EXEMPT_NAMES and not (
-        MARKER_EXEMPT_DIRS & {p.name for p in path.parents}
-    ):
+    if path.name not in MARKER_EXEMPT_NAMES and not (MARKER_EXEMPT_DIRS & {p.name for p in path.parents}):
         hits = sorted({m for m in MOJIBAKE_MARKERS if m in text})
         if hits:
             _record("FAIL", str(path), f"疑似 UTF-8→GBK 误解码残留：{', '.join(hits)}")
@@ -207,9 +205,7 @@ def roundtrip_path_test() -> bool:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="中文文本与路径编码全链路自检")
     parser.add_argument("targets", nargs="*", help="要扫描的文件或目录（可多个）")
-    parser.add_argument(
-        "--roundtrip", action="store_true", help="只跑中文路径 round-trip 测试"
-    )
+    parser.add_argument("--roundtrip", action="store_true", help="只跑中文路径 round-trip 测试")
     args = parser.parse_args(argv)
 
     if args.roundtrip:
@@ -226,9 +222,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"[{level}] {target} :: {detail}")
 
     fails = [r for r in results if r[0] == "FAIL"]
-    print(
-        f"\n=== 结果：{'PASS' if not fails and ok else 'FAIL'}（FAIL {len(fails)} 项）==="
-    )
+    print(f"\n=== 结果：{'PASS' if not fails and ok else 'FAIL'}（FAIL {len(fails)} 项）===")
     return 0 if not fails and ok else 1
 
 

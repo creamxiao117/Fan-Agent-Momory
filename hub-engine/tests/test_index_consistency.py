@@ -23,9 +23,7 @@ from scripts.index_consistency import (
 
 def test_authority_dirs_is_audit_source_not_copy():
     """权威目录清单必须来自 audit_index，而不是本模块另抄一份"""
-    assert AUTHORITY_DIRS is AUDIT_AUTHORITY_DIRS or tuple(AUTHORITY_DIRS) == tuple(
-        AUDIT_AUTHORITY_DIRS
-    )
+    assert AUTHORITY_DIRS is AUDIT_AUTHORITY_DIRS or tuple(AUTHORITY_DIRS) == tuple(AUDIT_AUTHORITY_DIRS)
 
 
 def test_card_section_tokens_are_derived_from_section_titles():
@@ -34,7 +32,7 @@ def test_card_section_tokens_are_derived_from_section_titles():
     这是本模块存在的核心理由：`fix_index_registry` 曾手写 token 列表，
     与 `fix_orphans` 的目录映射各维护一份。
     """
-    assert CARD_SECTION_TOKENS == tuple(f"{d}/" for d in SECTION_TITLES)
+    assert tuple(f"{d}/" for d in SECTION_TITLES) == CARD_SECTION_TOKENS
     # 每个分区标题都应能被 is_card_section 认出来（自洽性）
     for heading in SECTION_TITLES.values():
         assert is_card_section(heading), f"分区标题未被识别: {heading}"
@@ -64,9 +62,7 @@ def test_card_slug_rejects_legend_and_note_lines():
 def test_registered_slugs_exact_not_substring(tmp_path):
     """回归：`- alphabeta` 不得让 `alpha` 被当成已登记（曾是静默漏登 bug）"""
     idx = tmp_path / "INDEX.md"
-    idx.write_text(
-        "## 规则（rules/）\n- alphabeta    更长的另一个 slug\n", encoding="utf-8"
-    )
+    idx.write_text("## 规则（rules/）\n- alphabeta    更长的另一个 slug\n", encoding="utf-8")
     got = registered_slugs(idx)
     assert got == {"alphabeta"}
     assert "alpha" not in got

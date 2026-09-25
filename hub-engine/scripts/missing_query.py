@@ -149,9 +149,7 @@ def to_markdown(cands: list[dict]) -> str:
             "| --- | --- | --- | --- |",
         ]
         for c in p0:
-            lines.append(
-                f"| {c['query']} | {c['count']} | {c['zero_ratio']:.0%} | {','.join(c['channels'])} |"
-            )
+            lines.append(f"| {c['query']} | {c['count']} | {c['zero_ratio']:.0%} | {','.join(c['channels'])} |")
         lines.append("")
     if p1:
         lines += [
@@ -161,9 +159,7 @@ def to_markdown(cands: list[dict]) -> str:
             "| --- | --- | --- | --- |",
         ]
         for c in p1:
-            lines.append(
-                f"| {c['query']} | {c['count']} | {c['avg_hit']} | {','.join(c['channels'])} |"
-            )
+            lines.append(f"| {c['query']} | {c['count']} | {c['avg_hit']} | {','.join(c['channels'])} |")
         lines.append("")
     if not (p0 or p1):
         lines.append("（无缺口候选）")
@@ -205,9 +201,7 @@ def auto_apply_p1_tags(root: Path, hub_root: Path) -> dict:
     p1_items = [
         c
         for c in cands
-        if c["stage"].startswith("P1")
-        and c["count"] >= P1_MIN_COUNT
-        and c["zero_ratio"] <= P1_MAX_ZERO_RATIO
+        if c["stage"].startswith("P1") and c["count"] >= P1_MIN_COUNT and c["zero_ratio"] <= P1_MAX_ZERO_RATIO
     ]
 
     applied: list[dict] = []
@@ -242,9 +236,7 @@ def auto_apply_p1_tags(root: Path, hub_root: Path) -> dict:
                 try:
                     fresh = read_card(card.path)
                 except (OSError, ValueError):
-                    skipped.append(
-                        {"query": query, "reason": f"目标卡读取失败 {card.path.name}"}
-                    )
+                    skipped.append({"query": query, "reason": f"目标卡读取失败 {card.path.name}"})
                     continue
                 have = {t.lower() for t in fresh.tags}
                 new_tags = [t for t in tokens if t.lower() not in have]
@@ -388,9 +380,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"已自动应用: {result['applied_count']} 条")
         print(f"跳过: {result['skipped_count']} 条")
         for item in result["applied"]:
-            print(
-                f"  ✅ {item['query'][:60]}... → {len(item['tags_added'])} 张卡加了 tag"
-            )
+            print(f"  ✅ {item['query'][:60]}... → {len(item['tags_added'])} 张卡加了 tag")
         for item in result["skipped"]:
             print(f"  ⏭️ {item['query'][:40]}... ({item['reason']})")
         # 同时输出候选清单供人工复核
@@ -450,9 +440,7 @@ def auto_create_drafts(
     """
     since = datetime.now(LOCAL_TZ).date() - timedelta(days=since_days)
     candidates = aggregate(root, since=since)
-    p0_items = [
-        c for c in candidates if c["stage"] == "P0-新增卡片" and c["count"] >= min_count
-    ]
+    p0_items = [c for c in candidates if c["stage"] == "P0-新增卡片" and c["count"] >= min_count]
 
     drafts_dir = root / ".sync" / "drafts"
     drafts_dir.mkdir(parents=True, exist_ok=True)
@@ -474,9 +462,7 @@ def auto_create_drafts(
         # 检查是否已存在相同查询的草稿
         existing_drafts = list(drafts_dir.glob(f"*-{safe_name}.md"))
         if existing_drafts:
-            skipped.append(
-                {"query": query, "reason": f"已存在 {len(existing_drafts)} 个草稿"}
-            )
+            skipped.append({"query": query, "reason": f"已存在 {len(existing_drafts)} 个草稿"})
             continue
 
         # 生成草稿内容（experience 类型）

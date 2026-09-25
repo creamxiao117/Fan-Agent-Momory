@@ -6,9 +6,7 @@ from sync import append_log, confirm_rule, ingest
 
 
 # 2026-09-02 权威区收缩适配：低风险自动入区类型改用 longterm（exp 不再进权威区）
-def _make_draft(
-    root: Path, platform: str, name: str, body: str, ctype: str = "longterm"
-) -> Path:
+def _make_draft(root: Path, platform: str, name: str, body: str, ctype: str = "longterm") -> Path:
     d = root / ".sync" / "drafts" / f"{platform}_draft"
     d.mkdir(parents=True, exist_ok=True)
     card = parse_card(f"""---
@@ -75,14 +73,10 @@ def test_ingest_same_name_different_content_no_overwrite(tmp_path):
         "---\ntype: longterm\ntags: [test]\nupdated: 2026-08-17\nstatus: active\nreuse_count: 0\n---\n记录一次排查 Windows 系统崩溃的经验\n",
         encoding="utf-8",
     )
-    _make_draft(
-        root, "trae", "exp-a.md", "如何制作拿铁咖啡的心得体会", ctype="longterm"
-    )
+    _make_draft(root, "trae", "exp-a.md", "如何制作拿铁咖啡的心得体会", ctype="longterm")
     stat = ingest(root, "trae")
     # 权威区内容保持不变（未被草稿覆盖）
-    assert "排查 Windows 系统崩溃" in (root / "longterm" / "exp-a.md").read_text(
-        encoding="utf-8"
-    )
+    assert "排查 Windows 系统崩溃" in (root / "longterm" / "exp-a.md").read_text(encoding="utf-8")
     # 同名不同内容计入冲突，草稿被删除
     assert stat["duplicate"] == 1
     assert not (root / ".sync" / "drafts" / "trae_draft" / "exp-a.md").exists()
@@ -144,10 +138,7 @@ def test_ingest_writes_memory_diff(tmp_path):
     ingest(root, "trae")
     recs = read_records(root)
     assert any(
-        r.get("op") == "add"
-        and r.get("name") == "exp-a.md"
-        and r.get("after") == "longterm/exp-a.md"
-        for r in recs
+        r.get("op") == "add" and r.get("name") == "exp-a.md" and r.get("after") == "longterm/exp-a.md" for r in recs
     )
 
 
@@ -165,10 +156,7 @@ def test_ingest_exp_draft_moves_to_experience_not_deleted(tmp_path):
     assert not (root / ".sync" / "drafts" / "trae_draft" / "exp-b.md").exists()
     recs = read_records(root)
     assert any(
-        r.get("op") == "move"
-        and r.get("name") == "exp-b.md"
-        and r.get("after") == "experience/exp-b.md"
-        for r in recs
+        r.get("op") == "move" and r.get("name") == "exp-b.md" and r.get("after") == "experience/exp-b.md" for r in recs
     )
 
 

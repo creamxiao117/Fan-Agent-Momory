@@ -49,18 +49,14 @@ def _since_from_days(since_days: int) -> date:
     return _today_local() - timedelta(days=since_days - 1)
 
 
-def harvest_candidates(
-    root: Path, since: date | None, max_candidates: int
-) -> list[dict]:
+def harvest_candidates(root: Path, since: date | None, max_candidates: int) -> list[dict]:
     """收割+挖掘：从 query.log 聚合缺口候选，排序后截取前 max_candidates（有界）。
 
     返回面试项结构同 missing_query.aggregate 的输出（含 stage），仅保留知识缺口
     （P0 新增卡 / P1 补tag），并按缺口严重度降序、截断到 `max_candidates`。
     """
     cands = [c for c in aggregate(root, since=since) if c["stage"] != "ok-无需处理"]
-    cands.sort(
-        key=lambda c: (_STAGE_RANK.get(c["stage"], 9), -c["zero_ratio"], -c["count"])
-    )
+    cands.sort(key=lambda c: (_STAGE_RANK.get(c["stage"], 9), -c["zero_ratio"], -c["count"]))
     return cands[:max_candidates]
 
 
@@ -133,10 +129,7 @@ def _render_markdown(cands: list[dict], meta: dict) -> str:
             f"## 候选 {i} · `{c['query']}`",
             "",
             f"- 次数 ×{c['count']} · 零命中占比 {c['zero_ratio']:.0%} → **新增卡片**",
-            (
-                f"- 当前检索命中：{c.get('current_hits', '—')} 张"
-                f"（通道 {c.get('current_channel', '—')}）"
-            ),
+            (f"- 当前检索命中：{c.get('current_hits', '—')} 张（通道 {c.get('current_channel', '—')}）"),
             f"- 证据：{c.get('evidence', '—')}",
             f"- 结果(outcome)：{c.get('outcome', '待定')}",
             "- 卡草稿：",
@@ -148,10 +141,7 @@ def _render_markdown(cands: list[dict], meta: dict) -> str:
             f"## 候选 {i} · `{c['query']}`",
             "",
             f"- 次数 ×{c['count']} · 平均命中 {c['avg_hit']} → **补 tag/别名**",
-            (
-                f"- 当前检索命中：{c.get('current_hits', '—')} 张"
-                f"（通道 {c.get('current_channel', '—')}）"
-            ),
+            (f"- 当前检索命中：{c.get('current_hits', '—')} 张（通道 {c.get('current_channel', '—')}）"),
             f"- 证据：{c.get('evidence', '—')}",
             f"- 结果(outcome)：{c.get('outcome', '待定')}",
             "",
@@ -198,9 +188,7 @@ def stage_proposal(root: Path, cands: list[dict]) -> str:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="hub-sleep-consolidate", description=__doc__)
     ap.add_argument("--root", required=True, help="中枢根目录")
-    ap.add_argument(
-        "--since-days", type=int, default=7, help="收割近 N 天 query.log 缺口（默认 7）"
-    )
+    ap.add_argument("--since-days", type=int, default=7, help="收割近 N 天 query.log 缺口（默认 7）")
     ap.add_argument(
         "--max-candidates",
         type=int,
@@ -208,9 +196,7 @@ def main(argv: list[str] | None = None) -> int:
         help="每晚最大候选数（编辑预算/有界，默认 5）",
     )
     ap.add_argument("--top-k", type=int, default=5, help="当前命中验证的检索 top_k")
-    ap.add_argument(
-        "--model", default=DEFAULT_MODEL, help="HF 向量模型 id（与建库一致）"
-    )
+    ap.add_argument("--model", default=DEFAULT_MODEL, help="HF 向量模型 id（与建库一致）")
     ap.add_argument("--json", action="store_true", help="结构到 stdout（不落盘）")
     args = ap.parse_args(argv)
 
@@ -243,10 +229,7 @@ def main(argv: list[str] | None = None) -> int:
     staging = stage_proposal(root, cands)
     p0 = sum(1 for c in cands if c["stage"].startswith("P0"))
     p1 = len(cands) - p0
-    print(
-        f"[sleep] night harvesting query.log ({args.since_days}天): "
-        f"P0 {p0} / P1 {p1} 候选"
-    )
+    print(f"[sleep] night harvesting query.log ({args.since_days}天): P0 {p0} / P1 {p1} 候选")
     print(f"[sleep] staged: {staging}  (review → ingest 采纳，本脚本未改任何卡)")
     if p0:
         print("[sleep] 提示：有 P0 补卡候选待人工确认")

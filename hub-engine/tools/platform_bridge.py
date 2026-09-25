@@ -82,9 +82,7 @@ class MdSectionAdapter(Adapter):
         for e in entries:
             body = e.body.strip()
             if e.title and e.title != "(无标题)":
-                parts.append(
-                    f"## {e.title}\n\n{body}".strip() if body else f"## {e.title}"
-                )
+                parts.append(f"## {e.title}\n\n{body}".strip() if body else f"## {e.title}")
             elif body:
                 parts.append(body)
         return "\n\n".join(parts)
@@ -256,9 +254,7 @@ def pull(root: Path, platform: str, dry_run: bool = False) -> dict:
         if _find_duplicate(root, card):
             stat["conflicted"] += 1  # 语义相似 → 进冲突区，不写 draft
             done_fps.add(fp)
-            plans.append(
-                ("conflict", f"{platform}_{_unique_name(slug, used)}.md", card)
-            )
+            plans.append(("conflict", f"{platform}_{_unique_name(slug, used)}.md", card))
         else:
             stat["pulled"] += 1
             done_fps.add(fp)
@@ -280,9 +276,7 @@ def pull(root: Path, platform: str, dry_run: bool = False) -> dict:
     return stat
 
 
-def _render_section(
-    adapter: Adapter, title: str, body: str, authority: bool = False
-) -> str:
+def _render_section(adapter: Adapter, title: str, body: str, authority: bool = False) -> str:
     """把一张中枢卡片渲染为平台格式小节；authority=True 标注"中枢权威版"（不覆盖本地旧版）"""
     if authority:
         body = "> 中枢权威版（AgentMemoryHub，未覆盖本地旧版）\n\n" + body
@@ -374,9 +368,7 @@ def _stale_span(text: str, title: str, pushed_prev: set[str]) -> str | None:
     return _span_by_heading(text, pat_title, pat_next, pushed_prev)
 
 
-def _insert_after_instruction(
-    text: str, extra: str, stop_heads: tuple[str, ...] = ("## ", "### ", "§")
-) -> str:
+def _insert_after_instruction(text: str, extra: str, stop_heads: tuple[str, ...] = ("## ", "### ", "§")) -> str:
     """在注入指令块之后插入 extra；找不到指令块则追加到文末（不触碰平台原有段落）
 
     V1.2 (2026-09-19) 修 §-分隔平台的结构性破坏：停止集必须**按适配器的条目边界**给。
@@ -387,11 +379,7 @@ def _insert_after_instruction(
     """
     lines = text.splitlines(keepends=True)
     start = next(
-        (
-            i
-            for i, ln in enumerate(lines)
-            if _INSTRUCTION_KEY in ln and ln.lstrip().startswith(("## ", "### ", "【"))
-        ),
+        (i for i, ln in enumerate(lines) if _INSTRUCTION_KEY in ln and ln.lstrip().startswith(("## ", "### ", "【"))),
         None,
     )
     if start is None:
@@ -427,20 +415,13 @@ def push(
 
     # 外部改动检测：mtime + 内容哈希 与上次 Push 基线比对（首次无基线则放行）
     baseline = state.get("push")
-    if baseline and (
-        baseline.get("hash") != fingerprint(text)
-        or baseline.get("mtime") != target.stat().st_mtime_ns
-    ):
-        stat["status"] = (
-            "平台文件已被外部修改（与上次 Push 基线不符），已中止以免覆盖本地编辑"
-        )
+    if baseline and (baseline.get("hash") != fingerprint(text) or baseline.get("mtime") != target.stat().st_mtime_ns):
+        stat["status"] = "平台文件已被外部修改（与上次 Push 基线不符），已中止以免覆盖本地编辑"
         return stat
 
     cfg = HubConfig.load(root)
     adapter = adapter_for(platform, cfg)
-    titleless = isinstance(
-        adapter, SectSeparatedAdapter
-    )  # § 分隔无标题平台：无同名键，走段首行指纹闸
+    titleless = isinstance(adapter, SectSeparatedAdapter)  # § 分隔无标题平台：无同名键，走段首行指纹闸
     entries = adapter.parse(text)
     existing_bodies = {e.body.strip() for e in entries if e.body.strip()}
     existing_titles = {e.title for e in entries if e.title}
@@ -496,12 +477,8 @@ def push(
                 new_text = new_text.replace(old_block, new_block, 1)
             if blocks:
                 heads = _STOP_HEADS_SECT if titleless else _STOP_HEADS_MD
-                new_text = _insert_after_instruction(
-                    new_text, "\n\n".join(blocks), heads
-                )
-            with target.open(
-                "w", encoding="utf-8", newline=_dominant_newline(target)
-            ) as f:
+                new_text = _insert_after_instruction(new_text, "\n\n".join(blocks), heads)
+            with target.open("w", encoding="utf-8", newline=_dominant_newline(target)) as f:
                 f.write(new_text)
             state["pushed"] = sorted(pushed_fps)
             state["push"] = {

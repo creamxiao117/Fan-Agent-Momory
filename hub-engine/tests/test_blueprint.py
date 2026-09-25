@@ -65,9 +65,7 @@ def test_bootstrap_ideation_includes_blueprints_block(tmp_path):
     root = bootstrap(tmp_path)
     write_draft(root, "demo-blueprint.md", BLUEPRINT_TEXT)
     ingest(root, "trae")
-    res = hub_bootstrap(
-        root, "ideation", context="要给新项目定技术路径", platform="trae"
-    )
+    res = hub_bootstrap(root, "ideation", context="要给新项目定技术路径", platform="trae")
     kinds = {b["kind"] for b in res["blocks"]}
     assert "blueprints" in kinds
 

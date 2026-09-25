@@ -93,7 +93,5 @@ def test_prose_sections_are_not_flagged(tmp_path):
     """说明性分区（使用约定/沉淀通道）不是卡片清单分区 → 不得误报"""
     root = _hub(tmp_path)
     text = (root / "INDEX.md").read_text(encoding="utf-8")
-    (root / "INDEX.md").write_text(
-        text + "\n## 沉淀通道\n- 某说明文字    这不是卡登记\n", encoding="utf-8"
-    )
+    (root / "INDEX.md").write_text(text + "\n## 沉淀通道\n- 某说明文字    这不是卡登记\n", encoding="utf-8")
     assert "misrouted_entry" not in _types(audit(root))

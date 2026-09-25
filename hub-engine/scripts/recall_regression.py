@@ -71,9 +71,7 @@ GOLD: tuple[GoldCase, ...] = (
         "换向量模型前该先跑什么基准",
         "embedding-model-chinese-retrieval-bench-bge-m3-vs-nomic",
     ),
-    GoldCase(
-        "两套引擎共用向量库的字段契约", "dual-engine-single-vector-db-meta-contract"
-    ),
+    GoldCase("两套引擎共用向量库的字段契约", "dual-engine-single-vector-db-meta-contract"),
     GoldCase("npm 清理失败 文件被占用", "npm-eperm-node-file-lock-self-update-residue"),
     GoldCase("pi 自更新找不到包目录", "pi-self-update-path-layout-requirements"),
     GoldCase("ruff 错误凭空变多", "ruff-rule-set-drift-lock-select-precommit-gate"),
@@ -128,18 +126,13 @@ def run(root: Path, mode: str, top_k: int, n: int = 2) -> dict:
     for case in GOLD:
         hits = retrieve(root, case.query, top_k=top_k, n=n, mode=mode)
         rank = _rank_of(hits, case.slug)
-        pools = [
-            "blueprint" if getattr(c, "type", "") == "blueprint" else "core"
-            for c in hits
-        ]
+        pools = ["blueprint" if getattr(c, "type", "") == "blueprint" else "core" for c in hits]
         rows.append(
             {
                 "query": case.query,
                 "slug": case.slug,
                 "rank": rank,
-                "target_pool": "blueprint"
-                if case.slug.endswith("-blueprint")
-                else "core",
+                "target_pool": "blueprint" if case.slug.endswith("-blueprint") else "core",
                 "pools": pools,
                 "returned": [c.path.name for c in hits],
             }
@@ -169,9 +162,7 @@ def run(root: Path, mode: str, top_k: int, n: int = 2) -> dict:
 
 def _print_report(results: list[dict], verbose: bool, top_k: int) -> None:
     print(f"检索召回回归集：{len(GOLD)} 条金标准查询（recall@{top_k}）\n")
-    print(
-        f"{'模式':<8} {'recall@' + str(top_k):<12} {'recall@1':<10} {'蓝图占位':<9} 说明"
-    )
+    print(f"{'模式':<8} {'recall@' + str(top_k):<12} {'recall@1':<10} {'蓝图占位':<9} 说明")
     print("-" * 66)
     for r in results:
         tag = "← CLI 默认（生产路径）" if r["mode"] == PRODUCTION_MODE else ""
@@ -180,9 +171,7 @@ def _print_report(results: list[dict], verbose: bool, top_k: int) -> None:
             f"      {r['recall_at_1'] * 100:>5.0f}%     {r['blueprint_share'] * 100:>5.1f}%   {tag}"
         )
     print("-" * 66)
-    print(
-        "蓝图占位 = 目标非蓝图的查询里，blueprints/ 卡占的槽位比（P0-B 度量；判据见 WORK.md）"
-    )
+    print("蓝图占位 = 目标非蓝图的查询里，blueprints/ 卡占的槽位比（P0-B 度量；判据见 WORK.md）")
 
     if len(results) == 2:
         char_r = next(r for r in results if r["mode"] == "char")

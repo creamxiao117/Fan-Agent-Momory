@@ -150,9 +150,7 @@ def test_do_fallback_answers_with_local_llm(monkeypatch, tmp_path):
         "LLMHealthChecker",
         type("HC", (), {"get_instance": staticmethod(lambda *a, **k: _H())}),
     )
-    card = SimpleNamespace(
-        type="exp", status="active", path=SimpleNamespace(name="card.md"), body="卡正文"
-    )
+    card = SimpleNamespace(type="exp", status="active", path=SimpleNamespace(name="card.md"), body="卡正文")
     monkeypatch.setattr(engine, "retrieve", lambda root, q: [card])
 
     class FakeResp:

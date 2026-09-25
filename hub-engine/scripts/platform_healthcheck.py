@@ -133,9 +133,7 @@ def check_file_platform(name, info, hub_root):
         result["issues"].append("草稿目录不存在: " + str(draft_dir))
         result["status"] = "RED"
     else:
-        file_count = sum(
-            1 for f in draft_dir.iterdir() if f.is_file() and f.suffix == ".md"
-        )
+        file_count = sum(1 for f in draft_dir.iterdir() if f.is_file() and f.suffix == ".md")
         result["checks"]["draft_dir"] = "OK (" + str(file_count) + " 张草稿)"
         result["checks"]["files_count"] = file_count
     return result
@@ -187,10 +185,7 @@ def write_dashboard(results, hub_root):
         "生成时间 " + _local_now_iso() + " (CST)",
         "",
         "## 总体",
-        "  GREEN: "
-        + str(sum(1 for r in results if r["status"] == "GREEN"))
-        + " / "
-        + str(len(results)),
+        "  GREEN: " + str(sum(1 for r in results if r["status"] == "GREEN")) + " / " + str(len(results)),
         "  YELLOW: " + str(sum(1 for r in results if r["status"] == "YELLOW")),
         "  RED: " + str(sum(1 for r in results if r["status"] == "RED")),
         "",
@@ -198,15 +193,7 @@ def write_dashboard(results, hub_root):
         "",
     ]
     for r in results:
-        lines.append(
-            "### "
-            + _status_icon(r["status"])
-            + " "
-            + r["platform"]
-            + " ("
-            + r["type"]
-            + ")"
-        )
+        lines.append("### " + _status_icon(r["status"]) + " " + r["platform"] + " (" + r["type"] + ")")
         for ck, val in r["checks"].items():
             lines.append("  - " + ck + ": " + str(val))
         if r["issues"]:
@@ -229,9 +216,7 @@ def main():
     print("=== 5 平台统一健康检查 ===")
     for r in results:
         icon = _status_icon(r["status"])
-        print(
-            "  " + icon + " " + r["platform"] + " (" + r["type"] + "): " + r["status"]
-        )
+        print("  " + icon + " " + r["platform"] + " (" + r["type"] + "): " + r["status"])
         for iss in r["issues"]:
             print("    - " + iss)
     write_dashboard(results, hub_root)
@@ -239,9 +224,7 @@ def main():
     ledger.parent.mkdir(parents=True, exist_ok=True)
     entry = {
         "ts": int(datetime.now(timezone.utc).timestamp()),
-        "results": [
-            {"platform": r["platform"], "status": r["status"]} for r in results
-        ],
+        "results": [{"platform": r["platform"], "status": r["status"]} for r in results],
     }
     with open(ledger, "a", encoding="utf-8") as fh:
         fh.write(json.dumps(entry, ensure_ascii=False) + "\n")

@@ -18,9 +18,7 @@ from scripts.missing_query import LOG
 def _write_log(root, records):
     p = root / LOG
     p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(
-        "\n".join(json.dumps(r, ensure_ascii=False) for r in records), encoding="utf-8"
-    )
+    p.write_text("\n".join(json.dumps(r, ensure_ascii=False) for r in records), encoding="utf-8")
 
 
 def _search(query, hit_count, channel="semantic"):
@@ -70,9 +68,7 @@ def test_enrich_current_hits(tmp_path, monkeypatch):
     def fake_retrieve(root, query, top_k=None):
         return "semantic", [("card1", 0.9)]
 
-    monkeypatch.setattr(
-        "scripts.hub_sleep_consolidate.retrieve_with_meta", fake_retrieve
-    )
+    monkeypatch.setattr("scripts.hub_sleep_consolidate.retrieve_with_meta", fake_retrieve)
     enriched = enrich_current_hits(cands, tmp_path, top_k=5)
     assert enriched[0]["current_channel"] == "semantic"
     assert enriched[0]["current_hits"] == 1

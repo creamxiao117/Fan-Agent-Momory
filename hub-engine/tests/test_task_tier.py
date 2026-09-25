@@ -42,8 +42,6 @@ def test_l1_covers_all_tiers():
     for t in ("light", "code", "hub", "sync"):
         assert t in L1_CARDS
     assert L1_CARDS["light"] == []  # 仅 L0
-    assert any(
-        "chinese-text-encoding" in c or "encoding" in c for c in L1_CARDS["code"]
-    )
+    assert any("chinese-text-encoding" in c or "encoding" in c for c in L1_CARDS["code"])
     assert "dual-platform-coherence-discipline" in L1_CARDS["hub"]
     assert "cross-platform-sync-rule" in L1_CARDS["sync"]

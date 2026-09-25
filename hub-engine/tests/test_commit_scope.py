@@ -35,14 +35,7 @@ def _make_draft(root: Path, platform: str, name: str, body: str) -> Path:
     d.mkdir(parents=True, exist_ok=True)
     p = d / name
     p.write_text(
-        "---\n"
-        "type: longterm\n"
-        "tags:\n  - test\n"
-        "updated: 2026-09-19\n"
-        "status: candidate\n"
-        "reuse_count: 0\n"
-        "---\n"
-        f"{body}\n",
+        f"---\ntype: longterm\ntags:\n  - test\nupdated: 2026-09-19\nstatus: candidate\nreuse_count: 0\n---\n{body}\n",
         encoding="utf-8",
     )
     return p
@@ -118,9 +111,7 @@ def test_legacy_protect_none_still_adds_all_with_warning(tmp_path: Path, capsys)
 
     changed = set(_git(root, "show", "--name-only", "--format=", "HEAD").split())
     assert "projects/mine.md" in changed
-    assert "projects/foreign-untracked.md" in changed, (
-        "legacy 路径应保持旧行为（全部 add）"
-    )
+    assert "projects/foreign-untracked.md" in changed, "legacy 路径应保持旧行为（全部 add）"
     assert "警告" in capsys.readouterr().out
 
 

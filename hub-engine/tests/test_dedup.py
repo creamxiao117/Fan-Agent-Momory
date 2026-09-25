@@ -12,20 +12,16 @@ def _seed_authority(root: Path, name: str, body: str, ctype: str = "longterm") -
     """在权威区预置一张同主题卡，作为去重候选"""
     (root / "longterm").mkdir(parents=True, exist_ok=True)
     (root / "longterm" / name).write_text(
-        f"---\ntype: {ctype}\ntags: [test]\nupdated: 2026-08-17\nstatus: active\n"
-        f"reuse_count: 0\n---\n{body}\n",
+        f"---\ntype: {ctype}\ntags: [test]\nupdated: 2026-08-17\nstatus: active\nreuse_count: 0\n---\n{body}\n",
         encoding="utf-8",
     )
 
 
-def _make_draft(
-    root: Path, platform: str, name: str, body: str, ctype: str = "longterm"
-) -> Path:
+def _make_draft(root: Path, platform: str, name: str, body: str, ctype: str = "longterm") -> Path:
     d = root / ".sync" / "drafts" / f"{platform}_draft"
     d.mkdir(parents=True, exist_ok=True)
     (d / name).write_text(
-        f"---\ntype: {ctype}\ntags: [test]\nupdated: 2026-08-17\nstatus: candidate\n"
-        f"reuse_count: 0\n---\n{body}\n",
+        f"---\ntype: {ctype}\ntags: [test]\nupdated: 2026-08-17\nstatus: candidate\nreuse_count: 0\n---\n{body}\n",
         encoding="utf-8",
     )
     return d / name
@@ -35,9 +31,7 @@ def _make_draft(
 
 
 def test_parse_decision_valid():
-    d = parse_decision(
-        '{"action":"merge","target":"a.md","reason":"同主题互补","confidence":0.9}'
-    )
+    d = parse_decision('{"action":"merge","target":"a.md","reason":"同主题互补","confidence":0.9}')
     assert d["action"] == "merge"
     assert d["target"] == "a.md"
     assert d["confidence"] == 0.9
@@ -175,9 +169,7 @@ def test_ingest_llm_create_highconf_auto_promotes(tmp_path):
     stat = ingest(root, "trae", chat_fn=_chat)
     assert stat["promoted"] == 1, stat
     assert (root / "longterm" / "exp-b.md").exists()
-    assert not list((root / ".sync" / "conflicts").glob("*.md")), (
-        "高置信 create 不应落冲突区"
-    )
+    assert not list((root / ".sync" / "conflicts").glob("*.md")), "高置信 create 不应落冲突区"
 
 
 def test_ingest_llm_create_highconf_same_name_still_conflicts(tmp_path):

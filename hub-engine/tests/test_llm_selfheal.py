@@ -46,12 +46,7 @@ def test_online_returns_true_without_start(monkeypatch):
         raise AssertionError("在线时不应执行拉起命令")
 
     monkeypatch.setattr("subprocess.Popen", boom)
-    assert (
-        ensure_llm_service(
-            base_url="http://x:1", interval=0.01, retries=2, start_cmd=["no"]
-        )
-        is True
-    )
+    assert ensure_llm_service(base_url="http://x:1", interval=0.01, retries=2, start_cmd=["no"]) is True
     assert llm_health._self_heal_attempted is False
 
 
@@ -110,12 +105,7 @@ def test_manual_offline_flag_blocks_heal(monkeypatch, tmp_path):
         lambda *a, **k: executed.append(a),
     )
     (tmp_path / ".lmstudio-manual-offline").touch()
-    assert (
-        ensure_llm_service(
-            base_url="http://x:1", interval=0.01, retries=2, start_cmd=["fake.cmd"]
-        )
-        is False
-    )
+    assert ensure_llm_service(base_url="http://x:1", interval=0.01, retries=2, start_cmd=["fake.cmd"]) is False
     assert executed == []
     assert llm_health._self_heal_attempted is False  # 标记拦截不计自愈次数
 
@@ -128,12 +118,7 @@ def test_start_cmd_oserror_returns_false(monkeypatch):
         raise OSError("no wscript")
 
     monkeypatch.setattr("subprocess.Popen", boom)
-    assert (
-        ensure_llm_service(
-            base_url="http://x:1", interval=0.01, retries=2, start_cmd=["x"]
-        )
-        is False
-    )
+    assert ensure_llm_service(base_url="http://x:1", interval=0.01, retries=2, start_cmd=["x"]) is False
 
 
 def test_set_manual_offline_roundtrip(monkeypatch, tmp_path):

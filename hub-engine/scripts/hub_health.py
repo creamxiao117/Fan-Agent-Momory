@@ -155,9 +155,7 @@ def collect_skill_stats(skillhub_root: Path) -> dict:
         return {"total": 0, "by_status": {}, "skills": [], "source": "missing"}
 
     # 两种布局都认：SkillHub 的 skill.yaml + Hermes 的 SKILL.md（YAML frontmatter）
-    files = sorted(skills_root.rglob("skill.yaml")) + sorted(
-        skills_root.rglob("SKILL.md")
-    )
+    files = sorted(skills_root.rglob("skill.yaml")) + sorted(skills_root.rglob("SKILL.md"))
     import yaml
 
     for yaml_file in files:
@@ -222,21 +220,14 @@ def collect_flywheel_activity(hub_root: Path, days: int = 7) -> dict:
         return out
     if not isinstance(entries, list) or not entries:
         return out
-    dates = sorted(
-        {e.get("date") for e in entries if isinstance(e, dict) and e.get("date")}
-    )
+    dates = sorted({e.get("date") for e in entries if isinstance(e, dict) and e.get("date")})
     if not dates:
         return out
     try:
-        days_since = (
-            datetime.now(tz=timezone.utc).date()
-            - datetime.fromisoformat(dates[-1]).date()
-        ).days
+        days_since = (datetime.now(tz=timezone.utc).date() - datetime.fromisoformat(dates[-1]).date()).days
     except ValueError:
         return out
-    cutoff_day = (
-        (datetime.now(tz=timezone.utc) - timedelta(days=days)).date().isoformat()
-    )
+    cutoff_day = (datetime.now(tz=timezone.utc) - timedelta(days=days)).date().isoformat()
     out.update(
         {
             "available": True,
@@ -260,9 +251,7 @@ def collect_llm_status() -> dict:
             "models": status.models,
             "model_count": len(status.models),
             "response_time_ms": round(status.response_time * 1000, 1),
-            "last_check": datetime.fromtimestamp(
-                status.last_check, tz=timezone.utc
-            ).isoformat()
+            "last_check": datetime.fromtimestamp(status.last_check, tz=timezone.utc).isoformat()
             if status.last_check
             else None,
             "last_error": status.last_error,
@@ -287,16 +276,12 @@ def compute_health_score(
     # 1. 卡片健康度：active 占比（无可读卡片 ⇒ None，不冒充 0）
     total_cards = card_stats["total"]
     active_cards = card_stats["by_status"].get("active", 0)
-    scores["card_health"] = (
-        round((active_cards / total_cards) * 100, 1) if total_cards else None
-    )
+    scores["card_health"] = round((active_cards / total_cards) * 100, 1) if total_cards else None
 
     # 2. 技能健康度：active 占比（同上）
     total_skills = skill_stats["total"]
     active_skills = skill_stats["by_status"].get("active", 0)
-    scores["skill_health"] = (
-        round((active_skills / total_skills) * 100, 1) if total_skills else None
-    )
+    scores["skill_health"] = round((active_skills / total_skills) * 100, 1) if total_skills else None
 
     # 3. 飞轮活跃度：优先用真实日志口径（collect_flywheel_activity）
     fa = flywheel_activity or {}
@@ -306,9 +291,7 @@ def compute_health_score(
         # 回退旧的"阶段数"口径：确实数到活动才给分，否则 None
         active_stages = sum(1 for v in flywheel_stats.values() if v > 0)
         scores["flywheel_activity"] = (
-            round((active_stages / len(FLYWHEEL_STAGES)) * 100, 1)
-            if active_stages and FLYWHEEL_STAGES
-            else None
+            round((active_stages / len(FLYWHEEL_STAGES)) * 100, 1) if active_stages and FLYWHEEL_STAGES else None
         )
 
     # 4. Ollama 健康度
@@ -375,11 +358,7 @@ def check_alerts(
 
                 today = datetime.now(timezone.utc).date()
                 days_with_logs = sorted(
-                    [
-                        d
-                        for d in recent_dates
-                        if (today - date.fromisoformat(d)) <= td(days=alert_days)
-                    ]
+                    [d for d in recent_dates if (today - date.fromisoformat(d)) <= td(days=alert_days)]
                 )
                 if not days_with_logs:
                     alerts.append(
@@ -418,9 +397,7 @@ def check_alerts(
                 searches = [r for r in records if r.get("action") == "search"]
                 if searches:
                     total_searches = len(searches)
-                    zero_hits = sum(
-                        1 for r in searches if int(r.get("hit_count") or 0) == 0
-                    )
+                    zero_hits = sum(1 for r in searches if int(r.get("hit_count") or 0) == 0)
                     hit_rate = 1 - (zero_hits / max(total_searches, 1))
                     if hit_rate < 0.3:
                         alerts.append(
@@ -490,9 +467,7 @@ def main():
     flywheel_stats = count_scripts_run(log_dir, days=args.days)
     llm_status = collect_llm_status()
     flywheel_activity = collect_flywheel_activity(hub_root, days=args.days)
-    health_scores = compute_health_score(
-        card_stats, skill_stats, flywheel_stats, llm_status, flywheel_activity
-    )
+    health_scores = compute_health_score(card_stats, skill_stats, flywheel_stats, llm_status, flywheel_activity)
 
     report = {
         "generated_at": datetime.now(tz=timezone.utc).isoformat(),
@@ -518,9 +493,7 @@ def main():
         if alerts:
             print("=== ⚠️ 飞轮自监控告警 ===")
             for alert in alerts:
-                level_icon = {"warning": "⚠️", "info": "ℹ️", "critical": "🚨"}.get(
-                    alert["level"], "⚠️"
-                )
+                level_icon = {"warning": "⚠️", "info": "ℹ️", "critical": "🚨"}.get(alert["level"], "⚠️")
             # Ollama 告警使用特殊图标
             if alert.get("rule") == "ollama_unavailable":
                 level_icon = "🦙"

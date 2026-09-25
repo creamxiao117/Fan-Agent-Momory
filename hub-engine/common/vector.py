@@ -93,11 +93,7 @@ def tokenize(text: str, n: int = 2, mode: str = "char") -> list[str]:
     - word：jieba 分词 + 去停用词/标点；无 jieba 时自动回退 char 模式
     """
     if mode == "word" and _has_jieba():
-        return [
-            w
-            for w in _jieba().lcut(text.lower())
-            if w.strip() and not _is_punct(w) and w not in STOPWORDS
-        ]
+        return [w for w in _jieba().lcut(text.lower()) if w.strip() and not _is_punct(w) and w not in STOPWORDS]
     # word 模式无 jieba 时的回退：先按非字母数字/中文替换为空格再分词
     # 避免跨词边界的 bigram 碰撞（如 "dll-lock" + "autocad" 产生 "oc" 误命中）
     norm = _CHAR_RE.sub(" ", text.lower())
@@ -125,9 +121,7 @@ def build_idf(docs: list[str], n: int = 2, mode: str = "char") -> dict[str, floa
     return {tok: math.log((1 + doc_count) / (1 + df[tok])) + 1.0 for tok in df}
 
 
-def vector(
-    text: str, n: int = 2, mode: str = "char", idf: dict[str, float] | None = None
-) -> Counter:
+def vector(text: str, n: int = 2, mode: str = "char", idf: dict[str, float] | None = None) -> Counter:
     """文本 → token 计数向量；传入 idf 时按权重加权。"""
     counts = Counter(tokenize(text, n, mode))
     if not idf:

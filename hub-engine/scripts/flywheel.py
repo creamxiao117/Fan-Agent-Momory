@@ -57,9 +57,7 @@ def step_flywheel(hub_root: str | Path, dry_run: bool) -> dict:
     }
 
 
-def step_register(
-    hub_root: str | Path, skillhub_root: str | Path, dry_run: bool
-) -> dict:
+def step_register(hub_root: str | Path, skillhub_root: str | Path, dry_run: bool) -> dict:
     """步骤 2：自动注册（从中枢新卡片创建 SkillHub 技能）
     扫描中枢 .sync/drafts/ 中已 ingest 但 SkillHub 中尚无对应技能的卡片，
     或者用 --card 指定的卡片名
@@ -284,12 +282,8 @@ def main(argv: list[str] | None = None) -> int:
     p_run = sub.add_parser("run", help="执行完整飞轮（飞轮→注册→验证→打tag→记日志）")
     p_run.add_argument("--hub-root", required=True, help="中枢根目录")
     p_run.add_argument("--skillhub-root", required=True, help="SkillHub 根目录")
-    p_run.add_argument(
-        "--auto", action="store_true", help="自动注册新卡为 SkillHub 技能"
-    )
-    p_run.add_argument(
-        "--promote", action="store_true", help="验证通过时自动提升为 active"
-    )
+    p_run.add_argument("--auto", action="store_true", help="自动注册新卡为 SkillHub 技能")
+    p_run.add_argument("--promote", action="store_true", help="验证通过时自动提升为 active")
     p_run.add_argument(
         "--tag",
         action="store_true",
@@ -300,9 +294,7 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="tag 不追加 -flywheel 后缀（标为手动）",
     )
-    p_run.add_argument(
-        "--no-log", action="store_true", help="本次不写入 runlog（默认写）"
-    )
+    p_run.add_argument("--no-log", action="store_true", help="本次不写入 runlog（默认写）")
     p_run.add_argument("--dry-run", action="store_true", help="预览模式，不落盘")
     p_run.set_defaults(func=_cmd_run)
 
@@ -343,9 +335,7 @@ def main(argv: list[str] | None = None) -> int:
     p_timeline.set_defaults(func=cmd_timeline_proxy)
 
     # flywheel version-tag：给单个技能打 git tag（代理 skill_version_tag.py）
-    p_tag = sub.add_parser(
-        "version-tag", help="技能打 git tag（skill-<名>-v<版本>[-flywheel]）"
-    )
+    p_tag = sub.add_parser("version-tag", help="技能打 git tag（skill-<名>-v<版本>[-flywheel]）")
     p_tag.add_argument("--skill", required=True, help="技能名")
     p_tag.add_argument("--skillhub-root", required=True, help="SkillHub 根目录")
     p_tag.add_argument("--hub-root", default="", help="中枢路径（用于检测源卡）")
@@ -355,9 +345,7 @@ def main(argv: list[str] | None = None) -> int:
         help="标识为飞轮产出（追加 -flywheel 后缀）",
     )
     p_tag.add_argument("--force", action="store_true", help="tag 已存在则覆盖")
-    p_tag.add_argument(
-        "--dry-run", action="store_true", help="预览模式，不真的 commit/tag"
-    )
+    p_tag.add_argument("--dry-run", action="store_true", help="预览模式，不真的 commit/tag")
     p_tag.set_defaults(func=_cmd_version_tag_proxy)
 
     # flywheel runlog：三段子命令 list/record/timeline（直接代理 flywheel_runlog）
@@ -370,9 +358,7 @@ def main(argv: list[str] | None = None) -> int:
     p_runlog.set_defaults(func=_cmd_runlog_proxy)
 
     # flywheel iteration：技能迭代引擎（detect → apply → deprecation-check → auto-tag）
-    p_iter = sub.add_parser(
-        "iteration", help="技能迭代：源卡变更检测 → 版本升级/降级 → 能力画像"
-    )
+    p_iter = sub.add_parser("iteration", help="技能迭代：源卡变更检测 → 版本升级/降级 → 能力画像")
     p_iter.add_argument("--hub-root", required=True)
     p_iter.add_argument("--skillhub-root", required=True)
     p_iter.add_argument("--dry-run", action="store_true", help="预览模式，不落盘")
@@ -382,15 +368,11 @@ def main(argv: list[str] | None = None) -> int:
     p_rec = sub.add_parser("record-usage", help="记录技能使用（strong→reuse_count++）")
     p_rec.add_argument("--skill", required=True)
     p_rec.add_argument("--skillhub-root", required=True)
-    p_rec.add_argument(
-        "--grade", default="strong", choices=["strong", "weak", "discard"]
-    )
+    p_rec.add_argument("--grade", default="strong", choices=["strong", "weak", "discard"])
     p_rec.set_defaults(func=_cmd_record_usage)
 
     # flywheel alert：自监控告警检查
-    p_alert = sub.add_parser(
-        "alert", help="飞轮自监控告警检查（无产物/低命中率/零复用）"
-    )
+    p_alert = sub.add_parser("alert", help="飞轮自监控告警检查（无产物/低命中率/零复用）")
     p_alert.add_argument("--hub-root", required=True)
     p_alert.add_argument("--skillhub-root", required=True)
     p_alert.add_argument("--alert-days", type=int, default=2)
@@ -401,9 +383,7 @@ def main(argv: list[str] | None = None) -> int:
     p_rs.add_argument("--hub-root", required=True)
     p_rs.add_argument("--skillhub-root", required=True)
     p_rs.add_argument("--fix", action="store_true", help="正向修复（中枢→SkillHub）")
-    p_rs.add_argument(
-        "--reverse-fix", action="store_true", help="反向修复（SkillHub→中枢）"
-    )
+    p_rs.add_argument("--reverse-fix", action="store_true", help="反向修复（SkillHub→中枢）")
     p_rs.add_argument(
         "--merge-strategy",
         default="manual",
@@ -415,9 +395,7 @@ def main(argv: list[str] | None = None) -> int:
     p_rs.set_defaults(func=_cmd_router_sync)
 
     # flywheel session-preload：会话预加载（基于用户意图加载 Top-K 卡片摘要）
-    p_sp = sub.add_parser(
-        "session-preload", help="会话预加载：基于用户意图加载 Top-K 卡片摘要"
-    )
+    p_sp = sub.add_parser("session-preload", help="会话预加载：基于用户意图加载 Top-K 卡片摘要")
     p_sp.add_argument("--hub-root", required=True, help="中枢根目录")
     p_sp.add_argument("--query", required=True, help="用户初始查询/问题")
     p_sp.add_argument("--top-k", type=int, default=3, help="加载的卡片数量")
@@ -432,15 +410,9 @@ def main(argv: list[str] | None = None) -> int:
     p_dr.add_argument("--skillhub-root", required=True, help="SkillHub 根目录")
     p_dr.add_argument("--date", default="", help="指定日期 (YYYY-MM-DD)，默认今天")
     p_dr.add_argument("--output", default="", help="输出 Markdown 文件路径")
-    p_dr.add_argument(
-        "--hermes-target", default="", help="Hermes 推送到微信 (如 weixin:chat_id)"
-    )
-    p_dr.add_argument(
-        "--serverchan-key", default="", help="Server酱 SCKEY（推送到个人微信）"
-    )
-    p_dr.add_argument(
-        "--pushplus-token", default="", help="PushPlus Token（推送到个人微信）"
-    )
+    p_dr.add_argument("--hermes-target", default="", help="Hermes 推送到微信 (如 weixin:chat_id)")
+    p_dr.add_argument("--serverchan-key", default="", help="Server酱 SCKEY（推送到个人微信）")
+    p_dr.add_argument("--pushplus-token", default="", help="PushPlus Token（推送到个人微信）")
     p_dr.add_argument("--wecom-webhook", default="", help="企业微信群机器人 Webhook")
     p_dr.add_argument("--feishu-webhook", default="", help="飞书群机器人 Webhook")
     p_dr.add_argument("--push-config", default="", help="推送配置文件（批量多渠道）")
@@ -504,11 +476,7 @@ def _cmd_run(args) -> int:
             print(line)
             reg_output_parts.append(line)
         # Runlog: register 子步骤
-        reg_ok = (
-            all(res.get("exit", 0) == 0 for res in r2["results"])
-            if r2["results"]
-            else True
-        )
+        reg_ok = all(res.get("exit", 0) == 0 for res in r2["results"]) if r2["results"] else True
         if do_log:
             append_record(
                 skillhub_root,
@@ -549,9 +517,7 @@ def _cmd_run(args) -> int:
         print(line)
         smoke_output_parts.append(line)
     # Runlog: smoke 子步骤
-    smoke_ok = (
-        all(res.get("exit", 0) == 0 for res in r3["results"]) if r3["results"] else True
-    )
+    smoke_ok = all(res.get("exit", 0) == 0 for res in r3["results"]) if r3["results"] else True
     if do_log:
         append_record(
             skillhub_root,
@@ -580,9 +546,7 @@ def _cmd_run(args) -> int:
         tag_count = r3.get("tagged", 0)
         if tag_count:
             suff = "-flywheel" if tag_flywheel else ""
-            print(
-                f"  🏷️  {tag_count} 个 promote 成功的技能已打 git tag（{suff or '手动'} 来源）"
-            )
+            print(f"  🏷️  {tag_count} 个 promote 成功的技能已打 git tag（{suff or '手动'} 来源）")
         else:
             print("  🏷️  无可打 tag 的技能（没有 reference 技能 promote 成功）")
 
@@ -701,24 +665,14 @@ def _cmd_iteration(args) -> int:
 
     # Step 2: apply rules
     print("\n[2/4] apply_iteration_rules...")
-    results = skill_iteration.apply_iteration_rules(
-        changes, hub, skillhub, dry_run=args.dry_run
-    )
+    results = skill_iteration.apply_iteration_rules(changes, hub, skillhub, dry_run=args.dry_run)
     for r in results:
-        emoji = (
-            "🆕"
-            if "version" in r.get("action", "")
-            else "⚠️"
-            if "deprecate" in r.get("action", "")
-            else "✅"
-        )
+        emoji = "🆕" if "version" in r.get("action", "") else "⚠️" if "deprecate" in r.get("action", "") else "✅"
         print(f"  {emoji} [{r['action']}] {r['skill']}: {r['detail']}")
 
     # Step 3: deprecation check
     print("\n[3/4] apply_deprecation_rules...")
-    dep_results = skill_iteration.apply_deprecation_rules(
-        skillhub, dry_run=args.dry_run
-    )
+    dep_results = skill_iteration.apply_deprecation_rules(skillhub, dry_run=args.dry_run)
     for r in dep_results:
         print(f"  ⚠️ [{r['action']}] {r['skill']}: {r['detail']}")
     if not dep_results:
@@ -726,9 +680,7 @@ def _cmd_iteration(args) -> int:
 
     # Step 4: auto capability tagging
     print("\n[4/4] auto_capability_tagging...")
-    cap_results = skill_iteration.auto_capability_tagging(
-        skillhub, dry_run=args.dry_run
-    )
+    cap_results = skill_iteration.auto_capability_tagging(skillhub, dry_run=args.dry_run)
     changed = [r for r in cap_results if r["action"] == "capabilities_updated"]
     print(f"  能力画像更新: {len(changed)} 个技能")
     for r in changed:
@@ -787,9 +739,7 @@ def _cmd_alert(args) -> int:
     if alerts:
         print(f"\n共 {len(alerts)} 条告警:\n")
         for alert in alerts:
-            level_icon = {"warning": "⚠️", "info": "ℹ️", "critical": "🚨"}.get(
-                alert["level"], "⚠️"
-            )
+            level_icon = {"warning": "⚠️", "info": "ℹ️", "critical": "🚨"}.get(alert["level"], "⚠️")
             print(f"  {level_icon} [{alert['rule']}] {alert['message']}")
             if alert.get("suggestion"):
                 print(f"     💡 建议: {alert['suggestion']}")
@@ -841,9 +791,7 @@ def _cmd_router_sync(args) -> int:
     exit_code = 0
 
     if getattr(args, "fix", False):
-        fixes, msgs = router_sync.apply_fixes(
-            skillhub, report, merge_strategy=args.merge_strategy
-        )
+        fixes, msgs = router_sync.apply_fixes(skillhub, report, merge_strategy=args.merge_strategy)
         print("\n--- 正向修复（中枢 → SkillHub）---")
         for m in msgs:
             print(f"  {m}")
@@ -852,9 +800,7 @@ def _cmd_router_sync(args) -> int:
             exit_code = 2
 
     if getattr(args, "reverse_fix", False):
-        rfixes, rmsgs = router_sync.apply_reverse_fix(
-            hub, report, merge_strategy=args.merge_strategy
-        )
+        rfixes, rmsgs = router_sync.apply_reverse_fix(hub, report, merge_strategy=args.merge_strategy)
         print("\n--- 反向修复（SkillHub → 中枢）---")
         for m in rmsgs:
             print(f"  {m}")
@@ -1026,9 +972,7 @@ def _cmd_daily_report(args) -> int:
     # 推送（2026-09-02 Hermes 代办断链修复：原依赖的 push_channel 模块无
     # 源码可考，hermes 通道改走 `hermes send` CLI，webhook 通道用 urllib 直发）
     if push_kwargs:
-        report_title = (
-            f"📊 飞轮日报 ({datetime.now().astimezone().strftime('%Y-%m-%d')})"
-        )
+        report_title = f"📊 飞轮日报 ({datetime.now().astimezone().strftime('%Y-%m-%d')})"
         push_results = []
 
         def _post(url: str, payload: dict) -> dict:
@@ -1082,9 +1026,7 @@ def _cmd_daily_report(args) -> int:
                 push_results.append({"success": ok, "channel": "hermes"})
             except FileNotFoundError:
                 print("  ❌ hermes CLI 不在 PATH，跳过", file=sys.stderr)
-                push_results.append(
-                    {"success": False, "channel": "hermes", "error": "hermes 不可用"}
-                )
+                push_results.append({"success": False, "channel": "hermes", "error": "hermes 不可用"})
 
         if push_kwargs.get("serverchan_key"):
             key = push_kwargs.pop("serverchan_key")
@@ -1092,22 +1034,16 @@ def _cmd_daily_report(args) -> int:
             import urllib.parse
             import urllib.request
 
-            data = urllib.parse.urlencode(
-                {"text": report_title, "desp": report}
-            ).encode("utf-8")
+            data = urllib.parse.urlencode({"text": report_title, "desp": report}).encode("utf-8")
             try:
-                req = urllib.request.Request(
-                    f"https://sctapi.ftqq.com/{key}.send", data=data
-                )
+                req = urllib.request.Request(f"https://sctapi.ftqq.com/{key}.send", data=data)
                 with urllib.request.urlopen(req, timeout=30) as resp:
                     resp.read()
                 print("  ✅ 成功")
                 push_results.append({"success": True, "channel": "serverchan"})
             except Exception as exc:
                 print(f"  ❌ 失败: {str(exc)[:200]}")
-                push_results.append(
-                    {"success": False, "channel": "serverchan", "error": str(exc)[:200]}
-                )
+                push_results.append({"success": False, "channel": "serverchan", "error": str(exc)[:200]})
 
         if push_kwargs.get("pushplus_token"):
             token = push_kwargs.pop("pushplus_token")
@@ -1117,9 +1053,7 @@ def _cmd_daily_report(args) -> int:
                 {"token": token, "title": report_title, "content": report},
             )
             result["channel"] = "pushplus"
-            print(
-                f"  {'✅ 成功' if result.get('success') else '❌ 失败: ' + result.get('error', '未知')}"
-            )
+            print(f"  {'✅ 成功' if result.get('success') else '❌ 失败: ' + result.get('error', '未知')}")
             push_results.append(result)
 
         if push_kwargs.get("wecom_webhook"):
@@ -1130,9 +1064,7 @@ def _cmd_daily_report(args) -> int:
                 {"msgtype": "text", "text": {"content": f"{report_title}\n{report}"}},
             )
             result["channel"] = "wecom"
-            print(
-                f"  {'✅ 成功' if result.get('success') else '❌ 失败: ' + result.get('error', '未知')}"
-            )
+            print(f"  {'✅ 成功' if result.get('success') else '❌ 失败: ' + result.get('error', '未知')}")
             push_results.append(result)
 
         if push_kwargs.get("feishu_webhook"):
@@ -1143,9 +1075,7 @@ def _cmd_daily_report(args) -> int:
                 {"msg_type": "text", "content": {"text": f"{report_title}\n{report}"}},
             )
             result["channel"] = "feishu"
-            print(
-                f"  {'✅ 成功' if result.get('success') else '❌ 失败: ' + result.get('error', '未知')}"
-            )
+            print(f"  {'✅ 成功' if result.get('success') else '❌ 失败: ' + result.get('error', '未知')}")
             push_results.append(result)
 
         if push_results:

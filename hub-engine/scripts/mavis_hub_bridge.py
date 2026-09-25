@@ -28,11 +28,7 @@ MAVIS_PLATFORM = "mavis"
 _REPO = Path(__file__).resolve().parents[2]
 DEFAULT_HUB_ROOT = str(_REPO / "AgentMemoryHub")
 # Mavis（MiniMax Code）自己的数据目录：从家目录推导，可用 env MAVIS_DATA 覆盖
-DEFAULT_MAVIS_DATA = str(
-    Path(
-        os.environ.get("MAVIS_DATA") or Path.home() / "AppData" / "Roaming" / "MiniMax"
-    )
-)
+DEFAULT_MAVIS_DATA = str(Path(os.environ.get("MAVIS_DATA") or Path.home() / "AppData" / "Roaming" / "MiniMax"))
 DEFAULT_SIGN_SCRIPT = str(_REPO / "hub-engine" / "scripts" / "platform_sign.py")
 DEFAULT_PLATFORMS_YAML = str(_REPO / "AgentMemoryHub" / "system" / "platforms.yaml")
 
@@ -110,18 +106,14 @@ def cmd_check(args) -> int:
     if Path(L1_HOOK_PATH).exists():
         checks.append(("L1 Hook 启动门禁", "PASS", L1_HOOK_PATH))
     else:
-        checks.append(
-            ("L1 Hook 启动门禁", "WARN", f"未部署 {L1_HOOK_PATH}（首次接入可忽略）")
-        )
+        checks.append(("L1 Hook 启动门禁", "WARN", f"未部署 {L1_HOOK_PATH}（首次接入可忽略）"))
 
     # L2 Memory topic 目录
     if Path(L2_TOPIC_DIR).exists():
         n = sum(1 for _ in Path(L2_TOPIC_DIR).glob("*.md"))
         checks.append(("L2 Memory topic", "PASS", f"{L2_TOPIC_DIR}（{n} 个 topic）"))
     else:
-        checks.append(
-            ("L2 Memory topic", "WARN", f"未部署 {L2_TOPIC_DIR}（首次接入可忽略）")
-        )
+        checks.append(("L2 Memory topic", "WARN", f"未部署 {L2_TOPIC_DIR}（首次接入可忽略）"))
 
     # L3 Workspace gen
     if Path(L3_WORKSPACE_GEN).exists():
@@ -162,9 +154,7 @@ def cmd_write(args) -> int:
     draft_dir.mkdir(parents=True, exist_ok=True)
 
     ts = datetime.now(CST).strftime("%Y%m%d-%H%M%S")
-    safe_title = "".join(c if c.isalnum() or c in "-_" else "-" for c in args.title)[
-        :50
-    ]
+    safe_title = "".join(c if c.isalnum() or c in "-_" else "-" for c in args.title)[:50]
     out = draft_dir / f"{ts}-{MAVIS_PLATFORM}-v1.0-{safe_title}.md"
 
     frontmatter = f"""---

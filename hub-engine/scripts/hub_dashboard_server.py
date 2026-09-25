@@ -201,9 +201,7 @@ def chat(messages: list[dict], model: str | None = None) -> dict:
             "error": "LM Studio 无可用对话模型（请确认 1234 端口已加载模型）",
         }
 
-    body = json.dumps(
-        {"model": mdl, "messages": messages, "temperature": 0.3, "stream": False}
-    ).encode()
+    body = json.dumps({"model": mdl, "messages": messages, "temperature": 0.3, "stream": False}).encode()
     req = urllib.request.Request(
         f"{LM_STUDIO}/chat/completions",
         data=body,
@@ -287,9 +285,7 @@ def cron_incidents() -> dict:
         con = sqlite3.connect(f"file:{db.as_posix()}?mode=ro", uri=True)
         try:
             cols = [c[1] for c in con.execute("PRAGMA table_info(cron_incidents)")]
-            rows = con.execute(
-                f"SELECT {','.join(cols)} FROM cron_incidents ORDER BY rowid DESC LIMIT 30"
-            ).fetchall()
+            rows = con.execute(f"SELECT {','.join(cols)} FROM cron_incidents ORDER BY rowid DESC LIMIT 30").fetchall()
         finally:
             con.close()
         return {
@@ -331,9 +327,7 @@ def _live_vector() -> list[str]:
             cols = [c[1] for c in con.execute("PRAGMA table_info(docs)")]
             cards = con.execute("SELECT COUNT(*) FROM docs").fetchone()[0]
             embedded = (
-                con.execute(
-                    "SELECT COUNT(*) FROM docs WHERE embedding IS NOT NULL"
-                ).fetchone()[0]
+                con.execute("SELECT COUNT(*) FROM docs WHERE embedding IS NOT NULL").fetchone()[0]
                 if "embedding" in cols
                 else 0
             )
@@ -437,9 +431,7 @@ def alert_detail(alert_id: str) -> dict:
             lock = STATE["hub_root"] / ".sync" / "locks" / "writer.lock"
             live.append(f"锁文件存在={lock.exists()}")
             if lock.exists():
-                live.append(
-                    f"mtime={datetime.fromtimestamp(lock.stat().st_mtime, CST).isoformat()}"
-                )
+                live.append(f"mtime={datetime.fromtimestamp(lock.stat().st_mtime, CST).isoformat()}")
         elif alert_id.startswith("git-"):
             # 用采集器的仓库清单按「显示名」反查路径（目录名 ≠ 显示名，见 repo_list）
             name = alert_id.split("-", 2)[2]
@@ -472,17 +464,13 @@ def alert_detail(alert_id: str) -> dict:
             url = f"http://127.0.0.1:{port}/health"
             try:
                 with urllib.request.urlopen(url, timeout=3) as r:
-                    live.append(
-                        f"{url} → HTTP {r.status}（服务已恢复？请复核告警是否已陈旧）"
-                    )
+                    live.append(f"{url} → HTTP {r.status}（服务已恢复？请复核告警是否已陈旧）")
             except OSError as e:
                 live.append(f"{url} → 仍不可达: {e}")
     except (OSError, subprocess.SubprocessError):
         pass
 
-    evidence = list(hit.get("evidence", [])) + (
-        [f"【现读】{x}" for x in live] if live else []
-    )
+    evidence = list(hit.get("evidence", [])) + ([f"【现读】{x}" for x in live] if live else [])
 
     pkg_lines = [
         f"## 看板告警修复包 · {hit['id']}",
@@ -609,9 +597,7 @@ class Handler(BaseHTTPRequestHandler):
                     "ok": True,
                     "hub_root": str(STATE["hub_root"]),
                     "model": STATE["model"],
-                    "snapshot_age_s": round(time.time() - STATE["snapshot_ts"], 1)
-                    if STATE["snapshot_ts"]
-                    else None,
+                    "snapshot_age_s": round(time.time() - STATE["snapshot_ts"], 1) if STATE["snapshot_ts"] else None,
                 }
             )
 
@@ -756,11 +742,7 @@ def main() -> int:
 
     hub = Path(args.hub_root).resolve() if args.hub_root else detect_hub_root()
     repo = Path(args.repo_root).resolve() if args.repo_root else hub.parent
-    static = (
-        Path(args.static_root).resolve()
-        if args.static_root
-        else repo / "docs" / "dashboard"
-    )
+    static = Path(args.static_root).resolve() if args.static_root else repo / "docs" / "dashboard"
 
     if not hub.is_dir():
         print(f"[err] hub-root 不存在: {hub}")

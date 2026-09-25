@@ -36,9 +36,7 @@ def test_absolute_path_is_cwd_independent(tmp_path: Path, monkeypatch) -> None:
     assert Path(a).is_absolute()
 
 
-def test_relative_path_resolves_against_root_not_cwd(
-    tmp_path: Path, monkeypatch
-) -> None:
+def test_relative_path_resolves_against_root_not_cwd(tmp_path: Path, monkeypatch) -> None:
     """核心回归：相对路径按 **root** 解析。
 
     同一相对路径在两个不同 CWD 下必须得到**同一**结果 —— 旧实现会给出两个不同结果

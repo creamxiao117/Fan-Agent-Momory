@@ -219,11 +219,7 @@ def collect_cards(hub: Path) -> dict:
         by_type.append({"key": dirname, "label": label, "count": n})
 
     order = ["active", "candidate", "reference", "archived", "unknown"]
-    status_list = [
-        {"key": k, "count": by_status.get(k, 0)}
-        for k in order
-        if by_status.get(k, 0) or k != "unknown"
-    ]
+    status_list = [{"key": k, "count": by_status.get(k, 0)} for k in order if by_status.get(k, 0) or k != "unknown"]
     for k, v in by_status.items():
         if k not in order:
             status_list.append({"key": k, "count": v})
@@ -235,9 +231,7 @@ def collect_cards(hub: Path) -> dict:
         "no_frontmatter": no_frontmatter,
         "newest": {
             "path": newest[1],
-            "mtime": datetime.fromtimestamp(newest[0], CST).isoformat()
-            if newest[0]
-            else None,
+            "mtime": datetime.fromtimestamp(newest[0], CST).isoformat() if newest[0] else None,
         },
     }
 
@@ -261,9 +255,7 @@ def collect_vector(hub: Path) -> dict:
             cols = [c[1] for c in con.execute("PRAGMA table_info(docs)")]
             out["cards"] = con.execute("SELECT COUNT(*) FROM docs").fetchone()[0]
             if "embedding" in cols:
-                out["embedded"] = con.execute(
-                    "SELECT COUNT(*) FROM docs WHERE embedding IS NOT NULL"
-                ).fetchone()[0]
+                out["embedded"] = con.execute("SELECT COUNT(*) FROM docs WHERE embedding IS NOT NULL").fetchone()[0]
             out["missing"] = out["cards"] - out["embedded"]
         finally:
             con.close()
@@ -328,13 +320,9 @@ def collect_git(repos: list[tuple[str, Path]]) -> list[dict]:
         # 任何基于 .git mtime 的签名都会漏报 dirty，导致「工作区守护」告警谎报。
         st = _run(["git", "status", "--short", "--branch"], path).splitlines()
         has_header = bool(st) and st[0].startswith("## ")
-        branch, ahead, behind = (
-            _parse_branch_header(st[0]) if has_header else ("", 0, 0)
-        )
+        branch, ahead, behind = _parse_branch_header(st[0]) if has_header else ("", 0, 0)
         dirty = len([x for x in (st[1:] if has_header else st) if x.strip()])
-        meta = _run(["git", "log", "-1", "--format=%h%x1f%cI%x1f%s"], path).split(
-            "\x1f"
-        )
+        meta = _run(["git", "log", "-1", "--format=%h%x1f%cI%x1f%s"], path).split("\x1f")
         head = meta[0].strip() if meta else ""
         last_ts = meta[1].strip() if len(meta) > 1 else ""
         subject = meta[2].strip() if len(meta) > 2 else ""
@@ -385,9 +373,7 @@ def collect_cron() -> dict:
                         "expr": sch.get("display") or sch.get("expr") or "",
                         "kind": sch.get("kind") or "",
                         "enabled": bool(j.get("enabled")),
-                        "last_run": (
-                            str(j.get("last_run") or j.get("last_run_at") or "")
-                        )[:19],
+                        "last_run": (str(j.get("last_run") or j.get("last_run_at") or ""))[:19],
                     }
                 )
             jobs.sort(key=lambda x: x["last_run"], reverse=True)
@@ -417,9 +403,7 @@ def collect_cron() -> dict:
                     out["incidents_open"] = con.execute(
                         "SELECT COUNT(*) FROM cron_incidents WHERE closed_at IS NULL"
                     ).fetchone()[0]
-                    out["incidents_total"] = con.execute(
-                        "SELECT COUNT(*) FROM cron_incidents"
-                    ).fetchone()[0]
+                    out["incidents_total"] = con.execute("SELECT COUNT(*) FROM cron_incidents").fetchone()[0]
                 except sqlite3.Error:
                     pass
             finally:
@@ -434,9 +418,7 @@ def collect_backends() -> list[dict]:
     rows = []
     for name, port, desc in BACKENDS:
         alive, ms = _probe("127.0.0.1", port)
-        rows.append(
-            {"name": name, "port": port, "desc": desc, "alive": alive, "ms": ms}
-        )
+        rows.append({"name": name, "port": port, "desc": desc, "alive": alive, "ms": ms})
     return rows
 
 
@@ -492,9 +474,7 @@ def collect_query_log(hub: Path) -> dict:
     if last:
         try:
             lt = datetime.fromisoformat(last.replace("Z", "+00:00"))
-            out["idle_hours"] = round(
-                (datetime.now(timezone.utc) - lt).total_seconds() / 3600, 1
-            )
+            out["idle_hours"] = round((datetime.now(timezone.utc) - lt).total_seconds() / 3600, 1)
         except ValueError:
             pass
     return out
@@ -540,11 +520,7 @@ def _count_cited(name: str, haystack: str, token_count: Counter) -> int:
     """
     if SIMPLE_NAME_RE.match(name):
         return token_count.get(name, 0)
-    return len(
-        re.findall(
-            r"(?<![A-Za-z0-9_\-])" + re.escape(name) + r"(?![A-Za-z0-9_\-])", haystack
-        )
-    )
+    return len(re.findall(r"(?<![A-Za-z0-9_\-])" + re.escape(name) + r"(?![A-Za-z0-9_\-])", haystack))
 
 
 def collect_skills(hub: Path) -> dict:
@@ -614,11 +590,7 @@ def collect_skills(hub: Path) -> dict:
         m = re.search(r"^description:\s*(.+)$", text, re.MULTILINE)
         if m:
             desc = m.group(1).strip().strip("'\"")[:120]
-        support = sum(
-            1
-            for sub in ("references", "templates", "scripts", "assets")
-            if (d / sub).is_dir()
-        )
+        support = sum(1 for sub in ("references", "templates", "scripts", "assets") if (d / sub).is_dir())
         files = subtree_files.get(d, 0)
         # 被引用：用词边界匹配。
         # 不能用 substring（"reference" 会被 "references" 命中，污染成上百次），
@@ -632,9 +604,7 @@ def collect_skills(hub: Path) -> dict:
                 "size": sf.stat().st_size,
                 "files": files,
                 "support_dirs": support,
-                "mtime": datetime.fromtimestamp(sf.stat().st_mtime, CST).isoformat()[
-                    :16
-                ],
+                "mtime": datetime.fromtimestamp(sf.stat().st_mtime, CST).isoformat()[:16],
                 "cited": cited,
             }
         )
@@ -727,7 +697,7 @@ def collect_activity(hub: Path, root: Path) -> dict:
     # 最近更新的卡片 = 最接近"最近 ingest"的真实信号
     recent: list[dict] = []
     cands: list[tuple[float, Path]] = []
-    for dirname, label in CARD_DIRS:
+    for dirname, _label in CARD_DIRS:
         d = hub / dirname
         if d.is_dir():
             for p in d.glob("*.md"):
@@ -752,18 +722,14 @@ def collect_activity(hub: Path, root: Path) -> dict:
     for line in log.splitlines():
         parts = line.split("|", 2)
         if len(parts) == 3:
-            commits.append(
-                {"ts": parts[0][:16], "sha": parts[1], "subject": parts[2][:90]}
-            )
+            commits.append({"ts": parts[0][:16], "sha": parts[1], "subject": parts[2][:90]})
     # hub 仓库最近提交
     hlog = _run(["git", "log", "-8", "--format=%cI|%h|%s"], hub)
     hcommits = []
     for line in hlog.splitlines():
         parts = line.split("|", 2)
         if len(parts) == 3:
-            hcommits.append(
-                {"ts": parts[0][:16], "sha": parts[1], "subject": parts[2][:90]}
-            )
+            hcommits.append({"ts": parts[0][:16], "sha": parts[1], "subject": parts[2][:90]})
     return {"recent_cards": recent, "commits": commits, "hub_commits": hcommits}
 
 
@@ -813,9 +779,7 @@ def collect_alerts(hub: Path, data: dict) -> list[dict]:
         ev = []
         try:
             if lockf.exists():
-                ev.append(
-                    f"{lockf} 存在，mtime={datetime.fromtimestamp(lockf.stat().st_mtime, CST).isoformat()}"
-                )
+                ev.append(f"{lockf} 存在，mtime={datetime.fromtimestamp(lockf.stat().st_mtime, CST).isoformat()}")
         except OSError as e:
             ev.append(f"读锁文件失败: {e}")
         ev.append("写锁只判 exists() 不判进程存活 → 可能是僵尸锁")
@@ -843,15 +807,12 @@ def collect_alerts(hub: Path, data: dict) -> list[dict]:
                 "hub-vector-missing",
                 "warn",
                 f"向量库有 {vec['missing']} 张卡缺向量",
-                detail="卡片无向量则语义检索永远命中不到它（卡片等于隐身）。"
-                "新增卡后必须重建向量库。",
+                detail="卡片无向量则语义检索永远命中不到它（卡片等于隐身）。新增卡后必须重建向量库。",
                 source=f"{hub_rel}/.sync/vector.db",
                 evidence=[
                     f"库内总数={vec.get('total', '?')}  有向量={vec.get('embedded', '?')}  缺={vec.get('missing')}",
                 ],
-                cmds=[
-                    "python hub-engine/engine.py build-vectors --root AgentMemoryHub"
-                ],
+                cmds=["python hub-engine/engine.py build-vectors --root AgentMemoryHub"],
                 docs=["experience/bge-small-zh-sqlite-vector-search"],
             )
         )
@@ -868,9 +829,7 @@ def collect_alerts(hub: Path, data: dict) -> list[dict]:
                     f"stale_min={vmax:.1f}（≈{vmax / 60:.1f} 小时）",
                     f"mtime={vec.get('mtime', '?')}",
                 ],
-                cmds=[
-                    "python hub-engine/engine.py build-vectors --root AgentMemoryHub"
-                ],
+                cmds=["python hub-engine/engine.py build-vectors --root AgentMemoryHub"],
             )
         )
 
@@ -915,9 +874,7 @@ def collect_alerts(hub: Path, data: dict) -> list[dict]:
                         f"探测 {b['name']} 端口 {b['port']} → 无响应",
                         f"用途: {b['desc']}",
                     ],
-                    cmds=[
-                        f"curl -s -m 3 -o /dev/null -w '%{{http_code}}' http://127.0.0.1:{b['port']}/health"
-                    ],
+                    cmds=[f"curl -s -m 3 -o /dev/null -w '%{{http_code}}' http://127.0.0.1:{b['port']}/health"],
                     docs=["rules/ollama-retired-lmstudio-takeover"],
                 )
             )
@@ -933,9 +890,7 @@ def collect_alerts(hub: Path, data: dict) -> list[dict]:
                     detail="按工作区守护规则，≥3 个未提交改动视为「有他人现场」，"
                     "需先判定来源（批量格式化 vs 人工批改）再 commit/stash/reset 三选一。",
                     source=f"{name}（git working tree）",
-                    evidence=[
-                        f"dirty={g['dirty']}  ahead={g.get('ahead', 0)}  behind={g.get('behind', 0)}"
-                    ],
+                    evidence=[f"dirty={g['dirty']}  ahead={g.get('ahead', 0)}  behind={g.get('behind', 0)}"],
                     cmds=[
                         "git status --short",
                         "git status --short | awk '{print $2}' | xargs -I{} stat -c '%y {}' {} | sort",
@@ -953,9 +908,7 @@ def collect_alerts(hub: Path, data: dict) -> list[dict]:
                     f"{name} 与远端不同步 (ahead {g.get('ahead', 0)} / behind {g.get('behind', 0)})",
                     detail="ahead = 本地有未推送提交；behind = 远端有新提交。",
                     source=f"{name}（git remote）",
-                    evidence=[
-                        f"ahead={g.get('ahead', 0)}  behind={g.get('behind', 0)}"
-                    ],
+                    evidence=[f"ahead={g.get('ahead', 0)}  behind={g.get('behind', 0)}"],
                     cmds=["git push", "git pull --rebase"],
                 )
             )
@@ -984,14 +937,8 @@ def collect_alerts(hub: Path, data: dict) -> list[dict]:
                 f"{sh['unhealthy']} 个数据源体检不通过",
                 detail="体检不通过 = 「源错了却返回默认 0」，指标为 0 时无法区分「真的 0」与「读不到的 0」。",
                 source="collect_source_health()",
-                evidence=[
-                    f"{c['name']}: {c['note']}"
-                    for c in sh.get("checks", [])
-                    if not c.get("ok")
-                ],
-                cmds=[
-                    "python hub-engine/scripts/hub_dashboard_collect.py --hub-root AgentMemoryHub --repo-root ."
-                ],
+                evidence=[f"{c['name']}: {c['note']}" for c in sh.get("checks", []) if not c.get("ok")],
+                cmds=["python hub-engine/scripts/hub_dashboard_collect.py --hub-root AgentMemoryHub --repo-root ."],
             )
         )
     return out
@@ -1022,9 +969,7 @@ def collect_metric_sources(hub: Path, data: dict) -> dict:
     lock = data["hub"].get("lock", {})
     dirty_total = sum(int(g.get("dirty") or 0) for g in git_rt)
     alive_n = sum(1 for b in backends if b.get("alive"))
-    bailian_n = sum(
-        1 for r in sk.get("rows", []) if str(r.get("name", "")).startswith("bailian-")
-    )
+    bailian_n = sum(1 for r in sk.get("rows", []) if str(r.get("name", "")).startswith("bailian-"))
 
     return {
         "cards_total": {
@@ -1250,9 +1195,7 @@ def collect_all(hub: Path, root: Path) -> dict:
         hits.append("hub_health")
     hh_ms = round((time.perf_counter() - _t) * 1000, 1)
     if hh.get("_cached"):
-        saved_ms += max(
-            0.0, float(cache.get("cost_ms", {}).get("hub_health", 0.0)) - hh_ms
-        )
+        saved_ms += max(0.0, float(cache.get("cost_ms", {}).get("hub_health", 0.0)) - hh_ms)
     data["hub"]["health"] = hh
     new_cache["hub_health"] = {k: v for k, v in hh.items() if k != "_cached"}
     # 飞轮活动真实来源（hub_health 的 .sync/logs 口径在本机不成立，见函数 docstring）

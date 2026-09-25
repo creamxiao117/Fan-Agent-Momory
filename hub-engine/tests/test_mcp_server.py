@@ -90,9 +90,7 @@ def test_call_tool_search(tmp_path):
 
     async def _call():
         async with create_connected_server_and_client_session(server) as session:
-            return await session.call_tool(
-                "hub_search", {"query": "dll-lock", "platform": "trae"}
-            )
+            return await session.call_tool("hub_search", {"query": "dll-lock", "platform": "trae"})
 
     res = asyncio.run(_call())
     payload = json.loads(res.content[0].text)

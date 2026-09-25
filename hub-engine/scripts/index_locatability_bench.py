@@ -134,16 +134,10 @@ def card_tags(slug: str) -> list[str]:
         fm = m.group(1)
         inline = re.search(r"(?m)^tags:\s*\[(.*?)\]\s*$", fm)
         if inline:
-            return [
-                t.strip().strip("'\"") for t in inline.group(1).split(",") if t.strip()
-            ]
+            return [t.strip().strip("'\"") for t in inline.group(1).split(",") if t.strip()]
         blk = re.search(r"(?m)^tags:\s*\n((?:\s*-\s*.+\n)*)", fm)
         if blk:
-            return [
-                l.strip().lstrip("-").strip().strip("'\"")
-                for l in blk.group(1).splitlines()
-                if l.strip()
-            ]
+            return [line.strip().lstrip("-").strip().strip("'\"") for line in blk.group(1).splitlines() if line.strip()]
         return [tags_line] if tags_line else []
     return []
 
@@ -191,9 +185,7 @@ def score(descs: dict[str, str]) -> dict:
     for query, slug in CASES:
         desc = descs.get(slug)
         if desc is None:
-            rows.append(
-                {"query": query, "slug": slug, "covered": 0, "total": 0, "desc": None}
-            )
+            rows.append({"query": query, "slug": slug, "covered": 0, "total": 0, "desc": None})
             continue
         qtok = content_tokens(query)
         dtok = content_tokens(desc)
@@ -223,9 +215,7 @@ def score(descs: dict[str, str]) -> dict:
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="INDEX 可定位性基准（改造前后对比）")
-    ap.add_argument(
-        "--rev", default=None, help="对比的 git 版本（如 68088fa^）；不带则与工作区比"
-    )
+    ap.add_argument("--rev", default=None, help="对比的 git 版本（如 68088fa^）；不带则与工作区比")
     ap.add_argument("--show", action="store_true", help="打印逐例明细")
     args = ap.parse_args(argv)
 
@@ -239,13 +229,9 @@ def main(argv: list[str] | None = None) -> int:
         merged = desc + " " + " ".join(card_tags(slug))
         if content_tokens(query) & content_tokens(merged):
             variant += 1
-    added_chars = sum(
-        len(" ".join(card_tags(s))) for _q, s in CASES if load_index(None).get(s)
-    )
+    added_chars = sum(len(" ".join(card_tags(s))) for _q, s in CASES if load_index(None).get(s))
 
-    label_old = (
-        f"改造前（{args.rev}）" if args.rev else "对照（--rev 未指定，两侧相同）"
-    )
+    label_old = f"改造前（{args.rev}）" if args.rev else "对照（--rev 未指定，两侧相同）"
     print("=" * 76)
     print("INDEX 可定位性基准（确定性关键词覆盖代理指标）")
     print("=" * 76)
@@ -257,29 +243,17 @@ def main(argv: list[str] | None = None) -> int:
         f"{'可定位用例数（≥1 个内容词命中）':30s} "
         f"{old['locatable']:>10d}/{len(CASES):<12d} {new['locatable']:>10d}/{len(CASES):<12d}"
     )
-    print(
-        f"{'平均内容词覆盖率':30s} {old['coverage_avg']:>22.1%} {new['coverage_avg']:>24.1%}"
-    )
-    print(
-        f"{'描述平均内容词数':30s} {old['desc_tokens_avg']:>22.1f} {new['desc_tokens_avg']:>24.1f}"
-    )
-    print(
-        f"{'描述缺失（未登记）用例数':30s} {old['missing']:>22d} {new['missing']:>24d}"
-    )
+    print(f"{'平均内容词覆盖率':30s} {old['coverage_avg']:>22.1%} {new['coverage_avg']:>24.1%}")
+    print(f"{'描述平均内容词数':30s} {old['desc_tokens_avg']:>22.1f} {new['desc_tokens_avg']:>24.1f}")
+    print(f"{'描述缺失（未登记）用例数':30s} {old['missing']:>22d} {new['missing']:>24d}")
     print()
-    print(
-        f"〔变体〕摘要+卡 tags 的可定位用例数: {variant}/{len(CASES)}"
-        f"（当前 {new['locatable']}/{len(CASES)}）"
-    )
-    print(
-        f"〔变体〕仅本用例集就要额外 {added_chars} 字符；"
-        f"全量 251 条保守估计 +8~10K，会突破 30K 总帽 → 不可直接采用"
-    )
+    print(f"〔变体〕摘要+卡 tags 的可定位用例数: {variant}/{len(CASES)}（当前 {new['locatable']}/{len(CASES)}）")
+    print(f"〔变体〕仅本用例集就要额外 {added_chars} 字符；全量 251 条保守估计 +8~10K，会突破 30K 总帽 → 不可直接采用")
 
     if args.show:
         print()
         print("逐例（前 12）：")
-        for o, n in list(zip(old["rows"], new["rows"]))[:12]:
+        for o, n in list(zip(old["rows"], new["rows"], strict=False))[:12]:
             print(f"  查询: {o['query']}")
             print(f"    旧 {o['covered']}/{o['total']}  {str(o['desc'])[:52]}")
             print(f"    新 {n['covered']}/{n['total']}  {str(n['desc'])[:52]}")

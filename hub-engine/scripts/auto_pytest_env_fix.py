@@ -124,11 +124,9 @@ def auto_fix(engine_dir: Path, *, dry_run: bool = False) -> dict:
 
     # 收集所有 ModuleNotFoundError / ImportError 行
     error_lines = [
-        l.strip()
-        for l in output.splitlines()
-        if any(
-            k in l for k in ("ModuleNotFoundError", "No module named", "ImportError")
-        )
+        line.strip()
+        for line in output.splitlines()
+        if any(k in line for k in ("ModuleNotFoundError", "No module named", "ImportError"))
     ]
     # 去重
     seen_mods = set()
@@ -167,9 +165,7 @@ def auto_fix(engine_dir: Path, *, dry_run: bool = False) -> dict:
 
 def main() -> int:
     ap = argparse.ArgumentParser(prog="auto-pytest-env-fix", description=__doc__)
-    ap.add_argument(
-        "--root", required=True, help="中枢根目录（脚本在 hub-engine 运行）"
-    )
+    ap.add_argument("--root", required=True, help="中枢根目录（脚本在 hub-engine 运行）")
     ap.add_argument("--dry-run", action="store_true", help="只分析，不执行 pip install")
     args = ap.parse_args()
 
@@ -188,9 +184,7 @@ def main() -> int:
             f"[auto_pytest_env_fix] [{mode}] 检测到 {len(result['modules_detected'])} 个缺失模块, 自动安装 {result['fixed']} 个: {result['installed']}"
         )
     else:
-        print(
-            f"[auto_pytest_env_fix] [{mode}] pytest exit={result['pytest_exit_code_before']}, 无环境类缺失需自动安装"
-        )
+        print(f"[auto_pytest_env_fix] [{mode}] pytest exit={result['pytest_exit_code_before']}, 无环境类缺失需自动安装")
 
     return 0
 

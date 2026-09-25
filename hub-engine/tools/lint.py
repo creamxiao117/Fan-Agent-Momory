@@ -60,9 +60,7 @@ def find_type_dir_mismatch(root: Path) -> list[dict]:
             if card is None:
                 continue
             if card.type != want:
-                out.append(
-                    {"dir": sub, "name": p.name, "type": card.type, "expected": want}
-                )
+                out.append({"dir": sub, "name": p.name, "type": card.type, "expected": want})
     return out
 
 
@@ -128,7 +126,7 @@ def find_orphans(root: Path) -> list[Path]:
     if (root / "INDEX.md").exists():
         index_text = (root / "INDEX.md").read_text(encoding="utf-8")
     orphans = []
-    for sub, p, card in _all_cards(root):
+    for _sub, p, card in _all_cards(root):
         if card is None or card.status in ("archived", "reference"):
             continue
         # 缺失 status 视为 active（待补全），不触发 orphan 告警
@@ -138,7 +136,7 @@ def find_orphans(root: Path) -> list[Path]:
         referenced = stem in index_text
         if not referenced:
             # 粗略排除"自身目录内被其他文件引用"的情况
-            for sub2, p2, card2 in _all_cards(root):
+            for _sub2, p2, _card2 in _all_cards(root):
                 if p2 != p and stem in p2.read_text(encoding="utf-8"):
                     referenced = True
                     break
@@ -173,9 +171,7 @@ def find_schema_drift(root: Path) -> list[dict]:
     drift = []
     for sub, p, card in _non_authority_cards(Path(root)):
         if card is None:
-            drift.append(
-                {"dir": sub, "name": p.name, "errors": ["frontmatter 无法解析"]}
-            )
+            drift.append({"dir": sub, "name": p.name, "errors": ["frontmatter 无法解析"]})
             continue
         errs = validate_card(card)
         if errs:

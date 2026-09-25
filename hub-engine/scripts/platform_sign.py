@@ -4,6 +4,7 @@
 V1.0 (2026-09-09): 解决双平台身份君子协定问题。
 """
 
+import contextlib
 import hashlib
 import hmac
 import os
@@ -11,9 +12,7 @@ import secrets
 import sys
 from pathlib import Path
 
-DEFAULT_KEYS_DIR = (
-    Path(__file__).resolve().parent.parent.parent / "AgentMemoryHub" / "system" / "keys"
-)
+DEFAULT_KEYS_DIR = Path(__file__).resolve().parent.parent.parent / "AgentMemoryHub" / "system" / "keys"
 
 
 def get_or_create_key(platform: str, keys_dir: Path = DEFAULT_KEYS_DIR) -> bytes:
@@ -24,10 +23,8 @@ def get_or_create_key(platform: str, keys_dir: Path = DEFAULT_KEYS_DIR) -> bytes
         return key_path.read_bytes()
     key = secrets.token_bytes(32)
     key_path.write_bytes(key)
-    try:
+    with contextlib.suppress(OSError, AttributeError):
         os.chmod(key_path, 0o600)
-    except (OSError, AttributeError):
-        pass
     return key
 
 
@@ -45,9 +42,7 @@ def main() -> int:
 
     ap = argparse.ArgumentParser(description="平台身份签名/验证")
     ap.add_argument("action", choices=["init", "sign", "verify"], help="动作")
-    ap.add_argument(
-        "--platform", required=True, help="平台标识 hermes/trae/code/workbuddy"
-    )
+    ap.add_argument("--platform", required=True, help="平台标识 hermes/trae/code/workbuddy")
     ap.add_argument("--payload", help="签名内容（字符串）")
     ap.add_argument("--signature", help="验证时传")
     ap.add_argument("--keys-dir", help="keys 目录")

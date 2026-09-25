@@ -83,8 +83,8 @@ def assess_risk(old: str, new: str) -> tuple[int, str]:
             return 2, f"行过长（{len(line)} > {MAX_PATCH_CHARS} 字符）"
 
     # 4. 缩进层数变化（关键 bug 触发点）
-    old_indents = [detect_indent_level(l) for l in old_lines if l.strip()]
-    new_indents = [detect_indent_level(l) for l in new_lines if l.strip()]
+    old_indents = [detect_indent_level(line) for line in old_lines if line.strip()]
+    new_indents = [detect_indent_level(line) for line in new_lines if line.strip()]
     if old_indents and new_indents and max(new_indents) > max(old_indents):
         return (
             1,
@@ -138,9 +138,7 @@ def lint_file(file_path: Path) -> tuple[int, str]:
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="safe_patch: 智能 patch/write_file 工具（兼容 Hermes patch 接口）"
-    )
+    parser = argparse.ArgumentParser(description="safe_patch: 智能 patch/write_file 工具（兼容 Hermes patch 接口）")
     parser.add_argument(
         "--file",
         "--path",

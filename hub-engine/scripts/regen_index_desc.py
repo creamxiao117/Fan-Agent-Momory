@@ -54,9 +54,7 @@ def _build_card_index(hub: Path) -> dict[str, Path]:
     return index
 
 
-def regen_text(
-    text: str, cards: dict[str, Path], max_desc: int
-) -> tuple[str, dict[str, list[str]]]:
+def regen_text(text: str, cards: dict[str, Path], max_desc: int) -> tuple[str, dict[str, list[str]]]:
     """返回 (新文本, 统计)。统计含 rewritten / unchanged / unresolved / empty_summary。"""
     stats: dict[str, list[str]] = {
         "rewritten": [],
@@ -86,11 +84,7 @@ def regen_text(
             out.append(line)
             continue
         stats["rewritten"].append(slug)
-        newline = (
-            f"- {slug}{sep}{summary}\n"
-            if line.endswith("\n")
-            else f"- {slug}{sep}{summary}"
-        )
+        newline = f"- {slug}{sep}{summary}\n" if line.endswith("\n") else f"- {slug}{sep}{summary}"
         out.append(newline)
     return "".join(out), stats
 
@@ -105,9 +99,7 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="目标 INDEX 文件（可多次；默认根 INDEX.md + INDEX-experience.md）",
     )
-    ap.add_argument(
-        "--max-desc", type=int, default=40, help="描述上限（默认 40，spec S3）"
-    )
+    ap.add_argument("--max-desc", type=int, default=40, help="描述上限（默认 40，spec S3）")
     ap.add_argument("--dry-run", action="store_true", help="只报告不写盘（默认行为）")
     ap.add_argument("--apply", action="store_true", help="实际写盘")
     args = ap.parse_args(argv)

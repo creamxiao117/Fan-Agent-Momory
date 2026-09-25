@@ -59,12 +59,8 @@ import re
 # 为「INDEX 未登记」。slug 类仍不含空格，故加 CJK 不会引入贪婪越界。
 # 注意：字符集**不含 `/`** —— 这是排除目录图例行（`- rules/  说明`）的机制。
 _CJK = "\u4e00-\u9fff"
-INDEX_ENTRY_RE = re.compile(
-    rf"^- ([a-zA-Z0-9{_CJK}][a-zA-Z0-9_\-." rf"{_CJK}]{{0,80}})(?:\s{{2,}}|\s+)(.+)$"
-)
-NESTED_ENTRY_RE = re.compile(
-    rf"^\|- ([a-zA-Z0-9{_CJK}][a-zA-Z0-9_\-." rf"{_CJK}]{{0,80}})(?:\s{{2,}}|\s+)(.+)$"
-)
+INDEX_ENTRY_RE = re.compile(rf"^- ([a-zA-Z0-9{_CJK}][a-zA-Z0-9_\-." rf"{_CJK}]{{0,80}})(?:\s{{2,}}|\s+)(.+)$")
+NESTED_ENTRY_RE = re.compile(rf"^\|- ([a-zA-Z0-9{_CJK}][a-zA-Z0-9_\-." rf"{_CJK}]{{0,80}})(?:\s{{2,}}|\s+)(.+)$")
 
 # slug 格式校验（原在 audit_index，2026-09-23 一并上移：同样依赖 _CJK）
 SLUG_RE = re.compile(rf"^[a-zA-Z0-9{_CJK}][a-zA-Z0-9_\-." rf"{_CJK}]{{1,79}}$")
@@ -98,8 +94,7 @@ SECTION_TITLES: dict[str, str] = {
 # 实测：2026-09-23 某经验卡被登记到根 INDEX 的 L180（该区本应只有指针）。
 # 本映射即是修复：写入前先按目录选文件。
 INDEX_FILE_FOR_DIR: dict[str, str] = {
-    d: ("INDEX-experience.md" if d == "experience" else "INDEX.md")
-    for d in SECTION_TITLES
+    d: ("INDEX-experience.md" if d == "experience" else "INDEX.md") for d in SECTION_TITLES
 }
 
 

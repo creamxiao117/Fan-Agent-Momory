@@ -73,12 +73,8 @@ def repair(path: Path) -> tuple[int, int]:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description="nightly.log 编码巡检 / 回填")
-    ap.add_argument(
-        "--log", required=True, help="日志路径，如 AgentMemoryHub/.sync/nightly.log"
-    )
-    ap.add_argument(
-        "--repair", action="store_true", help="把非 UTF-8 行按 GBK 解码后回填为 UTF-8"
-    )
+    ap.add_argument("--log", required=True, help="日志路径，如 AgentMemoryHub/.sync/nightly.log")
+    ap.add_argument("--repair", action="store_true", help="把非 UTF-8 行按 GBK 解码后回填为 UTF-8")
     ap.add_argument("--backup-suffix", default=".bak-encoding", help="回填前备份后缀")
     args = ap.parse_args()
 
@@ -103,15 +99,11 @@ def main() -> int:
         shutil.copy2(path, bak)
         processed, fixed = repair(path)
         _total2, bad2, _ = scan(path)
-        print(
-            f"[repair] 备份 {bak.name} | 处理 {processed} 行、修复 {fixed} 行 | 残余非 UTF-8 {bad2}"
-        )
+        print(f"[repair] 备份 {bak.name} | 处理 {processed} 行、修复 {fixed} 行 | 残余非 UTF-8 {bad2}")
         bad = bad2
 
     if bad:
-        print(
-            "\n=== 结果：FAIL（仍有非 UTF-8 行；若刚修过 .cmd，请确认 chcp/PYTHONUTF8 已生效）==="
-        )
+        print("\n=== 结果：FAIL（仍有非 UTF-8 行；若刚修过 .cmd，请确认 chcp/PYTHONUTF8 已生效）===")
         return 1
     print("\n=== 结果：PASS（全 UTF-8 可解）===")
     return 0

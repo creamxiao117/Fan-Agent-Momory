@@ -266,9 +266,7 @@ def check_model(model: str, url: str = "http://localhost:11434") -> bool:
 
 # 开机自启同款 VBS（纯 ASCII，静默隐藏窗口拉起 lms server）
 # 路径按当前用户 HOME 推导（不硬编码用户名），环境变量 LM_STUDIO_START_VBS 可显式覆盖
-_LMS_AUTOSTART_VBS_DEFAULT = (
-    "AppData/Local/Programs/LM Studio/resources/app/.webpack/start_lm_studio_api.vbs"
-)
+_LMS_AUTOSTART_VBS_DEFAULT = "AppData/Local/Programs/LM Studio/resources/app/.webpack/start_lm_studio_api.vbs"
 
 
 def _autostart_vbs_path() -> Path:
@@ -285,10 +283,7 @@ _self_heal_attempted = False
 
 def _manual_offline_flag() -> Path:
     """手动下线标记文件（用户故意停服务省显存时，自愈不得救活）。"""
-    return (
-        Path(os.environ.get("USERPROFILE", str(Path.home())))
-        / ".lmstudio-manual-offline"
-    )
+    return Path(os.environ.get("USERPROFILE", str(Path.home()))) / ".lmstudio-manual-offline"
 
 
 def set_manual_offline(off: bool = True) -> Path:
@@ -340,9 +335,7 @@ def ensure_llm_service(
     try:
         subprocess.Popen(  # 固定路径 VBS，非用户输入
             cmd,
-            creationflags=(
-                subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
-            ),
+            creationflags=(subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0),
         )
     except OSError as e:
         print(f"[llm_health] 自愈拉起命令执行失败: {cmd} err={e}", file=sys.stderr)

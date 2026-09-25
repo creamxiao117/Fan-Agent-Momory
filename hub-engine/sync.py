@@ -42,9 +42,7 @@ def _git(repo: Path, *args: str) -> str:
     """运行 git 子命令；返回 stdout，失败时透传真实 stderr（与 bootstrap 的 _run_git 一致）"""
     cmd = ["git", "-C", str(repo), *args]
     try:
-        r = subprocess.run(
-            cmd, check=True, capture_output=True, text=True, encoding="utf-8"
-        )
+        r = subprocess.run(cmd, check=True, capture_output=True, text=True, encoding="utf-8")
         return r.stdout or ""
     except subprocess.CalledProcessError as e:
         stderr = (e.stderr or "").strip()
@@ -140,9 +138,7 @@ def _commit(root: Path, message: str, protect: set[str] | None = None) -> None:
     if not _git(root, "status", "--porcelain").strip():
         return
     if protect is None:
-        print(
-            "[sync] 警告: _commit 未给 protect 快照, 退回 git add -A（可能卷入他人改动）"
-        )
+        print("[sync] 警告: _commit 未给 protect 快照, 退回 git add -A（可能卷入他人改动）")
         add_args = ["add", "-A"]
     else:
         mine = sorted(_snapshot_dirty(root) - protect)
@@ -184,7 +180,7 @@ def _record_commit(root: Path, parent_sha: str, new_sha: str, intent: str) -> No
     except OSError as e:
         import warnings
 
-        warnings.warn(f"commit_ledger 写入失败：{e}")
+        warnings.warn(f"commit_ledger 写入失败：{e}", stacklevel=2)
 
 
 class _WriteLock:
@@ -206,9 +202,7 @@ class _WriteLock:
         self.lock = root / ".sync" / "locks" / "writer.lock"
         import uuid
 
-        self._signature = (
-            f"{os.getpid()}|{uuid.uuid4().hex[:12]}|{self._hostname()}|{int(_t.time())}"
-        )
+        self._signature = f"{os.getpid()}|{uuid.uuid4().hex[:12]}|{self._hostname()}|{int(_t.time())}"
 
     @staticmethod
     def _hostname() -> str:
@@ -290,9 +284,7 @@ class _WriteLock:
             pass
 
 
-def _write_dedup_prediction(
-    cdir: Path, platform: str, draft: Path, card, decision: dict
-) -> None:
+def _write_dedup_prediction(cdir: Path, platform: str, draft: Path, card, decision: dict) -> None:
     """把 LLM 去重建议写到冲突区伴生 .pred.json，供人工终审（不自动执行 merge/delete）"""
     try:
         payload = {
@@ -302,9 +294,7 @@ def _write_dedup_prediction(
             "decision": decision,
         }
         pred = cdir / f"{platform}_{draft.stem}.pred.json"
-        pred.write_text(
-            json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"
-        )
+        pred.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     except OSError:
         pass  # 决策留痕失败不阻断同步主流程
 
@@ -383,17 +373,9 @@ def ingest(root: Path, platform: str, chat_fn=None, strict_lint: bool = False) -
                 cands = dedup_candidates(root, card)
                 if cands:
                     stat["duplicate"] += 1
-                    decision = (
-                        dedup_decide(root, card, cands, chat_fn=chat_fn)
-                        if chat_fn
-                        else None
-                    )
+                    decision = dedup_decide(root, card, cands, chat_fn=chat_fn) if chat_fn else None
                     # 高置信重复（LLM 明确 skip 且 ≥0.8）→ 丢弃草稿，不落冲突区
-                    if (
-                        decision
-                        and decision["action"] == "skip"
-                        and decision["confidence"] >= 0.8
-                    ):
+                    if decision and decision["action"] == "skip" and decision["confidence"] >= 0.8:
                         _append_log(root, "ingest", f"LLM 判定重复，丢弃草稿：{p.name}")
                         record_diff(
                             root,
@@ -402,8 +384,7 @@ def ingest(root: Path, platform: str, chat_fn=None, strict_lint: bool = False) -
                                 "name": p.name,
                                 "type": card.type,
                                 "deleted_content": (
-                                    f"LLM 判定重复(skip conf={decision['confidence']:.2f})，"
-                                    f"丢弃：{decision['reason']}"
+                                    f"LLM 判定重复(skip conf={decision['confidence']:.2f})，丢弃：{decision['reason']}"
                                 ),
                             },
                         )
@@ -435,9 +416,7 @@ def ingest(root: Path, platform: str, chat_fn=None, strict_lint: bool = False) -
                                     "op": "delete",
                                     "name": p.name,
                                     "type": card.type,
-                                    "deleted_content": (
-                                        f"同名冲突，回收进冲突区（hash={hash(card.body) & 0xFFFF:x}）"
-                                    ),
+                                    "deleted_content": (f"同名冲突，回收进冲突区（hash={hash(card.body) & 0xFFFF:x}）"),
                                 },
                             )
                         else:
@@ -459,9 +438,7 @@ def ingest(root: Path, platform: str, chat_fn=None, strict_lint: bool = False) -
                                     "name": p.name,
                                     "type": card.type,
                                     "before": None,
-                                    "after": str(dst_c.relative_to(root)).replace(
-                                        os.sep, "/"
-                                    ),
+                                    "after": str(dst_c.relative_to(root)).replace(os.sep, "/"),
                                 },
                             )
                         p.unlink()
@@ -476,11 +453,7 @@ def ingest(root: Path, platform: str, chat_fn=None, strict_lint: bool = False) -
                         root,
                         "ingest",
                         f"重复内容进冲突区：{p.name}"
-                        + (
-                            f"（LLM 建议 {decision['action']}，待人工终审）"
-                            if decision
-                            else ""
-                        ),
+                        + (f"（LLM 建议 {decision['action']}，待人工终审）" if decision else ""),
                     )
                     record_diff(
                         root,
@@ -547,9 +520,7 @@ def ingest(root: Path, platform: str, chat_fn=None, strict_lint: bool = False) -
                                 "name": p.name,
                                 "type": card.type,
                                 "before": None,
-                                "after": str(dst.relative_to(root)).replace(
-                                    os.sep, "/"
-                                ),
+                                "after": str(dst.relative_to(root)).replace(os.sep, "/"),
                             },
                         )
                 p.unlink()

@@ -118,9 +118,7 @@ def scan(root: Path) -> dict:
             ghost_manual.append((entry["line_no"], slug, cands))
 
     unregistered = [
-        (rel.parts[0], rel.name)
-        for slug, rel in sorted(_files_sorted(files).items())
-        if slug not in by_slug
+        (rel.parts[0], rel.name) for slug, rel in sorted(_files_sorted(files).items()) if slug not in by_slug
     ]
     return {
         "ghost_fixable": ghost_fixable,

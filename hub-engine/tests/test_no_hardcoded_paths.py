@@ -59,8 +59,7 @@ _ALLOWED: dict[str, str] = {
         "散落各处才是病，收敛为一处常量 + env/config 覆盖是正解"
     ),
     "hub-engine/scripts/reclassify.py": (
-        "卡片**正文内容**（docstring）里记录的历史路径事实，不是可执行路径；"
-        "改写反而会让卡片失真"
+        "卡片**正文内容**（docstring）里记录的历史路径事实，不是可执行路径；改写反而会让卡片失真"
     ),
 }
 

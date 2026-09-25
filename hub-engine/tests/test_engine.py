@@ -79,9 +79,7 @@ def test_chat_raises_when_fallback_disabled(monkeypatch, tmp_path):
 def test_chat_no_gateway_never_raises_even_without_fallback(monkeypatch, tmp_path):
     """无远程时 fallback=False 也不抛：没有远程可用，只能本地兜底（契约已变，2026-09-15）。"""
     _use_cfg(monkeypatch, tmp_path, "timeout: 30\n")
-    monkeypatch.setattr(
-        "requests.post", lambda *a, **k: (_ for _ in ()).throw(AssertionError())
-    )
+    monkeypatch.setattr("requests.post", lambda *a, **k: (_ for _ in ()).throw(AssertionError()))
     out = chat("x", tmp_path, fallback=False)
     assert isinstance(out, str) and out
 
@@ -154,10 +152,7 @@ def test_status_returns_3_when_llm_unavailable(tmp_path, capsys, monkeypatch):
     code = main(["status", "--root", str(root), "--json"])
     data = json.loads(capsys.readouterr().out)
     assert code == 3
-    assert any(
-        a["rule"] == "local_llm_unavailable" and a["level"] == "critical"
-        for a in data["alerts"]
-    )
+    assert any(a["rule"] == "local_llm_unavailable" and a["level"] == "critical" for a in data["alerts"])
 
 
 def test_build_vectors_returns_zero_when_model_ok(tmp_path, capsys):
@@ -186,14 +181,7 @@ def test_build_vectors_warns_and_nonzero_when_no_vectors(tmp_path, capsys, monke
     exp = root / "rules"
     exp.mkdir(parents=True, exist_ok=True)
     (exp / "sample.md").write_text(
-        "---\n"
-        "type: rule\n"
-        "tags:\n- demo\n"
-        "updated: '2026-08-19'\n"
-        "status: active\n"
-        "reuse_count: 0\n"
-        "---\n\n"
-        "示例规则卡。\n",
+        "---\ntype: rule\ntags:\n- demo\nupdated: '2026-08-19'\nstatus: active\nreuse_count: 0\n---\n\n示例规则卡。\n",
         encoding="utf-8",
     )
     # 注入不可用后端：任何文本都返回 None，build 会全部空向量

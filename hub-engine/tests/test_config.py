@@ -40,8 +40,7 @@ def test_nested_gateway_is_flattened(tmp_path):
 
     p = tmp_path / "c.yaml"
     p.write_text(
-        "gateway:\n  url: http://x:1\n  default_model: m1\n"
-        "  timeout_seconds: 9\n  compress: llmlingua\n",
+        "gateway:\n  url: http://x:1\n  default_model: m1\n  timeout_seconds: 9\n  compress: llmlingua\n",
         encoding="utf-8",
     )
     cfg = load_engine_config(p)
@@ -56,7 +55,5 @@ def test_flat_key_wins_over_nested(tmp_path):
     from common.config import load_engine_config
 
     p = tmp_path / "c.yaml"
-    p.write_text(
-        "gateway:\n  url: http://x:1\ngateway_url: http://y:2\n", encoding="utf-8"
-    )
+    p.write_text("gateway:\n  url: http://x:1\ngateway_url: http://y:2\n", encoding="utf-8")
     assert load_engine_config(p)["gateway_url"] == "http://y:2"

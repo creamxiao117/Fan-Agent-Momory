@@ -86,9 +86,7 @@ def test_render_sections(tmp_path):
 
 def test_render_with_items(tmp_path):
     """填充态：新增表、pending 项、sleep 项均展示"""
-    new = [
-        {"file": "experience/a.md", "type": "exp", "status": "active", "tags": ["t"]}
-    ]
+    new = [{"file": "experience/a.md", "type": "exp", "status": "active", "tags": ["t"]}]
     md = render({"date": "2026-08-20"}, new, ["rule-a.md"], ["sleep/p/proposal.md"])
     assert "experience/a.md" in md
     assert "rule-a.md" in md

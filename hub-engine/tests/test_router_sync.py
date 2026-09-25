@@ -33,9 +33,7 @@ def _register_platform(root: Path, name: str, mem_dir: Path) -> None:
         "memory_dir": str(mem_dir),
         "target_file": "MEMORY.md",
     }
-    cfg_path.write_text(
-        yaml.safe_dump(data, allow_unicode=True, sort_keys=False), encoding="utf-8"
-    )
+    cfg_path.write_text(yaml.safe_dump(data, allow_unicode=True, sort_keys=False), encoding="utf-8")
 
 
 def test_supported_platforms_covers_mavis_and_deepseek():
@@ -108,6 +106,5 @@ def test_real_hub_config_platforms_all_have_adapters():
     configured = set((data or {}).get("platforms", {}))
     missing = sorted(configured - SUPPORTED_PLATFORMS)
     assert missing == [], (
-        f"平台 {missing} 已在 hub.config.yaml 登记但缺适配器登记；"
-        f"请在 tools/platform_bridge.ADAPTER_REGISTRY 补一行"
+        f"平台 {missing} 已在 hub.config.yaml 登记但缺适配器登记；请在 tools/platform_bridge.ADAPTER_REGISTRY 补一行"
     )

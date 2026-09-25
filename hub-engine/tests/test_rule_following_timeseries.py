@@ -24,11 +24,7 @@ def test_parses_old_format_inline_list(monkeypatch, tmp_path):
     """旧格式：`孤儿页: [...]` 内联 + `无效卡片: N`"""
     retro = _retro(monkeypatch, tmp_path)
     (retro / "lint-report-2026-08-25.md").write_text(
-        "# Lint 报告 2026-08-25\n\n"
-        "- 孤儿页: ['a.md']\n"
-        "- 陈旧页: []\n"
-        "- 无效卡片: 21\n"
-        "- 备注: 共检查 148 张卡片\n",
+        "# Lint 报告 2026-08-25\n\n- 孤儿页: ['a.md']\n- 陈旧页: []\n- 无效卡片: 21\n- 备注: 共检查 148 张卡片\n",
         encoding="utf-8",
     )
     rows = ts.load_lint_reports()
@@ -64,10 +60,7 @@ def test_parses_new_format_problem_count(monkeypatch, tmp_path):
     """新格式：`# L2 巡检报告` + `发现问题数: N`"""
     retro = _retro(monkeypatch, tmp_path)
     (retro / "lint-report-2026-09-08.md").write_text(
-        "# L2 巡检报告 - 2026-09-08\n\n"
-        "- INDEX 条目总数: 306\n"
-        "- 权威区文件总数: 307\n"
-        "- 发现问题数: 40\n",
+        "# L2 巡检报告 - 2026-09-08\n\n- INDEX 条目总数: 306\n- 权威区文件总数: 307\n- 发现问题数: 40\n",
         encoding="utf-8",
     )
     r = ts.load_lint_reports()[0]
@@ -175,7 +168,6 @@ def test_verdicts_ignore_non_conflict_headers(monkeypatch, tmp_path):
     _retro_log(
         monkeypatch,
         tmp_path,
-        "## [2026-08-20] ingest | 自动入区：a.md\n"
-        "- ingest：`{'promoted': 1, 'duplicate': 4}`\n",
+        "## [2026-08-20] ingest | 自动入区：a.md\n- ingest：`{'promoted': 1, 'duplicate': 4}`\n",
     )
     assert ts.load_ingest_verdicts() == []

@@ -86,11 +86,7 @@ _STOPWORDS = frozenset(
 def _extract_keywords(query: str) -> list[str]:
     """从用户查询中提取关键词。"""
     tokens = re.split(r"[\s,。，、；：！？.!?；:]+", query.lower())
-    tokens = [
-        t
-        for t in tokens
-        if t.strip() and t.strip() not in _STOPWORDS and len(t.strip()) > 1
-    ]
+    tokens = [t for t in tokens if t.strip() and t.strip() not in _STOPWORDS and len(t.strip()) > 1]
     if len(tokens) < 3:
         return [query]
     return tokens[:5]
@@ -115,9 +111,7 @@ def _estimate_tokens(text: str) -> int:
     return len(text) // 4
 
 
-def preload_session(
-    hub_root: Path, query: str, top_k: int = 3, max_tokens: int = 800
-) -> dict:
+def preload_session(hub_root: Path, query: str, top_k: int = 3, max_tokens: int = 800) -> dict:
     """预加载会话上下文。
 
     Args:
@@ -193,9 +187,7 @@ def preload_session(
     }
 
 
-def _generate_brief(
-    query: str, keywords: list[str], cards: list[dict], max_tokens: int = 800
-) -> str:
+def _generate_brief(query: str, keywords: list[str], cards: list[dict], max_tokens: int = 800) -> str:
     """生成会话简报。"""
     now = datetime.now(LOCAL_TZ).strftime("%Y-%m-%d %H:%M")
     lines = [
@@ -252,9 +244,7 @@ def main() -> int:
     parser.add_argument("--brief-only", action="store_true", help="只输出简报")
     args = parser.parse_args()
 
-    result = preload_session(
-        Path(args.hub_root).resolve(), args.query, args.top_k, args.max_tokens
-    )
+    result = preload_session(Path(args.hub_root).resolve(), args.query, args.top_k, args.max_tokens)
     if not result["success"]:
         print(f"❌ {result.get('error', '未知错误')}", file=sys.stderr)
         return 1

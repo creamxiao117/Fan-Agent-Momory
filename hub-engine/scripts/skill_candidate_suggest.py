@@ -107,9 +107,7 @@ def main() -> int:
 
     written = []
     for card in hot:
-        p = write_suggestion_card(
-            card, Path(args.skillhub_root), threshold=args.threshold
-        )
+        p = write_suggestion_card(card, Path(args.skillhub_root), threshold=args.threshold)
         written.append(str(p.relative_to(args.skillhub_root)))
     print(f"生成 {len(written)} 张建议卡：")
     for w in written:

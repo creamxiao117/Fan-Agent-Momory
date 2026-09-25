@@ -82,17 +82,13 @@ def test_persist_and_load_snapshot_roundtrip(tmp_path):
 
 def test_ensure_set_builds_when_missing(tmp_path):
     _write_log(tmp_path, [_search("缺失话题", 0), _search("缺失话题", 0)])
-    items, from_log = ensure_set(
-        tmp_path, min_count=2, max_age_days=7, force_refresh=False
-    )
+    items, from_log = ensure_set(tmp_path, min_count=2, max_age_days=7, force_refresh=False)
     assert from_log is True
     assert [i["query"] for i in items] == ["缺失话题"]
 
 
 def test_ensure_set_uses_cache_when_fresh(tmp_path):
-    persist_snapshot(
-        tmp_path, [{"query": "旧样本", "count": 2}], refreshed="2026-08-19"
-    )
+    persist_snapshot(tmp_path, [{"query": "旧样本", "count": 2}], refreshed="2026-08-19")
     # 日志与快照不一致——但快照仍新，不应重建（固定集稳定）
     _write_log(tmp_path, [_search("新样本", 0), _search("新样本", 0)])
     items, from_log = ensure_set(
@@ -107,9 +103,7 @@ def test_ensure_set_uses_cache_when_fresh(tmp_path):
 
 
 def test_ensure_set_rebuilds_when_stale(tmp_path):
-    persist_snapshot(
-        tmp_path, [{"query": "旧样本", "count": 2}], refreshed="2026-08-10"
-    )
+    persist_snapshot(tmp_path, [{"query": "旧样本", "count": 2}], refreshed="2026-08-10")
     _write_log(tmp_path, [_search("新样本", 0), _search("新样本", 0)])
     items, from_log = ensure_set(
         tmp_path,
@@ -123,9 +117,7 @@ def test_ensure_set_rebuilds_when_stale(tmp_path):
 
 
 def test_ensure_set_force_refresh_rebuilds(tmp_path):
-    persist_snapshot(
-        tmp_path, [{"query": "旧样本", "count": 2}], refreshed="2026-08-19"
-    )
+    persist_snapshot(tmp_path, [{"query": "旧样本", "count": 2}], refreshed="2026-08-19")
     _write_log(tmp_path, [_search("新样本", 0), _search("新样本", 0)])
     items, from_log = ensure_set(
         tmp_path,

@@ -39,9 +39,7 @@ def _clip(text: str, limit: int) -> str:
     return text[:limit] + "\n…（已截断，完整内容见原卡）"
 
 
-def candidates(
-    root: Path, card, min_sim: float = DEFAULT_MIN_SIM, top_k: int = 3
-) -> list[tuple]:
+def candidates(root: Path, card, min_sim: float = DEFAULT_MIN_SIM, top_k: int = 3) -> list[tuple]:
     """向量预过滤：返回与 card 语义相似（cosine>=min_sim）的权威区候选，按分降序。
 
     返回 (Card, score) 列表，至多 top_k 条。无命中返回空列表。

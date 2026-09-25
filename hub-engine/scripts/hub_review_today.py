@@ -40,7 +40,7 @@ def collect_new_updated(root: Path) -> list[dict]:
     """权威区中 updated == 今日的卡（含新卡与今日改动的）"""
     today = _today_local().isoformat()
     out = []
-    for sub, p, card in _all_cards(root):
+    for _sub, p, card in _all_cards(root):
         if card is None:
             continue
         if card.updated == today:
@@ -70,9 +70,7 @@ def collect_today_sleep(root: Path) -> list[str]:
     if not base.is_dir():
         return []
     hits = [
-        str(p.relative_to(base))
-        for p in base.glob("*/proposal.md")
-        if p.parent.name.startswith(today.replace("-", ""))
+        str(p.relative_to(base)) for p in base.glob("*/proposal.md") if p.parent.name.startswith(today.replace("-", ""))
     ]
     return sorted(hits)
 
@@ -109,9 +107,7 @@ def render(meta: dict, new_updated: list, pending: list, sleep: list) -> str:
     else:
         lines.append("（今日无夜间提案候选）")
     lines.append("")
-    lines.append(
-        "_审核动作：改卡 → ingest / confirm；无关 → 忽略。本清单由 hub_review_today 生成。_"
-    )
+    lines.append("_审核动作：改卡 → ingest / confirm；无关 → 忽略。本清单由 hub_review_today 生成。_")
     return "\n".join(lines)
 
 

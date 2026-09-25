@@ -45,9 +45,7 @@ def test_reports_missing_frontmatter_as_manual(tmp_path):
 
 def test_skips_high_risk_dirs_by_default(tmp_path):
     """rules/ methodology/ 默认跳过；--include-high-risk 才处理"""
-    _write(
-        tmp_path / "rules" / "r.md", "---\ntype: experience\ntags: [x]\n---\n\n正文丙\n"
-    )
+    _write(tmp_path / "rules" / "r.md", "---\ntype: experience\ntags: [x]\n---\n\n正文丙\n")
     assert run_fix(tmp_path, apply=True)["fixed"] == 0
     assert run_fix(tmp_path, apply=True, include_high_risk=True)["fixed"] == 1
 

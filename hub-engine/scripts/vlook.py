@@ -48,9 +48,7 @@ def ask(image_path: pathlib.Path, prompt: str, backend: str, timeout: int = 180)
                     {"type": "text", "text": prompt},
                     {
                         "type": "image_url",
-                        "image_url": {
-                            "url": "data:image/png;base64," + encode_image(image_path)
-                        },
+                        "image_url": {"url": "data:image/png;base64," + encode_image(image_path)},
                     },
                 ],
             }
@@ -80,9 +78,7 @@ def main() -> int:
         print(f"[ERR] 图片不存在: {p}")
         return 2
 
-    print(
-        f"[vlook] {p.name} ({p.stat().st_size // 1024}KB) -> {a.backend}/{BACKENDS[a.backend][1]}"
-    )
+    print(f"[vlook] {p.name} ({p.stat().st_size // 1024}KB) -> {a.backend}/{BACKENDS[a.backend][1]}")
     print("=" * 70)
     try:
         print(ask(p, a.prompt, a.backend))

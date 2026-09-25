@@ -14,9 +14,7 @@ from tools.retrieve import retrieve
 
 
 def cmd_retrieve(args) -> int:
-    for c in retrieve(
-        Path(args.root), args.query, top_k=args.top_k, n=args.n, mode=args.mode
-    ):
+    for c in retrieve(Path(args.root), args.query, top_k=args.top_k, n=args.n, mode=args.mode):
         from tools.snippet import extract_snippet
 
         print(f"[{c.type}/{c.status}] {c.path.name}")

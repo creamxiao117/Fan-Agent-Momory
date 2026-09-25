@@ -66,9 +66,7 @@ def _seed_non_authority_drift(root: Path) -> None:
         "---\ntype: experience\ntags: [x]\nstatus: active\n---\n漂移卡\n",
         encoding="utf-8",
     )
-    (root / "experience" / "drift-nofm.md").write_text(
-        "# 无 frontmatter\n正文\n", encoding="utf-8"
-    )
+    (root / "experience" / "drift-nofm.md").write_text("# 无 frontmatter\n正文\n", encoding="utf-8")
 
 
 def test_find_schema_drift_flags_non_authority(tmp_path):

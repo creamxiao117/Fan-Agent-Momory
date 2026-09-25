@@ -25,8 +25,7 @@ def _card(root: Path, rel: str, title: str) -> Path:
     p = root / rel
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(
-        "---\ntype: rule\ntags:\n- a\nupdated: 2026-09-23\nstatus: active\n---\n\n"
-        f"# {title}\n",
+        f"---\ntype: rule\ntags:\n- a\nupdated: 2026-09-23\nstatus: active\n---\n\n# {title}\n",
         encoding="utf-8",
     )
     return p
@@ -62,9 +61,7 @@ def test_registered_slugs_does_not_prefix_match(tmp_path):
 
 def test_registered_slugs_ignores_legend_lines(tmp_path):
     """目录图例行（`- rules/  说明`）不是卡登记"""
-    idx = _index(
-        tmp_path, "## 规则（rules/）\n- rules/        权威规则说明\n- alpha    描述\n"
-    )
+    idx = _index(tmp_path, "## 规则（rules/）\n- rules/        权威规则说明\n- alpha    描述\n")
     assert registered_slugs(idx) == {"alpha"}
 
 
@@ -87,9 +84,7 @@ def test_detect_missing_consults_both_index_files(tmp_path):
     _card(root, "rules/alpha.md", "Alpha 规则")
     _index(root, "## 规则（rules/）\n")
     # alpha 登记在**分册**里（错位登记）——仍应被认为“已登记”，不再重复加入
-    (root / "INDEX-experience.md").write_text(
-        "## 经验（experience/）\n- alpha    Alpha 规则\n", encoding="utf-8"
-    )
+    (root / "INDEX-experience.md").write_text("## 经验（experience/）\n- alpha    Alpha 规则\n", encoding="utf-8")
     assert {p.stem for p in detect_missing(root)} == set()
 
 

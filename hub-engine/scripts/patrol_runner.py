@@ -197,9 +197,8 @@ def _llm_pre_check() -> StepResult:
         status = checker.get_status()
         models_str = ", ".join(status.models[:3]) if status.models else "无模型"
         rt_ms = round(status.response_time * 1000, 1)
-        output = (
-            f"✅ 本地 LLM (LM Studio) 可用 · {len(status.models)} 模型 · 响应 {rt_ms}ms"
-            + (f" · {models_str}" if models_str != "无模型" else "")
+        output = f"✅ 本地 LLM (LM Studio) 可用 · {len(status.models)} 模型 · 响应 {rt_ms}ms" + (
+            f" · {models_str}" if models_str != "无模型" else ""
         )
         return StepResult(
             name="llm_check",
@@ -286,12 +285,7 @@ def _step_lint(root: Path) -> StepResult:
     from tools.lint import lint
 
     report = lint(root)
-    unhealthy = (
-        len(report["orphans"])
-        + len(report["ghosts"])
-        + len(report["stale"])
-        + report["invalid"]
-    )
+    unhealthy = len(report["orphans"]) + len(report["ghosts"]) + len(report["stale"]) + report["invalid"]
     output = (
         f"lint: orphans={len(report['orphans'])} ghosts={len(report['ghosts'])} "
         f"stale={len(report['stale'])} invalid={report['invalid']}"
@@ -333,11 +327,7 @@ def _step_pytest(engine_dir: Path) -> StepResult:
         cwd=engine_dir,
         timeout=420,
     )
-    last_line = (
-        (stdout or stderr or "(无输出)").strip().splitlines()[-1]
-        if (stdout or stderr)
-        else "(无输出)"
-    )
+    last_line = (stdout or stderr or "(无输出)").strip().splitlines()[-1] if (stdout or stderr) else "(无输出)"
     if exit_code == 0:
         return StepResult(
             name="pytest",
@@ -362,8 +352,7 @@ def _step_pytest(engine_dir: Path) -> StepResult:
             exit_code=exit_code,
             output=f"❌ pytest 失败: {last_line}",
             meta={
-                "has_import_error": "ModuleNotFoundError" in (stderr or stdout)
-                or "ImportError" in (stderr or stdout)
+                "has_import_error": "ModuleNotFoundError" in (stderr or stdout) or "ImportError" in (stderr or stdout)
             },
         )
 
@@ -375,11 +364,7 @@ def _step_ruff(engine_dir: Path) -> StepResult:
         cwd=engine_dir,
         timeout=60,
     )
-    last_line = (
-        (stdout or stderr or "(无输出)").strip().splitlines()[-1]
-        if (stdout or stderr)
-        else "(无输出)"
-    )
+    last_line = (stdout or stderr or "(无输出)").strip().splitlines()[-1] if (stdout or stderr) else "(无输出)"
     if exit_code == 0:
         return StepResult(
             name="ruff",
@@ -446,10 +431,7 @@ def _step_startup_budget() -> StepResult:
             stage="质量门禁",
             status="warn",
             exit_code=1,
-            output=(
-                f"⚠️ 预算超帽 L0 {total}/{TOTAL_LIMIT} [{l0_detail}]"
-                f" | L1 [{l1_detail}]：{'; '.join(errs)}"
-            ),
+            output=(f"⚠️ 预算超帽 L0 {total}/{TOTAL_LIMIT} [{l0_detail}] | L1 [{l1_detail}]：{'; '.join(errs)}"),
             meta=meta,
         )
     return StepResult(
@@ -478,11 +460,7 @@ def _step_build_vectors(root: Path, engine_dir: Path) -> StepResult:
         cwd=engine_dir,
         timeout=300,
     )
-    last_line = (
-        (stdout or stderr or "(无输出)").strip().splitlines()[-1]
-        if (stdout or stderr)
-        else "(无输出)"
-    )
+    last_line = (stdout or stderr or "(无输出)").strip().splitlines()[-1] if (stdout or stderr) else "(无输出)"
     if exit_code == 0:
         return StepResult(
             name="build_vectors",
@@ -567,11 +545,7 @@ def _step_vector_regression(root: Path, engine_dir: Path) -> StepResult:
         cwd=engine_dir,
         timeout=120,
     )
-    last_line = (
-        (stdout or stderr or "(无输出)").strip().splitlines()[-1]
-        if (stdout or stderr)
-        else "(无输出)"
-    )
+    last_line = (stdout or stderr or "(无输出)").strip().splitlines()[-1] if (stdout or stderr) else "(无输出)"
     if exit_code == 0:
         return StepResult(
             name="vector_regression",
@@ -694,9 +668,7 @@ def _step_status_snapshot(root: Path, engine_dir: Path) -> StepResult:
     )
 
 
-def _save_snapshot_archive(
-    root: Path, engine_dir: Path, *, no_overwrite: bool = False
-) -> StepResult:
+def _save_snapshot_archive(root: Path, engine_dir: Path, *, no_overwrite: bool = False) -> StepResult:
     """将快照归档到 retro/ 目录。支持防覆盖模式。"""
     retro_dir = root / "retro"
     retro_dir.mkdir(parents=True, exist_ok=True)
@@ -734,9 +706,7 @@ def _save_snapshot_archive(
     if exit_code in (0, 2):
         try:
             data = json.loads(stdout)
-            snap_path.write_text(
-                json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
-            )
+            snap_path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
             return StepResult(
                 name="archive_snapshot",
                 stage="报告归档",
@@ -781,9 +751,7 @@ def _step_freshness_check(root: Path, engine_dir: Path) -> StepResult:
     from common.config import external_path
 
     skillhub = external_path("skillhub", root)
-    skillhub_root_str = os.environ.get("SKILLHUB_ROOT") or (
-        str(skillhub) if skillhub else ""
-    )
+    skillhub_root_str = os.environ.get("SKILLHUB_ROOT") or (str(skillhub) if skillhub else "")
     script = engine_dir / "scripts" / "stale_detect.py"
     if not skillhub_root_str:
         return StepResult(
@@ -854,9 +822,7 @@ def _step_verify_after_fix(engine_dir: Path, fix_results: dict) -> StepResult:
     outputs: list[str] = []
     for name, cmd in cmds:
         try:
-            r = subprocess.run(
-                cmd, capture_output=True, text=True, timeout=120, cwd=str(engine_dir)
-            )
+            r = subprocess.run(cmd, capture_output=True, text=True, timeout=120, cwd=str(engine_dir))
             outputs.append(f"[{name}] exit={r.returncode}")
             if r.returncode != 0:
                 failed.append(f"{name}(exit={r.returncode})")
@@ -899,11 +865,7 @@ def _step_auto_fix_lint(root: Path, engine_dir: Path) -> StepResult:
         timeout=60,
     )
     text = (stdout or stderr or "").strip()
-    fixed = (
-        "修复" in text and "0" not in text.split("修复")[1].split("张")[0]
-        if "修复" in text
-        else False
-    )
+    fixed = "修复" in text and "0" not in text.split("修复")[1].split("张")[0] if "修复" in text else False
     return StepResult(
         name="auto_fix_lint",
         stage="自动修复",
@@ -1034,13 +996,10 @@ def _generate_suggestions(report: PatrolReport) -> list[str]:
                 "（OmniRoute 已于 2026-09-15 从兜底移除；本地端点不可用时应人工介入）"
             )
         elif rule == "local_llm_slow":
-            suggestions.append(
-                "🟢 本地 LLM 响应慢 → 检查 LM Studio 资源占用，考虑使用较小模型或开启 GPU 加速"
-            )
+            suggestions.append("🟢 本地 LLM 响应慢 → 检查 LM Studio 资源占用，考虑使用较小模型或开启 GPU 加速")
         elif rule == "lint_issues":
             suggestions.append(
-                "🟢 Lint 问题 → 已由 auto_fix_lint 自动修复 invalid 卡 frontmatter；"
-                "孤儿页和陈旧页需人工审核后手动处理"
+                "🟢 Lint 问题 → 已由 auto_fix_lint 自动修复 invalid 卡 frontmatter；孤儿页和陈旧页需人工审核后手动处理"
             )
         elif rule == "low_hit_rate":
             suggestions.append(
@@ -1048,9 +1007,7 @@ def _generate_suggestions(report: PatrolReport) -> list[str]:
                 "查看 .sync/drafts/auto_sleep_draft/ 中的草稿卡补充完整"
             )
         elif rule == "low_flywheel_activity":
-            suggestions.append(
-                "🟢 飞轮活跃度低 → 补充新经验卡或执行 `python engine.py distill` 处理草稿"
-            )
+            suggestions.append("🟢 飞轮活跃度低 → 补充新经验卡或执行 `python engine.py distill` 处理草稿")
         elif rule == "pending_confirmation":
             suggestions.append(
                 "🟢 待确认卡片 → 已由 auto_review_today 自动跳过非 rule/methodology 类卡；"
@@ -1099,20 +1056,13 @@ def run_patrol(
         if existing_snap.is_file():
             try:
                 existing_data = json.loads(existing_snap.read_text(encoding="utf-8"))
-                if (
-                    existing_data.get("generated_at", "")
-                    and today in existing_data["generated_at"]
-                ):
+                if existing_data.get("generated_at", "") and today in existing_data["generated_at"]:
                     # 兼容旧快照字段名 ollama → llm
-                    llm_field = existing_data.get("llm_health") or existing_data.get(
-                        "ollama", {}
-                    )
+                    llm_field = existing_data.get("llm_health") or existing_data.get("ollama", {})
                     report = PatrolReport(
                         hub_root=str(root),
                         generated_at=datetime.now(_LOCAL_TZ).isoformat(),
-                        llm_available=llm_field.get("available", True)
-                        if isinstance(llm_field, dict)
-                        else True,
+                        llm_available=llm_field.get("available", True) if isinstance(llm_field, dict) else True,
                         overall_exit_code=0,
                         snapshot=existing_data,
                         alerts=existing_data.get("alerts", []),
@@ -1142,12 +1092,8 @@ def run_patrol(
     stage1.steps.append(_run_step("llm_check", "基础设施", lambda: _llm_pre_check()))
     llm_ok = stage1.steps[-1].status == "pass"
     report.llm_available = llm_ok
-    stage1.steps.append(
-        _run_step("config_integrity", "基础设施", lambda: _check_config_integrity(root))
-    )
-    stage1.steps.append(
-        _run_step("file_integrity", "基础设施", lambda: _check_file_integrity(root))
-    )
+    stage1.steps.append(_run_step("config_integrity", "基础设施", lambda: _check_config_integrity(root)))
+    stage1.steps.append(_run_step("file_integrity", "基础设施", lambda: _check_file_integrity(root)))
     report.stages.append(stage1)
 
     if dry_run:
@@ -1165,13 +1111,9 @@ def run_patrol(
     # ===== 阶段 2: 代码质量门禁（始终执行，不依赖 LLM） =====
     stage2 = StageResult(name="代码质量门禁")
     stage2.steps.append(_run_step("lint", "质量门禁", lambda: _step_lint(root)))
-    stage2.steps.append(
-        _run_step("pytest", "质量门禁", lambda: _step_pytest(engine_dir))
-    )
+    stage2.steps.append(_run_step("pytest", "质量门禁", lambda: _step_pytest(engine_dir)))
     stage2.steps.append(_run_step("ruff", "质量门禁", lambda: _step_ruff(engine_dir)))
-    stage2.steps.append(
-        _run_step("startup_budget", "质量门禁", lambda: _step_startup_budget())
-    )
+    stage2.steps.append(_run_step("startup_budget", "质量门禁", lambda: _step_startup_budget()))
     report.stages.append(stage2)
 
     # ===== 阶段 3: 飞轮活跃度 =====
@@ -1204,11 +1146,7 @@ def run_patrol(
                     output="本地 LLM 不可用，跳过向量构建",
                 )
             )
-        stage3.steps.append(
-            _run_step(
-                "router_sync", "飞轮活跃度", lambda: _step_router_sync(root, engine_dir)
-            )
-        )
+        stage3.steps.append(_run_step("router_sync", "飞轮活跃度", lambda: _step_router_sync(root, engine_dir)))
     report.stages.append(stage3)
 
     # ===== 阶段 4: 数据质量 =====
@@ -1220,21 +1158,13 @@ def run_patrol(
             lambda: _step_vector_regression(root, engine_dir),
         )
     )
-    stage4.steps.append(
-        _run_step(
-            "metrics_daily", "数据质量", lambda: _step_metrics_daily(root, engine_dir)
-        )
-    )
-    stage4.steps.append(
-        _run_step("hub_review", "数据质量", lambda: _step_hub_review(root, engine_dir))
-    )
+    stage4.steps.append(_run_step("metrics_daily", "数据质量", lambda: _step_metrics_daily(root, engine_dir)))
+    stage4.steps.append(_run_step("hub_review", "数据质量", lambda: _step_hub_review(root, engine_dir)))
     report.stages.append(stage4)
 
     # ===== 阶段 5: 报告生成与归档 =====
     stage5 = StageResult(name="报告生成与归档")
-    snap_result = _run_step(
-        "status_snapshot", "报告归档", lambda: _step_status_snapshot(root, engine_dir)
-    )
+    snap_result = _run_step("status_snapshot", "报告归档", lambda: _step_status_snapshot(root, engine_dir))
     stage5.steps.append(snap_result)
     archive_result = _run_step(
         "archive_snapshot",
@@ -1315,10 +1245,7 @@ def run_patrol(
         report.stages.append(stage6)
 
         # 收集自动修复层结果到 report.auto_fix_results
-        report.auto_fix_results = {
-            st.name: {"status": st.status, "output": st.output[:300]}
-            for st in stage6.steps
-        }
+        report.auto_fix_results = {st.name: {"status": st.status, "output": st.output[:300]} for st in stage6.steps}
 
         # ===== 阶段 6b: 修复验证（任务 4）=====
         # 修复后必须再跑 pytest/ruff 验证，否则静默通过有风险
@@ -1407,9 +1334,7 @@ def _step_platform_sync_check(root: Path, engine_dir: Path) -> StepResult:
     exit_code, stdout, stderr = _run_cmd(
         [sys.executable, str(script), "--root", str(root)], cwd=engine_dir, timeout=120
     )
-    lines = [
-        s.strip() for s in ((stdout or "") + (stderr or "")).splitlines() if s.strip()
-    ]
+    lines = [s.strip() for s in ((stdout or "") + (stderr or "")).splitlines() if s.strip()]
     drift = [s for s in lines if ("需同步" in s or "❌" in s)]
     if exit_code == 0:
         return StepResult(
@@ -1438,12 +1363,8 @@ def _step_platform_healthcheck(root: Path, engine_dir: Path) -> StepResult:
             status="skip",
             output="platform_healthcheck.py 缺失",
         )
-    exit_code, stdout, stderr = _run_cmd(
-        [sys.executable, str(script)], cwd=engine_dir, timeout=180
-    )
-    lines = [
-        s.strip() for s in ((stdout or "") + (stderr or "")).splitlines() if s.strip()
-    ]
+    exit_code, stdout, stderr = _run_cmd([sys.executable, str(script)], cwd=engine_dir, timeout=180)
+    lines = [s.strip() for s in ((stdout or "") + (stderr or "")).splitlines() if s.strip()]
     bad = [s for s in lines if ("YELLOW" in s or "RED" in s)]
     if exit_code == 0:
         return StepResult(
@@ -1561,13 +1482,7 @@ def print_report(report: PatrolReport):
     if report.auto_fix_results:
         print("\n🔧 自动修复层结果:")
         for name, info in report.auto_fix_results.items():
-            icon = (
-                "✅"
-                if info["status"] == "pass"
-                else "⚠️"
-                if info["status"] == "warn"
-                else "⏭️"
-            )
+            icon = "✅" if info["status"] == "pass" else "⚠️" if info["status"] == "warn" else "⏭️"
             print(f"  {icon} {name}: {info['output'][:150]}")
 
     # 建议
@@ -1578,10 +1493,7 @@ def print_report(report: PatrolReport):
 
     # 总体退出码
     print(f"\n{'=' * 72}")
-    print(
-        f"  总体退出码: {report.overall_exit_code} "
-        f"({'全绿' if report.overall_exit_code == 0 else '需关注'})"
-    )
+    print(f"  总体退出码: {report.overall_exit_code} ({'全绿' if report.overall_exit_code == 0 else '需关注'})")
     print(f"{'=' * 72}")
 
 
@@ -1603,9 +1515,7 @@ def main() -> int:
         action="store_true",
         help="跳过飞轮相关步骤 (向量构建/路由同步)",
     )
-    parser.add_argument(
-        "--skip-autofix", action="store_true", help="跳过阶段 6 自动修复层 (调试用)"
-    )
+    parser.add_argument("--skip-autofix", action="store_true", help="跳过阶段 6 自动修复层 (调试用)")
     parser.add_argument("--dry-run", action="store_true", help="仅打印计划，不实际执行")
     parser.add_argument(
         "--skip-if-exists",

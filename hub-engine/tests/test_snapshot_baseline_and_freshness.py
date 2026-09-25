@@ -151,9 +151,7 @@ def test_freshness_check_step_is_callable_without_exception(tmp_path):
     """freshness_check 步骤必须正常返回 StepResult（不得抛 TypeError）。"""
     import importlib.util
 
-    spec = importlib.util.spec_from_file_location(
-        "_patrol_runner_probe", _ENGINE_DIR / "scripts" / "patrol_runner.py"
-    )
+    spec = importlib.util.spec_from_file_location("_patrol_runner_probe", _ENGINE_DIR / "scripts" / "patrol_runner.py")
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
 

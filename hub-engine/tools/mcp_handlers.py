@@ -66,11 +66,7 @@ def _hit(
         h["score"] = round(score, 4)
     if include_body:
         # 可选渐进压缩：>0 时返回压缩后的正文（前端/注入按用途取级），0=原文
-        h["body"] = (
-            compress_card_text(card.body, int(compress_level))
-            if compress_level > 0
-            else card.body
-        )
+        h["body"] = compress_card_text(card.body, int(compress_level)) if compress_level > 0 else card.body
     return h
 
 
@@ -92,9 +88,7 @@ def hub_search(
     for card, score in scored:
         if allow is not None and card.type not in allow:
             continue
-        hits.append(
-            _hit(card, channel, score, root, include_body, query, compress_level)
-        )
+        hits.append(_hit(card, channel, score, root, include_body, query, compress_level))
     aid = audit_id()
     append_query_log(
         root,
@@ -163,9 +157,7 @@ def _bump_reuse(path: Path) -> bool:
     def _inc(mo: re.Match) -> str:
         return f"reuse_count: {int(mo.group(1)) + 1}"
 
-    new_fm, n = re.subn(
-        r"^reuse_count:\s*(\d+)", _inc, fm_block, count=1, flags=re.MULTILINE
-    )
+    new_fm, n = re.subn(r"^reuse_count:\s*(\d+)", _inc, fm_block, count=1, flags=re.MULTILINE)
     if n == 0:
         return False  # 无 reuse_count 字段则不计数
     if new_fm == fm_block:
@@ -214,9 +206,7 @@ def record_reuse(root: Path, rel_paths: list[str]) -> dict:
     return {"counted": counted, "dup_skipped": dup, "archived_skipped": arc}
 
 
-def hub_get(
-    root: Path, id_: str = "", rel_path: str = "", platform: str = "unknown"
-) -> dict:
+def hub_get(root: Path, id_: str = "", rel_path: str = "", platform: str = "unknown") -> dict:
     target = rel_path or id_
     if not target:
         return {
@@ -480,9 +470,7 @@ def hub_announce(
 
     allow = allowed_platforms(root)
     if platform not in allow:
-        raise PolicyError(
-            f"platform {platform!r} not allowed; allowed: {sorted(allow)}"
-        )
+        raise PolicyError(f"platform {platform!r} not allowed; allowed: {sorted(allow)}")
 
     aid = audit_id()
     rec = {

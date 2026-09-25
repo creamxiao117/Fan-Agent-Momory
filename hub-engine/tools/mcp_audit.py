@@ -32,11 +32,7 @@ def _today_str() -> str:
 
 def audit_id() -> str:
     """形如 20260818T153012Z-a1b2c3d4（8 位 hex 随机段，避免同秒碰撞）"""
-    return (
-        datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-        + "-"
-        + uuid.uuid4().hex[:8]
-    )
+    return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ") + "-" + uuid.uuid4().hex[:8]
 
 
 def _state_dir(root: Path) -> Path:
@@ -78,10 +74,7 @@ def append_query_log(root: Path, record: dict) -> None:
 
         # 字节级兜底 rotate（单日极端超 8MB 时切新文件）
         if path.exists() and path.stat().st_size > ROTATE_BYTES:
-            path.rename(
-                d
-                / f"{LOG_PREFIX}{_today_str()}-{datetime.now(timezone.utc).strftime('%H%M%S')}{LOG_SUFFIX}"
-            )
+            path.rename(d / f"{LOG_PREFIX}{_today_str()}-{datetime.now(timezone.utc).strftime('%H%M%S')}{LOG_SUFFIX}")
 
         rec = {"ts": _ts(), **record}
         with open(path, "a", encoding="utf-8") as f:

@@ -93,9 +93,7 @@ def main(argv: list[str] | None = None) -> int:
         cfg = home / rel
         if not cfg.is_file():
             continue
-        if cfg.name in declared or rel.split("/")[0].lstrip(".") in {
-            d.lstrip(".") for d in declared
-        }:
+        if cfg.name in declared or rel.split("/")[0].lstrip(".") in {d.lstrip(".") for d in declared}:
             continue
         if _has_mcp_block(cfg):
             found.append({"platform_hint": rel.split("/")[0], "config": str(cfg)})
@@ -115,9 +113,7 @@ def main(argv: list[str] | None = None) -> int:
         for item in found:
             print(f"  • {item['platform_hint']:20} {item['config']}")
         if found:
-            print(
-                "  提示：登记到 system/platforms.yaml 后跑 platform_sync.py --apply + platform_healthcheck.py"
-            )
+            print("  提示：登记到 system/platforms.yaml 后跑 platform_sync.py --apply + platform_healthcheck.py")
     return 0
 
 

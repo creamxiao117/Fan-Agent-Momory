@@ -203,17 +203,11 @@ def build_server(root: Path) -> Server:
         if handler is None:
             raise ValueError(f"未知工具: {name}")
         res = handler(root, **_normalize(name, arguments))
-        return CallToolResult(
-            content=[TextContent(type="text", text=json.dumps(res, ensure_ascii=False))]
-        )
+        return CallToolResult(content=[TextContent(type="text", text=json.dumps(res, ensure_ascii=False))])
 
     async def _list_resources(context, params) -> ListResourcesResult:
         """WorkBuddy MCP Apps 要求 ui:// 资源可枚举（工具目录校验用）"""
-        return ListResourcesResult(
-            resources=[
-                Resource(uri=uri, name=f"{name} 卡片") for name, uri in _UI_META.items()
-            ]
-        )
+        return ListResourcesResult(resources=[Resource(uri=uri, name=f"{name} 卡片") for name, uri in _UI_META.items()])
 
     async def _read_resource(context, params) -> ReadResourceResult:
         """提供极简 HTML 占位页；WorkBuddy 打开资源视图时使用"""
@@ -224,18 +218,12 @@ def build_server(root: Path) -> Server:
 <title>{safe}</title><body style="font-family:system-ui;padding:16px">
 <h2>Agent Memory Hub · {safe}</h2><p>此工具以文本响应为主，UI 资源仅供 WorkBuddy MCP Apps 目录展示。</p>
 </body></html>"""
-        return ReadResourceResult(
-            contents=[TextResourceContents(uri=uri, mime_type="text/html", text=html)]
-        )
+        return ReadResourceResult(contents=[TextResourceContents(uri=uri, mime_type="text/html", text=html)])
 
     server.add_request_handler("tools/list", PaginatedRequestParams, _list_tools)
     server.add_request_handler("tools/call", CallToolRequestParams, _call_tool)
-    server.add_request_handler(
-        "resources/list", PaginatedRequestParams, _list_resources
-    )
-    server.add_request_handler(
-        "resources/read", ReadResourceRequestParams, _read_resource
-    )
+    server.add_request_handler("resources/list", PaginatedRequestParams, _list_resources)
+    server.add_request_handler("resources/read", ReadResourceRequestParams, _read_resource)
     return server
 
 
@@ -251,9 +239,7 @@ def main(argv: list[str] | None = None) -> int:
 
     async def _run() -> None:
         async with stdio_server() as (read_stream, write_stream):
-            await server.run(
-                read_stream, write_stream, server.create_initialization_options()
-            )
+            await server.run(read_stream, write_stream, server.create_initialization_options())
 
     asyncio.run(_run())
     return 0

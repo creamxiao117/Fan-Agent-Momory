@@ -113,9 +113,7 @@ def run_task(task_name, args, timeout, hub_root, skillhub_root):
     use_skillhub = "tools." in args_str or "tools/" in args_str or "router/" in args_str
     cwd = skillhub_root if use_skillhub else hub_root
     try:
-        r = subprocess.run(
-            args, capture_output=True, text=True, timeout=timeout, cwd=cwd
-        )
+        r = subprocess.run(args, capture_output=True, text=True, timeout=timeout, cwd=cwd)
         out = r.stdout.strip()[:200]
         err = r.stderr.strip()[:200]
         if r.returncode == 0:
@@ -133,9 +131,7 @@ def main():
     ap = argparse.ArgumentParser(description="hub_orchestrator")
     ap.add_argument("--hub-root", required=True)
     ap.add_argument("--skillhub-root", required=True)
-    ap.add_argument(
-        "--fan-root", required=True, help="Fan-Agent-Momory 根（含 hub-engine/）"
-    )
+    ap.add_argument("--fan-root", required=True, help="Fan-Agent-Momory 根（含 hub-engine/）")
     ap.add_argument("--task", help="单任务运行（默认全部）")
     args = ap.parse_args()
 

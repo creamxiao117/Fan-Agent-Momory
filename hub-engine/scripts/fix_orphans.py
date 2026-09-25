@@ -129,9 +129,7 @@ def main(argv: list[str] | None = None) -> int:
     else:
         cards = detect_missing(root, index_path)
 
-    print(
-        f"待补登: {len(cards)} 张{'（自动检测）' if not args.list_file else '（来自清单）'}"
-    )
+    print(f"待补登: {len(cards)} 张{'（自动检测）' if not args.list_file else '（来自清单）'}")
     if not cards:
         return 0
 
@@ -164,10 +162,7 @@ def main(argv: list[str] | None = None) -> int:
             added += 1
 
     print()
-    print(
-        f"待补登/已补登: {added}   跳过: {skipped}"
-        + ("" if args.apply else "  [dry-run，加 --apply]")
-    )
+    print(f"待补登/已补登: {added}   跳过: {skipped}" + ("" if args.apply else "  [dry-run，加 --apply]"))
     return 0
 
 

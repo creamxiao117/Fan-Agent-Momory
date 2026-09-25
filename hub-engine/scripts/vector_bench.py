@@ -194,25 +194,19 @@ def _score(root: Path, queries: list[tuple[str, str]], top_k: int) -> tuple[dict
         if want in fus:
             hits["fus"] += 1
             marks.append("F")
-        detail.append(
-            (want, want in bag, want in vec, want in fus, "".join(marks) or "-")
-        )
+        detail.append((want, want in bag, want in vec, want in fus, "".join(marks) or "-"))
     return hits, detail
 
 
 def _print_group(label: str, n: int, hits: dict, detail: list) -> None:
-    print(
-        f"\n-- {label}（{n} 条）--  词袋 {hits['bag']}/{n}   向量 {hits['vec']}/{n}   融合 {hits['fus']}/{n}"
-    )
-    for name, b, v, f, m in detail:
+    print(f"\n-- {label}（{n} 条）--  词袋 {hits['bag']}/{n}   向量 {hits['vec']}/{n}   融合 {hits['fus']}/{n}")
+    for name, _b, _v, _f, m in detail:
         print(f"  [{m:<3}] {name}")
 
 
 def main() -> int:
     ap = argparse.ArgumentParser(description="检索三通道命中率基准")
-    ap.add_argument(
-        "--model", default=DEFAULT_MODEL, help="HF 模型 id，默认 bge-small-zh-v1.5"
-    )
+    ap.add_argument("--model", default=DEFAULT_MODEL, help="HF 模型 id，默认 bge-small-zh-v1.5")
     ap.add_argument(
         "--no-rebuild",
         action="store_true",
@@ -234,9 +228,7 @@ def main() -> int:
 
     # ---------- 真实中枢回归门禁：不建语料、不重建向量库，直接对现库回归 ----------
     if args.real:
-        os.environ["AGENT_MD_EMBED_MODEL"] = (
-            args.model
-        )  # 向量检索读现库，仍需模型参数一致
+        os.environ["AGENT_MD_EMBED_MODEL"] = args.model  # 向量检索读现库，仍需模型参数一致
         # 真语料基准须用真实 LLM：前置运行时自愈，离线先拉起再测（WORK.md 第20条）
         from tools.llm_health import ensure_llm_service
 
@@ -257,14 +249,10 @@ def main() -> int:
         db.unlink()  # 模型隔离：删库强制全量重建为该模型的向量
     stats = build(BENCH)
 
-    print(
-        f"模型: {args.model}\n语料 {len(CARDS)} 卡 / 查询 {len(QUERIES)}+{len(HARD)} 条"
-    )
+    print(f"模型: {args.model}\n语料 {len(CARDS)} 卡 / 查询 {len(QUERIES)}+{len(HARD)} 条")
     print(f"vector build: {stats}")
     if stats["embedded"] + stats["reused"] == 0:
-        print(
-            "警告：无卡片生成向量（模型不可用/无网/退化），以下向量与融合命中受空库影响。"
-        )
+        print("警告：无卡片生成向量（模型不可用/无网/退化），以下向量与融合命中受空库影响。")
 
     top_k = 1
     eh, _ = _score(BENCH, QUERIES, top_k)
