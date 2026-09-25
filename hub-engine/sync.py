@@ -299,6 +299,239 @@ def _write_dedup_prediction(cdir: Path, platform: str, draft: Path, card, decisi
         pass  # 决策留痕失败不阻断同步主流程
 
 
+def _ingest_stat_template() -> dict:
+    """ingest 的统计骨架（键名是 post_ingest_hook 的接口，勿随意改）。"""
+    return {
+        "promoted": 0,
+        "pending": 0,
+        "duplicate": 0,
+        "invalid": 0,
+        "status": "ok",
+        "moved_names": [],  # T1 (2026-09-07): 给 post_ingest_hook 精确清单
+        "promoted_names": [],
+        "lint_errors": [],
+    }
+
+
+def _read_valid_draft(p: Path, stat: dict):
+    """读草稿并过合法性门；不合规则计入 invalid 并返回 None。
+
+    两类不合规：① frontmatter 读不出来（`try_read_card` → None）；
+    ② 能读但字段非法（`validate_card` 有错）。
+    """
+    card = try_read_card(p)
+    if card is None:
+        stat["invalid"] += 1
+        return None
+    if validate_card(card):
+        stat["invalid"] += 1
+        return None
+    return card
+
+
+def _move_non_authority_draft(root: Path, p: Path, card, stat: dict) -> None:
+    """非权威区类型（exp/note/retro）→ 不参与去重/向量/检索，**改挪 experience/ 保留**。
+
+    用户指令（2026-09-02）：改挪而非删除。同名时加日期后缀，绝不覆盖既有卡。
+    """
+    exp_dir = root / "experience"
+    exp_dir.mkdir(parents=True, exist_ok=True)
+    dst = exp_dir / p.name
+    if dst.exists():
+        dst = exp_dir / f"{p.stem}-{today_iso()}{p.suffix}"
+    shutil.move(str(p), str(dst))
+    stat["moved"] = stat.get("moved", 0) + 1
+    stat["moved_names"].append(p.name)
+    _append_log(root, "ingest", f"非权威区 type={card.type}，改挪 experience/ 保留：{dst.name}")
+    record_diff(
+        root,
+        {
+            "op": "move",
+            "name": p.name,
+            "type": card.type,
+            "before": str(p.relative_to(root)).replace(os.sep, "/"),
+            "after": str(dst.relative_to(root)).replace(os.sep, "/"),
+        },
+    )
+
+
+def _put_into_conflicts(
+    root: Path,
+    platform: str,
+    p: Path,
+    card,
+    *,
+    diff_message: str,
+    log_message: str | None = None,
+    decision: dict | None = None,
+    unlink: bool,
+) -> None:
+    """把草稿复制进 `.sync/conflicts/<platform>_<name>`，并按需留痕/记账/删草稿。
+
+    动作顺序与原实现逐字一致：**复制 → （可选）`.pred.json` 建议 → （可选）日志 → diff → （可选）删草稿**。
+    `unlink` 由调用方指定：重复分流路径自己删；低风险同名冲突路径交给循环尾部的统一 `p.unlink()`。
+    """
+    cdir = root / ".sync" / "conflicts"
+    cdir.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(p, cdir / f"{platform}_{p.name}")
+    if decision:
+        _write_dedup_prediction(cdir, platform, p, card, decision)
+    if log_message:
+        _append_log(root, "ingest", log_message)
+    record_diff(
+        root,
+        {
+            "op": "delete",
+            "name": p.name,
+            "type": card.type,
+            "deleted_content": diff_message,
+        },
+    )
+    if unlink:
+        p.unlink()  # 内容已保留在冲突区，草稿无保留价值
+
+
+def _handle_duplicate_draft(root: Path, platform: str, p: Path, card, cands: list, stat: dict, chat_fn) -> None:
+    """命中去重候选后的三条出路（按 LLM 决策分流；`cands` 原样传给 dedup_decide）。
+
+    1. **高置信 skip(≥0.8)** → 判为真重复，丢弃草稿（不入冲突区）
+    2. **高置信 create(≥0.8) 且非高风险** → 视作无有效候选：权威区无同名则直接入区，
+       有同名则进冲突区（不覆盖）
+    3. **其余（merge/delete/review/低置信/无决策）** → 进冲突区交人工
+    """
+    stat["duplicate"] += 1
+    decision = dedup_decide(root, card, cands, chat_fn=chat_fn) if chat_fn else None
+    # 高置信重复（LLM 明确 skip 且 ≥0.8）→ 丢弃草稿，不落冲突区
+    if decision and decision["action"] == "skip" and decision["confidence"] >= 0.8:
+        _append_log(root, "ingest", f"LLM 判定重复，丢弃草稿：{p.name}")
+        record_diff(
+            root,
+            {
+                "op": "delete",
+                "name": p.name,
+                "type": card.type,
+                "deleted_content": (
+                    f"LLM 判定重复(skip conf={decision['confidence']:.2f})，丢弃：{decision['reason']}"
+                ),
+            },
+        )
+        p.unlink()
+        return
+    # 反哺经验(2026-08-21)：LLM 高置信判 create（新卡、与候选主题不同无重复，target=null）
+    # → 视作无有效候选，低风险卡型直接自动入区；rule 仍须人工；权威区同名冲突仍交冲突区兜底
+    if (
+        decision
+        and decision["action"] == "create"
+        and decision.get("confidence", 0) >= 0.8
+        and card.type not in HIGH_RISK
+    ):
+        dst_c = root / TYPE_DIR.get(card.type) / p.name
+        if dst_c.exists():
+            _put_into_conflicts(
+                root,
+                platform,
+                p,
+                card,
+                # 外层 cands 命中已 duplicate+=1，此处不重复计数
+                log_message=f"LLM 判 create 高置信但权威区同名，进冲突区：{p.name}",
+                diff_message=f"同名冲突，回收进冲突区（hash={hash(card.body) & 0xFFFF:x}）",
+                unlink=False,
+            )
+        else:
+            if card.type != "blueprint":
+                card.status = "active"
+            dst_c.parent.mkdir(parents=True, exist_ok=True)
+            dst_c.write_text(write_card(card), encoding="utf-8")
+            stat["promoted"] += 1
+            stat["promoted_names"].append(p.name)
+            _append_log(root, "ingest", f"LLM 判 create 高置信，自动入区：{p.name}")
+            record_diff(
+                root,
+                {
+                    "op": "add",
+                    "name": p.name,
+                    "type": card.type,
+                    "before": None,
+                    "after": str(dst_c.relative_to(root)).replace(os.sep, "/"),
+                },
+            )
+        p.unlink()
+        return
+    _put_into_conflicts(
+        root,
+        platform,
+        p,
+        card,
+        log_message=(
+            f"重复内容进冲突区：{p.name}" + (f"（LLM 建议 {decision['action']}，待人工终审）" if decision else "")
+        ),
+        diff_message=f"重复，回收进冲突区（hash={hash(card.body) & 0xFFFF:x}）",
+        decision=decision,  # 决策留痕：冲突区附 .pred.json 建议，供人工终审
+        unlink=True,
+    )
+
+
+def _stage_pending_draft(root: Path, p: Path, card, stat: dict) -> None:
+    """高风险类型（rule + methodology）→ 落 `.sync/pending/` 且状态置 `candidate`，等人工确认。"""
+    pending = root / ".sync" / "pending"
+    pending.mkdir(parents=True, exist_ok=True)
+    card.status = "candidate"
+    (pending / p.name).write_text(write_card(card), encoding="utf-8")
+    stat["pending"] += 1
+    _append_log(root, "ingest", f"新规则待确认：{p.name}")
+    record_diff(
+        root,
+        {
+            "op": "add",
+            "name": p.name,
+            "type": card.type,
+            "before": None,
+            "after": f".sync/pending/{p.name}",
+        },
+    )
+
+
+def _promote_or_conflict_draft(root: Path, platform: str, p: Path, card, stat: dict) -> None:
+    """低风险内容 → 自动入区；权威区已存在同名（语义去重已在上游处理过）→ 不覆盖，转冲突区。
+
+    状态处理：蓝图保留草稿声明（reference→T1 前 / active→试用后），其余低风险卡置 `active`。
+    草稿的删除统一由调用方（循环尾部）负责。
+    """
+    dst_dir = TYPE_DIR.get(card.type)
+    dst = root / dst_dir / p.name
+    if dst.exists():
+        # 同名不同内容（语义去重已在上方处理过）→ 不覆盖权威区，转冲突区
+        _put_into_conflicts(
+            root,
+            platform,
+            p,
+            card,
+            log_message=f"同名不同内容进冲突区：{p.name}",
+            diff_message=f"同名冲突，回收进冲突区（hash={hash(card.body) & 0xFFFF:x}）",
+            unlink=False,
+        )
+        stat["duplicate"] += 1
+        return
+    # 蓝图卡保留草稿声明的 status（reference→T1 前 / active→试用后），其余低风险卡默认为 active
+    if card.type != "blueprint":
+        card.status = "active"
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    dst.write_text(write_card(card), encoding="utf-8")
+    stat["promoted"] += 1
+    stat["promoted_names"].append(p.name)
+    _append_log(root, "ingest", f"自动入区：{p.name}")
+    record_diff(
+        root,
+        {
+            "op": "add",
+            "name": p.name,
+            "type": card.type,
+            "before": None,
+            "after": str(dst.relative_to(root)).replace(os.sep, "/"),
+        },
+    )
+
+
 def ingest(root: Path, platform: str, chat_fn=None, strict_lint: bool = False) -> dict:
     """把 .sync/drafts/<platform>_draft/ 下的内容提升到中枢；返回统计。
 
@@ -309,20 +542,16 @@ def ingest(root: Path, platform: str, chat_fn=None, strict_lint: bool = False) -
 
     strict_lint（T2, 2026-09-07）：True = 草稿 frontmatter 不合规直接 return 阻断；
     False（默认）= 软门禁，只把 errors 写进 stat["lint_errors"], 继续 ingest。
+
+    2026-09-25（审计 SPLIT / P2-b）：本函数由 229 行拆成「门禁 + 遍历派发 + 提交」编排，
+    各分支的落盘/日志/diff 行为抽到 `_move_non_authority_draft` / `_handle_duplicate_draft` /
+    `_stage_pending_draft` / `_promote_or_conflict_draft` / `_put_into_conflicts`，
+    行为逐字保持不变（拆分前先补了 14 例分支级 fixture 测试作网，拆分后同一套测试全绿）。
     """
     from tools.lint import lint_drafts  # lazy import 避免循环依赖
 
     root = Path(root)
-    stat = {
-        "promoted": 0,
-        "pending": 0,
-        "duplicate": 0,
-        "invalid": 0,
-        "status": "ok",
-        "moved_names": [],
-        "promoted_names": [],
-        "lint_errors": [],
-    }  # T1 (2026-09-07): 给 post_ingest_hook 精确清单
+    stat = _ingest_stat_template()
     drafts = root / ".sync" / "drafts" / f"{platform}_draft"
     if not drafts.is_dir():
         return stat
@@ -337,192 +566,21 @@ def ingest(root: Path, platform: str, chat_fn=None, strict_lint: bool = False) -
     try:
         with _WriteLock(root):
             for p in sorted(drafts.glob("*.md")):
-                card = try_read_card(p)
+                card = _read_valid_draft(p, stat)
                 if card is None:
-                    stat["invalid"] += 1
                     continue
-                if validate_card(card):
-                    stat["invalid"] += 1
-                    continue
-                # (2026-09-02) 非权威区类型（exp/note/retro）→ 不参与去重/向量/检索，直接改挪 experience/ 保留（用户指令：改挪而非删除）
+                # (2026-09-02) 非权威区类型（exp/note/retro）→ 直接改挪 experience/ 保留
                 if card.type not in TYPE_DIR:
-                    exp_dir = root / "experience"
-                    exp_dir.mkdir(parents=True, exist_ok=True)
-                    dst = exp_dir / p.name
-                    if dst.exists():
-                        dst = exp_dir / f"{p.stem}-{today_iso()}{p.suffix}"
-                    shutil.move(str(p), str(dst))
-                    stat["moved"] = stat.get("moved", 0) + 1
-                    stat["moved_names"].append(p.name)
-                    _append_log(
-                        root,
-                        "ingest",
-                        f"非权威区 type={card.type}，改挪 experience/ 保留：{dst.name}",
-                    )
-                    record_diff(
-                        root,
-                        {
-                            "op": "move",
-                            "name": p.name,
-                            "type": card.type,
-                            "before": str(p.relative_to(root)).replace(os.sep, "/"),
-                            "after": str(dst.relative_to(root)).replace(os.sep, "/"),
-                        },
-                    )
+                    _move_non_authority_draft(root, p, card, stat)
                     continue
                 cands = dedup_candidates(root, card)
                 if cands:
-                    stat["duplicate"] += 1
-                    decision = dedup_decide(root, card, cands, chat_fn=chat_fn) if chat_fn else None
-                    # 高置信重复（LLM 明确 skip 且 ≥0.8）→ 丢弃草稿，不落冲突区
-                    if decision and decision["action"] == "skip" and decision["confidence"] >= 0.8:
-                        _append_log(root, "ingest", f"LLM 判定重复，丢弃草稿：{p.name}")
-                        record_diff(
-                            root,
-                            {
-                                "op": "delete",
-                                "name": p.name,
-                                "type": card.type,
-                                "deleted_content": (
-                                    f"LLM 判定重复(skip conf={decision['confidence']:.2f})，丢弃：{decision['reason']}"
-                                ),
-                            },
-                        )
-                        p.unlink()
-                        continue
-                    # 反哺经验(2026-08-21)：LLM 高置信判 create（新卡、与候选主题不同无重复，
-                    # target=null）→ 视作无有效候选，低风险卡型直接自动入区不落冲突区；
-                    # rule 仍须人工；权威区同名冲突仍交冲突区兜底。
-                    if (
-                        decision
-                        and decision["action"] == "create"
-                        and decision.get("confidence", 0) >= 0.8
-                        and card.type not in HIGH_RISK
-                    ):
-                        dst_c = root / TYPE_DIR.get(card.type) / p.name
-                        if dst_c.exists():
-                            cdir = root / ".sync" / "conflicts"
-                            cdir.mkdir(parents=True, exist_ok=True)
-                            shutil.copy2(p, cdir / f"{platform}_{p.name}")
-                            # 外层 cands 命中已 duplicate+=1，此处不重复计数
-                            _append_log(
-                                root,
-                                "ingest",
-                                f"LLM 判 create 高置信但权威区同名，进冲突区：{p.name}",
-                            )
-                            record_diff(
-                                root,
-                                {
-                                    "op": "delete",
-                                    "name": p.name,
-                                    "type": card.type,
-                                    "deleted_content": (f"同名冲突，回收进冲突区（hash={hash(card.body) & 0xFFFF:x}）"),
-                                },
-                            )
-                        else:
-                            if card.type != "blueprint":
-                                card.status = "active"
-                            dst_c.parent.mkdir(parents=True, exist_ok=True)
-                            dst_c.write_text(write_card(card), encoding="utf-8")
-                            stat["promoted"] += 1
-                            stat["promoted_names"].append(p.name)
-                            _append_log(
-                                root,
-                                "ingest",
-                                f"LLM 判 create 高置信，自动入区：{p.name}",
-                            )
-                            record_diff(
-                                root,
-                                {
-                                    "op": "add",
-                                    "name": p.name,
-                                    "type": card.type,
-                                    "before": None,
-                                    "after": str(dst_c.relative_to(root)).replace(os.sep, "/"),
-                                },
-                            )
-                        p.unlink()
-                        continue
-                    cdir = root / ".sync" / "conflicts"
-                    cdir.mkdir(parents=True, exist_ok=True)
-                    shutil.copy2(p, cdir / f"{platform}_{p.name}")
-                    # 决策留痕：冲突区附 .pred.json 建议，供人工终审
-                    if decision:
-                        (_write_dedup_prediction(cdir, platform, p, card, decision))
-                    _append_log(
-                        root,
-                        "ingest",
-                        f"重复内容进冲突区：{p.name}"
-                        + (f"（LLM 建议 {decision['action']}，待人工终审）" if decision else ""),
-                    )
-                    record_diff(
-                        root,
-                        {
-                            "op": "delete",
-                            "name": p.name,
-                            "type": card.type,
-                            "deleted_content": f"重复，回收进冲突区（hash={hash(card.body) & 0xFFFF:x}）",
-                        },
-                    )
-                    p.unlink()  # 内容已保留在冲突区，草稿无保留价值
+                    _handle_duplicate_draft(root, platform, p, card, cands, stat, chat_fn)
                     continue
                 if card.type in HIGH_RISK:
-                    # 新增重要规则 → 待人工确认
-                    pending = root / ".sync" / "pending"
-                    pending.mkdir(parents=True, exist_ok=True)
-                    card.status = "candidate"
-                    (pending / p.name).write_text(write_card(card), encoding="utf-8")
-                    stat["pending"] += 1
-                    _append_log(root, "ingest", f"新规则待确认：{p.name}")
-                    record_diff(
-                        root,
-                        {
-                            "op": "add",
-                            "name": p.name,
-                            "type": card.type,
-                            "before": None,
-                            "after": f".sync/pending/{p.name}",
-                        },
-                    )
+                    _stage_pending_draft(root, p, card, stat)
                 else:
-                    # 低风险内容 → 自动入区，仅记日志
-                    dst_dir = TYPE_DIR.get(card.type)
-                    dst = root / dst_dir / p.name
-                    if dst.exists():
-                        # 同名不同内容（语义去重已在上方处理过）→ 不覆盖权威区，转冲突区
-                        cdir = root / ".sync" / "conflicts"
-                        cdir.mkdir(parents=True, exist_ok=True)
-                        shutil.copy2(p, cdir / f"{platform}_{p.name}")
-                        stat["duplicate"] += 1
-                        _append_log(root, "ingest", f"同名不同内容进冲突区：{p.name}")
-                        record_diff(
-                            root,
-                            {
-                                "op": "delete",
-                                "name": p.name,
-                                "type": card.type,
-                                "deleted_content": f"同名冲突，回收进冲突区（hash={hash(card.body) & 0xFFFF:x}）",
-                            },
-                        )
-                    else:
-                        # 蓝图卡保留草稿声明的 status（reference→T1 前 / active→试用后），其余低风险卡默认为 active
-                        if card.type != "blueprint":
-                            card.status = "active"
-                        dst.parent.mkdir(parents=True, exist_ok=True)
-                        dst.write_text(write_card(card), encoding="utf-8")
-                        stat["promoted"] += 1
-                        stat["promoted_names"].append(p.name)
-                        _append_log(root, "ingest", f"自动入区：{p.name}")
-                        record_diff(
-                            root,
-                            {
-                                "op": "add",
-                                "name": p.name,
-                                "type": card.type,
-                                "before": None,
-                                "after": str(dst.relative_to(root)).replace(os.sep, "/"),
-                            },
-                        )
+                    _promote_or_conflict_draft(root, platform, p, card, stat)
                 p.unlink()
             _commit(root, f"sync: ingest {platform} draft → hub", protect=protect)
     except RuntimeError as e:
