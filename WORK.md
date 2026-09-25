@@ -12,7 +12,7 @@
 - 安全底座常驻：单写者+§4 守护+ledger；query-first + 交回用户 + 回写
 - 方案 `docs/compose/specs/2026-09-23-slim-rules-gates-design.md`；计划 `docs/compose/plans/2026-09-23-slim-rules-gates.md`
 - 分项帽：AGENTS≤2500 / CHARTER≤1500 / WORK≤5000 / INDEX≤20000（和 29,000 ≤ 总帽 30,000；不变量有测试看守）
-- **测试 478 passed / 4 skipped / 0 failed**；ruff 全绿；lint 干净；audit ✅ 健康
+- **测试 551 passed / 4 skipped / 0 failed**；ruff 全绿；lint 干净；audit ✅ 健康
 - 磁盘：已释放 ≈1.61 GB（`work/` 历史基准夹具 + `.mimocode/node_modules`）
 
 ## 活跃待办
@@ -26,7 +26,7 @@
 | P0-B | 蓝图分池（121 张外部蓝图挤占召回） | 未做；同一份检索代码，**与 P0-A 的复核合并一次做** |
 | ~~P1~~ | ~~外部非版本控制脚本迁入~~ | **已完成（`ee4af05`）**：裁定真实被执行的**只有 1 个**（`local_summary.py`）；另 4 个仅经验卡记载，不迁 |
 | ~~P1~~ | ~~统一定时任务路径~~ | **已完成**：3 个任务全部指向本检出 |
-| P1 | 补 16 个巡检步骤测试（现 **4/20** 有） | 可分批，无依赖 |
+| ~~P1~~ | ~~补 16 个巡检步骤测试~~ | **已完成（`703ce45`）**：24 步判定契约全覆盖（+73 例）；新增步骤未加测试即红 |
 | P2 | 8 个零引用脚本（1,660 行）+ 仪表盘子系统的处置（~4,900 行、无入口） | **需你给方向**（谁还在手动用？） |
 
 > 审计报告（2026-09-24）结论：**总分 5.9/10**，加权最差项是检索召回与代码卫生。
@@ -53,7 +53,7 @@
 - **每日 06:00** `AgentHub-NightlyConsolidate` → `scripts/nightly_consolidate.cmd`（distill→build-vectors→sleep→local-summary；**仅 build-vectors 失败才非零**——索引坏会静默劣化检索）
 - **每日 06:00** `AgentHub-SecretSentry` → `scripts/secret_sentry.cmd` → `scripts/secret_sentry.py`（**2026-09-24 迁入仓库并重写**：26 条永久误报 → 0，真泄漏已脱敏；LastTaskResult 由恒 2 变 0）
 - **手动门禁**：`python -m scripts.recall_regression`（召回回归集，20 条金标准，退出码 2 = 未达 90% 目标）
-- 验收：`.venv\Scripts\python.exe -m pytest` → **478 通过 / 4 跳过 / 0 失败**；`startup_budget` 退出码 0
+- 验收：`.venv\Scripts\python.exe -m pytest` → **551 通过 / 4 跳过 / 0 失败**；`startup_budget` 退出码 0
 
 ## 禁止 / 注意
 
