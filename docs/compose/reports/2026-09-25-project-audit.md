@@ -234,4 +234,3 @@ cmd /c scripts\run_patrol.cmd                              # exit 0（198s）
 | **I-6**（P1-e） | 外层与中枢**均推送** origin（中枢 rebase 了 `skillhub-bot` 的 1 笔自动同步） | 两仓 ahead = 0；中枢 rebase 后 lint 245 卡 0 问题 |
 
 **仍然开放**（不是 Important）：P2 六小项（`lint_report` argparse / 拆超长函数 / 3 对相似卡裁定 / 检索延迟剖析 / markdownlint 挂门禁）与重构候选 A–D（**需人工拍板**）。
-
