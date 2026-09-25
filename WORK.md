@@ -12,7 +12,7 @@
 - 安全底座常驻：单写者+§4 守护+ledger；query-first + 交回用户 + 回写
 - 方案 `docs/compose/specs/2026-09-23-slim-rules-gates-design.md`；计划 `docs/compose/plans/2026-09-23-slim-rules-gates.md`
 - 分项帽：AGENTS≤2500 / CHARTER≤1500 / WORK≤5000 / INDEX≤20000（和 29,000 ≤ 总帽 30,000；不变量有测试看守）
-- **测试 551 passed / 4 skipped / 0 failed**；ruff 全绿；lint 干净；audit ✅ 健康
+- **测试 558 passed / 4 skipped / 0 failed**；ruff 全绿；lint 干净；audit ✅ 健康
 - 磁盘：已释放 ≈1.61 GB（`work/` 历史基准夹具 + `.mimocode/node_modules`）
 
 ## 活跃待办
@@ -20,10 +20,10 @@
 | # | 任务 | 触发 / 做法 |
 | -- | --- | --- |
 | **T1** | 量「规则遵循/返工」改造前后 | **重跑 ≥2026-10-07**：`python -m scripts.rule_following_timeseries`。判据 3 条见下 |
-| T2 | 复核 INDEX 可定位性 | `python -m scripts.index_locatability_bench --rev 68088fa^`（当前 18/20、覆盖 42.5%）。**关键词代理，不衡量语义理解** |
+| T2 | 复核 INDEX 可定位性 | `python -m scripts.index_locatability_bench --rev 68088fa^`。**关键词代理，不衡量语义理解**；判据 = 与基线（18/20、覆盖 42.5%）对比 **不劣化** |
 | T3 | ~~四项待裁定~~ | **已裁定（2026-09-24）**：①夹具腐化→**修**（67%→100%）②RRF 保底→**已不复现** ③CWD 依赖→不再复现，**加固**（建库落库存绝对路径）④巡检 fail-below→**修**（补回 `--fail-below 0.8`） |
 | ~~P0-A~~ | ~~修检索召回~~ | **已修（`2a22648`）**：根因=确定性通道**部分命中即短路**；`recall@1` **5%→80%**。复核用 `python -m scripts.recall_regression` |
-| P0-B | 蓝图分池（121 张外部蓝图挤占召回） | 未做；同一份检索代码，**与 P0-A 的复核合并一次做** |
+| ~~P0-B~~ | ~~蓝图分池~~ | **已裁定（`9c7f79f`）：前提不成立**。配额（cap 2/1/0）对 recall **零影响**、目标卡零位移（改的只是 2-5 名非目标卡）⇒ **不做配额**。真因是**向量强证据被 RRF 淹没**：改「冠军保底 + 通道加权」后 word **95%→100%**、recall@1 **77%→86%**。**复启守线**：蓝图占位率 ≥20%，或 top-1 出现蓝图而目标非蓝图 |
 | ~~P1~~ | ~~外部非版本控制脚本迁入~~ | **已完成（`ee4af05`）**：裁定真实被执行的**只有 1 个**（`local_summary.py`）；另 4 个仅经验卡记载，不迁 |
 | ~~P1~~ | ~~统一定时任务路径~~ | **已完成**：3 个任务全部指向本检出 |
 | ~~P1~~ | ~~补 16 个巡检步骤测试~~ | **已完成（`703ce45`）**：24 步判定契约全覆盖（+73 例）；新增步骤未加测试即红 |
@@ -52,8 +52,8 @@
 - **每日 07:30** `AgentHub-DailyPatrol` → `scripts/run_patrol.cmd` → `patrol_runner`（20 步：lint / pytest / ruff / startup_budget / 向量回归【已补 `--fail-below 0.8`】/ autofix）
 - **每日 06:00** `AgentHub-NightlyConsolidate` → `scripts/nightly_consolidate.cmd`（distill→build-vectors→sleep→local-summary；**仅 build-vectors 失败才非零**——索引坏会静默劣化检索）
 - **每日 06:00** `AgentHub-SecretSentry` → `scripts/secret_sentry.cmd` → `scripts/secret_sentry.py`（**2026-09-24 迁入仓库并重写**：26 条永久误报 → 0，真泄漏已脱敏；LastTaskResult 由恒 2 变 0）
-- **手动门禁**：`python -m scripts.recall_regression`（召回回归集，20 条金标准，退出码 2 = 未达 90% 目标）
-- 验收：`.venv\Scripts\python.exe -m pytest` → **551 通过 / 4 跳过 / 0 失败**；`startup_budget` 退出码 0
+- **手动门禁**：`python -m scripts.recall_regression`（召回回归集，**22 条**金标准含 2 条蓝图池守卫，退出码 2 = 未达 90% 目标）
+- 验收：`.venv\Scripts\python.exe -m pytest` → **558 通过 / 4 跳过 / 0 失败**；`startup_budget` 退出码 0
 
 ## 禁止 / 注意
 
