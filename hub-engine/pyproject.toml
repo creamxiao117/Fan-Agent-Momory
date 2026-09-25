@@ -69,13 +69,13 @@ max-complexity = 15
 # E501（81）：内容型长行——卡片正文 / 内嵌 HTML 模板 / 测试夹具长字符串，重排会损可读性
 "scripts/{reclassify,flywheel_runlog}.py" = ["E501"]
 "tests/*" = ["E501"]
-"scripts/{auto_process_sleep,auto_pytest_env_fix,check_encoding,flywheel,hub_daily_report,hub_dashboard_collect,hub_health,hub_mcp_launcher,rule_following_timeseries,secret_sentry}.py" = ["E501"]
+"scripts/{auto_process_sleep,auto_pytest_env_fix,check_encoding,flywheel,hub_daily_report,hub_health,hub_mcp_launcher,rule_following_timeseries,secret_sentry}.py" = ["E501"]
 "commands/ingest.py" = ["E501"]
 "mcp_server.py" = ["E501"]
 "tools/inject.py" = ["E501"]
 # C901（16）：超复杂函数，需重构而非压制——已列入审计 P2-b（拆超长函数）
 "commands/status.py" = ["C901"]
 "scripts/{audit_index,auto_fix_lint,auto_flywheel,flywheel,hub_daily_report,hub_health,post_ingest_hook,rule_following_timeseries}.py" = ["C901"]
-"scripts/{hub_dashboard_collect,patrol_runner}.py" = ["C901"]
+"patrol_runner.py" = ["C901"]
 "tools/platform_bridge.py" = ["C901"]
 "sync.py" = ["E501", "C901"]
