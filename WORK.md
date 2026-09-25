@@ -27,7 +27,7 @@
 | ~~P1~~ | ~~外部非版本控制脚本迁入~~ | **已完成（`ee4af05`）**：裁定真实被执行的**只有 1 个**（`local_summary.py`）；另 4 个仅经验卡记载，不迁 |
 | ~~P1~~ | ~~统一定时任务路径~~ | **已完成**：3 个任务全部指向本检出 |
 | ~~P1~~ | ~~补 16 个巡检步骤测试~~ | **已完成（`703ce45`）**：24 步判定契约全覆盖（+73 例）；新增步骤未加测试即红 |
-| P2 | 死代码 + 仪表盘处置 | **已重审（`work/audit_dead_modules.py`）**：零引用从 8 个**降到 5 个**；其中 `index_locatability_bench.py` 刚被 T2 正式使用、`safe_patch_handler.py` 经核为**审计假阳性**（被 `mcp_server`/`mcp_handlers`/tests 引用，且 CHARTER:33 声明它是高风险改动唯一渠道，**禁删**）⇒ 真正待裁定 **3 个**（`measure_embed_speed` / `mcp_e2e_phase3` / `verify_vector`，均带 `__main__`）。仪表盘子系 **31 文件 / 226 KB、无入口无引用** | **需你给方向**：①3 个一次性脚本删还是留 ②仪表盘还有人在手动用吗（无人用则整目录归档）。⚠️ 删前先按入口/注册表复查——本次已出一个假阳性 |
+| ~~P2~~ | ~~死代码 + 仪表盘处置~~ | **已完成**（留档 `docs/compose/cleanup/2026-09-25-dead-scripts-and-dashboard.md`）：5 个零引用中**保留 2**（`index_locatability_bench` = T2 正式命令；`safe_patch_handler` = **审计假阳性**，CHARTER:33 禁删）⇒ **删 3**（`measure_embed_speed` / `mcp_e2e_phase3` / `verify_vector`，逐个取证 + blob SHA 可恢复）；仪表盘草稿 31 文件/226 KB **归档为 `work/_archive/dashboard-20260925.zip`** 后删原目录（根级活仪表盘由 tracked 脚本生成，**未连坐**） |
 
 > 审计报告（2026-09-24）结论：**总分 5.9/10**，加权最差项是检索召回与代码卫生。
 > 已修：secret_sentry 假红灯（26 误报 → 0，真泄漏已脱敏）、护栏与报警可信度。
