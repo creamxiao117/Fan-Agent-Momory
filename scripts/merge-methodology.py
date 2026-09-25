@@ -15,7 +15,7 @@
 #
 # 现状：4 组合并在 2026-09-21 已完成，且已按新约定改写为
 #   `status: deprecated` + `superseded_by`（不依赖注释位置）。
-#   内容完整性已逐张验证（见 work/verify_merge_fidelity.py，8 张 exact）。
+#   内容完整性已逐张验证（见 python -m scripts.verify_merge_fidelity，8 张 exact）。
 #
 # 确需再合并新组时：请写新的幂等脚本（默认 dry-run、按 frontmatter 边界取正文、
 # 不覆写已有 dst），不要复活本脚本。
@@ -31,7 +31,7 @@ _REFUSAL = """\
   3) 非幂等：会重复给源卡追加 DEPRECATED 注释。
 
 4 组合并均已完成，且已改为 `status: deprecated` + `superseded_by` 显式表达。
-如需核对完整性：python work/verify_merge_fidelity.py
+如需核对完整性：python -m scripts.verify_merge_fidelity
 如需新增合并：请写幂等、默认 dry-run、不覆写 dst 的新脚本。
 """
 

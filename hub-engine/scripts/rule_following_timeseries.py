@@ -17,7 +17,7 @@
   searches / hits / misses / hit_rate / reuse_ops
 健康维度：overall / card / skill / flywheel / llm
 
-用法: python work/rule_following_timeseries.py [--csv]
+用法: python -m scripts.rule_following_timeseries [--csv]
 """
 
 from __future__ import annotations
