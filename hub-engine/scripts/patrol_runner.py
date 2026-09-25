@@ -1025,102 +1025,83 @@ def _generate_suggestions(report: PatrolReport) -> list[str]:
 # ============================================================================
 
 
-def run_patrol(
-    root: Path,
-    *,
-    skip_flywheel: bool = False,
-    dry_run: bool = False,
-    skip_if_exists: bool = False,
-    skip_autofix: bool = False,
-) -> PatrolReport:
+def _skip_if_exists_report(root: Path) -> PatrolReport | None:
+    """幂等保护：今日快照已存在 → 返回「跳过版」报告；否则 None（继续正常巡检）。
+
+    从 `run_patrol` 抽出（2026-09-25 审计 P2-b/重构 A：拆分 319 行巨型函数）。
     """
-    执行完整的 7 阶段巡检流水线。
-
-    Args:
-        root: 中枢根目录
-        skip_flywheel: 是否跳过飞轮相关步骤
-        dry_run: 是否仅打印计划不实际执行
-        skip_if_exists: 幂等保护：今日快照已存在则直接跳过
-        skip_autofix: 跳过阶段 6 自动修复层（调试用）
-
-    Returns:
-        PatrolReport 完整巡检报告
-    """
-    engine_dir = Path(__file__).resolve().parent.parent
-
-    # === 幂等保护 ===
-    if skip_if_exists:
-        retro_dir = root / "retro"
-        today = datetime.now(_LOCAL_TZ).date().isoformat()
-        existing_snap = retro_dir / f"snapshot-{today}.json"
-        if existing_snap.is_file():
-            try:
-                existing_data = json.loads(existing_snap.read_text(encoding="utf-8"))
-                if existing_data.get("generated_at", "") and today in existing_data["generated_at"]:
-                    # 兼容旧快照字段名 ollama → llm
-                    llm_field = existing_data.get("llm_health") or existing_data.get("ollama", {})
-                    report = PatrolReport(
-                        hub_root=str(root),
-                        generated_at=datetime.now(_LOCAL_TZ).isoformat(),
-                        llm_available=llm_field.get("available", True) if isinstance(llm_field, dict) else True,
-                        overall_exit_code=0,
-                        snapshot=existing_data,
-                        alerts=existing_data.get("alerts", []),
-                        suggestions=["今日快照已存在，跳过巡检（幂等保护）"],
-                    )
-                    skipped_stage = StageResult(name="幂等保护")
-                    skipped_stage.steps.append(
-                        StepResult(
-                            name="check_existing_snapshot",
-                            stage="幂等保护",
-                            status="skip",
-                            output=f"⏭️ 今日快照已存在: {existing_snap}",
-                        )
-                    )
-                    report.stages.append(skipped_stage)
-                    return report
-            except (json.JSONDecodeError, KeyError, OSError):
-                pass
-
+    retro_dir = root / "retro"
+    today = datetime.now(_LOCAL_TZ).date().isoformat()
+    existing_snap = retro_dir / f"snapshot-{today}.json"
+    if not existing_snap.is_file():
+        return None
+    try:
+        existing_data = json.loads(existing_snap.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return None
+    if not (existing_data.get("generated_at", "") and today in existing_data["generated_at"]):
+        return None
+    # 兼容旧快照字段名 ollama → llm
+    llm_field = existing_data.get("llm_health") or existing_data.get("ollama", {})
     report = PatrolReport(
         hub_root=str(root),
         generated_at=datetime.now(_LOCAL_TZ).isoformat(),
+        llm_available=llm_field.get("available", True) if isinstance(llm_field, dict) else True,
+        overall_exit_code=0,
+        snapshot=existing_data,
+        alerts=existing_data.get("alerts", []),
+        suggestions=["今日快照已存在，跳过巡检（幂等保护）"],
     )
-
-    # ===== 阶段 1: 基础设施检查 =====
-    stage1 = StageResult(name="基础设施检查")
-    stage1.steps.append(_run_step("llm_check", "基础设施", lambda: _llm_pre_check()))
-    llm_ok = stage1.steps[-1].status == "pass"
-    report.llm_available = llm_ok
-    stage1.steps.append(_run_step("config_integrity", "基础设施", lambda: _check_config_integrity(root)))
-    stage1.steps.append(_run_step("file_integrity", "基础设施", lambda: _check_file_integrity(root)))
-    report.stages.append(stage1)
-
-    if dry_run:
-        print("[DRY-RUN] 阶段 1 完成，后续步骤仅打印计划")
-        print("  阶段 2: lint → pytest → ruff (始终执行)")
-        print("  阶段 3: build-vectors → router-sync")
-        print("  阶段 4: vector-regression → metrics-daily → hub-review")
-        print("  阶段 5: status-snapshot → archive-snapshot")
-        print(
-            "  阶段 6: auto_fix_lint → auto_pytest_env_fix → auto_sleep_filter → auto_process_sleep → auto_review_today"
+    skipped_stage = StageResult(name="幂等保护")
+    skipped_stage.steps.append(
+        StepResult(
+            name="check_existing_snapshot",
+            stage="幂等保护",
+            status="skip",
+            output=f"⏭️ 今日快照已存在: {existing_snap}",
         )
-        print("  阶段 7: 分级输出")
-        return report
+    )
+    report.stages.append(skipped_stage)
+    return report
 
-    # ===== 阶段 2: 代码质量门禁（始终执行，不依赖 LLM） =====
-    stage2 = StageResult(name="代码质量门禁")
-    stage2.steps.append(_run_step("lint", "质量门禁", lambda: _step_lint(root)))
-    stage2.steps.append(_run_step("pytest", "质量门禁", lambda: _step_pytest(engine_dir)))
-    stage2.steps.append(_run_step("ruff", "质量门禁", lambda: _step_ruff(engine_dir)))
-    stage2.steps.append(_run_step("startup_budget", "质量门禁", lambda: _step_startup_budget()))
-    report.stages.append(stage2)
 
-    # ===== 阶段 3: 飞轮活跃度 =====
-    stage3 = StageResult(name="飞轮活跃度")
+def _stage_infra(root: Path, report: PatrolReport) -> StageResult:
+    """阶段 1：基础设施（LLM 前置检测 + 配置/目录完整性）。"""
+    stage = StageResult(name="基础设施检查")
+    stage.steps.append(_run_step("llm_check", "基础设施", lambda: _llm_pre_check()))
+    report.llm_available = stage.steps[-1].status == "pass"
+    stage.steps.append(_run_step("config_integrity", "基础设施", lambda: _check_config_integrity(root)))
+    stage.steps.append(_run_step("file_integrity", "基础设施", lambda: _check_file_integrity(root)))
+    return stage
+
+
+def _print_dry_run_plan() -> None:
+    """dry-run 的后续阶段计划（只打印，不执行）。"""
+    print("[DRY-RUN] 阶段 1 完成，后续步骤仅打印计划")
+    print("  阶段 2: lint → pytest → ruff (始终执行)")
+    print("  阶段 3: build-vectors → router-sync")
+    print("  阶段 4: vector-regression → metrics-daily → hub-review")
+    print("  阶段 5: status-snapshot → archive-snapshot")
+    print("  阶段 6: auto_fix_lint → auto_pytest_env_fix → auto_sleep_filter → auto_process_sleep → auto_review_today")
+    print("  阶段 7: 分级输出")
+
+
+def _stage_quality(root: Path, engine_dir: Path) -> StageResult:
+    """阶段 2：代码质量门禁（始终执行，不依赖 LLM）。"""
+    stage = StageResult(name="代码质量门禁")
+    stage.steps.append(_run_step("lint", "质量门禁", lambda: _step_lint(root)))
+    stage.steps.append(_run_step("pytest", "质量门禁", lambda: _step_pytest(engine_dir)))
+    stage.steps.append(_run_step("ruff", "质量门禁", lambda: _step_ruff(engine_dir)))
+    stage.steps.append(_run_step("startup_budget", "质量门禁", lambda: _step_startup_budget()))
+    return stage
+
+
+def _stage_flywheel(root: Path, engine_dir: Path, *, llm_ok: bool, skip_flywheel: bool) -> StageResult:
+    """阶段 3：飞轮活跃度（本地 LLM 不可用时不构建向量）。"""
+    stage = StageResult(name="飞轮活跃度")
     if skip_flywheel:
-        stage3.skipped = True
-        stage3.steps.append(
+        stage.skipped = True
+        stage.steps.append(
             StepResult(
                 name="flywheel",
                 stage="飞轮活跃度",
@@ -1128,52 +1109,57 @@ def run_patrol(
                 output="已指定 --skip-flywheel，跳过飞轮步骤",
             )
         )
+        return stage
+    if llm_ok:
+        stage.steps.append(
+            _run_step(
+                "build_vectors",
+                "飞轮活跃度",
+                lambda: _step_build_vectors(root, engine_dir),
+            )
+        )
     else:
-        if llm_ok:
-            stage3.steps.append(
-                _run_step(
-                    "build_vectors",
-                    "飞轮活跃度",
-                    lambda: _step_build_vectors(root, engine_dir),
-                )
+        stage.steps.append(
+            StepResult(
+                name="build_vectors",
+                stage="飞轮活跃度",
+                status="skip",
+                output="本地 LLM 不可用，跳过向量构建",
             )
-        else:
-            stage3.steps.append(
-                StepResult(
-                    name="build_vectors",
-                    stage="飞轮活跃度",
-                    status="skip",
-                    output="本地 LLM 不可用，跳过向量构建",
-                )
-            )
-        stage3.steps.append(_run_step("router_sync", "飞轮活跃度", lambda: _step_router_sync(root, engine_dir)))
-    report.stages.append(stage3)
+        )
+    stage.steps.append(_run_step("router_sync", "飞轮活跃度", lambda: _step_router_sync(root, engine_dir)))
+    return stage
 
-    # ===== 阶段 4: 数据质量 =====
-    stage4 = StageResult(name="数据质量")
-    stage4.steps.append(
+
+def _stage_data_quality(root: Path, engine_dir: Path) -> StageResult:
+    """阶段 4：数据质量（向量回归 / 指标 / 今日审核）。"""
+    stage = StageResult(name="数据质量")
+    stage.steps.append(
         _run_step(
             "vector_regression",
             "数据质量",
             lambda: _step_vector_regression(root, engine_dir),
         )
     )
-    stage4.steps.append(_run_step("metrics_daily", "数据质量", lambda: _step_metrics_daily(root, engine_dir)))
-    stage4.steps.append(_run_step("hub_review", "数据质量", lambda: _step_hub_review(root, engine_dir)))
-    report.stages.append(stage4)
+    stage.steps.append(_run_step("metrics_daily", "数据质量", lambda: _step_metrics_daily(root, engine_dir)))
+    stage.steps.append(_run_step("hub_review", "数据质量", lambda: _step_hub_review(root, engine_dir)))
+    return stage
 
-    # ===== 阶段 5: 报告生成与归档 =====
-    stage5 = StageResult(name="报告生成与归档")
+
+def _stage_report_archive(root: Path, engine_dir: Path, *, skip_if_exists: bool, report: PatrolReport) -> StageResult:
+    """阶段 5：报告生成与归档（快照生成 → 归档 → 解析 alerts 到 report）。"""
+    stage = StageResult(name="报告生成与归档")
     snap_result = _run_step("status_snapshot", "报告归档", lambda: _step_status_snapshot(root, engine_dir))
-    stage5.steps.append(snap_result)
-    archive_result = _run_step(
-        "archive_snapshot",
-        "报告归档",
-        lambda: _save_snapshot_archive(root, engine_dir, no_overwrite=skip_if_exists),
+    stage.steps.append(snap_result)
+    stage.steps.append(
+        _run_step(
+            "archive_snapshot",
+            "报告归档",
+            lambda: _save_snapshot_archive(root, engine_dir, no_overwrite=skip_if_exists),
+        )
     )
-    stage5.steps.append(archive_result)
 
-    # 解析快照
+    # 解析快照：把 alerts 提到 report 顶层（退出码判定要用）
     if snap_result.status == "pass":
         _exit_code, stdout, _ = _run_cmd(
             [
@@ -1192,110 +1178,78 @@ def run_patrol(
             report.alerts = report.snapshot.get("alerts", [])
         except (json.JSONDecodeError, OSError):
             pass
+    return stage
 
-    report.stages.append(stage5)
 
-    # ===== 阶段 6: 自动修复层（v3 新增） =====
+def _stage_autofix(root: Path, engine_dir: Path, *, skip_autofix: bool) -> StageResult:
+    """阶段 6：自动修复层（v3 新增；`--skip-autofix` 时整阶段跳过）。"""
     if skip_autofix:
-        stage6 = StageResult(name="自动修复层 (已跳过)")
-        stage6.skipped = True
-        report.stages.append(stage6)
+        stage = StageResult(name="自动修复层 (已跳过)")
+        stage.skipped = True
+        return stage
+    stage = StageResult(name="自动修复层")
+    # 6-1: lint invalid 卡自动修复（不依赖其他步骤）
+    stage.steps.append(_run_step("auto_fix_lint", "自动修复", lambda: _step_auto_fix_lint(root, engine_dir)))
+    # 6-2: pytest 环境类修复（pip install 缺的包）
+    stage.steps.append(_run_step("auto_pytest_env_fix", "自动修复", lambda: _step_auto_pytest_fix(root, engine_dir)))
+    # 6-3: sleep 候选假信号过滤
+    stage.steps.append(_run_step("auto_sleep_filter", "自动修复", lambda: _step_auto_sleep_filter(root, engine_dir)))
+    # 6-4: sleep 候选补 tag / 生成草稿
+    stage.steps.append(_run_step("auto_process_sleep", "自动修复", lambda: _step_auto_process_sleep(root, engine_dir)))
+    # 6-5: review_today 自动分类过审
+    stage.steps.append(_run_step("auto_review_today", "自动修复", lambda: _step_auto_review_today(root, engine_dir)))
+    return stage
+
+
+def _stage_verify_after_fix(engine_dir: Path, auto_fix_results: dict, autofix_steps: list[StepResult]) -> StageResult:
+    """阶段 6b：修复验证。**只有真的修过（status=fixed）才跑**，否则整阶段跳过。
+
+    修复后必须再跑 pytest/ruff，否则「静默通过」有风险。
+    """
+    stage = StageResult(name="修复验证（阶段 6b）")
+    if any(s.status == "fixed" for s in autofix_steps):
+        stage.steps.append(
+            _run_step(
+                "verify_after_fix",
+                "验证",
+                lambda: _step_verify_after_fix(engine_dir, auto_fix_results),
+            )
+        )
     else:
-        stage6 = StageResult(name="自动修复层")
-        # 6-1: lint invalid 卡自动修复（不依赖其他步骤）
-        stage6.steps.append(
-            _run_step(
-                "auto_fix_lint",
-                "自动修复",
-                lambda: _step_auto_fix_lint(root, engine_dir),
-            )
-        )
-        # 6-2: pytest 环境类修复（pip install 缺的包）
-        stage6.steps.append(
-            _run_step(
-                "auto_pytest_env_fix",
-                "自动修复",
-                lambda: _step_auto_pytest_fix(root, engine_dir),
-            )
-        )
-        # 6-3: sleep 候选假信号过滤
-        stage6.steps.append(
-            _run_step(
-                "auto_sleep_filter",
-                "自动修复",
-                lambda: _step_auto_sleep_filter(root, engine_dir),
-            )
-        )
-        # 6-4: sleep 候选补 tag / 生成草稿
-        stage6.steps.append(
-            _run_step(
-                "auto_process_sleep",
-                "自动修复",
-                lambda: _step_auto_process_sleep(root, engine_dir),
-            )
-        )
-        # 6-5: review_today 自动分类过审
-        stage6.steps.append(
-            _run_step(
-                "auto_review_today",
-                "自动修复",
-                lambda: _step_auto_review_today(root, engine_dir),
-            )
-        )
-        report.stages.append(stage6)
+        stage.skipped = True
+    return stage
 
-        # 收集自动修复层结果到 report.auto_fix_results
-        report.auto_fix_results = {st.name: {"status": st.status, "output": st.output[:300]} for st in stage6.steps}
 
-        # ===== 阶段 6b: 修复验证（任务 4）=====
-        # 修复后必须再跑 pytest/ruff 验证，否则静默通过有风险
-        stage6b = StageResult(name="修复验证（阶段 6b）")
-        if any(s.status == "fixed" for s in stage6.steps):
-            stage6b.steps.append(
-                _run_step(
-                    "verify_after_fix",
-                    "验证",
-                    lambda: _step_verify_after_fix(engine_dir, report.auto_fix_results),
-                )
-            )
-        else:
-            stage6b.skipped = True
-        report.stages.append(stage6b)
+def _stage_freshness_platform(root: Path, engine_dir: Path) -> StageResult:
+    """阶段 6c：知识新鲜度 + 平台层三项（MCP 块一致性 / 5 平台健康 / 未接入平台提示）。
 
-        # ===== 阶段 6c: 知识新鲜度检测（任务 8）=====
-        stage6c = StageResult(name="知识新鲜度（阶段 6c）")
-        stage6c.steps.append(
-            _run_step(
-                "freshness_check",
-                "新鲜度",
-                lambda: _step_freshness_check(root, engine_dir),
-            )
+    平台三项原先在 `A/4` 时并入本阶段（它们是「环境是否与配置一致」的同族检查）。
+    """
+    stage = StageResult(name="知识新鲜度（阶段 6c）")
+    stage.steps.append(_run_step("freshness_check", "新鲜度", lambda: _step_freshness_check(root, engine_dir)))
+    stage.steps.append(_run_step("platform_sync", "平台一致性", lambda: _step_platform_sync_check(root, engine_dir)))
+    stage.steps.append(
+        _run_step(
+            "platform_healthcheck",
+            "平台一致性",
+            lambda: _step_platform_healthcheck(root, engine_dir),
         )
-        # A/4：平台层三项并入 6c 一起跑（MCP 块一致性 / 5 平台健康 / 未接入平台提示）
-        stage6c.steps.append(
-            _run_step(
-                "platform_sync",
-                "平台一致性",
-                lambda: _step_platform_sync_check(root, engine_dir),
-            )
+    )
+    stage.steps.append(
+        _run_step(
+            "platform_unregistered",
+            "平台一致性",
+            lambda: _step_platform_unregistered(root, engine_dir),
         )
-        stage6c.steps.append(
-            _run_step(
-                "platform_healthcheck",
-                "平台一致性",
-                lambda: _step_platform_healthcheck(root, engine_dir),
-            )
-        )
-        stage6c.steps.append(
-            _run_step(
-                "platform_unregistered",
-                "平台一致性",
-                lambda: _step_platform_unregistered(root, engine_dir),
-            )
-        )
-        report.stages.append(stage6c)
+    )
+    return stage
 
-    # ===== 计算总体退出码 =====
+
+def _finalize_report(report: PatrolReport) -> None:
+    """收尾：从各步骤退出码与 alerts 计算总体退出码，并生成改进建议。
+
+    退出码优先级：critical 告警(3) > 任一步骤 ≥2 > 任一步骤 1 > 0。
+    """
     has_critical = any(a.get("level") == "critical" for a in report.alerts)
     max_exit = 0
     for stage in report.stages:
@@ -1309,10 +1263,65 @@ def run_patrol(
         report.overall_exit_code = 1
     else:
         report.overall_exit_code = 0
-
-    # ===== 生成建议 =====
     report.suggestions = _generate_suggestions(report)
 
+
+def run_patrol(
+    root: Path,
+    *,
+    skip_flywheel: bool = False,
+    dry_run: bool = False,
+    skip_if_exists: bool = False,
+    skip_autofix: bool = False,
+) -> PatrolReport:
+    """执行完整的 7 阶段巡检流水线（编排层；各阶段实现见 `_stage_*`）。
+
+    Args:
+        root: 中枢根目录
+        skip_flywheel: 是否跳过飞轮相关步骤
+        dry_run: 是否仅打印计划不实际执行
+        skip_if_exists: 幂等保护：今日快照已存在则直接跳过
+        skip_autofix: 跳过阶段 6 自动修复层（调试用）
+
+    Returns:
+        PatrolReport 完整巡检报告
+
+    2026-09-25（审计 P2-b / 重构 A）：本函数从 **319 行**拆成「编排 + 9 个 `_stage_*` 函数」，
+    阶段顺序、阶段名、步骤名与语义**逐字保持不变**（24 步契约测试与巡检前后报告可对比验证）。
+    """
+    engine_dir = Path(__file__).resolve().parent.parent
+
+    if skip_if_exists:
+        skipped = _skip_if_exists_report(root)
+        if skipped is not None:
+            return skipped
+
+    report = PatrolReport(
+        hub_root=str(root),
+        generated_at=datetime.now(_LOCAL_TZ).isoformat(),
+    )
+
+    # 阶段 1: 基础设施检查
+    report.stages.append(_stage_infra(root, report))
+
+    if dry_run:
+        _print_dry_run_plan()
+        return report
+
+    # 阶段 2-5
+    report.stages.append(_stage_quality(root, engine_dir))
+    report.stages.append(_stage_flywheel(root, engine_dir, llm_ok=report.llm_available, skip_flywheel=skip_flywheel))
+    report.stages.append(_stage_data_quality(root, engine_dir))
+    report.stages.append(_stage_report_archive(root, engine_dir, skip_if_exists=skip_if_exists, report=report))
+
+    # 阶段 6/6b/6c: 自动修复 → 修复验证 → 新鲜度与平台层
+    stage6 = _stage_autofix(root, engine_dir, skip_autofix=skip_autofix)
+    report.stages.append(stage6)
+    report.auto_fix_results = {st.name: {"status": st.status, "output": st.output[:300]} for st in stage6.steps}
+    report.stages.append(_stage_verify_after_fix(engine_dir, report.auto_fix_results, stage6.steps))
+    report.stages.append(_stage_freshness_platform(root, engine_dir))
+
+    _finalize_report(report)
     return report
 
 
