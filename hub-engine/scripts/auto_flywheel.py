@@ -129,6 +129,71 @@ def has_pending_drafts(root: Path) -> bool:
     return sum(len(v) for v in platform_drafts.values()) > 0
 
 
+def _maybe_router_sync(root: Path, args, *, warn_missing_skillhub: bool = False) -> None:
+    """可选的「路由表同步检查」。
+
+    2026-09-25（审计 P2-b）：原为 `run()` 内**逐字重复**的两份 55 行块（仅两处微差），
+    现抽为公共实现。为不改既有输出，用 `warn_missing_skillhub` 显式保留唯一差异：
+    收尾那处会在 SkillHub 目录不存在时多打一行提示，早先那处不打。
+    """
+    if not (getattr(args, "router_sync", False) and getattr(args, "skillhub_root", "")):
+        return
+    skillhub_root = Path(args.skillhub_root).resolve()
+    if not skillhub_root.is_dir():
+        if warn_missing_skillhub:
+            print(f"[router-sync] SkillHub 目录不存在: {skillhub_root}")
+        return
+    print("\n===== 路由表同步检查 =====")
+    try:
+        import router_sync as rs
+
+        hub_md = rs.find_hub_router(root)
+        sh_yaml = skillhub_root / "router" / "router.yaml"
+        hub_entries = rs.parse_hub_router(hub_md) if hub_md else []
+        sh_entries = rs.parse_skillhub_router(sh_yaml)
+        rs_report = rs.diff_routers(hub_entries, sh_entries)
+
+        rs.print_report(rs_report)
+
+        sem = len(rs_report.get("semantic_mismatch", []))
+        struc = len(rs_report.get("structural_mismatch", []))
+        miss_sh = len(rs_report.get("missing_in_skillhub", []))
+        miss_hub = len(rs_report.get("missing_in_hub", []))
+
+        if sem or struc or miss_sh or miss_hub:
+            print(f"\n[router-sync] 语义差异={sem}, 结构差异={struc}, 中枢缺失={miss_sh}, SkillHub缺失={miss_hub}")
+
+            # 智能自动修复策略
+            if getattr(args, "auto_fix", False):
+                has_field_diff = sem > 0 or struc > 0
+                if has_field_diff:
+                    print("[router-sync] ⚠️ 存在字段差异，需人工确认，仅报告不自动修复")
+                elif miss_sh or miss_hub:
+                    print("[router-sync] ✅ 仅缺失条目，无字段差异，执行自动修复")
+                    _fixes, msgs = rs.apply_fixes(
+                        skillhub_root,
+                        rs_report,
+                        merge_strategy=getattr(args, "router_sync_strategy", "manual"),
+                    )
+                    for m in msgs:
+                        print(f"  {m}")
+                    print(f"[router-sync] 自动修复完成，共处理 {miss_sh + miss_hub} 条缺失项")
+            elif getattr(args, "router_sync_fix", False):
+                _fixes, msgs = rs.apply_fixes(
+                    skillhub_root,
+                    rs_report,
+                    merge_strategy=getattr(args, "router_sync_strategy", "manual"),
+                )
+                for m in msgs:
+                    print(f"  {m}")
+            print("[router-sync] 建议: 定期运行 router-sync diff 检查，避免路由表漂移")
+        else:
+            print("[router-sync] ✅ 路由表完全同步")
+
+    except (ImportError, OSError, ValueError) as e:
+        print(f"[router-sync] 检查失败: {e}")
+
+
 def run(args: argparse.Namespace) -> int:
     """执行自动飞轮主流程。"""
     root = Path(args.root).resolve()
@@ -175,61 +240,7 @@ def run(args: argparse.Namespace) -> int:
         extra = f"（其中 {n_cand} 张在 candidates/ 审核暂存区，**不会自动提升**）" if n_cand else ""
         print(f"  - {pf}: {len(files)} 张{extra}")
 
-    # 路由表同步检查（可选，dry-run 时也执行）
-    if getattr(args, "router_sync", False) and getattr(args, "skillhub_root", ""):
-        skillhub_root = Path(args.skillhub_root).resolve()
-        if skillhub_root.is_dir():
-            print("\n===== 路由表同步检查 =====")
-            try:
-                import router_sync as rs
-
-                hub_md = rs.find_hub_router(root)
-                sh_yaml = skillhub_root / "router" / "router.yaml"
-                hub_entries = rs.parse_hub_router(hub_md) if hub_md else []
-                sh_entries = rs.parse_skillhub_router(sh_yaml)
-                rs_report = rs.diff_routers(hub_entries, sh_entries)
-
-                rs.print_report(rs_report)
-
-                sem = len(rs_report.get("semantic_mismatch", []))
-                struc = len(rs_report.get("structural_mismatch", []))
-                miss_sh = len(rs_report.get("missing_in_skillhub", []))
-                miss_hub = len(rs_report.get("missing_in_hub", []))
-
-                if sem or struc or miss_sh or miss_hub:
-                    print(
-                        f"\n[router-sync] 语义差异={sem}, 结构差异={struc}, 中枢缺失={miss_sh}, SkillHub缺失={miss_hub}"
-                    )
-
-                    # 智能自动修复策略
-                    if getattr(args, "auto_fix", False):
-                        has_field_diff = sem > 0 or struc > 0
-                        if has_field_diff:
-                            print("[router-sync] ⚠️ 存在字段差异，需人工确认，仅报告不自动修复")
-                        elif miss_sh or miss_hub:
-                            print("[router-sync] ✅ 仅缺失条目，无字段差异，执行自动修复")
-                            _fixes, msgs = rs.apply_fixes(
-                                skillhub_root,
-                                rs_report,
-                                merge_strategy=getattr(args, "router_sync_strategy", "manual"),
-                            )
-                            for m in msgs:
-                                print(f"  {m}")
-                            print(f"[router-sync] 自动修复完成，共处理 {miss_sh + miss_hub} 条缺失项")
-                    elif getattr(args, "router_sync_fix", False):
-                        _fixes, msgs = rs.apply_fixes(
-                            skillhub_root,
-                            rs_report,
-                            merge_strategy=getattr(args, "router_sync_strategy", "manual"),
-                        )
-                        for m in msgs:
-                            print(f"  {m}")
-                    print("[router-sync] 建议: 定期运行 router-sync diff 检查，避免路由表漂移")
-                else:
-                    print("[router-sync] ✅ 路由表完全同步")
-
-            except (ImportError, OSError, ValueError) as e:
-                print(f"[router-sync] 检查失败: {e}")
+    _maybe_router_sync(root, args)
 
     if args.dry_run:
         print("[dry-run] 仅扫描，不执行 ingest / build-vectors")
@@ -289,64 +300,7 @@ def run(args: argparse.Namespace) -> int:
     append_log(root, record)
     print(f"\n日志已写入：{root / '.sync' / 'state' / 'flywheel-log.json'}")
 
-    # 6. 路由表同步检查（可选）
-    if getattr(args, "router_sync", False) and getattr(args, "skillhub_root", ""):
-        skillhub_root = Path(args.skillhub_root).resolve()
-        if skillhub_root.is_dir():
-            print("\n===== 路由表同步检查 =====")
-            try:
-                import router_sync as rs
-
-                hub_md = rs.find_hub_router(root)
-                sh_yaml = skillhub_root / "router" / "router.yaml"
-                hub_entries = rs.parse_hub_router(hub_md) if hub_md else []
-                sh_entries = rs.parse_skillhub_router(sh_yaml)
-                rs_report = rs.diff_routers(hub_entries, sh_entries)
-
-                rs.print_report(rs_report)
-
-                # 输出分类摘要
-                sem = len(rs_report.get("semantic_mismatch", []))
-                struc = len(rs_report.get("structural_mismatch", []))
-                miss_sh = len(rs_report.get("missing_in_skillhub", []))
-                miss_hub = len(rs_report.get("missing_in_hub", []))
-
-                if sem or struc or miss_sh or miss_hub:
-                    print(
-                        f"\n[router-sync] 语义差异={sem}, 结构差异={struc}, 中枢缺失={miss_sh}, SkillHub缺失={miss_hub}"
-                    )
-
-                    # 智能自动修复策略
-                    if getattr(args, "auto_fix", False):
-                        has_field_diff = sem > 0 or struc > 0
-                        if has_field_diff:
-                            print("[router-sync] ⚠️ 存在字段差异，需人工确认，仅报告不自动修复")
-                        elif miss_sh or miss_hub:
-                            print("[router-sync] ✅ 仅缺失条目，无字段差异，执行自动修复")
-                            _fixes, msgs = rs.apply_fixes(
-                                skillhub_root,
-                                rs_report,
-                                merge_strategy=getattr(args, "router_sync_strategy", "manual"),
-                            )
-                            for m in msgs:
-                                print(f"  {m}")
-                            print(f"[router-sync] 自动修复完成，共处理 {miss_sh + miss_hub} 条缺失项")
-                    elif getattr(args, "router_sync_fix", False):
-                        _fixes, msgs = rs.apply_fixes(
-                            skillhub_root,
-                            rs_report,
-                            merge_strategy=getattr(args, "router_sync_strategy", "manual"),
-                        )
-                        for m in msgs:
-                            print(f"  {m}")
-                    print("[router-sync] 建议: 定期运行 router-sync diff 检查，避免路由表漂移")
-                else:
-                    print("[router-sync] ✅ 路由表完全同步")
-
-            except (ImportError, OSError, ValueError) as e:
-                print(f"[router-sync] 检查失败: {e}")
-        else:
-            print(f"[router-sync] SkillHub 目录不存在: {skillhub_root}")
+    _maybe_router_sync(root, args, warn_missing_skillhub=True)
 
     return 0
 
