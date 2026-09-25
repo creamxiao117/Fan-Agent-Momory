@@ -52,7 +52,27 @@ def run_report(root: str | Path) -> Path:
 
 
 if __name__ == "__main__":
-    import sys
+    # 2026-09-25（审计 P2-a）：改用 argparse。
+    # 旧实现是 `sys.argv[1] if len(sys.argv) > 1 else "AgentMemoryHub"` —— 传 `--root X`
+    # 会把字面量 `--root` 当成路径，在 CWD 下真的建出一棵名为 `--root` 的中枢骨架（实测复现）。
+    import argparse
 
-    target = sys.argv[1] if len(sys.argv) > 1 else "AgentMemoryHub"
-    print(f"报告已写入: {run_report(target)}")
+    ap = argparse.ArgumentParser(description="生成中枢 lint 报告（retro/lint-report-<date>.md）")
+    ap.add_argument(
+        "--root",
+        type=Path,
+        default=Path(__file__).resolve().parents[2] / "AgentMemoryHub",
+        help="中枢根目录（默认：本仓 AgentMemoryHub）",
+    )
+    ap.add_argument(
+        "positional_root",
+        nargs="?",
+        type=Path,
+        default=None,
+        help="兼容旧用法：直接给位置参数当根目录（等价 --root）",
+    )
+    args = ap.parse_args()
+    root = args.positional_root or args.root
+    if str(root).startswith("--"):  # 防再次把参数名当路径
+        ap.error(f"根目录看起来是参数名：{root}")
+    print(f"报告已写入: {run_report(root)}")

@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # @version V1.2 / 2026-09-23 / Hermes + pi / hub-engine 三道提交门禁钩子
 #
-# 作用（三道门禁，先编码 → 再预算 → 后 lint）：
+# 作用（四道门禁，先编码 → 再预算 → 再 markdown → 后 ruff）：
 #   0) 编码门禁：staged 文本文件跑 check_encoding.py，非 UTF-8 / BOM 不合规 /
 #      乱码串残留 / .vbs 含非 ASCII → 阻断（依据 rules/chinese-text-encoding-discipline v1.0）
 #   0.5) 启动链预算门禁（L0 ≤30K + L1 各任务型 ≤15K）→ 超标阻断
+#   0.8) markdownlint（仅 staged .md）→ 违规阻断（存量基线见 .markdownlintignore）
 #   1) ruff check  → 不通过则阻断
 #   2) ruff format --check → 不一致则阻断
 #
@@ -23,6 +24,7 @@
 #   0 = 通过
 #   1 = 阻断（ruff check 报错）
 #   2 = 阻断（ruff format --check 不一致）
+#   3 = 阻断（markdownlint 未通过，2026-09-25 新增）
 #   4 = 阻断（编码门禁未通过）
 #   5 = 阻断（启动链预算超帽）
 #
@@ -78,6 +80,26 @@ else
     echo "[pre-commit] ⚠️ 找不到 $BUDGET_SCRIPT，跳过预算门禁"
 fi
 
+echo "[pre-commit] ✅ 预算门禁通过"
+
+# ---------- 0.8) markdownlint 门禁（2026-09-25 审计 P2-f）----------
+# 配置（.markdownlint.json / .markdownlintignore）早已存在但**无任何门禁**；
+# 存量违规集中在 2 份历史文档 → 已加进 .markdownlintignore 作基线（不改写历史）。
+# 必须在“无 .py 则 exit 0”之前跑，否则纯文档提交会绕过本门禁。
+STAGED_MD=$(git diff --cached --name-only --diff-filter=ACM | grep "\.md$" || true)
+if [ -n "$STAGED_MD" ]; then
+    if command -v markdownlint >/dev/null 2>&1; then
+        echo "[pre-commit] 跑 markdownlint（$(echo "$STAGED_MD" | wc -l) 个 .md）..."
+        if ! markdownlint $STAGED_MD 2>&1; then
+            echo "[pre-commit] ❌ markdownlint 未通过，commit 阻断（修文或加 .markdownlintignore 基线）"
+            exit 3
+        fi
+        echo "[pre-commit] ✅ markdownlint 通过"
+    else
+        echo "[pre-commit] ⚠️ markdownlint 未安装，跳过（不阻断）"
+    fi
+fi
+
 # ---------- 1) ruff 门禁 ----------
 # 检测 .py 文件 staged
 STAGED_PY=$(git diff --cached --name-only --diff-filter=ACM | grep "\.py$" || true)
@@ -115,5 +137,7 @@ if ! $RUFF_CMD format --check $STAGED_PY 2>&1; then
     exit 2
 fi
 
-echo "[pre-commit] ✅ ruff 门禁通过，commit 允许"
+echo "[pre-commit] ✅ ruff 门禁通过"
+
+echo "[pre-commit] ✅ 全部门禁通过，commit 允许"
 exit 0
