@@ -33,6 +33,7 @@ from pathlib import Path
 
 import pytest
 
+import scripts.patrol.steps as patrol_steps
 import scripts.patrol_runner as patrol
 
 _VALID_STATUS = {"pass", "warn", "fail", "skip"}
@@ -187,7 +188,7 @@ def test_step_contract(patrol_tree, monkeypatch, name, call):
         "platform_healthcheck.py",
         "platform_unregistered.py",
     )
-    monkeypatch.setattr(patrol, "_run_cmd", FakeCmd(0, '{"cards": 1}'))
+    monkeypatch.setattr(patrol_steps, "_run_cmd", FakeCmd(0, '{"cards": 1}'))
     monkeypatch.setattr(subprocess, "run", FakeRun(0, "ok"))
     monkeypatch.setattr(
         "tools.lint.lint",
@@ -302,7 +303,7 @@ def test_lint_clean_is_pass(patrol_tree, monkeypatch):
 )
 def test_pytest_exit_code_mapping(patrol_tree, monkeypatch, rc, status):
     _, engine = patrol_tree
-    monkeypatch.setattr(patrol, "_run_cmd", FakeCmd(rc, "1 passed"))
+    monkeypatch.setattr(patrol_steps, "_run_cmd", FakeCmd(rc, "1 passed"))
     r = patrol._step_pytest(engine)
     assert r.status == status and r.exit_code == rc
 
@@ -310,7 +311,7 @@ def test_pytest_exit_code_mapping(patrol_tree, monkeypatch, rc, status):
 def test_pytest_flags_import_error_for_autofix(patrol_tree, monkeypatch):
     """meta.has_import_error 决定 auto_pytest_env_fix 是否值得跑。"""
     _, engine = patrol_tree
-    monkeypatch.setattr(patrol, "_run_cmd", FakeCmd(1, "", "ModuleNotFoundError: No module named 'x'"))
+    monkeypatch.setattr(patrol_steps, "_run_cmd", FakeCmd(1, "", "ModuleNotFoundError: No module named 'x'"))
     assert patrol._step_pytest(engine).meta["has_import_error"] is True
 
 
@@ -318,7 +319,7 @@ def test_pytest_timeout_exceeds_inner_suite_budget(patrol_tree, monkeypatch):
     """外层超时必须 > 套件实测时长（曾 120s 卡边 ⇒ 合并后首跑即假失败）。"""
     _, engine = patrol_tree
     fake = FakeCmd(0, "ok")
-    monkeypatch.setattr(patrol, "_run_cmd", fake)
+    monkeypatch.setattr(patrol_steps, "_run_cmd", fake)
     patrol._step_pytest(engine)
     assert fake.last["timeout"] >= 420
 
@@ -330,7 +331,7 @@ def test_pytest_timeout_exceeds_inner_suite_budget(patrol_tree, monkeypatch):
 def test_ruff_never_blocks(patrol_tree, monkeypatch, rc, status):
     """ruff 非零只告警（exit_code 原样保留，但状态不是 fail）。"""
     _, engine = patrol_tree
-    monkeypatch.setattr(patrol, "_run_cmd", FakeCmd(rc, "found 3 errors"))
+    monkeypatch.setattr(patrol_steps, "_run_cmd", FakeCmd(rc, "found 3 errors"))
     r = patrol._step_ruff(engine)
     assert r.status == status and r.exit_code == rc
 
@@ -353,7 +354,7 @@ def test_startup_budget_runs_against_real_repo():
 )
 def test_build_vectors_exit_code_mapping(patrol_tree, monkeypatch, rc, status, exit_code):
     hub, engine = patrol_tree
-    monkeypatch.setattr(patrol, "_run_cmd", FakeCmd(rc, "{'inserted': 1}"))
+    monkeypatch.setattr(patrol_steps, "_run_cmd", FakeCmd(rc, "{'inserted': 1}"))
     r = patrol._step_build_vectors(hub, engine)
     assert r.status == status and r.exit_code == exit_code
 
@@ -367,7 +368,7 @@ def test_router_sync_skips_when_script_missing(patrol_tree):
 def test_router_sync_nonzero_is_warn(patrol_tree, monkeypatch):
     hub, engine = patrol_tree
     _touch(engine, "router_sync.py")
-    monkeypatch.setattr(patrol, "_run_cmd", FakeCmd(1, "", "路由表漂移"))
+    monkeypatch.setattr(patrol_steps, "_run_cmd", FakeCmd(1, "", "路由表漂移"))
     r = patrol._step_router_sync(hub, engine)
     assert r.status == "warn" and "路由表漂移" in r.output
 
@@ -387,7 +388,7 @@ def test_vector_regression_passes_fail_below_threshold(patrol_tree, monkeypatch)
     hub, engine = patrol_tree
     _touch(engine, "vector_bench.py")
     fake = FakeCmd(0, "命中率 100%")
-    monkeypatch.setattr(patrol, "_run_cmd", fake)
+    monkeypatch.setattr(patrol_steps, "_run_cmd", fake)
     r = patrol._step_vector_regression(hub, engine)
     assert r.status == "pass"
     assert "--fail-below" in fake.last["argv"] and "0.8" in fake.last["argv"]
@@ -396,7 +397,7 @@ def test_vector_regression_passes_fail_below_threshold(patrol_tree, monkeypatch)
 def test_vector_regression_below_threshold_is_warn(patrol_tree, monkeypatch):
     hub, engine = patrol_tree
     _touch(engine, "vector_bench.py")
-    monkeypatch.setattr(patrol, "_run_cmd", FakeCmd(2, "命中率 65% < 0.8"))
+    monkeypatch.setattr(patrol_steps, "_run_cmd", FakeCmd(2, "命中率 65% < 0.8"))
     r = patrol._step_vector_regression(hub, engine)
     assert r.status == "warn" and r.exit_code == 2
 
@@ -405,7 +406,7 @@ def test_metrics_daily_skip_and_warn(patrol_tree, monkeypatch):
     hub, engine = patrol_tree
     assert patrol._step_metrics_daily(hub, engine).status == "skip"
     _touch(engine, "metrics_daily.py")
-    monkeypatch.setattr(patrol, "_run_cmd", FakeCmd(1, "", "聚合失败"))
+    monkeypatch.setattr(patrol_steps, "_run_cmd", FakeCmd(1, "", "聚合失败"))
     r = patrol._step_metrics_daily(hub, engine)
     assert r.status == "warn" and "聚合失败" in r.output
 
@@ -414,7 +415,7 @@ def test_hub_review_skip_and_pass(patrol_tree, monkeypatch):
     hub, engine = patrol_tree
     assert patrol._step_hub_review(hub, engine).status == "skip"
     _touch(engine, "hub_review_today.py")
-    monkeypatch.setattr(patrol, "_run_cmd", FakeCmd(0, "待审 3 张"))
+    monkeypatch.setattr(patrol_steps, "_run_cmd", FakeCmd(0, "待审 3 张"))
     r = patrol._step_hub_review(hub, engine)
     assert r.status == "pass" and "待审 3 张" in r.output
 
@@ -426,17 +427,17 @@ def test_hub_review_skip_and_pass(patrol_tree, monkeypatch):
 
 def test_status_snapshot_requires_valid_json(patrol_tree, monkeypatch):
     hub, engine = patrol_tree
-    monkeypatch.setattr(patrol, "_run_cmd", FakeCmd(0, "not-json"))
+    monkeypatch.setattr(patrol_steps, "_run_cmd", FakeCmd(0, "not-json"))
     assert patrol._step_status_snapshot(hub, engine).status == "fail"
 
-    monkeypatch.setattr(patrol, "_run_cmd", FakeCmd(2, json.dumps({"cards": 1})))
+    monkeypatch.setattr(patrol_steps, "_run_cmd", FakeCmd(2, json.dumps({"cards": 1})))
     r = patrol._step_status_snapshot(hub, engine)
     assert r.status == "pass" and r.exit_code == 2  # exit=2（有告警）仍算快照可用
 
 
 def test_archive_snapshot_writes_retro_file(patrol_tree, monkeypatch):
     hub, engine = patrol_tree
-    monkeypatch.setattr(patrol, "_run_cmd", FakeCmd(0, json.dumps({"cards": {"rules": 3}})))
+    monkeypatch.setattr(patrol_steps, "_run_cmd", FakeCmd(0, json.dumps({"cards": {"rules": 3}})))
     r = patrol._save_snapshot_archive(hub, engine)
     today = datetime.now(_CN_TZ).date().isoformat()
     snap = hub / "retro" / f"snapshot-{today}.json"
@@ -452,7 +453,7 @@ def test_archive_snapshot_no_overwrite_is_idempotent(patrol_tree, monkeypatch):
     snap.write_text(json.dumps({"generated_at": f"{today}T08:00:00+08:00"}), encoding="utf-8")
 
     fake = FakeCmd(0, json.dumps({"cards": {}}))
-    monkeypatch.setattr(patrol, "_run_cmd", fake)
+    monkeypatch.setattr(patrol_steps, "_run_cmd", fake)
     r = patrol._save_snapshot_archive(hub, engine, no_overwrite=True)
     assert r.status == "pass" and "幂等保护" in r.output
     assert fake.calls == [], "幂等命中时不应再调子进程"
@@ -463,7 +464,7 @@ def test_archive_snapshot_broken_existing_file_is_overwritten(patrol_tree, monke
     hub, engine = patrol_tree
     today = datetime.now(_CN_TZ).date().isoformat()
     (hub / "retro" / f"snapshot-{today}.json").write_text("{ 坏 json", encoding="utf-8")
-    monkeypatch.setattr(patrol, "_run_cmd", FakeCmd(0, json.dumps({"cards": {}})))
+    monkeypatch.setattr(patrol_steps, "_run_cmd", FakeCmd(0, json.dumps({"cards": {}})))
     r = patrol._save_snapshot_archive(hub, engine, no_overwrite=True)
     assert r.status == "pass" and "已归档" in r.output
 
@@ -477,7 +478,7 @@ def test_auto_fix_lint_skip_and_warn(patrol_tree, monkeypatch):
     hub, engine = patrol_tree
     assert patrol._step_auto_fix_lint(hub, engine).status == "skip"
     _touch(engine, "auto_fix_lint.py")
-    monkeypatch.setattr(patrol, "_run_cmd", FakeCmd(1, "修复 0 张", ""))
+    monkeypatch.setattr(patrol_steps, "_run_cmd", FakeCmd(1, "修复 0 张", ""))
     assert patrol._step_auto_fix_lint(hub, engine).status == "warn"
 
 
@@ -485,7 +486,7 @@ def test_auto_pytest_env_fix_never_fails_patrol(patrol_tree, monkeypatch):
     """修复步骤失败只降为 warn（exit_code 归 0），不把巡检判红。"""
     hub, engine = patrol_tree
     _touch(engine, "auto_pytest_env_fix.py")
-    monkeypatch.setattr(patrol, "_run_cmd", FakeCmd(1, "修不了"))
+    monkeypatch.setattr(patrol_steps, "_run_cmd", FakeCmd(1, "修不了"))
     r = patrol._step_auto_pytest_fix(hub, engine)
     assert r.status == "warn" and r.exit_code == 0
 
@@ -495,7 +496,7 @@ def test_auto_pytest_env_fix_outer_timeout_exceeds_inner(patrol_tree, monkeypatc
     hub, engine = patrol_tree
     _touch(engine, "auto_pytest_env_fix.py")
     fake = FakeCmd(0, "ok")
-    monkeypatch.setattr(patrol, "_run_cmd", fake)
+    monkeypatch.setattr(patrol_steps, "_run_cmd", fake)
     patrol._step_auto_pytest_fix(hub, engine)
     assert fake.last["timeout"] >= 420
 
@@ -506,7 +507,7 @@ def test_sleep_autofix_passes_three_day_window(patrol_tree, monkeypatch, step_na
     hub, engine = patrol_tree
     _touch(engine, f"{step_name}.py")
     fake = FakeCmd(0, "处理 2 条")
-    monkeypatch.setattr(patrol, "_run_cmd", fake)
+    monkeypatch.setattr(patrol_steps, "_run_cmd", fake)
     fn = getattr(patrol, f"_step_{step_name}")
     r = fn(hub, engine)
     assert r.status == "pass"
@@ -517,7 +518,7 @@ def test_auto_review_today_skip_and_pass(patrol_tree, monkeypatch):
     hub, engine = patrol_tree
     assert patrol._step_auto_review_today(hub, engine).status == "skip"
     _touch(engine, "auto_review_today.py")
-    monkeypatch.setattr(patrol, "_run_cmd", FakeCmd(0, "过审 4 张"))
+    monkeypatch.setattr(patrol_steps, "_run_cmd", FakeCmd(0, "过审 4 张"))
     r = patrol._step_auto_review_today(hub, engine)
     assert r.status == "pass" and "过审 4 张" in r.output
 
@@ -564,7 +565,7 @@ def test_platform_sync_drift_is_fail_exit1(patrol_tree, monkeypatch):
     hub, engine = patrol_tree
     assert patrol._step_platform_sync_check(hub, engine).status == "skip"
     _touch(engine, "platform_sync.py")
-    monkeypatch.setattr(patrol, "_run_cmd", FakeCmd(1, "❌ trae 需同步", ""))
+    monkeypatch.setattr(patrol_steps, "_run_cmd", FakeCmd(1, "❌ trae 需同步", ""))
     r = patrol._step_platform_sync_check(hub, engine)
     assert r.status == "fail" and r.exit_code == 1 and "需同步" in r.output
 
@@ -572,7 +573,7 @@ def test_platform_sync_drift_is_fail_exit1(patrol_tree, monkeypatch):
 def test_platform_healthcheck_lists_non_green(patrol_tree, monkeypatch):
     hub, engine = patrol_tree
     _touch(engine, "platform_healthcheck.py")
-    monkeypatch.setattr(patrol, "_run_cmd", FakeCmd(1, "trae RED 会话超时", ""))
+    monkeypatch.setattr(patrol_steps, "_run_cmd", FakeCmd(1, "trae RED 会话超时", ""))
     r = patrol._step_platform_healthcheck(hub, engine)
     assert r.status == "fail" and r.exit_code == 1 and "RED" in r.output
 
@@ -581,6 +582,6 @@ def test_platform_unregistered_is_informational_only(patrol_tree, monkeypatch):
     """未接入平台提示恒为 pass（信息级，不制造红灯）。"""
     hub, engine = patrol_tree
     _touch(engine, "platform_unregistered.py")
-    monkeypatch.setattr(patrol, "_run_cmd", FakeCmd(0, "• cursor\n• windsurf", ""))
+    monkeypatch.setattr(patrol_steps, "_run_cmd", FakeCmd(0, "• cursor\n• windsurf", ""))
     r = patrol._step_platform_unregistered(hub, engine)
     assert r.status == "pass" and r.exit_code == 0 and "2 个候选待接入" in r.output

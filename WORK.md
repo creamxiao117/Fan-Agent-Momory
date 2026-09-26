@@ -10,7 +10,7 @@
 - 分层：L0（AGENTS / CHARTER / **本文件** / 根 INDEX 目录版）→ L1 四型（`hub-engine/tools/task_tier.py`）→ L2 检索
 - 安全底座常驻：单写者+§4 守护+ledger；query-first + 交回用户 + 回写
 - 分项帽：AGENTS≤2500 / CHARTER≤1500 / WORK≤5000 / INDEX≤20000（和 29,000 ≤ 总帽 30,000；不变量有测试看守）
-- **测试 677 passed / 4 skipped / 0 failed**；**ruff 新规则集（B/SIM/UP/C901）全绿**；lint 干净；**巡检 24 步 exit 0**（258 s，健康 92/100）
+- **测试 681 passed / 4 skipped / 0 failed**；**ruff 新规则集（B/SIM/UP/C901）全绿**；lint 干净；**巡检 24 步 exit 0**（248 s，健康 92/100）
 - **检索（D2 扩容后 58 条金标准）word recall@5 98% / @1 79%**、char 100% / 70%；向量回归 100%；首调 6.7 s（进程级一次性）· 稳态 4–145 ms
 - **覆盖率 56.2%**（生产代码；tools/ 85.8% · common/ 91.1% · 顶层 67.6% · commands/ 63.5% · **scripts/ 44.9%**）；**两仓均已推送 origin**；`work/` 只剩 `_archive/`；**审计重评 8.7/10（§11）**
 
@@ -35,7 +35,7 @@
 - **每日 06:00** `AgentHub-NightlyConsolidate` → `scripts/nightly_consolidate.cmd`（distill→build-vectors→sleep→local-summary）
 - **每日 06:00** `AgentHub-SecretSentry` → `scripts/secret_sentry.cmd`（误报 **26 → 0**）
 - **手动**：`python -m scripts.recall_regression`（**58 条金标准**，退出码 2 = 未达 90% 或夹具失效）；`python -m scripts.index_locatability_bench --rev <rev>`；`python -m scripts.audit_dead_modules`（零引用审计，**有假阳性须复查**）；**覆盖率** `pytest --cov=.`（基线 40.0%，实测 54.0%）
-- 验收：`.venv\Scripts\python.exe -m pytest` → **677 通过 / 4 跳过 / 0 失败**；`startup_budget` 退出码 0
+- 验收：`.venv\Scripts\python.exe -m pytest` → **681 通过 / 4 跳过 / 0 失败**；`startup_budget` 退出码 0
 
 ## 已闭环（本迭代；明细见各留档与 `work-history.md`）
 
@@ -53,6 +53,7 @@
 - **COV 收口**：`scripts/` 覆盖率 **26.9% → 41.8%**（TOTAL 54.0%），+73 例测试；顺带修 3 个真 bug（详审计 §11.2）
 - **D1/D1b 收口**（审计 §11.5）：6 张卡补 `status` + 4 张补空 `tags`；门禁与修复器升 V1.1（必填字段缺失即阻断、可一键修）；顺手修掉修复器漏 `deprecated` 的潜在错改
 - **SPLIT2 收口**：C901 **16 → 0**（第二批拆 8 个；保真靠 stdout 逐行 diff + 新补 14 例网）；**顺带修 `auto_fix_lint` 漏 `deprecated` 的错改**（详审计 §11.7）
+- **patrol 拆包**（审计 §11.8）：`patrol_runner.py` **1,597 → 477 行**（core/steps/report + 编排层，依赖单向）；纯搬运经 AST 源码比对（53/53）；新增 `test_patrol_cli.py` 守护**入口/重导出**（防“定时任务假绿”）
 - **D2 收口**（审计 §11.6）：金标准 **22 → 58 条**（+39 含 8 条真实日志；剔除 3 条 candidate 目标）；@1 恢复分辨力（word **100%/79%**、char 100%/72%）；顺带揪出冠军保底“补首位”抢位缺陷 → 改补末位；**R1**（唯一真未命中）由“保底前 2 条 + 卡补 tag”关闭
 - **重评两轮**：同一口径重测 → **加权 7.7 → 8.5（§10）→ 8.7/10（§11）**；代码卫生 6.0→**8.3**、可维护性 6.0→**8.4**、测试与门禁 8.5→**9.3**
 - **secret_sentry** 26 误报 → 0；**首评总分 5.9 → 7.7（整改前） → 8.5 → 8.7（重评两轮）**

@@ -15,6 +15,7 @@
 - **D2 当日已收口**（审计 §11.6）：金标准 **22 → 58 条**（+39：8 条真实日志改写 + 31 条区域补写；−3：目标卡是 candidate）；建立**夹具体检**（目标卡必须存在且 active/reference，否则 exit 2 且“修夹具不改阈值”）；@1 从饱和 86% 恢复分辨力；**顺带揪出向量冠军保底“补首位”缺陷**（带假 score=0.0 抢位）→ 改补末位；权重新集合上扫 1.0–2.0 同分 ⇒ 保留 1.5。验证：测试 **661 passed** · 巡检 exit 0（248 s）
 - **R1 当日已收口**（审计 §11.6.3）：唯一真未命中 `memory-hub-card-promotion` —— 诊断确认它在**向量第 2**却被融合挤出（RRF 只看位序）；保底从“只保第 1”推广到**保前 2**（word @5 98% → **100%**，char 维持 100%；保 3/4 条反而伤 char）
 - **SPLIT2 当日已收口**（审计 §11.7）：**C901 复杂度债 16 → 0**，`pyproject.toml` 里 C901 豁免全删；第二批拆 8 个函数（`audit_index.audit` / `post_ingest_hook.main` / `rule_following_timeseries.main` / `platform_bridge.push` / `status`×2 / `auto_fix_lint.run_fix` / `flywheel._cmd_daily_report`），保真靠 **stdout 逐行 diff（差异 0）**；顺手修 `auto_fix_lint` 漏 `deprecated` 的错改。验证：测试 **677 passed** · 巡检 exit 0（258 s）
+- **patrol 拆包当日已收口**（审计 §11.8）：`patrol_runner.py` **1,597 → 477 行**（`scripts/patrol/{core,steps,report}.py` + 编排层，单向依赖）；纯搬运经 AST 源码比对 53/53；⚠️ 过程踩到**“假绿入口”**（漏搬 `if __name__ == "__main__"` ⇒ `python -m` 静默 exit 0 什么都不做，而所有单测/契约测试全绿）⇒ 新增 `test_patrol_cli.py` 守护入口与重导出。验证：测试 **681 passed** · 完整巡检 24 步 exit 0（248 s，健康 92/100）
 
 ## [2026-09-23] R16 | 每日巡检 exit 2（13 Lint）· 修复进行中
 

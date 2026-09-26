@@ -366,7 +366,7 @@ cmd /c scripts\run_patrol.cmd                              # exit 0（198s）
 | 2 | ~~6 张缺 `status` 的卡补元数据（或归档）~~ ✅ **已完成（见 §11.5）** | 6 张补 `status: active`；同一类缺陷（4 张空 `tags`）一并修；门禁新增「必填字段存在性」检查堵住复发 |
 | 3 | ~~金标准集 22 → 40+~~ ✅ **已完成（见 §11.6）** | 实际做到 **58 条**（+39，含 8 条真实日志改写），@1 恢复分辨力，并顺带揪出 1 个排序缺陷 |
 | 4 | ~~SPLIT2 余 8 个 C901~~ ✅ **已完成（见 §11.7）** | 当日全部拆完：**C901 债清零**（基线豁免 16 处 → 0 处） |
-| 5 | 可选：`patrol_runner.py`（1,597 行）拆 `steps/` 包 | 24 步契约测试已具备，风险低；纯可读性收益（C901 已在 `run_patrol`/`print_report` 两层清干净） |
+| 5 | ~~可选：`patrol_runner.py` 拆 `steps/` 包~~ ✅ **已完成（见 §11.8）** | 实际拆成 `scripts/patrol/` 包（core/steps/report）+ 编排层保留在 runner；1,597 → **477 行** |
 
 ### 11.5 §11 之后的追加修复（D1 / D1b 已关闭）
 
@@ -494,3 +494,45 @@ top-1 反而是被冠军保底推上来的噪声卡。已作为**有意保留的
 `ruff check .` 0 违规且 **per-file-ignores 里已无任何 C901 条目**（豁免不再需要，因为真的没超阈函数）·
 测试 **663 → 677 passed**（+14）· 巡检 24 步 **exit 0**（258 s，健康 92/100）·
 函数层面：`ruff --isolated --select C901` 全库 **0 命中**。
+
+### 11.8 patrol_runner 拆包（1,597 → 477 行编排层）
+
+§11.4 第 5 项的“可选”项也做了。目标：把 1,597 行的单文件按**职责**分层，
+且**注册表唯一事实源不变**（`tests/test_patrol_steps.py` 静态扫描的仍是编排层）。
+
+#### 11.8.1 新布局
+
+| 模块 | 行数 | 职责 |
+|:--|--:|:--|
+| `scripts/patrol/core.py` | 158 | 路径引导 + `_LOCAL_TZ` + 数据模型（`StepResult`/`StageResult`/`PatrolReport`）+ `_run_step`/`_run_cmd` |
+| `scripts/patrol/steps.py` | 946 | 24 个步骤实现（预检 / 质量 / 飞轮 / 数据 / 自修复 / 平台）+ 快照归档 + 建议生成 |
+| `scripts/patrol/report.py` | 106 | 报告渲染（`_STEP_ICONS` / `_print_*` / `print_report`） |
+| `scripts/patrol/__init__.py` | 90 | 公共 API 聚合（`__all__`） |
+| **`scripts/patrol_runner.py`** | **477** | **阶段编排 + `run_patrol` + `main` + 向后兼容 re-export** |
+
+依赖方向单向：`runner → {steps, report} → core`，无循环。
+
+#### 11.8.2 保真证据
+
+- **纯搬运校验**（脚本比对 HEAD 版与拆后各文件的 AST 源码）：53/53 函数与类全部找到、**无新增**；
+  仅 2 个函数有差异，且经 diff 确认是 ruff 刪掉了**冗余的局部 import**（`import os` / `import subprocess`
+  与模块级重复）——语义等价。
+- 24 步契约 + 报告渲染测试全绿（`test_patrol_steps.py` 24 例 + `test_local_summary_flow.py`）
+- **端到端**：完整巡检 24 步 **exit 0**（248 s，健康 92/100）
+
+#### 11.8.3 踩到的真坑（已固化为守护测试）
+
+1. **漏装饰器**：按行区间搬运时 `@dataclass` 在被搬函数行的**上一行**，漏搬 ⇒ `StepResult() takes no arguments`
+   （契约测试立即报红，已补回）。
+2. ⚠️ **“假绿”入口**：漏搬 `if __name__ == "__main__":` ⇒ `python -m scripts.patrol_runner`
+   **静默 exit 0 什么都不做**（定时任务看到的就是“全绿”）；而单元测试全绿、契约测试也全绿，
+   **只有人眼看输出才能发现**。已新增 `tests/test_patrol_cli.py`（4 例）：
+   `--help` 必须真打 usage / `__all__` 全部可访问 / re-export 是**同一对象**（否则 monkeypatch 打不到真位置）/ `main` 可调用。
+3. **测试 patch 目标随搬移而变**：`test_patrol_steps.py` 原用 `monkeypatch.setattr(patrol, "_run_cmd", …)`（同模块时代有效），
+   拆分后步骤从 `steps` 模块解析该名字 ⇒ 已改为 patch `scripts.patrol.steps._run_cmd`（24 处），
+   并在测试里写明了“patch 的是步骤实现所在模块”。
+
+#### 11.8.4 验收
+
+测试 **677 → 681 passed**（+4 CLI/re-export 守护）· 巡检 24 步 exit 0（248 s，健康 92/100）·
+预算 25,011/30,000（WORK 4,763）· `ruff check .` 0 违规 · C901 仍为 0。
