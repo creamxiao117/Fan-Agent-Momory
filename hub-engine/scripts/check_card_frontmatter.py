@@ -1,4 +1,4 @@
-# @version V1.0 / 2026-09-11 / Hermes / 卡片 frontmatter 校验器（直接写入路径的提交前门禁）
+# @version V1.1 / 2026-09-25 / Hermes + pi / 卡片 frontmatter 校验器（直接写入路径的提交前门禁）
 """卡片 frontmatter 校验器 —— 给「直接写入路径」加校验关口。
 
 被谁调用
@@ -13,8 +13,13 @@
     `validate_card`，而 lint 只扫 5 个权威区。本校验器把关口前移到 commit。
 
 退出码
-    0 = 全部通过（可含 dir↔type 不一致的**警告**）
+    0 = 全部通过（可含 dir↔type 不一致、tags 为空的**警告**）
     1 = 有卡不合规（阻断提交）
+
+V1.1（2026-09-25）：补「**必填字段存在性**」检查（raw frontmatter 层）。
+    原因：`parse_card` 对缺字段有默认值（status→active / type→note），所以「卡里没写
+    status」在 `validate_card` 眼里合法 —— 实测 experience/ 下 6 张卡缺 status 静默存活
+    （审计 §11.4 D1）。现：type/status/updated 缺失 → 阻断（退出码 1）；tags 为空 → 警告。
 """
 
 from __future__ import annotations
@@ -27,7 +32,7 @@ _HUB_ENGINE = Path(__file__).resolve().parent.parent
 if str(_HUB_ENGINE) not in sys.path:
     sys.path.insert(0, str(_HUB_ENGINE))
 
-from common.frontmatter import try_read_card, validate_card
+from common.frontmatter import missing_required_keys, raw_frontmatter, try_read_card, validate_card
 
 # 卡片目录 → 期望 type（仅用于**警告**：experience/ 历史上混装 rule/methodology/blueprint，
 # 强制失败会造成大量假阳性）
@@ -76,7 +81,14 @@ def check_file(root: Path, raw: str) -> tuple[list[str], list[str]]:
         return [f"{rel}: frontmatter 无法解析（缺结束 '---' 或 YAML 语法错误）"], []
 
     errors = [f"{rel}: {e}" for e in validate_card(card)]
+    raw = raw_frontmatter(path)
+    errors += [
+        f"{rel}: frontmatter 缺必填字段 '{k}'（须显式写：不能靠默认值兜底，" + "status 缺省=active / type 缺省=note）"
+        for k in missing_required_keys(raw)
+    ]
     warnings = []
+    if not raw.get("tags"):
+        warnings.append(f"{rel}: tags 为空 → tag 检索与可定位性度量看不到该卡，建议补 3–6 个主题标签")
     if expected and card.type != expected and not errors:
         warnings.append(f"{rel}: type={card.type} 与目录 '{rel.split('/')[0]}/' 期望 {expected} 不一致")
     return errors, warnings
@@ -108,7 +120,8 @@ def main() -> int:
         for e in all_errors:
             print(f"  - {e}")
         print("[hub-cards] 修复：python hub-engine/scripts/fix_card_schema_drift.py --root <Hub> --apply")
-        print("[hub-cards] 说明：schema 合法值见 common/frontmatter.py 的 VALID_TYPES / VALID_STATUS")
+        print("[hub-cards] 说明：schema 合法值见 common/frontmatter.py 的 VALID_TYPES / VALID_STATUS；")
+        print("[hub-cards]      缺必填字段（type/status/updated）由同一修复器补（默认 dry-run，先看再 --apply）")
         return 1
     print(f"[hub-cards] ✅ {checked} 张卡 frontmatter 通过")
     return 0

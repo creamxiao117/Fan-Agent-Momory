@@ -363,7 +363,25 @@ cmd /c scripts\run_patrol.cmd                              # exit 0（198s）
 | 优先 | 事项 | 为什么 |
 |:--|:--|:--|
 | 1 | **T1 重跑（时间门 ≥ 2026-10-07）** | 唯一硬约束项；改造前后对照的判据已写好 |
-| 2 | **6 张缺 `status` 的卡补元数据**（或归档） | ⚠ 新发现：全在 `experience/`（`dashboard-metric-source-mismatch` · `autocad-cad-plugin-testing-skill-decoupled-architecture` · `deepseek-peak-offpeak-scheduler` · `hermes-env-only-proxy-vs-clash-fakeip` · `vmmem-wsl2-docker-memory-three-layer` · `workbuddy-model-list-static-deepseek-alias`）；`check_card_frontmatter` **不报**此事 ⇒ status 统计失真（应补一条 lint 规则） |
+| 2 | ~~6 张缺 `status` 的卡补元数据（或归档）~~ ✅ **已完成（见 §11.5）** | 6 张补 `status: active`；同一类缺陷（4 张空 `tags`）一并修；门禁新增「必填字段存在性」检查堵住复发 |
 | 3 | 金标准集 **22 → 40+** | 检索维度唯一的上升通道（当前 100% 已无区分度） |
 | 4 | SPLIT2 余 **8** 个 C901（待有测试） | 属线性 CLI 选项处理，先补测试再拆 |
 | 5 | 可选：`patrol_runner.py`（1,597 行）拆 `steps/` 包 | 24 步契约测试已具备，风险低；纯可读性收益 |
+
+### 11.5 §11 之后的追加修复（D1 / D1b 已关闭）
+
+§11 评的是**当日 COV+SPLIT2 收口时点**；随后当日即把 §11.4 第 2 项做掉，顺带关掉同一缺陷类的 D1b。
+
+| 项 | 内容 | 证据 |
+|:--|:--|:--|
+| **D1 数据** | 6 张 `experience/` 卡补 `status: active`（`dashboard-metric-source-mismatch` · `autocad-cad-plugin-testing-skill-decoupled-architecture` · `deepseek-peak-offpeak-scheduler` · `hermes-env-only-proxy-vs-clash-fakeip` · `vmmem-wsl2-docker-memory-three-layer` · `workbuddy-model-list-static-deepseek-alias`） | 用**刚修好的** `fix_card_schema_drift` 自身跑 dry-run → `--apply`：`合规 368 / 修复 6 / 需人工 0`；复扫 **0** 张缺 status |
+| **D1 规则（根因）** | `common/frontmatter.py` 新增 **raw 层** `raw_frontmatter()` / `missing_required_keys()`；`check_card_frontmatter` V1.1 据此把 `type`/`status`/`updated` 缺失升为**阻断**、`tags` 为空升为**警告** | 根因：`parse_card` 对缺字段有默认值（status→active / type→note），`validate_card` **永远看不到“没写”** —— 所以 6 张卡静默存活 |
+| **D1 修复链** | `fix_card_schema_drift` V1.1：`run_fix` 的 clean 判定不再只看 `validate_card`，并新增「缺 type/status 按目录映射与 active 补齐」 | 修前是“门禁报错却无法一键修”；现两条路径同一口径（`REQUIRED_KEYS` 单源） |
+| **D1b** | 4 张 `tags:` 为空的 autocad 卡补主题标签（自标题/正文的显式主题提取，**不臆造**），并清掉 frontmatter 内的前导空行 | 空 tags ⇒ tag 检索与可定位性度量看不到该卡；复扫 **0** 张空 tags |
+| **顺手修的潜在 bug** | `fix_card_schema_drift` 原有一份本地 `VALID_STATUS` 副本且**漏了 `deprecated`** ⇒ 修其它缺陷时会顺手把 deprecated 卡改成 `active`（只因 `validate_card` 提前放行而从未爆）；现统一取 `common.frontmatter.VALID_STATUS` 单源 | 新增回归测试 `test_deprecated_status_not_flipped_when_repairing_type` |
+
+**验证**：全中枢 **469 张卡门禁 exit 0（0 警告）** · 缺 status / 空 tags 复扫 **0 / 0** ·
+测试 **643 → 652 passed**（+9：门禁 3 / 修复器 2 / raw 层 4）· 覆盖率 **54.0%**（common 81.1→**91.1%**）·
+巡检 24 步 **exit 0**（249 s，健康 92/100）· lint `orphans/ghosts/stale/invalid` 全 0。
+
+> ⚠ **§11 的 8.7 不因本节回溯上调**：评分是时点快照，D1 的收益计入下一次重跑（T1 重跑或新一轮审计）。

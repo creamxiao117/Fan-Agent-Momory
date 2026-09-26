@@ -58,3 +58,31 @@ def test_clean_card_untouched(tmp_path):
     res = run_fix(tmp_path, apply=True)
     assert res["fixed"] == 0
     assert res["clean"] == 1
+
+
+def test_fills_missing_status(tmp_path):
+    """V1.1：缺 status 的卡要能被修（修复前它在 validate_card 眼里完全合法）
+
+    回归背景（审计 §11.4 D1）：experience/ 下 6 张卡缺 status，本工具旧版把它们
+    计入「合规」直接跳过 ⇒ 门禁报错却无法一键修。
+    """
+    p = tmp_path / "experience" / "nos.md"
+    _write(p, "---\ntype: exp\ntags: [x]\nupdated: '2026-09-10'\n---\n\n正文戊\n")
+    res = run_fix(tmp_path, apply=True)
+    assert res["fixed"] == 1
+    text = p.read_text(encoding="utf-8")
+    assert "status: active" in text
+    assert "正文戊" in text
+
+
+def test_deprecated_status_not_flipped_when_repairing_type(tmp_path):
+    """V1.1：本地 VALID_STATUS 副本漏了 deprecated ⇒ 修 type 时会把 deprecated 错改成 active"""
+    p = tmp_path / "experience" / "dep.md"
+    _write(
+        p,
+        "---\ntype: experience\ntags: [x]\nupdated: '2026-09-10'\nstatus: deprecated\n---\n\n正文己\n",
+    )
+    run_fix(tmp_path, apply=True)
+    text = p.read_text(encoding="utf-8")
+    assert "type: exp" in text
+    assert "status: deprecated" in text

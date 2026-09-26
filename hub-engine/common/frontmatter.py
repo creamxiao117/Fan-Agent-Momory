@@ -23,6 +23,40 @@ VALID_TYPES = {
 VALID_STATUS = {"active", "archived", "candidate", "reference", "deprecated"}
 KNOWN = {"type", "tags", "updated", "status", "reuse_count", "superseded_by"}
 
+# 必填字段（**原始 frontmatter 层**判定，非 Card 层）。
+# 为何需要 raw 层：`parse_card` 对缺字段有默认值（status→active / type→note），
+# 于是「卡里压根没写 status」在 `validate_card` 眼里是合法的 —— 2026-09-25 实测
+# experience/ 下 6 张卡缺 status 静默存活（审计 §11.4 D1），status 统计因此失真。
+# 使用方：`scripts/check_card_frontmatter.py`（提交门禁）与
+# `scripts/fix_card_schema_drift.py`（修复器）——两者必须同一口径。
+REQUIRED_KEYS = ("type", "status", "updated")
+
+
+def raw_frontmatter(path: Path) -> dict:
+    """读**原始** frontmatter（不经 Card 默认值兜底）；不可解析时返回 {}。
+
+    容忍 BOM 与前导空行（与 try_read_card 同口径）；只负责取字典，不做校验。
+    """
+    try:
+        text = path.read_text(encoding="utf-8-sig", errors="replace")
+    except OSError:
+        return {}
+    if not text.lstrip().startswith("---"):
+        return {}
+    parts = text.split("---", 2)
+    if len(parts) < 3:
+        return {}
+    try:
+        fm = yaml.safe_load(parts[1])
+    except yaml.YAMLError:
+        return {}
+    return fm if isinstance(fm, dict) else {}
+
+
+def missing_required_keys(raw: dict) -> list[str]:
+    """返回原始 frontmatter 中**缺失或空值**的必填字段名（顺序同 REQUIRED_KEYS）"""
+    return [k for k in REQUIRED_KEYS if not str(raw.get(k) or "").strip()]
+
 
 def today_date() -> date:
     """本地日期（时区感知，满足 lint 的 tz 要求）"""

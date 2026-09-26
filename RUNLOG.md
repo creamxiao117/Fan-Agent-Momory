@@ -11,6 +11,7 @@
 - **测试实测揪出 3 个真 bug（已修+回归）**：日报空 `_gap` **KeyError 崩** · 健康分把“LLM 未知”当满分（总分虚高）· `card_tags` 块写法只读首个 tag
 - **巡检**：24 步 exit 0（239 s，健康 **92/100**）· 预算 **25,114/30,000** · 两仓 ahead=**0**
 - **新发现待办**：6 张 `experience/` 卡缺 `status`（`check_card_frontmatter` 不报）；金标准集 22 条已无区分度（recall 100%）；SPLIT2 余 8 个 C901（待有测试）
+- **D1/D1b 当日已收口**（审计 §11.5）：6 张补 `status` + 4 张补空 `tags`；`common/frontmatter.py` 新增 raw 层 `raw_frontmatter()`/`missing_required_keys()`，门禁与修复器同步升至 V1.1（缺 `type`/`status`/`updated` → 阻断并可一键修）；顺手修掉修复器漏 `deprecated` 的潜在错改。验证：469 张卡门禁 0 警告 · 测试 **652 passed** · 巡检 exit 0
 
 ## [2026-09-23] R16 | 每日巡检 exit 2（13 Lint）· 修复进行中
 

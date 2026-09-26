@@ -1,4 +1,4 @@
-# @version V1.0 / 2026-09-11 / Hermes / 卡片 schema 漂移外科式修复器（保留 EOL/created）
+# @version V1.1 / 2026-09-25 / Hermes + pi / 卡片 schema 漂移外科式修复器（保留 EOL/created）
 """卡片 schema 漂移外科式修复器（幂等，默认 dry-run）。
 
 背景（2026-09-11 实测）：
@@ -16,7 +16,9 @@
     1. type 非法 → 按所在目录映射（rules→rule / experience→exp / blueprints→blueprint …）
     2. updated 缺失 → 取卡内 created；无 created 才用今天
     3. status 非法 → active
-    4. 无 frontmatter / frontmatter 无法解析 → 只报告（需人工，不臆造）
+    4. **必填字段缺失（V1.1 新增）**：type / status 缺失 → 按目录映射与 active 补齐
+       （缺失在 `validate_card` 里看不见 —— parse_card 有默认值，见审计 §11.4 D1）
+    5. 无 frontmatter / frontmatter 无法解析 → 只报告（需人工，不臆造）
 
 用法：
   python scripts/fix_card_schema_drift.py --root ..\\AgentMemoryHub
@@ -37,10 +39,21 @@ if str(_HUB_ENGINE) not in sys.path:
     sys.path.insert(0, str(_HUB_ENGINE))
 
 from common.constants import HUMAN_REQUIRED_TYPES
-from common.frontmatter import VALID_TYPES, today_date, try_read_card, validate_card
+from common.frontmatter import (
+    VALID_STATUS,
+    VALID_TYPES,
+    missing_required_keys,
+    raw_frontmatter,
+    today_date,
+    try_read_card,
+    validate_card,
+)
 from tools.lint import AUTHORITY_DIRS, NON_AUTHORITY_DIRS
 
 # 目录 → 合法 type（与 engine.config.yaml / sync.py TYPE_DIR 口径一致）
+# 注：合法 status 从 common.frontmatter.VALID_STATUS 取单源。V1.1 前这里有一份本地副本
+# 且漏了 deprecated ⇒ 修一个非 status 缺陷时会顺手把 deprecated 卡错改成 active
+# （只因 validate_card 会提前放行而没爆；现已去重）。
 DIR_TO_TYPE = {
     "rules": "rule",
     "blueprints": "blueprint",
@@ -51,7 +64,6 @@ DIR_TO_TYPE = {
     "notes": "note",
 }
 
-VALID_STATUS = ("active", "archived", "candidate", "reference")
 _TYPE_RE = re.compile(r"^type:[ \t]*(\S+)[ \t]*$")
 _STATUS_RE = re.compile(r"^status:[ \t]*(\S+)[ \t]*$")
 _UPDATED_RE = re.compile(r"^updated:[ \t]*\S+")
@@ -101,24 +113,30 @@ def repair(path: Path, dir_type: str | None, apply: bool, today: str) -> tuple[l
     actions: list[str] = []
     created: str | None = None
     has_updated = False
+    seen_keys: set[str] = set()
     last_insert = bounds[0]
 
     for i in range(bounds[0] + 1, end):
         body = lines[i].rstrip("\r\n")
         if _CREATED_RE.match(body):
             created = _iso_or_none(_clean(_CREATED_RE.match(body).group(1)))  # type: ignore[union-attr]
+        m = _TYPE_RE.match(body)
+        if m:
+            seen_keys.add("type")
+            if m.group(1) not in VALID_TYPES and dir_type:
+                eol = _eol(lines[i])
+                lines[i] = f"type: {dir_type}{eol}"
+                actions.append(f"type: {m.group(1)} → {dir_type}")
+        m = _STATUS_RE.match(body)
+        if m:
+            seen_keys.add("status")
+            if m.group(1) not in VALID_STATUS:
+                eol = _eol(lines[i])
+                lines[i] = f"status: active{eol}"
+                actions.append(f"status: {m.group(1)} → active")
         if _UPDATED_RE.match(body):
             has_updated = True
-        m = _TYPE_RE.match(body)
-        if m and m.group(1) not in VALID_TYPES and dir_type:
-            eol = _eol(lines[i])
-            lines[i] = f"type: {dir_type}{eol}"
-            actions.append(f"type: {m.group(1)} → {dir_type}")
-        m = _STATUS_RE.match(body)
-        if m and m.group(1) not in VALID_STATUS:
-            eol = _eol(lines[i])
-            lines[i] = f"status: active{eol}"
-            actions.append(f"status: {m.group(1)} → active")
+            seen_keys.add("updated")
         if body.startswith(("type:", "tags:", "status:", "updated:", "reuse_count:")):
             last_insert = i
 
@@ -127,6 +145,15 @@ def repair(path: Path, dir_type: str | None, apply: bool, today: str) -> tuple[l
         eol = _eol(lines[end])
         lines.insert(last_insert + 1, f"updated: '{value}'{eol}")
         actions.append(f"updated: 补 {value}" + ("" if created else "（无 created，用今天）"))
+
+    # V1.1：补**缺失**的必填字段（缺失不会被 validate_card 看见，故在此单独判定）
+    fills = {"type": dir_type or "", "status": "active"}
+    for key in ("type", "status"):
+        if key in seen_keys or not fills[key]:
+            continue
+        eol = _eol(lines[end])
+        lines.insert(last_insert + 1, f"{key}: {fills[key]}{eol}")
+        actions.append(f"{key}: 补 {fills[key]}" + ("（按目录映射）" if key == "type" else ""))
 
     if actions and apply:
         with open(path, "w", encoding="utf-8", newline="") as fh:
@@ -164,7 +191,8 @@ def run_fix(root: Path, *, apply: bool = False, include_high_risk: bool = False)
             if card is None:
                 skipped.append((rel, "frontmatter 无法解析"))
                 continue
-            if not validate_card(card):
+            # 缺失的必填字段（V1.1）在 validate_card 里看不见，须单独判
+            if not validate_card(card) and not missing_required_keys(raw_frontmatter(md)):
                 clean += 1
                 continue
             actions, skip_reason = repair(md, dir_type, apply, today)
