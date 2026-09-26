@@ -35,7 +35,7 @@
 - **每日 00:35** `AgentHub-NightlyConsolidate` → `scripts/nightly_consolidate.cmd`（distill→build-vectors→sleep→local-summary）
 - **每日 06:00** `AgentHub-SecretSentry` → `scripts/secret_sentry.cmd`（误报 **26 → 0**）
 - **每日 09:00** `PluginHub-PytestTempClean`（临时目录清理）
-- **Hermes 链（5 个，07:30 起每 10 min；模型统一 `mimo-v2.6-flash@xiaomi`）**：07:30 晨间日报 → 07:40 草稿提升 → 07:50 star-distill+T1（唯一 agent）→ 周六 08:00 召回评测 → 周六 08:10 SkillHub（详卡 `projects/hermes-cron-jobs`）
+- **Hermes 链（5 个，07:30 起每 10 min；模型统一 `mimo-v2.6-flash@xiaomi`，全部 `deliver=local` = 零自动外发）**：07:30 晨间日报 → 07:40 草稿提升 → 07:50 star-distill+T1（唯一 agent）→ 周六 08:00 召回评测 → 周六 08:10 SkillHub（详卡 `projects/hermes-cron-jobs`）
 - **手动**：`python -m scripts.recall_regression`（**58 条金标准**，退出码 2 = 未达 90% 或夹具失效）；`python -m scripts.index_locatability_bench --rev <rev>`；`python -m scripts.audit_dead_modules`（零引用审计，**有假阳性须复查**）；**覆盖率** `pytest --cov=.`（基线 40.0%，实测 54.0%）
 - 验收：`.venv\Scripts\python.exe -m pytest` → **683 通过 / 4 跳过 / 0 失败**；`startup_budget` 退出码 0
 
@@ -51,7 +51,7 @@
 - **SPLIT2**（§11.7）：C901 **16 → 0**（豁免全删）；保真靠 stdout 逐行 diff；顺带修 `auto_fix_lint` 漏 `deprecated` 的错改
 - **patrol 拆包**（§11.8）：`patrol_runner.py` **1,597 → 477 行**；AST 纯搬运 53/53；`test_patrol_cli.py` 守护入口（防假绿）
 - **导入回归修复**（§11.9）：P1-c 漏 `sys.path` 引导 ⇒ Hermes 任务真挂；护栏又捐出 3 个同病脚本；`test_script_bootstrap.py`
-- **Hermes 定时任务精简**：**7 → 5** + 模型统一 `mimo-v2.6-flash@xiaomi` + 07:30 起每 10 min（卡 `projects/hermes-cron-jobs`）
+- **Hermes 定时任务精简**：**7 → 5** + 模型统一 `mimo-v2.6-flash@xiaomi` + 07:30 起每 10 min + **取消微信推送（全部 `deliver=local`）**（卡 `projects/hermes-cron-jobs`）
 - **重评两轮**：同一口径重测 → **7.7 → 8.5（§10）→ 8.7/10（§11）**；**首评 5.9 → 现 8.7**
 
 ## 禁止 / 注意
