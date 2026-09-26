@@ -1,11 +1,17 @@
 """端到端演示：一条真实 AutoCAD DLL 规则走通 沉淀→提炼→确认→复用"""
 
+import sys
 from pathlib import Path
 
-from common.frontmatter import parse_card, today_iso, write_card
-from scripts.bootstrap_hub import bootstrap
-from sync import append_log, confirm_rule, ingest
-from tools.retrieve import retrieve
+# 引导：允许被外部调度器用绝对路径 + 任意 cwd 调用（见 tests/test_script_bootstrap.py）
+_HUB_ENGINE = Path(__file__).resolve().parent.parent
+if str(_HUB_ENGINE) not in sys.path:
+    sys.path.insert(0, str(_HUB_ENGINE))
+
+from common.frontmatter import parse_card, today_iso, write_card  # noqa: E402
+from scripts.bootstrap_hub import bootstrap  # noqa: E402
+from sync import append_log, confirm_rule, ingest  # noqa: E402
+from tools.retrieve import retrieve  # noqa: E402
 
 
 def run_demo(root: str | Path) -> dict:

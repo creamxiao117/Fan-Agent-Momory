@@ -12,7 +12,12 @@ import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from common.config import external_path
+# 引导：允许被 MCP 宿主/调度器用绝对路径 + 任意 cwd 调用（见 tests/test_script_bootstrap.py）
+_HUB_ENGINE = Path(__file__).resolve().parent.parent
+if str(_HUB_ENGINE) not in sys.path:
+    sys.path.insert(0, str(_HUB_ENGINE))
+
+from common.config import external_path  # noqa: E402
 
 CST = timezone(timedelta(hours=8))
 BACKUP_DIR_NAME = "mcp_backups"

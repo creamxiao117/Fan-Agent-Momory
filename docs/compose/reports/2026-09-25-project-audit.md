@@ -540,3 +540,25 @@ top-1 反而是被冠军保底推上来的噪声卡。已作为**有意保留的
 覆盖率复测：TOTAL **56.3%**；新分组的 `patrol/` 包 **86.2%**（412 语句中 355 覆盖）。
 ⚠️ 口径提醒：`patrol_runner.py` 从 `scripts/` 移入 `patrol/` 分组 ⇒ `scripts/` 从 44.9% 显示为 42.6%
 （**分母缩了，不是同口径下降**）；换组后 TOTAL 仍微升（56.2% → 56.3%）。
+
+### 11.9 自查发现的回归（P1-c 引入）+ 护栏
+
+**现象**：2026-09-26 06:00 Hermes 定时任务「T15-6工具每日编排」失败：
+`ModuleNotFoundError: No module named 'common'`（`hub_orchestrator.py:13`）。
+
+**根因（自我归因）**：P1-c（硬编码路径清零）把该脚本里 3 处写死盘符路径换成
+`from common.config import external_path`，但**没有给它补 `sys.path` 引导** —— 这个脚本此前靠
+“cwd 恰好是 hub-engine”才导得到 `common`，而真实调用方（Hermes cron）是**绝对路径 + 任意 cwd**。
+
+**波及面**：写完护栏后静态扫描又捐出 **3 个同病脚本**：
+`bootstrap_hub.py`、`demo_e2e.py`、**`hub_mcp_launcher.py`（MCP 启动链）** —— 前两个与本次回归同类，
+第三个是潜在坑（MCP 宿主若不用 hub-engine 作 cwd 就会挂）。四个均已补引导。
+
+**护栏**：新增 `tests/test_script_bootstrap.py`（2 例）
+① 静态：`scripts/**/*.py` 中任何**模块级** `import common/tools/commands.*` 之前必须已有
+`sys.path.insert(...)`（否则即告警）；
+② 端到端：以**任意 cwd + 绝对路径**跑 `hub_orchestrator.py --help`（真复现调度器场景）。
+
+**教训（值得记卡）**：“测试全绿 ≠ 调度器能跑” —— 单测都是 `import scripts.x`（`sys.path` 已就绪），
+而真实调用方是绝对路径 + 任意 cwd。同类风险：P1-c 那次改动只被 `test_no_hardcoded_paths`（字符扫描）
+覆盖，它管不了导入顺序。

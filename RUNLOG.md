@@ -16,6 +16,26 @@
 - **R1 当日已收口**（审计 §11.6.3）：唯一真未命中 `memory-hub-card-promotion` —— 诊断确认它在**向量第 2**却被融合挤出（RRF 只看位序）；保底从“只保第 1”推广到**保前 2**（word @5 98% → **100%**，char 维持 100%；保 3/4 条反而伤 char）
 - **SPLIT2 当日已收口**（审计 §11.7）：**C901 复杂度债 16 → 0**，`pyproject.toml` 里 C901 豁免全删；第二批拆 8 个函数（`audit_index.audit` / `post_ingest_hook.main` / `rule_following_timeseries.main` / `platform_bridge.push` / `status`×2 / `auto_fix_lint.run_fix` / `flywheel._cmd_daily_report`），保真靠 **stdout 逐行 diff（差异 0）**；顺手修 `auto_fix_lint` 漏 `deprecated` 的错改。验证：测试 **677 passed** · 巡检 exit 0（258 s）
 - **patrol 拆包当日已收口**（审计 §11.8）：`patrol_runner.py` **1,597 → 477 行**（`scripts/patrol/{core,steps,report}.py` + 编排层，单向依赖）；纯搬运经 AST 源码比对 53/53；⚠️ 过程踩到**“假绿入口”**（漏搬 `if __name__ == "__main__"` ⇒ `python -m` 静默 exit 0 什么都不做，而所有单测/契约测试全绿）⇒ 新增 `test_patrol_cli.py` 守护入口与重导出。验证：测试 **681 passed** · 完整巡检 24 步 exit 0（248 s，健康 92/100）
+- **自查回归已修**（审计 §11.9）：P1-c 给 `hub_orchestrator.py` 加 `from common.config import …` 时漏了 `sys.path` 引导 ⇒ 2026-09-26 06:00 Hermes 任务 `ModuleNotFoundError` 真挂一场（绝对路径 + 任意 cwd）；护栏测试又捐出 **3 个同病脚本**（`bootstrap_hub` / `demo_e2e` / **`hub_mcp_launcher`（MCP 启动链）**）一并修；新增 `tests/test_script_bootstrap.py`（静态扫 + 反例端到端）
+- **Hermes 定时任务精简**（7 → 5）：删 2 个与 Windows 计划任务重复的（中枢每日健康快照 agent 版、5 平台健康检查）；2 个 LLM 任务改脚本；新写 `hub_daily_cron.py`（6 工具 + 日报 + 补卡候选 + 睡眠候选 + 快照提交→一条 07:30 链）与 `recall_review_cron.py`（召回回归 + 可定位性 + 缺口汇总）；**全部任务模型改 mimo-v2.6-flash@xiaomi（effort=low）**；时间 **07:30 / 07:40 / 07:50 + 周六 08:00 / 08:10**。验证：`hermes cron run` 两个新脚本任务均 succeeded · 模型一次性 prompt 回“可用” · 详见卡片 `projects/hermes-cron-jobs`
+
+## 本轮小结（R17 收尾 · 2026-09-25 → 09-26）
+
+**一句话**：把审计报告里的欠债从“已登记”改成“已还完”——保真优先、每步都留可复算的证据，并顺手捐出 6 个真 bug。
+
+| 主题 | 做了什么 | 硬证据 |
+|:--|:--|:--|
+| **P1/P2 六项 + 重构 A–D** | 规则族启用、硬编码清零、覆盖率基线、`work/` 纳管、单点自愈、推送；`lint_report` argparse、卡片去重裁定、延迟 340→138 ms、markdownlint 挂门禁；巡检器拆分、仪表盘单一化、删遗留 ≈12.8 MB | 审计 §9/§10 |
+| **COV** | `scripts/` 覆盖率 26.9% → 41.7%（+64 例） | 测试 579 → 643 |
+| **SPLIT / SPLIT2** | `sync.ingest` 229→54 行；**C901 16 → 0**（豁免全删） | stdout 逐行 diff = 0 |
+| **D1/D1b** | 6 卡补 `status` + 4 卡补 tag；门禁/修复器升 V1.1（raw 层必填字段） | 469 张卡 0 警告 |
+| **D2 / R1** | 金标准 22 → 58 条；融合保底推广到 top-2 | word recall@5 **100%** |
+| **patrol 拆包** | `patrol_runner` 1,597 → 477 行（core/steps/report 包） | AST 纯搬运 53/53 |
+| **自查回归** | P1-c 引入的导入回归 + 3 个同病脚本 | 巡检 24 步 exit 0 |
+| **Hermes 定时任务** | 7 → 5，模型统一 mimo-v2.6-flash，07:30 起每 10 分钟 | 两个新任务 run succeeded |
+
+**当前基线**：测试 **683 passed / 4 skipped** · 覆盖率 **56.3%** · C901 **0** · 巡检 24 步 exit 0（248 s，健康 92/100）·
+预算 25,011/30,000 · 审计重评 **8.7/10** · **两仓 ahead=0**。
 
 ## [2026-09-23] R16 | 每日巡检 exit 2（13 Lint）· 修复进行中
 

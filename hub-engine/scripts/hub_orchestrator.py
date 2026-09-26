@@ -1,7 +1,12 @@
-# @version V1.0 / 2026-09-09 / Hermes / T15 改进工具统一编排入口
+# @version V1.1 / 2026-09-26 / Hermes + pi / T15 改进工具统一编排入口
 """hub_orchestrator.py - T15 6 工具统一 cron 入口.
 
 V1.0 (2026-09-09): 6 项 cron 任务统一调度。
+V1.1 (2026-09-26): 补回 **sys.path 引导**（回归修复）。
+    P1-c 把写死盘符路径换成 `from common.config import external_path` 时，忘了这个
+    脚本此前是靠 cwd/env 才导得到 `common` 的 ⇒ Hermes cron（working dir 不是
+    hub-engine）下抛 `ModuleNotFoundError: No module named 'common'`，
+    2026-09-26 06:00 真的挂了一场。护栏：tests/test_script_bootstrap.py。
 """
 
 import argparse
@@ -10,7 +15,11 @@ import subprocess
 import sys
 from pathlib import Path
 
-from common.config import external_path
+_HUB_ENGINE = Path(__file__).resolve().parent.parent
+if str(_HUB_ENGINE) not in sys.path:
+    sys.path.insert(0, str(_HUB_ENGINE))
+
+from common.config import external_path  # noqa: E402
 
 # SkillHub 检出根：env SKILLHUB_ROOT → hub.config.yaml:external_paths.skillhub → 内置默认
 # （原为在 3 条命令里各写死一次盘符路径；收敛为**单点**，换机只改一处）

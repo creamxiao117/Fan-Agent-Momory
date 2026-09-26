@@ -4,7 +4,12 @@ import subprocess
 import sys
 from pathlib import Path
 
-from common.frontmatter import today_iso
+# 引导：允许被外部调度器用绝对路径 + 任意 cwd 调用（见 tests/test_script_bootstrap.py）
+_HUB_ENGINE = Path(__file__).resolve().parent.parent
+if str(_HUB_ENGINE) not in sys.path:
+    sys.path.insert(0, str(_HUB_ENGINE))
+
+from common.frontmatter import today_iso  # noqa: E402
 
 STRUCTURE = [
     "rules",
