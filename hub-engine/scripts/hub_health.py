@@ -328,6 +328,121 @@ def compute_health_score(
     return scores
 
 
+def _alert_no_recent_productivity(hub_root: Path, alert_days: int) -> list[dict]:
+    """规则 1：连续 N 天无飞轮产物 → 建议触发 auto_flywheel。
+
+    读 `.sync/state/flywheel-log.json` 取最近 30 条记录的日期集合；窗口内为空才告警。
+    文件缺失/损坏/日期非法一律静默跳过（健康检查不该因为日志坏了而假报）。
+    """
+    recent_log = hub_root / ".sync" / "state" / "flywheel-log.json"
+    if not recent_log.is_file():
+        return []
+    try:
+        logs = json.loads(recent_log.read_text(encoding="utf-8"))
+        if not isinstance(logs, list) or not logs:
+            return []
+        recent_dates = {entry.get("date", "") for entry in logs[-30:] if entry.get("date")}
+        from datetime import date
+        from datetime import timedelta as td
+
+        today = datetime.now(timezone.utc).date()
+        days_with_logs = [d for d in recent_dates if (today - date.fromisoformat(d)) <= td(days=alert_days)]
+    except (json.JSONDecodeError, ValueError, OSError):
+        return []
+    if days_with_logs:
+        return []
+    return [
+        {
+            "level": "warning",
+            "rule": "no_recent_productivity",
+            "message": f"最近 {alert_days} 天无飞轮产物，建议触发 auto_flywheel",
+            "suggestion": f"python auto_flywheel.py --root {hub_root}",
+        }
+    ]
+
+
+def _alert_low_hit_rate(hub_root: Path) -> list[dict]:
+    """规则 2：命中率 < 30% → 建议触发 missing_query 补 tag。
+
+    日志按日切分（`tools.mcp_audit.query_log_files`）与旧版单一文件都兼容；
+    无 search 记录或读取失败时不告警（缺少证据 ≠ 命中率低）。
+    """
+    try:
+        from tools.mcp_audit import query_log_files
+
+        log_files = query_log_files(hub_root)
+    except ImportError:
+        log_files = [hub_root / ".sync" / "state" / "query.log.jsonl"]
+
+    records: list[dict] = []
+    try:
+        for log_file in log_files or []:
+            if not log_file.is_file():
+                continue
+            for line in log_file.read_text(encoding="utf-8").splitlines():
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    records.append(json.loads(line))
+                except json.JSONDecodeError:
+                    continue
+    except (OSError, UnicodeDecodeError):
+        return []
+
+    searches = [r for r in records if r.get("action") == "search"]
+    if not searches:
+        return []
+    total_searches = len(searches)
+    zero_hits = sum(1 for r in searches if int(r.get("hit_count") or 0) == 0)
+    hit_rate = 1 - (zero_hits / max(total_searches, 1))
+    if hit_rate >= 0.3:
+        return []
+    return [
+        {
+            "level": "warning",
+            "rule": "low_hit_rate",
+            "message": f"最近命中率 {hit_rate:.0%}，低于 30% 阈值",
+            "suggestion": f"python missing_query.py --root {hub_root} --auto-apply-p1",
+        }
+    ]
+
+
+def _alert_active_zero_reuse(skill_stats: dict, hub_root: Path, skillhub_root: Path) -> list[dict]:
+    """规则 3：active 技能里有零复用的 → 建议 run smoke-test 或标 deprecated。"""
+    zero_reuse_active = [
+        s["name"]
+        for s in skill_stats.get("skills", [])
+        if s.get("status") == "active" and int(s.get("reuse_count", 0) or 0) == 0
+    ]
+    if not zero_reuse_active:
+        return []
+    return [
+        {
+            "level": "info",
+            "rule": "active_zero_reuse",
+            "message": (f"{len(zero_reuse_active)} 个 active 技能零复用，建议 run smoke-test 或标记 deprecated"),
+            "skills": zero_reuse_active[:10],
+            "suggestion": (f"python flywheel.py smoke --hub-root {hub_root} --skillhub-root {skillhub_root} --promote"),
+        }
+    ]
+
+
+def _alert_llm_unavailable() -> list[dict]:
+    """规则 4：本地 LLM（LM Studio）不可用 → critical（唯一阻断级告警）。"""
+    llm_status = collect_llm_status()
+    if llm_status.get("available", True):
+        return []
+    return [
+        {
+            "level": "critical",
+            "rule": "ollama_unavailable",
+            "message": f"本地 LLM 服务不可用 (LM Studio): {llm_status.get('last_error', '未知错误')}",
+            "suggestion": "检查 LM Studio 是否在运行，确认 API 端口 1234",
+        }
+    ]
+
+
 def check_alerts(
     hub_root: Path,
     skillhub_root: Path,
@@ -336,112 +451,22 @@ def check_alerts(
     flywheel_stats: dict,
     alert_days: int = 2,
 ) -> list[dict]:
-    """自监控告警检查。
+    """自监控告警检查。四条规则各自独立、任一失败不影响其它。
 
     规则:
       1. 连续 N 天无新产物 → 建议触发飞轮
       2. 命中率 < 30% → 建议触发 missing_query 补 tag
       3. active 技能中有零复用的 → 建议 run smoke-test
+      4. 本地 LLM 不可用 → critical
+
+    2026-09-25（SPLIT2）：由单函数 117 行（C901=22）拆成 4 个 `_alert_*` 规则函数 +
+    此处纯编排（复杂度降到 1）。行为不变（tests/test_reports_and_health.py 已按规则断言）。
     """
-    alerts = []
-
-    # 规则 1: 连续无产物
-    recent_log = hub_root / ".sync" / "state" / "flywheel-log.json"
-    if recent_log.is_file():
-        try:
-            logs = json.loads(recent_log.read_text(encoding="utf-8"))
-            if isinstance(logs, list) and logs:
-                recent_dates = set()
-                for entry in logs[-30:]:
-                    d = entry.get("date", "")
-                    if d:
-                        recent_dates.add(d)
-                from datetime import date
-                from datetime import timedelta as td
-
-                today = datetime.now(timezone.utc).date()
-                days_with_logs = sorted(
-                    [d for d in recent_dates if (today - date.fromisoformat(d)) <= td(days=alert_days)]
-                )
-                if not days_with_logs:
-                    alerts.append(
-                        {
-                            "level": "warning",
-                            "rule": "no_recent_productivity",
-                            "message": f"最近 {alert_days} 天无飞轮产物，建议触发 auto_flywheel",
-                            "suggestion": f"python auto_flywheel.py --root {hub_root}",
-                        }
-                    )
-        except (json.JSONDecodeError, ValueError, OSError):
-            pass
-
-    # 规则 2: 命中率低（读全部按日切分 + 旧版单一文件，向后兼容）
-    try:
-        from tools.mcp_audit import query_log_files
-
-        log_files = query_log_files(hub_root)
-    except ImportError:
-        log_files = [hub_root / ".sync" / "state" / "query.log.jsonl"]
-
-    records = []
-    if log_files:
-        try:
-            for log_file in log_files:
-                if not log_file.is_file():
-                    continue
-                for line in log_file.read_text(encoding="utf-8").splitlines():
-                    line = line.strip()
-                    if line:
-                        try:
-                            records.append(json.loads(line))
-                        except json.JSONDecodeError:
-                            continue
-            if records:
-                searches = [r for r in records if r.get("action") == "search"]
-                if searches:
-                    total_searches = len(searches)
-                    zero_hits = sum(1 for r in searches if int(r.get("hit_count") or 0) == 0)
-                    hit_rate = 1 - (zero_hits / max(total_searches, 1))
-                    if hit_rate < 0.3:
-                        alerts.append(
-                            {
-                                "level": "warning",
-                                "rule": "low_hit_rate",
-                                "message": f"最近命中率 {hit_rate:.0%}，低于 30% 阈值",
-                                "suggestion": f"python missing_query.py --root {hub_root} --auto-apply-p1",
-                            }
-                        )
-        except (OSError, UnicodeDecodeError):
-            pass
-
-    # 规则 3: active 技能零复用
-    zero_reuse_active = []
-    for s in skill_stats.get("skills", []):
-        if s.get("status") == "active" and int(s.get("reuse_count", 0) or 0) == 0:
-            zero_reuse_active.append(s["name"])
-    if zero_reuse_active:
-        alerts.append(
-            {
-                "level": "info",
-                "rule": "active_zero_reuse",
-                "message": f"{len(zero_reuse_active)} 个 active 技能零复用，建议 run smoke-test 或标记 deprecated",
-                "skills": zero_reuse_active[:10],
-                "suggestion": f"python flywheel.py smoke --hub-root {hub_root} --skillhub-root {skillhub_root} --promote",
-            }
-        )
-
-    # 规则 4: Ollama 不可用
-    llm_status = collect_llm_status()
-    if not llm_status.get("available", True):
-        alerts.append(
-            {
-                "level": "critical",
-                "rule": "ollama_unavailable",
-                "message": f"本地 LLM 服务不可用 (LM Studio): {llm_status.get('last_error', '未知错误')}",
-                "suggestion": "检查 LM Studio 是否在运行，确认 API 端口 1234",
-            }
-        )
-
+    alerts: list[dict] = []
+    alerts += _alert_no_recent_productivity(hub_root, alert_days)
+    alerts += _alert_low_hit_rate(hub_root)
+    alerts += _alert_active_zero_reuse(skill_stats, hub_root, skillhub_root)
+    alerts += _alert_llm_unavailable()
     return alerts
 
 

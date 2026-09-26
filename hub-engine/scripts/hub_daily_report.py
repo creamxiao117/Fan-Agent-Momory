@@ -104,8 +104,71 @@ def _load_6panel(hub_root: Path) -> dict | None:
         return {"_error": str(exc)}
 
 
+def _panel_lines_skill_health(results: dict) -> list[str]:
+    sh = results.get("skill_health", {})
+    return [f"  {sh.get('info', {}).get('stdout', '')}"] if sh.get("ok") else ["  ❌ skill_health 失败"]
+
+
+def _panel_lines_llm_route(results: dict) -> list[str]:
+    lr = results.get("llm_route", {})
+    if not lr.get("ok"):
+        return []
+    stdout = lr.get("info", {}).get("stdout", "")
+    if "hits: []" in stdout:
+        return ["  🟡 LLM 路由：fallback 可用但 LLM 决策无命中（可能是离线或无可用模型）"]
+    return [f"  ✅ LLM 路由：{stdout[:60]}"]
+
+
+def _panel_lines_stale(results: dict) -> list[str]:
+    sd = results.get("stale_detect", {})
+    if not sd.get("ok"):
+        return []
+    stdout = sd.get("info", {}).get("stdout", "")
+    return [f"  📦 {line.strip()}" for line in stdout.split("\n") if "Stale" in line]
+
+
+def _panel_lines_gap(results: dict) -> list[str]:
+    kg = results.get("knowledge_gap", {})
+    if not kg.get("ok"):
+        return []
+    return [f"  {kg.get('info', {}).get('stdout', '')}"]
+
+
+def _panel_lines_skill_candidate(results: dict) -> list[str]:
+    sc = results.get("skill_candidate", {})
+    if not sc.get("ok"):
+        return []
+    stdout = sc.get("info", {}).get("stdout", "")
+    # 提取数字 "生成 N 张"
+    return [f"  💡 {line.strip()}" for line in stdout.split("\n") if "生成" in line and "建议" in line]
+
+
+def _panel_lines_freshness(results: dict) -> list[str]:
+    fr = results.get("freshness", {})
+    if not fr.get("ok"):
+        return []
+    stdout = fr.get("info", {}).get("stdout", "")
+    return [f"  📅 90 天: {line.strip()}" for line in stdout.split("\n") if "Stale" in line and "60" not in line]
+
+
+# 面板段落生成器（**顺序即输出顺序**）
+_PANEL_FORMATTERS = (
+    _panel_lines_skill_health,
+    _panel_lines_llm_route,
+    _panel_lines_stale,
+    _panel_lines_gap,
+    _panel_lines_skill_candidate,
+    _panel_lines_freshness,
+)
+
+
 def _format_6panel_section(panel: dict | None) -> list[str]:
-    """把 6 面板结果格式化为微信友好段落。"""
+    """把 6 面板结果格式化为微信友好段落。
+
+    2026-09-25（SPLIT2）：原函数把 6 个面板的内联 if/for 堆在一起（C901=17）⇒
+    拆成 6 个 `_panel_lines_*` 生成器 + 此处纯编排（复杂度降到 3）。
+    行为**逐字不变**（tests/test_reports_and_health.py 已按段断言）。
+    """
     if not panel:
         return []
     if "_error" in panel:
@@ -115,55 +178,8 @@ def _format_6panel_section(panel: dict | None) -> list[str]:
         return []
 
     lines: list[str] = []
-
-    # 1. 技能健康
-    sh = results.get("skill_health", {})
-    if sh.get("ok"):
-        stdout = sh.get("info", {}).get("stdout", "")
-        lines.append(f"  {stdout}")
-    else:
-        lines.append("  ❌ skill_health 失败")
-
-    # 2. LLM 路由
-    lr = results.get("llm_route", {})
-    if lr.get("ok"):
-        stdout = lr.get("info", {}).get("stdout", "")
-        if "hits: []" in stdout:
-            lines.append("  🟡 LLM 路由：fallback 可用但 LLM 决策无命中（可能是离线或无可用模型）")
-        else:
-            lines.append(f"  ✅ LLM 路由：{stdout[:60]}")
-
-    # 3. 陈旧检测（60 天）
-    sd = results.get("stale_detect", {})
-    if sd.get("ok"):
-        stdout = sd.get("info", {}).get("stdout", "")
-        for line in stdout.split("\n"):
-            if "Stale" in line:
-                lines.append(f"  📦 {line.strip()}")
-
-    # 4. 知识缺口
-    kg = results.get("knowledge_gap", {})
-    if kg.get("ok"):
-        stdout = kg.get("info", {}).get("stdout", "")
-        lines.append(f"  {stdout}")
-
-    # 5. 技能建议
-    sc = results.get("skill_candidate", {})
-    if sc.get("ok"):
-        stdout = sc.get("info", {}).get("stdout", "")
-        # 提取数字 "生成 N 张"
-        for line in stdout.split("\n"):
-            if "生成" in line and "建议" in line:
-                lines.append(f"  💡 {line.strip()}")
-
-    # 6. 90 天 freshness
-    fr = results.get("freshness", {})
-    if fr.get("ok"):
-        stdout = fr.get("info", {}).get("stdout", "")
-        for line in stdout.split("\n"):
-            if "Stale" in line and "60" not in line:
-                lines.append(f"  📅 90 天: {line.strip()}")
-
+    for formatter in _PANEL_FORMATTERS:
+        lines.extend(formatter(results))
     return lines
 
 

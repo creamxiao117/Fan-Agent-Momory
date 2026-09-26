@@ -1,6 +1,6 @@
 # WORK.md（当前状态 · 唯一来源）
 
-更新于：2026-09-25 · **审计 P1 六项 / P2 六小项 / 重构 A–D / SPLIT 均收口；重评 7.7 → 8.5/10**；只剩 T1（时间门）与「提高 scripts/ 覆盖」
+更新于：2026-09-25 · **审计 P1 六项 / P2 六小项 / 重构 A–D / SPLIT / COV 均收口；重评 7.7 → 8.5/10**；只剩 T1（时间门）与 SPLIT2 余项
 
 > 过程明细：`docs/superpowers/retro/work-history.md`｜T1 基线：`docs/compose/metrics/2026-09-23-t1-baseline.md`｜清理留档：`docs/compose/cleanup/`｜**全面分析：`docs/compose/reports/2026-09-25-project-audit.md`**
 
@@ -10,17 +10,16 @@
 - 分层：L0（AGENTS / CHARTER / **本文件** / 根 INDEX 目录版）→ L1 四型（`hub-engine/tools/task_tier.py`）→ L2 检索
 - 安全底座常驻：单写者+§4 守护+ledger；query-first + 交回用户 + 回写
 - 分项帽：AGENTS≤2500 / CHARTER≤1500 / WORK≤5000 / INDEX≤20000（和 29,000 ≤ 总帽 30,000；不变量有测试看守）
-- **测试 579 passed / 4 skipped / 0 failed**；**ruff 新规则集（B/SIM/UP/C901）全绿**；lint 干净；**巡检 24 步 exit 0**（健康 92/100）
-- **检索 recall@5 100% / recall@1 86%**（22 条金标准）；向量回归 100%；**检索稳态延迟 ~138 ms**（P2-e）
-- **覆盖率 43.8%**（生产代码；tools/ 84.9% · common/ 90.8% · **scripts/ 26.9%**）；**两仓均已推送 origin**；`work/` 只剩 `_archive/`；**审计重评 8.5/10**
+- **测试 643 passed / 4 skipped / 0 failed**；**ruff 新规则集（B/SIM/UP/C901）全绿**；lint 干净；**巡检 24 步 exit 0**（健康 92/100）
+- **检索 recall@5 100% / recall@1 86%**（22 条金标准）；向量回归 100%；**检索稳态延迟 ~138 ms**
+- **覆盖率 53.7%**（生产代码；tools/ 85.5% · common/ 91.3% · **scripts/ 41.4%**）；**两仓均已推送 origin**；`work/` 只剩 `_archive/`；**审计重评 8.5/10**
 
 ## 活跃待办
 
 | # | 任务 | 触发 / 做法 |
 | -- | --- | --- |
 | **T1** | 量「规则遵循/返工」改造前后 | **重跑 ≥2026-10-07**：`python -m scripts.rule_following_timeseries`；判据见下 |
-| **COV** | `scripts/` 覆盖率 26.9% → ≥40% | 挑 3–5 个高频脚本补端到端用例（`pytest --cov=. --cov-report=term:skip-covered` 验收益） |
-| **SPLIT2** | 拆 C901 基线里的 11 个函数 | **有测试的优先**；`>100 行` 函数现 15 个（`build_timeline_html` 225 等） |
+| **SPLIT2** | 拆 C901 基线余下 **8 个**函数 | 集中在 CLI `main()`/报表函数，**待有测试后再动**（详见审计 §10.4 清单） |
 
 ### T1 重跑判据（可证伪）
 
@@ -50,10 +49,12 @@
 - **P0-A** 检索召回 5%→80%（`2a22648`）；**P0-B** 蓝图配额证伪，改冠军保底+通道加权 → **100%/86%**（`9c7f79f`）
 - **P1-1** 脚本迁入（`ee4af05`）+ 三定时任务统一指本检出 + 24 步巡检契约测试（`703ce45`，+73 例）
 - **P2** 死代码/仪表盘处置 + **T2** INDEX 可定位性复核（17/20→18/20、36.5%→42.5%）+ **T3** 四项待裁定
-- **审计 P2 六小项**：P2-a `lint_report` argparse、P2-b 拆超长函数（`run_patrol` 319→57、`auto_flywheel.run` 220→109）、P2-c 卡片去重裁定（pluginhub v1.1 的 3 条教训并入 v1.2）、P2-d 路径写全与空目录定去留、P2-e 延迟剖析（**340→138 ms**）、P2-f markdownlint 挂门禁
+- **审计 P2 六小项**：P2-a `lint_report` argparse · P2-b 拆超长函数 · P2-c 卡片去重裁定 · P2-d 路径写全 · P2-e 延迟剖析（**340→138 ms**）· P2-f markdownlint 挂门禁（详审计 §4）
 - **重构 A–D**：A 巡检器拆分（9 个 `_stage_*`）· B 仪表盘单一化（v4 归归档，保留巡检产物 + 手动 HTML）· C 删 `node_modules/` + `.tools/`（≈12.8 MB）· D `work/` 定为只读归档区（97 件归档）
 - **历史遗留文件清理**：逐项取证（untracked 归档/删除、tracked 记 blob SHA）；留档 `docs/compose/cleanup/2026-09-25-legacy-files-and-work-disposition.md`
 - **SPLIT 收口**：`sync.py::ingest` **229 → 54 行**（先补 **14 例分支级 fixture 测试**，再抽 5 个具名函数；拆分前后同一套测试全绿）
+- **COV 收口**：`scripts/` 覆盖率 **26.9% → 41.4%**（TOTAL 53.7%），+64 例测试；顺带修 3 个真 bug
+- **SPLIT2（部分）**：C901 超阈 **16 → 8**（`run_patrol`/`auto_flywheel.run`/`sync.ingest`/`print_report`/`check_alerts`/`_format_6panel_section`）
 - **重评（§10）**：同一口径重测 → **加权 7.7 → 8.5/10**；扣分最重的代码卫生 6.0→8.0、可维护性 6.0→8.2
 - **secret_sentry** 26 误报 → 0；**首评总分 5.9 → 7.7（整改前） → 8.5（整改后）**
 
@@ -65,7 +66,7 @@
 - embed 配置以 `AgentMemoryHub/system/config.yaml` 为准（生效单源；`hub-engine/config/engine.config.yaml` 仅兜底）
 - **外层超时必须 > 内层超时**（pytest 步骤外 420s / 内 180s；曾因外 120s < 内导致内层永不生效）
 - **夹具里的期望卡名会随卡片生命周期漂移**：归档卡片时必须同步检查引用它的夹具（否则门禁数学上无法达标）
-- **LM Studio 缺 `%LMSTUDIO_HOME%\.internal\temp` 会让所有模型 JIT 加载 400**（`mkdtemp ENOENT`）；`hub-engine/scripts/local_summary.py` 现已**自愈**（解析报错建回目录并重试一次），其余调用方仍需人工建目录
+- **LM Studio 缺 `%LMSTUDIO_HOME%\.internal\temp` 会让所有模型 JIT 加载 400**（`mkdtemp ENOENT`）；`local_summary.py` 现已**自愈**（建回目录并重试一次）
 - **文档里写的命令必须来自被跟踪的文件**：`work/` 是 gitignore 草稿区，把它的脚本写进文档就制造悬空引用（审计 I-4 / M-3 是同一个病）
 - **零引用 ≠ 死代码**：`audit_dead_modules` 存在假阳性，删除前逐个人工看入口/注册表
 - 勿提交 `nul`（已清除的幽灵条目）

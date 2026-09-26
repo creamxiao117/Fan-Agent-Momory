@@ -273,7 +273,8 @@ cmd /c scripts\run_patrol.cmd                              # exit 0（198s）
 | ruff 违规 | 规则未启用（不可比） | **0**（E501 79 / C901 11 在按文件基线上） |
 | 硬编码个人路径 | **57 处 / 22 文件** | **0**（+ 护栏测试，白名单仅 2 条且防腐化） |
 | 检索稳态延迟 | ~340 ms | **~138 ms** |
-| 函数 >100 行 | 24 个 | **15 个** |
+| 函数 >100 行 | 24 个 | **14 个** |
+| C901 超阈函数（max 15） | 16 个 | **8 个**（已拆：`run_patrol` / `auto_flywheel.run` / `sync.ingest` / `print_report` / `check_alerts` / `_format_6panel_section`） |
 | 死代码审计 | 仅 `work/` 下临时脚本（gitignore） | 工具入仓（`python -m scripts.audit_dead_modules`） |
 | 巡检 | 24 步 exit 0（199 s） | **24 步 exit 0**（225 s；pytest 变长因用例增多） |
 | 健康分 | 92/100 | 92/100（唯一扣分仍是本地 LLM 响应慢） |
@@ -287,7 +288,15 @@ cmd /c scripts\run_patrol.cmd                              # exit 0（198s）
 3. **单机依赖未解**：LM Studio / 计划任务 / 无 CI —— 属设计选择，但可用性确实绑在一台机器上。
 4. **本地 LLM 响应 ~2 s**：`llm_health` 恒 60 分，是总分里唯一持续扣分项。
 
-### 10.4 重评后的下一刀
+### 10.4 重评后的下一刀（已执行）
 
-**不在代码里**：先把 `scripts/` 覆盖提到 ≥40%（挑 3–5 个高频脚本写端到端用例），
-再按「有测试的优先」逐个拆 C901 基线里剩下的 11 个函数 —— 两者都能直接用现有巡检与覆盖率命令验证收益。
+**COV（已完成）**：`scripts/` **26.9% → 41.4%**（超 40% 目标），TOTAL 43.8% → **53.7%**；
++64 例测试（4 个新文件），过程中**搞出 3 个真 bug**（日报空 `_gap` 崩 · 健康分“未知当满分” ·
+`card_tags` 块写法只读首个 tag）——均已修 + 回归测试。
+
+**SPLIT2（部分完成）**：C901 超阈函数 **16 → 8**（已拆 6 个，前件均为“已有测试”）。
+剩下的 8 个集中在 CLI `main()` 与报表函数，**属线性选项处理，拆分收益低（待有测试后再动）**，
+已按文件名+行号登记在 `hub-engine/pyproject.toml` 的 C901 基线里：
+`flywheel._cmd_daily_report`(27) · `auto_fix_lint.run_fix`(20) · `commands/status.print_snapshot_report`(19) ·
+`post_ingest_hook.main`(19) · `tools/platform_bridge.push`(18) · `audit_index.audit`(17) ·
+`rule_following_timeseries.main`(17) · `commands/status.compute_snapshot_health_scores`(16)。
