@@ -890,6 +890,177 @@ def _cmd_session_preload(args) -> int:
     return 0
 
 
+"""日报推送通道（_cmd_daily_report 拆分，2026-09-25 SPLIT2）。
+
+原函数是 27 复杂度的"生成 + 6 个推送通道 + 汇总"大块；这里按通道拆开，
+每个通道函数只负责"发一次 + 打一行结果 + 追加结果记录"，编排留在 _cmd_daily_report。
+"""
+
+
+def _post_json(url: str, payload: dict) -> dict:
+    """POST JSON（wecom/feishu/pushplus 通道通用）。"""
+    import json as _json
+    import urllib.request
+
+    body = _json.dumps(payload, ensure_ascii=False).encode("utf-8")
+    req = urllib.request.Request(
+        url,
+        data=body,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            resp.read()
+        return {"success": True}
+    except Exception as exc:  # 网络/HTTP 错误统一转失败结果
+        return {"success": False, "error": str(exc)[:200]}
+
+
+def _generate_report(hub: Path, skillhub: Path) -> str | None:
+    """调用 hub_daily_report.py 生成日报正文；失败返回 None（调用方转退出码 1）"""
+    gen = subprocess.run(
+        [
+            sys.executable,
+            "-u",
+            str(_SCRIPT_DIR / "hub_daily_report.py"),
+            "--hub-root",
+            str(hub),
+            "--skillhub-root",
+            str(skillhub),
+        ],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=300,
+    )
+    if gen.returncode != 0:
+        print(
+            f"❌ 日报生成失败: {(gen.stderr or gen.stdout).strip()[:300]}",
+            file=sys.stderr,
+        )
+        return None
+    return gen.stdout.strip()
+
+
+def _collect_push_kwargs(args) -> dict:
+    """把 CLI 参数收敛成推送通道字典（只收录显式传了的通道）"""
+    push_kwargs = {}
+    for arg_name, key in (
+        ("hermes_target", "hermes_target"),
+        ("serverchan_key", "serverchan_key"),
+        ("pushplus_token", "pushplus_token"),
+        ("wecom_webhook", "wecom_webhook"),
+        ("feishu_webhook", "feishu_webhook"),
+        ("push_config", "push_config"),
+    ):
+        if getattr(args, arg_name, None):
+            push_kwargs[key] = getattr(args, arg_name)
+    return push_kwargs
+
+
+def _push_hermes(target: str, title: str, report: str, results: list[dict]) -> None:
+    """hermes 通道（2026-09-02 断链修复：原 push_channel 无源码，改走 `hermes send` CLI）"""
+    print(f"📤 正在通过 Hermes 推送到微信 ({target})...")
+    try:
+        send = subprocess.run(
+            ["hermes", "send", "-t", target, "-"],
+            input=f"{title}\n\n{report}",
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=120,
+        )
+        ok = send.returncode == 0
+        if ok:
+            print("  ✅ 推送成功")
+        else:
+            err = (send.stderr or send.stdout).strip()[:200]
+            print(f"  ❌ 失败: {err}")
+            if "session timeout" in err:
+                print("  💡 微信会话已过期，请重新认证 Hermes 微信连接")
+        results.append({"success": ok, "channel": "hermes"})
+    except FileNotFoundError:
+        print("  ❌ hermes CLI 不在 PATH，跳过", file=sys.stderr)
+        results.append({"success": False, "channel": "hermes", "error": "hermes 不可用"})
+
+
+def _push_serverchan(key: str, title: str, report: str, results: list[dict]) -> None:
+    """Server酱（微信）通道"""
+    print("📤 正在推送到 Server酱 (微信)...")
+    import urllib.parse
+    import urllib.request
+
+    data = urllib.parse.urlencode({"text": title, "desp": report}).encode("utf-8")
+    try:
+        req = urllib.request.Request(f"https://sctapi.ftqq.com/{key}.send", data=data)
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            resp.read()
+        print("  ✅ 成功")
+        results.append({"success": True, "channel": "serverchan"})
+    except Exception as exc:
+        print(f"  ❌ 失败: {str(exc)[:200]}")
+        results.append({"success": False, "channel": "serverchan", "error": str(exc)[:200]})
+
+
+def _push_webhook(channel: str, label: str, url: str, payload: dict, results: list[dict]) -> None:
+    """通用 webhook 通道（pushplus / wecom / feishu 共用同一套打印口径）"""
+    print(f"📤 正在推送到{label}...")
+    result = _post_json(url, payload)
+    result["channel"] = channel
+    print(f"  {'✅ 成功' if result.get('success') else '❌ 失败: ' + result.get('error', '未知')}")
+    results.append(result)
+
+
+def _push_report(push_kwargs: dict, title: str, report: str) -> list[dict]:
+    """按显式通道逐个推送 → 结果记录列表（原函数里的 5 个 `if` 分支）"""
+    results: list[dict] = []
+
+    if push_kwargs.get("push_config"):
+        print(
+            "❌ --push-config 暂不可用：原 push_channel 配置文件格式无源码可考，"
+            "请改用显式通道参数（--hermes-target/--serverchan-key/...）",
+            file=sys.stderr,
+        )
+        push_kwargs.pop("push_config")
+
+    if push_kwargs.get("hermes_target"):
+        _push_hermes(push_kwargs.pop("hermes_target"), title, report, results)
+
+    if push_kwargs.get("serverchan_key"):
+        _push_serverchan(push_kwargs.pop("serverchan_key"), title, report, results)
+
+    if push_kwargs.get("pushplus_token"):
+        _push_webhook(
+            "pushplus",
+            " PushPlus (微信)",
+            "http://www.pushplus.plus/send",
+            {"token": push_kwargs.pop("pushplus_token"), "title": title, "content": report},
+            results,
+        )
+
+    if push_kwargs.get("wecom_webhook"):
+        _push_webhook(
+            "wecom",
+            "企业微信",
+            push_kwargs.pop("wecom_webhook"),
+            {"msgtype": "text", "text": {"content": f"{title}\n{report}"}},
+            results,
+        )
+
+    if push_kwargs.get("feishu_webhook"):
+        _push_webhook(
+            "feishu",
+            "飞书",
+            push_kwargs.pop("feishu_webhook"),
+            {"msg_type": "text", "content": {"text": f"{title}\n{report}"}},
+            results,
+        )
+    return results
+
+
 def _cmd_daily_report(args) -> int:
     """生成飞轮日报并推送。
 
@@ -897,6 +1068,10 @@ def _cmd_daily_report(args) -> int:
     源码灭失（仅 .pyc，且早于现存 hub_daily_report.py），改 subprocess
     走本目录 hub_daily_report.py（与 8:00 cron 日报同源）；
     hermes 通道改走 `hermes send` CLI（push_channel 模块亦无源码）。
+
+    2026-09-25（SPLIT2）：原为单函数 212 行（C901=27），拆成
+    `_generate_report` / `_collect_push_kwargs` / `_push_report`（+ 4 个通道函数 /
+    `_post_json`）+ 此处纯编排。输出与退出码逐字不变（拆分前后 stdout diff 为 0）。
     """
     hub = Path(args.hub_root).resolve()
     skillhub = Path(args.skillhub_root).resolve()
@@ -923,29 +1098,9 @@ def _cmd_daily_report(args) -> int:
             file=sys.stderr,
         )
 
-    gen = subprocess.run(
-        [
-            sys.executable,
-            "-u",
-            str(_SCRIPT_DIR / "hub_daily_report.py"),
-            "--hub-root",
-            str(hub),
-            "--skillhub-root",
-            str(skillhub),
-        ],
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        timeout=300,
-    )
-    if gen.returncode != 0:
-        print(
-            f"❌ 日报生成失败: {(gen.stderr or gen.stdout).strip()[:300]}",
-            file=sys.stderr,
-        )
+    report = _generate_report(hub, skillhub)
+    if report is None:
         return 1
-    report = gen.stdout.strip()
 
     # 输出
     if args.output:
@@ -954,130 +1109,13 @@ def _cmd_daily_report(args) -> int:
         output_path.write_text(report, encoding="utf-8")
         print(f"📄 日报已保存: {output_path}")
 
-    # 构建推送参数
-    push_kwargs = {}
-    if args.hermes_target:
-        push_kwargs["hermes_target"] = args.hermes_target
-    if args.serverchan_key:
-        push_kwargs["serverchan_key"] = args.serverchan_key
-    if args.pushplus_token:
-        push_kwargs["pushplus_token"] = args.pushplus_token
-    if args.wecom_webhook:
-        push_kwargs["wecom_webhook"] = args.wecom_webhook
-    if args.feishu_webhook:
-        push_kwargs["feishu_webhook"] = args.feishu_webhook
-    if args.push_config:
-        push_kwargs["push_config"] = args.push_config
+    push_kwargs = _collect_push_kwargs(args)
 
     # 推送（2026-09-02 Hermes 代办断链修复：原依赖的 push_channel 模块无
     # 源码可考，hermes 通道改走 `hermes send` CLI，webhook 通道用 urllib 直发）
     if push_kwargs:
         report_title = f"📊 飞轮日报 ({datetime.now().astimezone().strftime('%Y-%m-%d')})"
-        push_results = []
-
-        def _post(url: str, payload: dict) -> dict:
-            """POST JSON（wecom/feishu/pushplus 通道通用）。"""
-            import json as _json
-            import urllib.request
-
-            body = _json.dumps(payload, ensure_ascii=False).encode("utf-8")
-            req = urllib.request.Request(
-                url,
-                data=body,
-                headers={"Content-Type": "application/json"},
-                method="POST",
-            )
-            try:
-                with urllib.request.urlopen(req, timeout=30) as resp:
-                    resp.read()
-                return {"success": True}
-            except Exception as exc:  # 网络/HTTP 错误统一转失败结果
-                return {"success": False, "error": str(exc)[:200]}
-
-        if push_kwargs.get("push_config"):
-            print(
-                "❌ --push-config 暂不可用：原 push_channel 配置文件格式无源码可考，"
-                "请改用显式通道参数（--hermes-target/--serverchan-key/...）",
-                file=sys.stderr,
-            )
-            push_kwargs.pop("push_config")
-
-        if push_kwargs.get("hermes_target"):
-            target = push_kwargs.pop("hermes_target")
-            print(f"📤 正在通过 Hermes 推送到微信 ({target})...")
-            try:
-                send = subprocess.run(
-                    ["hermes", "send", "-t", target, "-"],
-                    input=f"{report_title}\n\n{report}",
-                    capture_output=True,
-                    text=True,
-                    encoding="utf-8",
-                    errors="replace",
-                    timeout=120,
-                )
-                ok = send.returncode == 0
-                if ok:
-                    print("  ✅ 推送成功")
-                else:
-                    err = (send.stderr or send.stdout).strip()[:200]
-                    print(f"  ❌ 失败: {err}")
-                    if "session timeout" in err:
-                        print("  💡 微信会话已过期，请重新认证 Hermes 微信连接")
-                push_results.append({"success": ok, "channel": "hermes"})
-            except FileNotFoundError:
-                print("  ❌ hermes CLI 不在 PATH，跳过", file=sys.stderr)
-                push_results.append({"success": False, "channel": "hermes", "error": "hermes 不可用"})
-
-        if push_kwargs.get("serverchan_key"):
-            key = push_kwargs.pop("serverchan_key")
-            print("📤 正在推送到 Server酱 (微信)...")
-            import urllib.parse
-            import urllib.request
-
-            data = urllib.parse.urlencode({"text": report_title, "desp": report}).encode("utf-8")
-            try:
-                req = urllib.request.Request(f"https://sctapi.ftqq.com/{key}.send", data=data)
-                with urllib.request.urlopen(req, timeout=30) as resp:
-                    resp.read()
-                print("  ✅ 成功")
-                push_results.append({"success": True, "channel": "serverchan"})
-            except Exception as exc:
-                print(f"  ❌ 失败: {str(exc)[:200]}")
-                push_results.append({"success": False, "channel": "serverchan", "error": str(exc)[:200]})
-
-        if push_kwargs.get("pushplus_token"):
-            token = push_kwargs.pop("pushplus_token")
-            print("📤 正在推送到 PushPlus (微信)...")
-            result = _post(
-                "http://www.pushplus.plus/send",
-                {"token": token, "title": report_title, "content": report},
-            )
-            result["channel"] = "pushplus"
-            print(f"  {'✅ 成功' if result.get('success') else '❌ 失败: ' + result.get('error', '未知')}")
-            push_results.append(result)
-
-        if push_kwargs.get("wecom_webhook"):
-            webhook = push_kwargs.pop("wecom_webhook")
-            print("📤 正在推送到企业微信...")
-            result = _post(
-                webhook,
-                {"msgtype": "text", "text": {"content": f"{report_title}\n{report}"}},
-            )
-            result["channel"] = "wecom"
-            print(f"  {'✅ 成功' if result.get('success') else '❌ 失败: ' + result.get('error', '未知')}")
-            push_results.append(result)
-
-        if push_kwargs.get("feishu_webhook"):
-            webhook = push_kwargs.pop("feishu_webhook")
-            print("📤 正在推送到飞书...")
-            result = _post(
-                webhook,
-                {"msg_type": "text", "content": {"text": f"{report_title}\n{report}"}},
-            )
-            result["channel"] = "feishu"
-            print(f"  {'✅ 成功' if result.get('success') else '❌ 失败: ' + result.get('error', '未知')}")
-            push_results.append(result)
-
+        push_results = _push_report(push_kwargs, report_title, report)
         if push_results:
             success_count = sum(1 for r in push_results if r.get("success"))
             print(f"\n📊 推送汇总: {success_count}/{len(push_results)} 成功")

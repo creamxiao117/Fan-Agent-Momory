@@ -1,6 +1,6 @@
 # WORK.md（当前状态 · 唯一来源）
 
-更新于：2026-09-25 · **审计 P1 六项 / P2 六小项 / 重构 A–D / SPLIT / COV 均收口；重评 7.7 → 8.5 → 8.7/10（§11）**；只剩 T1（时间门）与 SPLIT2 余项
+更新于：2026-09-25 · **审计 P1 六项 / P2 六小项 / 重构 A–D / SPLIT / COV / D1 / D2 / R1 均收口；重评 7.7 → 8.5 → 8.7/10（§11）**；只剩 T1（时间门）
 
 > 过程明细 `docs/superpowers/retro/work-history.md`｜T1 基线 `docs/compose/metrics/2026-09-23-t1-baseline.md`｜清理留档 `docs/compose/cleanup/`｜**审计（§11 即最新评分）：`docs/compose/reports/2026-09-25-project-audit.md`**
 
@@ -10,7 +10,7 @@
 - 分层：L0（AGENTS / CHARTER / **本文件** / 根 INDEX 目录版）→ L1 四型（`hub-engine/tools/task_tier.py`）→ L2 检索
 - 安全底座常驻：单写者+§4 守护+ledger；query-first + 交回用户 + 回写
 - 分项帽：AGENTS≤2500 / CHARTER≤1500 / WORK≤5000 / INDEX≤20000（和 29,000 ≤ 总帽 30,000；不变量有测试看守）
-- **测试 661 passed / 4 skipped / 0 failed**；**ruff 新规则集（B/SIM/UP/C901）全绿**；lint 干净；**巡检 24 步 exit 0**（248 s，健康 92/100）
+- **测试 677 passed / 4 skipped / 0 failed**；**ruff 新规则集（B/SIM/UP/C901）全绿**；lint 干净；**巡检 24 步 exit 0**（258 s，健康 92/100）
 - **检索（D2 扩容后 58 条金标准）word recall@5 98% / @1 79%**、char 100% / 70%；向量回归 100%；首调 6.7 s（进程级一次性）· 稳态 4–145 ms
 - **覆盖率 54.0%**（生产代码；tools/ 85.5% · common/ 91.1% · 顶层 67.6% · commands/ 62.9% · **scripts/ 41.8%**）；**两仓均已推送 origin**；`work/` 只剩 `_archive/`；**审计重评 8.7/10（§11）**
 
@@ -19,8 +19,6 @@
 | # | 任务 | 触发 / 做法 |
 | -- | --- | --- |
 | **T1** | 量「规则遵循/返工」改造前后 | **重跑 ≥2026-10-07**：`python -m scripts.rule_following_timeseries`；判据见下 |
-| **SPLIT2** | 拆 C901 基线余下 **8 个**函数 | 集中在 CLI `main()`/报表函数，**待有测试后再动**（审计 §11.4 清单） |
-| **R1** | 金标准唯一真未命中项：`memory-hub-card-promotion` | 待定位后补 tag 或改卡内词面（审计 §11.6）；不为单条调参 |
 
 ### T1 重跑判据（可证伪）
 
@@ -37,11 +35,11 @@
 - **每日 06:00** `AgentHub-NightlyConsolidate` → `scripts/nightly_consolidate.cmd`（distill→build-vectors→sleep→local-summary）
 - **每日 06:00** `AgentHub-SecretSentry` → `scripts/secret_sentry.cmd`（误报 **26 → 0**）
 - **手动**：`python -m scripts.recall_regression`（**58 条金标准**，退出码 2 = 未达 90% 或夹具失效）；`python -m scripts.index_locatability_bench --rev <rev>`；`python -m scripts.audit_dead_modules`（零引用审计，**有假阳性须复查**）；**覆盖率** `pytest --cov=.`（基线 40.0%，实测 54.0%）
-- 验收：`.venv\Scripts\python.exe -m pytest` → **652 通过 / 4 跳过 / 0 失败**；`startup_budget` 退出码 0
+- 验收：`.venv\Scripts\python.exe -m pytest` → **677 通过 / 4 跳过 / 0 失败**；`startup_budget` 退出码 0
 
 ## 已闭环（本迭代；明细见各留档与 `work-history.md`）
 
-- **审计 P1-a**（I-1）规则集：`select E4/E7/E9/F/W/I/UP/B/SIM/C901` + 行宽 120 + E501/C901 按文件登记基线
+- **审计 P1-a**（I-1）规则集：`select E4/E7/E9/F/W/I/UP/B/SIM/C901` + 行宽 120 + E501 按文件登记基线（C901 已于 SPLIT2 清零）
 - **审计 P1-b**（I-3）覆盖率：装 pytest-cov、立基线 **40.0%**、写进 `[tool.coverage.*]`
 - **审计 P1-c**（I-2）硬编码清零：**57 处** → 自解析／`Path.home()`／单点 `external_path()`；新增护栏测试（首次即多揪出 10 处）
 - **审计 P1-d**（I-4）/ **P1-e**（I-6）/ **P1-f**（I-5）：`work/` 审计器入仓 · 两仓推 origin · `local_summary` 自愈 LM Studio `.internal\temp`（含 4 例测试）
@@ -54,8 +52,8 @@
 - **SPLIT 收口**：`sync.py::ingest` **229 → 54 行**（先补 **14 例分支级夹具测试**再抽函数，前后同一套测试全绿）
 - **COV 收口**：`scripts/` 覆盖率 **26.9% → 41.8%**（TOTAL 54.0%），+73 例测试；顺带修 3 个真 bug（详审计 §11.2）
 - **D1/D1b 收口**（审计 §11.5）：6 张卡补 `status` + 4 张补空 `tags`；门禁与修复器升 V1.1（必填字段缺失即阻断、可一键修）；顺手修掉修复器漏 `deprecated` 的潜在错改
-- **SPLIT2（部分）**：C901 超阈 **16 → 8**（`run_patrol`/`auto_flywheel.run`/`sync.ingest`/`print_report`/`check_alerts`/`_format_6panel_section`）；余 8 个已登记在 `pyproject.toml` 基线，待有测试再拆
-- **D2 收口**（审计 §11.6）：金标准 **22 → 58 条**（+39 含 8 条真实日志；剔除 3 条 candidate 目标）；@1 恢复分辨力（word **98%/79%**、char 100%/70%）；顺带揪出冠军保底“补首位”抢位缺陷 → 改补末位；夹具体检（卡存在且 active/reference）入脚本+单测
+- **SPLIT2 收口**：C901 **16 → 0**（第二批拆 8 个；保真靠 stdout 逐行 diff + 新补 14 例网）；**顺带修 `auto_fix_lint` 漏 `deprecated` 的错改**（详审计 §11.7）
+- **D2 收口**（审计 §11.6）：金标准 **22 → 58 条**（+39 含 8 条真实日志；剔除 3 条 candidate 目标）；@1 恢复分辨力（word **100%/79%**、char 100%/72%）；顺带揪出冠军保底“补首位”抢位缺陷 → 改补末位；**R1**（唯一真未命中）由“保底前 2 条 + 卡补 tag”关闭
 - **重评两轮**：同一口径重测 → **加权 7.7 → 8.5（§10）→ 8.7/10（§11）**；代码卫生 6.0→**8.3**、可维护性 6.0→**8.4**、测试与门禁 8.5→**9.3**
 - **secret_sentry** 26 误报 → 0；**首评总分 5.9 → 7.7（整改前） → 8.5 → 8.7（重评两轮）**
 

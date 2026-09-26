@@ -365,8 +365,8 @@ cmd /c scripts\run_patrol.cmd                              # exit 0（198s）
 | 1 | **T1 重跑（时间门 ≥ 2026-10-07）** | 唯一硬约束项；改造前后对照的判据已写好 |
 | 2 | ~~6 张缺 `status` 的卡补元数据（或归档）~~ ✅ **已完成（见 §11.5）** | 6 张补 `status: active`；同一类缺陷（4 张空 `tags`）一并修；门禁新增「必填字段存在性」检查堵住复发 |
 | 3 | ~~金标准集 22 → 40+~~ ✅ **已完成（见 §11.6）** | 实际做到 **58 条**（+39，含 8 条真实日志改写），@1 恢复分辨力，并顺带揪出 1 个排序缺陷 |
-| 4 | SPLIT2 余 **8** 个 C901（待有测试） | 属线性 CLI 选项处理，先补测试再拆 |
-| 5 | 可选：`patrol_runner.py`（1,597 行）拆 `steps/` 包 | 24 步契约测试已具备，风险低；纯可读性收益 |
+| 4 | ~~SPLIT2 余 8 个 C901~~ ✅ **已完成（见 §11.7）** | 当日全部拆完：**C901 债清零**（基线豁免 16 处 → 0 处） |
+| 5 | 可选：`patrol_runner.py`（1,597 行）拆 `steps/` 包 | 24 步契约测试已具备，风险低；纯可读性收益（C901 已在 `run_patrol`/`print_report` 两层清干净） |
 
 ### 11.5 §11 之后的追加修复（D1 / D1b 已关闭）
 
@@ -449,3 +449,47 @@ top-1 反而是被冠军保底推上来的噪声卡。已作为**有意保留的
 | 测试与门禁 | 9.3 | **≈ 9.4** | +9 例（金标准集体检 9 例；夹具失效即 red） |
 
 具体数字待 T1 重跑（≥2026-10-07）或新一轮审计时按同一口径重测确认。
+
+### 11.7 SPLIT2 收口：C901 复杂度债清零（16 → 0）
+
+启动规则族时在 `hub-engine/pyproject.toml` 登记了 **16 个超阈函数**（max-complexity 15）作为“可度量的债”。
+本轮（§10 / §11 之间共两批）**全部拆完**，基线豁免条目 **16 → 0**：
+
+| 批次 | 函数 | 原复杂度 | 拆法 |
+|:--|:--|--:|:--|
+| 第一批（前次） | `patrol_runner.run_patrol` | 319 行 | 编排 + 9 个 `_stage_*` |
+| 第一批 | `auto_flywheel.run` | 220 行 | 抽掉两份 55 行重复块 |
+| 第一批 | `sync.ingest` | 229 行 | 先补 14 例分支测试，再抽 5 个函数 |
+| 第一批 | `patrol_runner.print_report` | 16 | 表头 + 5 个 `_print_*` 段落 |
+| 第一批 | `hub_health.check_alerts` | 22 | 4 个 `_alert_*` 规则函数 + 编排 |
+| 第一批 | `hub_daily_report._format_6panel_section` | 17 | 6 个 `_panel_lines_*` + 表驱动 |
+| **第二批** | `audit_index.audit` | 127 行 | 6 个 `_check_*` 维度函数（顺序=输出顺序） |
+| **第二批** | `post_ingest_hook.main` | 124 行 | `_parse_args`/`_diffs_from_names`/`_plan_entries`/`_apply_plan`/`_commit_indices` |
+| **第二批** | `rule_following_timeseries.main` | 177 行 | 6 个 `_print_*` 段落（A–E）+ `_iso_week` |
+| **第二批** | `platform_bridge.push` | 98 行 | `_push_guard`/`_select_cards`/`_plan_push`/`_apply_push` |
+| **第二批** | `status.compute_snapshot_health_scores` | 80 行 | 4 个 `_score_*` + 加权求和 |
+| **第二批** | `status.print_snapshot_report` | 90 行 | 6 个 `_print_*` 段落 |
+| **第二批** | `auto_fix_lint.run_fix` | 130 行 | `_apply_card_fixes`/`_collect_fixable`/`_write_patch` |
+| **第二批** | `flywheel._cmd_daily_report` | 212 行 | `_generate_report`/`_collect_push_kwargs`/`_push_report` + 4 个通道函数 |
+
+#### 保真手段（不只是“看起来一样”）
+
+| 手段 | 用在 | 结果 |
+|:--|:--|:--|
+| **stdout 逐行 diff** | `rule_following_timeseries` / `status.print_snapshot_report` / `flywheel._cmd_daily_report` | 差异 **0 行**（除临时目录随机名） |
+| 既有测试全绿 | `audit_index`(5) / `platform_bridge`(34) / 前次 5 个 | 全绿 |
+| 新补网测试 | `post_ingest_hook`(+3) / `auto_fix_lint`(+5) / `flywheel 日报通道`(+6) | 拆前无测试的路径现有看守 |
+
+#### 拆的过程中顺手修的真缺陷
+
+1. **`auto_fix_lint` 漏 `deprecated`**（与 `fix_card_schema_drift` 同一 bug 类）：它用一份手写 status 四元组判定合法性，
+   漏了 `deprecated` ⇒ **一张已作废的卡只要还有别的缺陷，就会被改回 `active`**（等于把并入旧卡“复活”）。
+   现统一取 `common.frontmatter.VALID_STATUS` 单源，并有回归测试 `test_deprecated_status_is_not_flipped`。
+2. **留痕路径跨平台**：`auto_fix_lint` 写 patch 时用 `str(relative_to())`（Windows 会写成 `experience\x.md`），
+   现统一 `as_posix()`，与 `post_ingest_hook` 同口径。
+
+#### 验收
+
+`ruff check .` 0 违规且 **per-file-ignores 里已无任何 C901 条目**（豁免不再需要，因为真的没超阈函数）·
+测试 **663 → 677 passed**（+14）· 巡检 24 步 **exit 0**（258 s，健康 92/100）·
+函数层面：`ruff --isolated --select C901` 全库 **0 命中**。

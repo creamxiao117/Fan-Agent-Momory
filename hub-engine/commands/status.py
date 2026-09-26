@@ -562,8 +562,8 @@ def compare_snapshots(prev: dict, curr: dict) -> dict:
     return changes
 
 
-def print_snapshot_report(data: dict, report: dict, pending: list):
-    """打印人类可读的快照报告。"""
+def _print_snapshot_header(data: dict, report: dict) -> None:
+    """表头 + 卡片分布 + Lint 摘要 + 待确认 + 向量 freshness + 最近提交"""
     print(f"生成时间: {data['generated_at']}")
     print(f"中枢: {data['root']}")
     print()
@@ -583,71 +583,94 @@ def print_snapshot_report(data: dict, report: dict, pending: list):
         print(f"💾 向量待重建(freshness): {fresh_total} 张" + (f" ({fresh_txt})" if fresh_total > 0 else ""))
     print(f"📦 最近提交: {data['last_commit']}")
 
-    # 变量去 ollama 残名；`data.get("ollama")` 键读取保留（兼容历史快照字段名）
-    llm_health = data.get("llm_health") or data.get("ollama", {})
-    if llm_health.get("available"):
-        models_str = ", ".join(llm_health.get("models", [])[:3])
+
+def _print_llm_health(line: dict) -> None:
+    """本地 LLM 健康行（变量去 ollama 残名；`data.get("ollama")` 键读取保留以兼容历史快照）"""
+    if line.get("available"):
+        models_str = ", ".join(line.get("models", [])[:3])
         print(
-            f"🦙 本地 LLM 健康 (LM Studio): ✅ 可用 · {llm_health.get('model_count', 0)} 模型"
-            f" · 响应 {llm_health.get('response_time_ms', 0)}ms" + (f" · 模型: {models_str}" if models_str else "")
+            f"🦙 本地 LLM 健康 (LM Studio): ✅ 可用 · {line.get('model_count', 0)} 模型"
+            f" · 响应 {line.get('response_time_ms', 0)}ms" + (f" · 模型: {models_str}" if models_str else "")
         )
     else:
-        print(f"🦙 本地 LLM 健康 (LM Studio): ❌ 不可用 · 错误: {llm_health.get('last_error', '未知')}")
+        print(f"🦙 本地 LLM 健康 (LM Studio): ❌ 不可用 · 错误: {line.get('last_error', '未知')}")
 
-    scores = data.get("health_scores", {})
-    if scores:
-        print("\n📊 健康度评分:")
-        score_labels = {
-            "card_health": "卡片",
-            "skill_health": "技能",
-            "flywheel_activity": "飞轮",
-            "llm_health": "本地 LLM",
-            "overall": "📈 总分",
-        }
-        for k, v in scores.items():
-            label = score_labels.get(k, k)
-            bar = "█" * int(v / 5) + "░" * (20 - int(v / 5))
-            print(f"  {label}: {bar} {v:.1f}")
 
-    metrics = data.get("today_metrics", {})
-    if metrics:
-        print("\n📈 今日指标:")
-        hr = metrics.get("hit_rate", "N/A")
-        print(
-            f"  查询 {metrics.get('searches', 0)} 次"
-            f" · 命中 {metrics.get('hits', 0)}"
-            f" · 命中率 {hr}"
-            f" · 复用 {metrics.get('reuse_ops', 0)} 次"
-        )
+def _print_health_scores(scores: dict) -> None:
+    if not scores:
+        return
+    print("\n📊 健康度评分:")
+    score_labels = {
+        "card_health": "卡片",
+        "skill_health": "技能",
+        "flywheel_activity": "飞轮",
+        "llm_health": "本地 LLM",
+        "overall": "📈 总分",
+    }
+    for k, v in scores.items():
+        label = score_labels.get(k, k)
+        bar = "█" * int(v / 5) + "░" * (20 - int(v / 5))
+        print(f"  {label}: {bar} {v:.1f}")
 
-    alerts = data.get("alerts", [])
-    if alerts:
-        print(f"\n⚠️ 告警 ({len(alerts)} 项):")
-        level_icons = {"critical": "🚨", "warning": "⚠️", "info": "ℹ️"}
-        for a in alerts:
-            icon = level_icons.get(a["level"], "⚠️")
-            print(f"  {icon} [{a['level']}] {a['message']}")
-            if a.get("suggestion"):
-                print(f"     💡 {a['suggestion']}")
-    else:
+
+def _print_today_metrics(metrics: dict) -> None:
+    if not metrics:
+        return
+    print("\n📈 今日指标:")
+    print(
+        f"  查询 {metrics.get('searches', 0)} 次"
+        f" · 命中 {metrics.get('hits', 0)}"
+        f" · 命中率 {metrics.get('hit_rate', 'N/A')}"
+        f" · 复用 {metrics.get('reuse_ops', 0)} 次"
+    )
+
+
+def _print_alerts(alerts: list) -> None:
+    if not alerts:
         print("\n✅ 无告警")
+        return
+    print(f"\n⚠️ 告警 ({len(alerts)} 项):")
+    level_icons = {"critical": "🚨", "warning": "⚠️", "info": "ℹ️"}
+    for a in alerts:
+        icon = level_icons.get(a["level"], "⚠️")
+        print(f"  {icon} [{a['level']}] {a['message']}")
+        if a.get("suggestion"):
+            print(f"     💡 {a['suggestion']}")
 
-    comparison = data.get("comparison", {})
-    if comparison:
-        print("\n🔄 较昨日变化:")
-        for area, changes in comparison.items():
-            if area == "cards":
-                for k, v in changes.items():
-                    arrow = "📈" if v["delta"] > 0 else "📉" if v["delta"] < 0 else "➡️"
-                    print(f"  {arrow} {k}: {v['prev']} → {v['curr']} ({v['delta']:+d})")
-            elif area == "health_scores":
-                for k, v in changes.items():
-                    arrow = "📈" if v["delta"] > 0 else "📉"
-                    print(f"  {arrow} 健康分 {k}: {v['prev']} → {v['curr']} ({v['delta']:+.1f})")
-            elif area == "llm_status":
-                print(f"  ⚡ 本地 LLM: {changes['prev']} → {changes['curr']}")
-            elif area == "alerts":
-                for r in changes.get("new", []):
-                    print(f"  🆕 新告警: {r}")
-                for r in changes.get("resolved", []):
-                    print(f"  ✅ 已消除: {r}")
+
+def _print_comparison(comparison: dict) -> None:
+    """较昨日变化（cards / health_scores / llm_status / alerts 四类；未知类静默跳过）"""
+    if not comparison:
+        return
+    print("\n🔄 较昨日变化:")
+    for area, changes in comparison.items():
+        if area == "cards":
+            for k, v in changes.items():
+                arrow = "📈" if v["delta"] > 0 else "📉" if v["delta"] < 0 else "➡️"
+                print(f"  {arrow} {k}: {v['prev']} → {v['curr']} ({v['delta']:+d})")
+        elif area == "health_scores":
+            for k, v in changes.items():
+                arrow = "📈" if v["delta"] > 0 else "📉"
+                print(f"  {arrow} 健康分 {k}: {v['prev']} → {v['curr']} ({v['delta']:+.1f})")
+        elif area == "llm_status":
+            print(f"  ⚡ 本地 LLM: {changes['prev']} → {changes['curr']}")
+        elif area == "alerts":
+            for r in changes.get("new", []):
+                print(f"  🆕 新告警: {r}")
+            for r in changes.get("resolved", []):
+                print(f"  ✅ 已消除: {r}")
+
+
+def print_snapshot_report(data: dict, report: dict, pending: list):
+    """打印人类可读的快照报告。
+
+    2026-09-25（SPLIT2）：原为单函数 90 行（C901=19），拆成 6 个 `_print_*` 段落渲染器 +
+    此处纯编排。**输出逐字不变**（拆分前后对 3 组样例数据的 stdout 做过 diff 比对）。
+    """
+    _print_snapshot_header(data, report)
+    # 变量去 ollama 残名；`data.get("ollama")` 键读取保留（兼容历史快照字段名）
+    _print_llm_health(data.get("llm_health") or data.get("ollama", {}))
+    _print_health_scores(data.get("health_scores", {}))
+    _print_today_metrics(data.get("today_metrics", {}))
+    _print_alerts(data.get("alerts", []))
+    _print_comparison(data.get("comparison", {}))

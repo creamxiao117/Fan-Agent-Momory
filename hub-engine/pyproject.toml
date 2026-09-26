@@ -73,11 +73,11 @@ max-complexity = 15
 "commands/ingest.py" = ["E501"]
 "mcp_server.py" = ["E501"]
 "tools/inject.py" = ["E501"]
-# C901（3）：超复杂函数，需重构而非压制——已列入审计 P2-b（拆超长函数）
-# 2026-09-25 SPLIT2 已拆：run_patrol / auto_flywheel.run / sync.ingest / print_report /
-#   check_alerts / _format_6panel_section / audit_index.audit / post_ingest_hook.main /
-#   rule_following_timeseries.main / platform_bridge.push / status.compute_snapshot_health_scores
-# 以下三处是仅剩的债（已登记在审计 §11.4，待拆）：
-"commands/status.py" = ["C901"]
-"scripts/{auto_fix_lint,flywheel}.py" = ["C901"]
+# C901（**已清零**）：复杂度债已于 2026-09-25 SPLIT2 全部拆完，无豁免。
+# 已拆清单：run_patrol / auto_flywheel.run / sync.ingest / print_report / check_alerts /
+#   _format_6panel_section / audit_index.audit / post_ingest_hook.main /
+#   rule_following_timeseries.main / platform_bridge.push /
+#   status.compute_snapshot_health_scores / status.print_snapshot_report /
+#   auto_fix_lint.run_fix / flywheel._cmd_daily_report
+# ⇒ 新增函数若超 15，请**直接拆**，不要再往这里加豁免。
 "sync.py" = ["E501"]
