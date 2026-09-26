@@ -479,6 +479,7 @@ top-1 反而是被冠军保底推上来的噪声卡。已作为**有意保留的
 | **stdout 逐行 diff** | `rule_following_timeseries` / `status.print_snapshot_report` / `flywheel._cmd_daily_report` | 差异 **0 行**（除临时目录随机名） |
 | 既有测试全绿 | `audit_index`(5) / `platform_bridge`(34) / 前次 5 个 | 全绿 |
 | 新补网测试 | `post_ingest_hook`(+3) / `auto_fix_lint`(+5) / `flywheel 日报通道`(+6) | 拆前无测试的路径现有看守 |
+| 覆盖率副作用 | — | `scripts/` **41.8% → 44.9%**、TOTAL **54.0% → 56.2%**（拆出的子函数被新测试覆盖） |
 
 #### 拆的过程中顺手修的真缺陷
 
