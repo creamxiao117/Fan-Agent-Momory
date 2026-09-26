@@ -209,7 +209,11 @@ def append_to_index(index_path: Path, section_title: str, slug: str, summary: st
     return True
 
 
-def main() -> int:
+# 卡可能在的权威区子目录（--names 精确清单的查找顺序）
+_CARD_SUBDIRS = ("rules", "methodology", "blueprints", "longterm", "projects", "experience", "notes")
+
+
+def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     ap = argparse.ArgumentParser(prog="post_ingest_hook")
     ap.add_argument("--root", required=True)
     ap.add_argument(
@@ -228,59 +232,44 @@ def main() -> int:
         default="",
         help="本轮 ingest 涉及的卡名清单（逗号分隔）；优先于 diff 扫描，避免历史污染",
     )
-    args = ap.parse_args()
-    root = Path(args.root)
-    index_path = root / "INDEX.md"
-    if not index_path.exists():
-        print(f"INDEX.md 不存在: {index_path}", file=sys.stderr)
-        return 2
-    # 注：根 INDEX 只用于前置存在性检查；实际写入目标由
-    #     index_consistency.index_file_for_dir() 按卡所在目录决定
-    #     （experience → INDEX-experience.md）。
-    # 优先使用 ingest 传入的精确清单（防历史污染 INDEX）
-    target_names = [n.strip() for n in args.names.split(",") if n.strip()]
-    if target_names:
-        # 直接从权威区目录读这 N 张卡（不走 diff 扫描）
-        diffs = []
-        for name in target_names:
-            # 找文件位置：先查权威区，再查 experience，再查 .sync
-            found = None
-            for sub in [
-                "rules",
-                "methodology",
-                "blueprints",
-                "longterm",
-                "projects",
-                "experience",
-                "notes",
-            ]:
-                p2 = root / sub / name
-                if p2.exists():
-                    found = p2
-                    break
-            if found is None:
-                continue
-            # 解析 type：从 frontmatter 读取
-            try:
-                from common.frontmatter import read_card
+    return ap.parse_args(argv)
 
-                card = read_card(found)
-                diffs.append(
-                    {
-                        "name": name,
-                        "type": card.type,
-                        "after": str(found.relative_to(root)).replace(os.sep, "/"),
-                    }
-                )
-            except Exception as e:
-                _LOG.warning("post_ingest_hook: 跳过卡片 %s 解析失败: %s", name, e)
-                continue
-    else:
-        diffs = read_diff_since(root, args.since_ts)
-    if not diffs:
-        print("post_ingest_hook: 本轮无新增卡", file=sys.stderr)
-        return 0
-    planned: list[tuple[str, str, str]] = []
+
+def _diffs_from_names(root: Path, names: list[str]) -> list[dict]:
+    """按 `--names` 精确清单构造 diff 记录（优先于 diff 扫描，防历史污染 INDEX）。
+
+    找不到文件 → 跳过（不报错）；frontmatter 解析失败 → 记 warning 跳过
+    （一张卡坏了不该拖垮整轮登记）。
+    """
+    diffs: list[dict] = []
+    for name in names:
+        found = next((root / sub / name for sub in _CARD_SUBDIRS if (root / sub / name).exists()), None)
+        if found is None:
+            continue
+        try:
+            from common.frontmatter import read_card
+
+            card = read_card(found)
+        except Exception as e:  # noqa: BLE001 - 单卡解析失败只记日志，不中断整轮
+            _LOG.warning("post_ingest_hook: 跳过卡片 %s 解析失败: %s", name, e)
+            continue
+        diffs.append(
+            {
+                "name": name,
+                "type": card.type,
+                "after": str(found.relative_to(root)).replace(os.sep, "/"),
+            }
+        )
+    return diffs
+
+
+def _plan_entries(root: Path, diffs: list[dict]) -> list[tuple[str, str, str, str]]:
+    """把 diff 记录规划成 (目标 INDEX 文件, section 标题, slug, 摘要) 列表。
+
+    按卡所在目录选**目标 INDEX 文件**（2026-09-23 修）：experience 已拆到
+    INDEX-experience.md（L2），不能再追加回根 INDEX（会白涨 L0）。
+    """
+    planned: list[tuple[str, str, str, str]] = []
     for rec in diffs:
         card_type = rec.get("type", "")
         after = rec.get("after", "")
@@ -291,45 +280,83 @@ def main() -> int:
         section_title = SECTION_TITLES.get(card_type)
         if not section_title:
             continue
-        slug = Path(rec["name"]).stem
-        card_path = root / after
-        summary = extract_summary(card_path)
-        # 按卡所在目录选**目标 INDEX 文件**（2026-09-23 修）：experience 已拆到
-        # INDEX-experience.md（L2），不能再追加回根 INDEX（会白涨 L0）。
         rel_dir = after.split("/")[0]
         target_name = index_file_for_dir(rel_dir) or "INDEX.md"
-        planned.append((target_name, section_title, slug, summary))
-    if args.dry_run:
-        print(f"post_ingest_hook dry-run: 计划登记 {len(planned)} 张")
-        for tn, st, slug, sm in planned:
-            print(f"  → {tn} | {st} | {slug} | {sm[:60]}")
-        return 0
-    added = []
+        planned.append((target_name, section_title, Path(rec["name"]).stem, extract_summary(root / after)))
+    return planned
+
+
+def _apply_plan(root: Path, planned: list[tuple[str, str, str, str]]) -> tuple[list[str], set[str]]:
+    """逐个登记 → (已登记的 slug, 实际写入过的索引文件集合)"""
+    added: list[str] = []
     written_files: set[str] = set()
     for target_name, section_title, slug, summary in planned:
         if append_to_index(root / target_name, section_title, slug, summary):
             added.append(slug)
             written_files.add(target_name)
-    if not added:
-        print(
-            "post_ingest_hook: 无 INDEX 变更（可能已存在或无匹配 section）",
-            file=sys.stderr,
-        )
-        return 0
+    return added, written_files
+
+
+def _commit_indices(root: Path, written_files: set[str], added: list[str]) -> bool:
+    """提交索引变更；失败返回 False（调用方转成退出码 3）。
+
+    只暂存**实际写入过的**索引文件：此前硬编码只 add INDEX.md，在 experience 拆到
+    分册后 → 分册的改动从未被暂存 ⇒ commit 无内容 ⇒ 报错退出
+    （同一 bug 类的第二处：写入路由改了，暂存路径没改）。
+    """
     env = os.environ.copy()
     env["GIT_AUTHOR_NAME"] = "AgentMemoryHub"
     env["GIT_AUTHOR_EMAIL"] = "hub@local"
     env["GIT_COMMITTER_NAME"] = "AgentMemoryHub"
     env["GIT_COMMITTER_EMAIL"] = "hub@local"
     try:
-        # 暂存**实际写入过的**索引文件：此前硬编码只 add INDEX.md，
-        # 在 experience 拆到分册后 → 分册的改动从未被暂存 ⇒ commit 无内容 ⇒ 报错退出。
-        # （同一 bug 类的第二处：写入路由改了，暂存路径没改）
         git(root, "add", *sorted(written_files), env=env)
         msg = f"docs(INDEX): post_ingest_hook 自动登记 {len(added)} 张新卡"
         git(root, "commit", "-m", msg, env=env)
     except RuntimeError as e:
         print(f"commit 失败: {e}", file=sys.stderr)
+        return False
+    return True
+
+
+def main(argv: list[str] | None = None) -> int:
+    """登记入口。
+
+    2026-09-25（SPLIT2）：原为单函数 124 行（C901=19），拆成
+    `_parse_args` / `_diffs_from_names` / `_plan_entries` / `_apply_plan` / `_commit_indices`
+    + 此处纯编排（复杂度降到 5）。输出文案与退出码（0/2/3）逐字不变。
+    """
+    args = _parse_args(argv)
+    root = Path(args.root)
+    index_path = root / "INDEX.md"
+    if not index_path.exists():
+        print(f"INDEX.md 不存在: {index_path}", file=sys.stderr)
+        return 2
+    # 注：根 INDEX 只用于前置存在性检查；实际写入目标由
+    #     index_consistency.index_file_for_dir() 按卡所在目录决定
+    #     （experience → INDEX-experience.md）。
+
+    target_names = [n.strip() for n in args.names.split(",") if n.strip()]
+    diffs = _diffs_from_names(root, target_names) if target_names else read_diff_since(root, args.since_ts)
+    if not diffs:
+        print("post_ingest_hook: 本轮无新增卡", file=sys.stderr)
+        return 0
+
+    planned = _plan_entries(root, diffs)
+    if args.dry_run:
+        print(f"post_ingest_hook dry-run: 计划登记 {len(planned)} 张")
+        for tn, st, slug, sm in planned:
+            print(f"  → {tn} | {st} | {slug} | {sm[:60]}")
+        return 0
+
+    added, written_files = _apply_plan(root, planned)
+    if not added:
+        print(
+            "post_ingest_hook: 无 INDEX 变更（可能已存在或无匹配 section）",
+            file=sys.stderr,
+        )
+        return 0
+    if not _commit_indices(root, written_files, added):
         return 3
     print(f"post_ingest_hook: 已登记 {len(added)} 张 → {added}（已提交 {sorted(written_files)}）")
     return 0

@@ -279,76 +279,98 @@ def estimate_hub_tool_capacity(root: Path) -> float:
     return min(round(score, 1), 100.0)
 
 
+def _score_card_health(counts: dict, report: dict) -> float:
+    """卡片健康：非孤儿/非幽灵卡占全部卡的比例（×100）"""
+    total_cards = sum(counts.values())
+    unhealthy_cards = len(report.get("orphans", [])) + len(report.get("ghosts", []))
+    return ((total_cards - unhealthy_cards) / max(total_cards, 1)) * 100
+
+
+def _score_skill_health(root: Path) -> float:
+    """技能健康：SkillHub 里 active 技能占比；无 SkillHub / 解析失败 → 退回 hub 工具能力估算。
+
+    （默认值曾硬编码 50.0，2026-08 改为按 hub 自身工具能力估算。）
+    """
+    skill_health = estimate_hub_tool_capacity(root)
+    skillhub_root = root.parent / "SkillHub"
+    if not skillhub_root.is_dir():
+        return skill_health
+    try:
+        import yaml
+
+        skills_root = skillhub_root / "skills"
+        if not skills_root.is_dir():
+            return skill_health
+        from collections import Counter as Ctr
+
+        status_counts = Ctr()
+        for yaml_file in skills_root.rglob("skill.yaml"):
+            try:
+                with open(yaml_file, encoding="utf-8") as f:
+                    data = yaml.safe_load(f) or {}
+                status_counts[data.get("status", "unknown")] += 1
+            except (OSError, ValueError):
+                continue
+        total_skills = sum(status_counts.values())
+        return (status_counts.get("active", 0) / max(total_skills, 1)) * 100
+    except ImportError:
+        return skill_health
+
+
+def _score_flywheel_activity(root: Path) -> float:
+    """飞轮活跃：最近 7 天有记录的条数 / 7，封顶 100（无日志 / 读不到 → 0）"""
+    flywheel_log = root / ".sync" / "state" / "flywheel-log.json"
+    if not flywheel_log.is_file():
+        return 0.0
+    try:
+        logs = json.loads(flywheel_log.read_text(encoding="utf-8"))
+        if not isinstance(logs, list) or not logs:
+            return 0.0
+        from datetime import timedelta as td
+
+        cutoff = datetime.now(timezone.utc) - td(days=7)
+        recent = 0
+        for entry in logs[-30:]:
+            ts = entry.get("timestamp", "")
+            if not ts:
+                continue
+            try:
+                if datetime.fromisoformat(ts.replace("Z", "+00:00")) >= cutoff:
+                    recent += 1
+            except ValueError:
+                continue
+        return min(recent / 7.0, 1.0) * 100
+    except (json.JSONDecodeError, ValueError, OSError):
+        return 0.0
+
+
+def _score_llm_health(llm_status: dict) -> float:
+    """本地 LLM 健康：不可用 → 0；可用则按响应时间分档（<100ms 100 / <500ms 80 / 否则 60）"""
+    if not llm_status.get("available", False):
+        return 0.0
+    rt = llm_status.get("response_time_ms", 1000)
+    if rt < 100:
+        return 100.0
+    if rt < 500:
+        return 80.0
+    return 60.0
+
+
 def compute_snapshot_health_scores(
     counts: dict,
     report: dict,
     llm_status: dict,
     root: Path,
 ) -> dict:
-    """计算快照健康度评分（4 维 + 总分）。"""
-    total_cards = sum(counts.values())
-    unhealthy_cards = len(report.get("orphans", [])) + len(report.get("ghosts", []))
-    card_health = ((total_cards - unhealthy_cards) / max(total_cards, 1)) * 100
+    """计算快照健康度评分（4 维 + 总分）。
 
-    # skill_health 默认值改为 hub 自身工具能力估算（取代硬编码 50.0）
-    skill_health = estimate_hub_tool_capacity(root)
-    skillhub_root = root.parent / "SkillHub"
-    if skillhub_root.is_dir():
-        try:
-            import yaml
-
-            skills_root = skillhub_root / "skills"
-            if skills_root.is_dir():
-                from collections import Counter as Ctr
-
-                status_counts = Ctr()
-                for yaml_file in skills_root.rglob("skill.yaml"):
-                    try:
-                        with open(yaml_file, encoding="utf-8") as f:
-                            data = yaml.safe_load(f) or {}
-                        status_counts[data.get("status", "unknown")] += 1
-                    except (OSError, ValueError):
-                        continue
-                total_skills = sum(status_counts.values())
-                active_skills = status_counts.get("active", 0)
-                skill_health = (active_skills / max(total_skills, 1)) * 100
-        except ImportError:
-            pass
-
-    flywheel_log = root / ".sync" / "state" / "flywheel-log.json"
-    flywheel_activity = 0.0
-    if flywheel_log.is_file():
-        try:
-            logs = json.loads(flywheel_log.read_text(encoding="utf-8"))
-            if isinstance(logs, list) and logs:
-                from datetime import timedelta as td
-
-                cutoff = datetime.now(timezone.utc) - td(days=7)
-                recent = 0
-                for entry in logs[-30:]:
-                    ts = entry.get("timestamp", "")
-                    if ts:
-                        try:
-                            dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
-                            if dt >= cutoff:
-                                recent += 1
-                        except ValueError:
-                            pass
-                flywheel_activity = min(recent / 7.0, 1.0) * 100
-        except (json.JSONDecodeError, ValueError, OSError):
-            pass
-
-    llm_health = 100.0
-    if not llm_status.get("available", False):
-        llm_health = 0.0
-    else:
-        rt = llm_status.get("response_time_ms", 1000)
-        if rt < 100:
-            llm_health = 100.0
-        elif rt < 500:
-            llm_health = 80.0
-        else:
-            llm_health = 60.0
+    2026-09-25（SPLIT2）：原为单函数（C901=16），拆成 4 个 `_score_*` 维度函数 +
+    此处加权求和。权重与取整口径不变（0.25 / 0.35 / 0.20 / 0.20）。
+    """
+    card_health = _score_card_health(counts, report)
+    skill_health = _score_skill_health(root)
+    flywheel_activity = _score_flywheel_activity(root)
+    llm_health = _score_llm_health(llm_status)
 
     overall = card_health * 0.25 + skill_health * 0.35 + flywheel_activity * 0.20 + llm_health * 0.20
 

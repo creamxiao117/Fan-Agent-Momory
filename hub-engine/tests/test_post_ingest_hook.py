@@ -6,7 +6,7 @@
 
 from pathlib import Path
 
-from scripts.post_ingest_hook import extract_summary
+from scripts.post_ingest_hook import extract_summary, main
 
 
 def _card(p: Path, body: str) -> Path:
@@ -39,3 +39,28 @@ def test_h2_skipped_then_paragraph(tmp_path):
 
 def test_missing_file_returns_empty(tmp_path):
     assert extract_summary(tmp_path / "nope.md") == ""
+
+
+# ── main() 编排层（2026-09-25 SPLIT2 补网：拆分前 main 无测试）────────────────
+
+
+def test_main_missing_index_returns_2(tmp_path):
+    """根 INDEX 不存在 → 退出码 2（不静默成功）"""
+    assert main(["--root", str(tmp_path)]) == 2
+
+
+def test_main_no_new_cards_returns_0(tmp_path):
+    """没有新增卡 → 退出码 0 且不打 commit"""
+    (tmp_path / "INDEX.md").write_text("# idx\n", encoding="utf-8")
+    assert main(["--root", str(tmp_path)]) == 0
+
+
+def test_main_dry_run_plans_named_card(tmp_path, capsys):
+    """--names 分支 + --dry-run：只规划不写盘（经验卡应路由到分册）"""
+    (tmp_path / "INDEX.md").write_text("# idx\n", encoding="utf-8")
+    _card(tmp_path / "experience" / "x.md", "# 标题\n\n摘要段落。\n")
+    assert main(["--root", str(tmp_path), "--names", "x.md", "--dry-run"]) == 0
+    out = capsys.readouterr().out
+    assert "dry-run" in out and "x" in out
+    # 未写盘（dry-run 不碰文件；且不调 git）
+    assert not (tmp_path / "INDEX-experience.md").exists()

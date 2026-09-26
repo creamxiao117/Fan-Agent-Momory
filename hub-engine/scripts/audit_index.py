@@ -95,75 +95,68 @@ def _authority_files(root: Path, dirs: tuple[str, ...] | None = None) -> dict[st
     return out
 
 
-def audit(root: Path) -> dict:
-    """主审计：返回 issues 列表 + 统计。"""
+def _check_ghost_index(by_slug: dict, all_files_by_slug: dict) -> list[dict]:
+    """1) ghost：INDEX 登记了但任何目录（含 experience/notes/retro）都找不到文件"""
+    return [
+        {
+            "type": "ghost_index",
+            "msg": f"INDEX 登记了 '{slug}' 但所有目录都找不到对应文件",
+            "slug": slug,
+            "severity": "high",
+        }
+        for slug in by_slug
+        if slug not in all_files_by_slug
+    ]
+
+
+def _check_orphan_files(files_by_slug: dict, by_slug: dict) -> list[dict]:
+    """2) orphan：权威区有文件但 INDEX 未登记"""
+    return [
+        {
+            "type": "orphan_file",
+            "msg": f"权威区有 '{rel}' 但 INDEX 未登记",
+            "slug": slug,
+            "path": str(rel),
+            "severity": "high",
+        }
+        for slug, rel in files_by_slug.items()
+        if slug not in by_slug
+    ]
+
+
+def _check_duplicate_slugs(by_slug: dict) -> list[dict]:
+    """3) 重复 slug（多次登记）"""
+    return [
+        {
+            "type": "duplicate_slug",
+            "msg": f"INDEX 中 '{slug}' 登记了 {len(descs)} 次",
+            "slug": slug,
+            "count": len(descs),
+            "severity": "medium",
+        }
+        for slug, descs in by_slug.items()
+        if len(descs) > 1
+    ]
+
+
+def _check_slug_format(entries: list[dict]) -> list[dict]:
+    """4) slug 格式校验"""
+    return [
+        {
+            "type": "invalid_slug",
+            "msg": f"行 {entry['line_no']}: slug '{entry['slug']}' 不符合 slug 格式（小写字母/数字/连字符）",
+            "slug": entry["slug"],
+            "line_no": entry["line_no"],
+            "severity": "low",
+        }
+        for entry in entries
+        if not SLUG_RE.match(entry["slug"])
+    ]
+
+
+def _check_desc_lengths(entries: list[dict]) -> list[dict]:
+    """5) 描述长度校验（上限按分区差异化：blueprints 800 / 其他 250）"""
     issues: list[dict] = []
-    stats: dict[str, int] = {"total_index_entries": 0, "total_files": 0}
-
-    index_path = root / "INDEX.md"
-    if not index_path.exists():
-        issues.append({"type": "missing_index", "msg": f"INDEX.md 不存在: {index_path}"})
-        return {"issues": issues, "stats": stats}
-
-    by_slug, entries = _parse_index(index_path)
-    stats["total_index_entries"] = len(entries)
-
-    files_by_slug = _authority_files(root)
-    stats["total_files"] = len(files_by_slug)
-
-    # 1) ghost：INDEX 登记了但任何目录（含 experience/notes/retro）都找不到文件
-    all_files_by_slug = _authority_files(root, dirs=_ALL_SCAN_DIRS)
-    for slug in by_slug:
-        if slug not in all_files_by_slug:
-            issues.append(
-                {
-                    "type": "ghost_index",
-                    "msg": f"INDEX 登记了 '{slug}' 但所有目录都找不到对应文件",
-                    "slug": slug,
-                    "severity": "high",
-                }
-            )
-
-    # 2) orphan：权威区有文件但 INDEX 未登记
-    for slug, rel in files_by_slug.items():
-        if slug not in by_slug:
-            issues.append(
-                {
-                    "type": "orphan_file",
-                    "msg": f"权威区有 '{rel}' 但 INDEX 未登记",
-                    "slug": slug,
-                    "path": str(rel),
-                    "severity": "high",
-                }
-            )
-
-    # 3) 重复 slug（多次登记）
-    for slug, descs in by_slug.items():
-        if len(descs) > 1:
-            issues.append(
-                {
-                    "type": "duplicate_slug",
-                    "msg": f"INDEX 中 '{slug}' 登记了 {len(descs)} 次",
-                    "slug": slug,
-                    "count": len(descs),
-                    "severity": "medium",
-                }
-            )
-
-    # 4) slug 格式校验
-    for entry in entries:
-        if not SLUG_RE.match(entry["slug"]):
-            issues.append(
-                {
-                    "type": "invalid_slug",
-                    "msg": f"行 {entry['line_no']}: slug '{entry['slug']}' 不符合 slug 格式（小写字母/数字/连字符）",
-                    "slug": entry["slug"],
-                    "line_no": entry["line_no"],
-                    "severity": "low",
-                }
-            )
-
-    # 5) 描述长度校验（上限按分区差异化：blueprints 800 / 其他 250）
     for entry in entries:
         desc = entry["desc"]
         limit = _desc_limit(entry.get("section", ""))
@@ -189,38 +182,74 @@ def audit(root: Path) -> dict:
                     "severity": "low",
                 }
             )
+    return issues
 
-    # 6) 登记位置错位（misrouted）：条目住在了“不该它住”的 INDEX 文件。
-    #
-    # 为何需要这一维度（2026-09-23 实测踩到）：A4 把 experience 整区从根 INDEX 拆到
-    # INDEX-experience.md（根 INDEX 只留指针）后，两个写入方（post_ingest_hook /
-    # fix_orphans）**没跟着改**，继续把经验卡追加回根 INDEX → **白涨 L0 预算**
-    # 且分册失去意义。而 orphan/ghost/格式/重复四个维度**都查不出**这种错位。
-    # 本条即把“人工撞见”变成“门禁自动发现”。
-    for _fname in INDEX_FILES_AUDITED:
-        _fpath = root / _fname
-        if not _fpath.exists():
+
+def _check_misrouted(root: Path) -> list[dict]:
+    """6) 登记位置错位（misrouted）：条目住在了不该它住的 INDEX 文件。
+
+    为何需要这一维度（2026-09-23 实测踩到）：A4 把 experience 整区从根 INDEX 拆到
+    INDEX-experience.md（根 INDEX 只留指针）后，两个写入方（post_ingest_hook /
+    fix_orphans）**没跟着改**，继续把经验卡追加回根 INDEX → **白涨 L0 预算**
+    且分册失去意义。而 orphan/ghost/格式/重复四个维度**都查不出**这种错位。
+    本条即把“人工撞见”变成“门禁自动发现”。
+    """
+    issues: list[dict] = []
+    for fname in INDEX_FILES_AUDITED:
+        fpath = root / fname
+        if not fpath.exists():
             continue
-        _by, _fentries = _parse_index(_fpath)
-        for _entry in _fentries:
-            _want = expected_index_file(_entry.get("section", ""))
-            if _want is None or _want == _fname:
+        _by, fentries = _parse_index(fpath)
+        for entry in fentries:
+            want = expected_index_file(entry.get("section", ""))
+            if want is None or want == fname:
                 continue
             issues.append(
                 {
                     "type": "misrouted_entry",
                     "msg": (
-                        f"{_fname} 行 {_entry['line_no']}: '{_entry['slug']}' 登记在"
-                        f"'{_entry.get('section', '')}' 分区，但该分区的条目应写入 {_want}"
+                        f"{fname} 行 {entry['line_no']}: '{entry['slug']}' 登记在"
+                        f"'{entry.get('section', '')}' 分区，但该分区的条目应写入 {want}"
                     ),
-                    "slug": _entry["slug"],
-                    "line_no": _entry["line_no"],
-                    "in_file": _fname,
-                    "expected_file": _want,
+                    "slug": entry["slug"],
+                    "line_no": entry["line_no"],
+                    "in_file": fname,
+                    "expected_file": want,
                     "severity": "high",
                 }
             )
+    return issues
 
+
+def audit(root: Path) -> dict:
+    """主审计：返回 issues 列表 + 统计。
+
+    2026-09-25（SPLIT2）：原为单函数 127 行（C901=17），拆成 6 个 `_check_*` 维度函数 +
+    此处纯编排（复杂度降到 3）。**维度顺序与 issue 顺序逐字不变**（单测按类型断言）。
+    """
+    stats: dict[str, int] = {"total_index_entries": 0, "total_files": 0}
+
+    index_path = root / "INDEX.md"
+    if not index_path.exists():
+        return {
+            "issues": [{"type": "missing_index", "msg": f"INDEX.md 不存在: {index_path}"}],
+            "stats": stats,
+        }
+
+    by_slug, entries = _parse_index(index_path)
+    stats["total_index_entries"] = len(entries)
+    files_by_slug = _authority_files(root)
+    stats["total_files"] = len(files_by_slug)
+    all_files_by_slug = _authority_files(root, dirs=_ALL_SCAN_DIRS)
+
+    issues: list[dict] = []
+    # 顺序即输出顺序：ghost → orphan → duplicate → slug 格式 → 描述长度 → 错位
+    issues += _check_ghost_index(by_slug, all_files_by_slug)
+    issues += _check_orphan_files(files_by_slug, by_slug)
+    issues += _check_duplicate_slugs(by_slug)
+    issues += _check_slug_format(entries)
+    issues += _check_desc_lengths(entries)
+    issues += _check_misrouted(root)
     return {"issues": issues, "stats": stats}
 
 

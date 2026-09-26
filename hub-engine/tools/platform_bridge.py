@@ -396,38 +396,21 @@ def _insert_after_instruction(text: str, extra: str, stop_heads: tuple[str, ...]
     return out + "\n"
 
 
-def push(
-    root: Path,
-    platform: str,
-    only_rules: bool = False,
-    name_filter: str | None = None,
-    dry_run: bool = False,
-) -> dict:
-    """中枢权威卡片 → 平台记忆文件（默认关闭）；外部改动检测到即中止，绝不覆盖本地旧版"""
-    root = Path(root)
-    stat = {"added": 0, "updated": 0, "replaced": 0, "skipped": 0, "status": "ok"}
-    target = _target_path(root, platform)
-    if not target.is_file():
-        stat["status"] = f"平台记忆文件不存在: {target}"
-        return stat
-    state = _read_state(root, platform)
-    text = target.read_text(encoding="utf-8")
+def _push_guard(target: Path, state: dict, text: str) -> str | None:
+    """外部改动检测：mtime + 内容哈希 与上次 Push 基线比对（首次无基线则放行）。
 
-    # 外部改动检测：mtime + 内容哈希 与上次 Push 基线比对（首次无基线则放行）
+    返回非 None 即应中止（避免覆盖用户在平台记忆文件里的本地编辑）。
+    """
     baseline = state.get("push")
-    if baseline and (baseline.get("hash") != fingerprint(text) or baseline.get("mtime") != target.stat().st_mtime_ns):
-        stat["status"] = "平台文件已被外部修改（与上次 Push 基线不符），已中止以免覆盖本地编辑"
-        return stat
+    if not baseline:
+        return None
+    if baseline.get("hash") != fingerprint(text) or baseline.get("mtime") != target.stat().st_mtime_ns:
+        return "平台文件已被外部修改（与上次 Push 基线不符），已中止以免覆盖本地编辑"
+    return None
 
-    cfg = HubConfig.load(root)
-    adapter = adapter_for(platform, cfg)
-    titleless = isinstance(adapter, SectSeparatedAdapter)  # § 分隔无标题平台：无同名键，走段首行指纹闸
-    entries = adapter.parse(text)
-    existing_bodies = {e.body.strip() for e in entries if e.body.strip()}
-    existing_titles = {e.title for e in entries if e.title}
-    pushed_prev = set(state.get("pushed") or [])
-    replacements: list[tuple[str, str]] = []
 
+def _select_cards(root: Path, only_rules: bool, name_filter: str | None) -> tuple[list, str | None]:
+    """挑出待推的权威卡片；`name_filter` 命中不到时报错（不静默 0 添加）"""
     cards = _authority_cards(root)
     if only_rules:
         cards = [c for c in cards if c.path and c.path.parent.name == "rules"]
@@ -435,11 +418,28 @@ def push(
         cards = [c for c in cards if c.path and c.path.stem == name_filter]
         if not cards:
             # guard：卡名不存在时报错而非静默 0 添加，避免误以为已同步
-            stat["status"] = f"not-found: 未找到权威卡片 {name_filter}"
-            return stat
+            return [], f"not-found: 未找到权威卡片 {name_filter}"
+    return cards, None
 
+
+def _plan_push(
+    adapter,
+    cards: list,
+    text: str,
+    state: dict,
+    titleless: bool,
+    existing_bodies: set[str],
+    existing_titles: set[str],
+    stat: dict,
+) -> tuple[list[str], list[tuple[str, str]], set[str]]:
+    """规划本轮推送：返回 (追加块, 原地替换对, 本轮全部指纹)，并就地累加 stat 计数。
+
+    幂等：已推过（指纹命中）或平台已有同内容 → skipped，不重复写。
+    """
+    pushed_prev = set(state.get("pushed") or [])
     pushed_fps = set(state.get("pushed", []))
     blocks: list[str] = []
+    replacements: list[tuple[str, str]] = []
     for card in cards:
         if not card.path:
             continue
@@ -467,9 +467,22 @@ def push(
             stat["added"] += 1
             blocks.append(block)
         pushed_fps.add(fp)
+    return blocks, replacements, pushed_fps
 
-    if dry_run or (not blocks and not replacements):
-        return stat
+
+def _apply_push(
+    root: Path,
+    platform: str,
+    target: Path,
+    state: dict,
+    text: str,
+    blocks: list[str],
+    replacements: list[tuple[str, str]],
+    titleless: bool,
+    pushed_fps: set[str],
+    stat: dict,
+) -> str | None:
+    """写盘 + 更新状态 + 记日志（单写者锁内）；返回错误信息或 None"""
     try:
         with _WriteLock(root):
             new_text = text
@@ -492,5 +505,57 @@ def push(
                 f"{platform} ← 中枢（added={stat['added']} updated={stat['updated']}）",
             )
     except RuntimeError as e:
-        stat["status"] = str(e)
+        return str(e)
+    return None
+
+
+def push(
+    root: Path,
+    platform: str,
+    only_rules: bool = False,
+    name_filter: str | None = None,
+    dry_run: bool = False,
+) -> dict:
+    """中枢权威卡片 → 平台记忆文件（默认关闭）；外部改动检测到即中止，绝不覆盖本地旧版。
+
+    2026-09-25（SPLIT2）：原为单函数 98 行（C901=18），拆成
+    `_push_guard` / `_select_cards` / `_plan_push` / `_apply_push` + 此处纯编排。
+    行为逐字不变（tests/test_platform_bridge.py 34 例看守）。
+    """
+    root = Path(root)
+    stat = {"added": 0, "updated": 0, "replaced": 0, "skipped": 0, "status": "ok"}
+    target = _target_path(root, platform)
+    if not target.is_file():
+        stat["status"] = f"平台记忆文件不存在: {target}"
+        return stat
+    state = _read_state(root, platform)
+    text = target.read_text(encoding="utf-8")
+
+    abort = _push_guard(target, state, text)
+    if abort:
+        stat["status"] = abort
+        return stat
+
+    cfg = HubConfig.load(root)
+    adapter = adapter_for(platform, cfg)
+    titleless = isinstance(adapter, SectSeparatedAdapter)  # § 分隔无标题平台：无同名键，走段首行指纹闸
+    entries = adapter.parse(text)
+    existing_bodies = {e.body.strip() for e in entries if e.body.strip()}
+    existing_titles = {e.title for e in entries if e.title}
+
+    cards, not_found = _select_cards(root, only_rules, name_filter)
+    if not_found:
+        stat["status"] = not_found
+        return stat
+
+    pushed_fps = set(state.get("pushed") or [])
+    blocks, replacements, pushed_fps = _plan_push(
+        adapter, cards, text, state, titleless, existing_bodies, existing_titles, stat
+    )
+
+    if dry_run or (not blocks and not replacements):
+        return stat
+    err = _apply_push(root, platform, target, state, text, blocks, replacements, titleless, pushed_fps, stat)
+    if err:
+        stat["status"] = err
     return stat

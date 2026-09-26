@@ -1,4 +1,4 @@
-# @version V1.0 / 2026-09-23 / pi / 规则遵循与返工的时间序列仪表（改造前 vs 后）
+# @version V1.1 / 2026-09-25 / pi / 规则遵循与返工的时间序列仪表（改造前 vs 后）
 
 """把 `retro/snapshot-*.json` 的每日指标抽成时间序列，用于回答
 「优化后的规则/方法论/门禁，实际起到了什么作用」。
@@ -26,6 +26,7 @@ import datetime
 import json
 import re
 import sys
+from collections import Counter
 from pathlib import Path
 
 # 本文件位于 hub-engine/scripts/ → 上溯 3 层得仓库根
@@ -33,6 +34,10 @@ HUB = Path(__file__).resolve().parents[2] / "AgentMemoryHub"
 RETRO = HUB / "retro"
 
 GATE_KEYS = ("invalid", "schema_drift", "orphans", "ghosts", "stale")
+
+# 改造日与「后窗口」（T1 重跑对照用；改这里等于换对照口径，须同步文档）
+RULE_REFORM_DATE = "2026-09-23"
+POST_WINDOW = (RULE_REFORM_DATE, "2026-09-24")
 USE_KEYS = ("searches", "hits", "misses", "reuse_ops")
 SCORE_KEYS = (
     "overall",
@@ -201,22 +206,18 @@ def load_rows() -> list[dict]:
     return rows
 
 
-def main() -> int:
-    rows = load_rows()
-    if not rows:
-        print("未找到快照")
-        return 1
+def _print_csv(rows: list[dict]) -> int:
+    """--csv：把快照序列原样导出（机器可读出口）"""
+    import csv
 
-    if "--csv" in sys.argv:
-        import csv
+    w = csv.DictWriter(sys.stdout, fieldnames=list(rows[0].keys()))
+    w.writeheader()
+    w.writerows(rows)
+    return 0
 
-        w = csv.DictWriter(sys.stdout, fieldnames=list(rows[0].keys()))
-        w.writeheader()
-        w.writerows(rows)
-        return 0
 
-    # ── 第二序列：lint 周期报告（覆盖改造前期）────────────────────
-    reps = load_lint_reports()
+def _print_section_a(rows: list[dict], reps: list[dict]) -> None:
+    """A. 快照序列明细 + 基线统计（改造前口径）"""
     print("=" * 78)
     print(f"A. 快照序列（{len(rows)} 份，{rows[0]['date']} ~ {rows[-1]['date']}）")
     print("=" * 78)
@@ -242,6 +243,10 @@ def main() -> int:
             print(
                 f"  {key:20s} 均值={sum(vals) / len(vals):6.2f}  最大={max(vals):4}  非零天数={sum(1 for v in vals if v)}"
             )
+
+
+def _print_section_b(reps: list[dict]) -> None:
+    """B. lint 周期报告序列（覆盖改造前期，含新旧格式可比性缺口说明）"""
     print()
     print("=" * 78)
     print(f"B. lint 周期报告序列（{len(reps)} 份，{reps[0]['date']} ~ {reps[-1]['date']}）")
@@ -258,20 +263,23 @@ def main() -> int:
     print("   且新增了 long_desc / short_desc 等维度（09-08 的 40 项里 34 项是 long_desc，旧格式不检）。")
     print("   ⇒ **跨格式不能直接比大小**；只有 `无效卡片/invalid` 在两格式与快照中同义可比。")
 
+
+def _print_section_c(rows: list[dict], reps: list[dict]) -> None:
+    """C. 改造前后对照 + 可证伪判据（T1 重跑时对照用）"""
+
+    def _num(v) -> int | None:
+        return v if isinstance(v, (int, float)) else None
+
     print()
     print("=" * 78)
     print("C. 改造前后对照（改造日 = 2026-09-23）")
     print("=" * 78)
 
-    def _num(v) -> int | None:
-        return v if isinstance(v, (int, float)) else None
-
     pre_inv = [n for n in (_num(r["lint_invalid"]) for r in rows) if n is not None]
     pre_days = len(pre_inv)
     pre_bad = sum(1 for n in pre_inv if n > 0)
 
-    POST = ("2026-09-23", "2026-09-24")
-    post = [r for r in rows if r["date"] in POST]
+    post = [r for r in rows if r["date"] in POST_WINDOW]
     post_clean = sum(1 for r in post if all((_num(r[f"lint_{k}"]) or 0) == 0 for k in GATE_KEYS))
 
     print(
@@ -295,8 +303,9 @@ def main() -> int:
     print("    ② 反面：任一维度复现非零 → 说明仍有未收敛的漂移源，须定位根因")
     print("    ③ 无效对比：若期间 lint 检查维度变了（如新增 long_desc），须分段比较")
 
-    # ── D. ingest 结果趋势（定义未变，最宜做趋势）──────────────────
-    ing = load_ingest_outcomes()
+
+def _print_section_d(ing: list[dict]) -> None:
+    """D. ingest 结果趋势（定义未变，最宜做趋势）"""
     print()
     print("=" * 78)
     span = f"{ing[0]['date']} ~ {ing[-1]['date']}" if ing else "-"
@@ -304,79 +313,103 @@ def main() -> int:
     print("=" * 78)
     if not ing:
         print("  （无数据）")
-    else:
-        weeks: dict[str, dict[str, int]] = {}
-        for r in ing:
-            y, m, d = (int(x) for x in r["date"].split("-"))
-            iso = datetime.date(y, m, d).isocalendar()
-            key = f"{iso[0]}-W{iso[1]:02d}"
-            w = weeks.setdefault(key, {"promoted": 0, "conflict": 0})
-            w["promoted"] += r["promoted"]
-            w["conflict"] += r["conflict"]
-        print(f"{'周':12s} {'入区':>5s} {'重复':>5s} {'合计':>5s} {'重复率':>7s}  柱状")
-        print("-" * 66)
-        for k in sorted(weeks):
-            w = weeks[k]
-            tot = w["promoted"] + w["conflict"]
-            rate = (w["conflict"] / tot) if tot else 0.0
-            bar = "█" * round(rate * 30)
-            print(f"{k:12s} {w['promoted']:>5d} {w['conflict']:>5d} {tot:>5d} {rate:>6.0%}  {bar}")
+        return
 
-        tot_p = sum(r["promoted"] for r in ing)
-        tot_c = sum(r["conflict"] for r in ing)
-        tot = tot_p + tot_c
-        if tot:
-            print()
-            print(f"  总计：入区 {tot_p} / 重复 {tot_c} / 合计 {tot} → 总体重复率 {tot_c / tot:.0%}")
-        n_post = sum(1 for r in ing if r["date"] >= "2026-09-23")
-        print()
-        print("  读法：重复率高 = 同一知识被反复提交（返工/漂移）；稳定下降说明去重生效。")
-        print(f"  注：改造日（2026-09-23）之后仅 {n_post} 天——仍不足以断言趋势。")
+    weeks: dict[str, dict[str, int]] = {}
+    for r in ing:
+        key = _iso_week(r["date"])
+        w = weeks.setdefault(key, {"promoted": 0, "conflict": 0})
+        w["promoted"] += r["promoted"]
+        w["conflict"] += r["conflict"]
+    print(f"{'周':12s} {'入区':>5s} {'重复':>5s} {'合计':>5s} {'重复率':>7s}  柱状")
+    print("-" * 66)
+    for k in sorted(weeks):
+        w = weeks[k]
+        tot = w["promoted"] + w["conflict"]
+        rate = (w["conflict"] / tot) if tot else 0.0
+        bar = "█" * round(rate * 30)
+        print(f"{k:12s} {w['promoted']:>5d} {w['conflict']:>5d} {tot:>5d} {rate:>6.0%}  {bar}")
 
-    # ── D2. 冲突判决分解（回答：重复率上升是「真重复」还是「判重误杀」）──
-    verd = load_ingest_verdicts()
-    if verd:
+    tot_p = sum(r["promoted"] for r in ing)
+    tot_c = sum(r["conflict"] for r in ing)
+    tot = tot_p + tot_c
+    if tot:
         print()
-        print("=" * 78)
-        print(f"E. 冲突判决分解（{len(verd)} 条冲突）")
-        print("=" * 78)
-        print("  为何要看：单看重复率无法区分性质——")
-        print("    真重复↑ → 知识被反复提交（漂移/返工成立）；")
-        print("    误杀(create) 非零 → **去重通道拦掉了本该新建的内容**（性质完全不同）。")
-        print()
-        vw: dict[str, dict[str, int]] = {}
-        for r in verd:
-            y, m, d = (int(x) for x in r["date"].split("-"))
-            iso = datetime.date(y, m, d).isocalendar()
-            k = f"{iso[0]}-W{iso[1]:02d}"
-            vw.setdefault(k, {})
-            vw[k][r["kind"]] = vw[k].get(r["kind"], 0) + 1
-        kinds = ("真重复", "误杀", "不确定", "无注记")
-        hdr = f"  {'周':11s} " + " ".join(f"{k:>6s}" for k in kinds) + f" {'合计':>5s} {'真重复占比':>10s}"
-        print(hdr)
-        print("  " + "-" * (len(hdr) - 2))
-        for k in sorted(vw):
-            cw = vw[k]
-            tot = sum(cw.values())
-            cells = " ".join(f"{cw.get(x, 0):>6d}" for x in kinds)
-            print(f"  {k:11s} {cells} {tot:>5d} {cw.get('真重复', 0) / tot:>9.0%}")
+        print(f"  总计：入区 {tot_p} / 重复 {tot_c} / 合计 {tot} → 总体重复率 {tot_c / tot:.0%}")
+    n_post = sum(1 for r in ing if r["date"] >= RULE_REFORM_DATE)
+    print()
+    print("  读法：重复率高 = 同一知识被反复提交（返工/漂移）；稳定下降说明去重生效。")
+    print(f"  注：改造日（{RULE_REFORM_DATE}）之后仅 {n_post} 天——仍不足以断言趋势。")
 
-        from collections import Counter as _C
 
-        overall = _C(r["kind"] for r in verd)
-        print()
-        print(
-            f"  总体：真重复 {overall.get('真重复', 0)} / 误杀 {overall.get('误杀', 0)} / "
-            f"不确定 {overall.get('不确定', 0)} / 无注记 {overall.get('无注记', 0)}（共 {len(verd)}）"
-        )
-        dup_cards = _C(r["card"] for r in verd)
-        rep = sorted(((n, c) for c, n in dup_cards.items() if n > 1), reverse=True)
-        if rep:
-            print(f"  被反复提交的卡（≥2 次，共 {len(rep)} 个）：")
-            for n, c in rep[:5]:
-                print(f"    {n}×  {c}")
-        print()
-        print("  判据：某周真重复占比高 → 真漂移；误杀非零 → 去重拦掉了本该新建的内容。")
+def _iso_week(date_str: str) -> str:
+    """日期 → ISO 周标签（如 2026-W38）"""
+    y, m, d = (int(x) for x in date_str.split("-"))
+    iso = datetime.date(y, m, d).isocalendar()
+    return f"{iso[0]}-W{iso[1]:02d}"
+
+
+def _print_section_e(verd: list[dict]) -> None:
+    """E. 冲突判决分解（回答：重复率上升是「真重复」还是「判重误杀」）"""
+    if not verd:
+        return
+    print()
+    print("=" * 78)
+    print(f"E. 冲突判决分解（{len(verd)} 条冲突）")
+    print("=" * 78)
+    print("  为何要看：单看重复率无法区分性质——")
+    print("    真重复↑ → 知识被反复提交（漂移/返工成立）；")
+    print("    误杀(create) 非零 → **去重通道拦掉了本该新建的内容**（性质完全不同）。")
+    print()
+    vw: dict[str, dict[str, int]] = {}
+    for r in verd:
+        k = _iso_week(r["date"])
+        vw.setdefault(k, {})
+        vw[k][r["kind"]] = vw[k].get(r["kind"], 0) + 1
+    kinds = ("真重复", "误杀", "不确定", "无注记")
+    hdr = f"  {'周':11s} " + " ".join(f"{k:>6s}" for k in kinds) + f" {'合计':>5s} {'真重复占比':>10s}"
+    print(hdr)
+    print("  " + "-" * (len(hdr) - 2))
+    for k in sorted(vw):
+        cw = vw[k]
+        tot = sum(cw.values())
+        cells = " ".join(f"{cw.get(x, 0):>6d}" for x in kinds)
+        print(f"  {k:11s} {cells} {tot:>5d} {cw.get('真重复', 0) / tot:>9.0%}")
+
+    overall = Counter(r["kind"] for r in verd)
+    print()
+    print(
+        f"  总体：真重复 {overall.get('真重复', 0)} / 误杀 {overall.get('误杀', 0)} / "
+        f"不确定 {overall.get('不确定', 0)} / 无注记 {overall.get('无注记', 0)}（共 {len(verd)}）"
+    )
+    rep = sorted(((n, c) for c, n in Counter(r["card"] for r in verd).items() if n > 1), reverse=True)
+    if rep:
+        print(f"  被反复提交的卡（≥2 次，共 {len(rep)} 个）：")
+        for n, c in rep[:5]:
+            print(f"    {n}×  {c}")
+    print()
+    print("  判据：某周真重复占比高 → 真漂移；误杀非零 → 去重拦掉了本该新建的内容。")
+
+
+def main() -> int:
+    """T1 时间序列报告入口（A/B/C/D/E 五段）。
+
+    2026-09-25（SPLIT2）：原为单函数 177 行（C901=17），拆成 6 个 `_print_*` 段落函数 +
+    此处纯编排（复杂度降到 3）。**输出逐字不变**（拆分前后 stdout 做过 diff 比对）。
+    """
+    rows = load_rows()
+    if not rows:
+        print("未找到快照")
+        return 1
+    if "--csv" in sys.argv:
+        return _print_csv(rows)
+
+    reps = load_lint_reports()
+    _print_section_a(rows, reps)
+    _print_section_b(reps)
+    _print_section_c(rows, reps)
+    _print_section_d(load_ingest_outcomes())
+    _print_section_e(load_ingest_verdicts())
     return 0
 
 
