@@ -168,13 +168,17 @@ def _format_6panel_section(panel: dict | None) -> list[str]:
 
 
 def _format_gap_section(gap: dict) -> list[str]:
-    """把知识缺口数据格式化为微信友好的文本段落。"""
-    if "error" in gap:
+    """把知识缺口数据格式化为微信友好的文本段落。
+
+    2026-09-25 COV 修正：原先 `gap["total"]` 直取 ⇒ 传空 dict（`format_report` 的
+    `data.get("_gap", {})` 默认值）会 KeyError，**导致整个日报崩**。现全部 .get 兜底。
+    """
+    if not gap or "error" in gap:
         return []
-    total = gap["total"]
-    miss = gap["miss"]
-    miss_rate = gap["miss_rate"]
-    top = gap["top_misses"]
+    total = gap.get("total", 0)
+    miss = gap.get("miss", 0)
+    miss_rate = gap.get("miss_rate", 0.0)
+    top = gap.get("top_misses") or []
     if total == 0:
         return []
     lines = []

@@ -130,15 +130,15 @@ def card_tags(slug: str) -> list[str]:
         m = re.match(r"^---\s*\n(.*?)\n---\s*\n", raw, re.DOTALL)
         if not m:
             return []
-        tags_line = ""
+        tags_line = ""  # noqa: F841  兼容旧字段（当前版本未使用，保留结构不动）
         fm = m.group(1)
         inline = re.search(r"(?m)^tags:\s*\[(.*?)\]\s*$", fm)
         if inline:
             return [t.strip().strip("'\"") for t in inline.group(1).split(",") if t.strip()]
-        blk = re.search(r"(?m)^tags:\s*\n((?:\s*-\s*.+\n)*)", fm)
+        blk = re.search(r"(?m)^tags:\s*\n((?:\s*-\s*[^\n]+\n?)*)", fm)
         if blk:
             return [line.strip().lstrip("-").strip().strip("'\"") for line in blk.group(1).splitlines() if line.strip()]
-        return [tags_line] if tags_line else []
+        return []
     return []
 
 

@@ -274,13 +274,14 @@ def compute_health_score(
     scores = {}
 
     # 1. 卡片健康度：active 占比（无可读卡片 ⇒ None，不冒充 0）
-    total_cards = card_stats["total"]
-    active_cards = card_stats["by_status"].get("active", 0)
+    # .get 兜底：调用方传入残缺统计（如 {} 或仅部分字段）时不应崩（2026-09-25 COV 实测崩过）
+    total_cards = card_stats.get("total", 0)
+    active_cards = (card_stats.get("by_status") or {}).get("active", 0)
     scores["card_health"] = round((active_cards / total_cards) * 100, 1) if total_cards else None
 
     # 2. 技能健康度：active 占比（同上）
-    total_skills = skill_stats["total"]
-    active_skills = skill_stats["by_status"].get("active", 0)
+    total_skills = skill_stats.get("total", 0)
+    active_skills = (skill_stats.get("by_status") or {}).get("active", 0)
     scores["skill_health"] = round((active_skills / total_skills) * 100, 1) if total_skills else None
 
     # 3. 飞轮活跃度：优先用真实日志口径（collect_flywheel_activity）
@@ -294,11 +295,13 @@ def compute_health_score(
             round((active_stages / len(FLYWHEEL_STAGES)) * 100, 1) if active_stages and FLYWHEEL_STAGES else None
         )
 
-    # 4. Ollama 健康度
-    llm_health = 100.0  # 默认满分
+    # 4. 本地 LLM 健康度
+    # ⚠️ 2026-09-25 修正：原先默认 100.0（“未检查”当满分），与下方“读不到 ≠ 不健康”的
+    # 权重归一口径**相矛盾**——会把未知一律算成满分，抬高 overall。现改为 None（从权重剔除）。
+    llm_health: float | None = None
     if llm_status:
         if not llm_status.get("available", False):
-            llm_health = 0.0  # Ollama 不可用
+            llm_health = 0.0  # 本地 LLM 不可用
         else:
             # 响应时间评分（<100ms = 100分, <500ms = 80分, 其他 = 60分）
             response_time = llm_status.get("response_time_ms", 1000)
@@ -308,7 +311,7 @@ def compute_health_score(
                 llm_health = 80.0
             else:
                 llm_health = 60.0
-    scores["llm_health"] = round(llm_health, 1)
+    scores["llm_health"] = round(llm_health, 1) if llm_health is not None else None
 
     # 总分：跳过不可用分项并按可用权重归一化（"读不到" ≠ "不健康"）
     parts = [
