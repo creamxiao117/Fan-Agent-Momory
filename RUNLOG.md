@@ -1,3 +1,17 @@
+# RUNLOG.md（迭代日志 · 只追加 · 最新在前）
+
+按轮次（R1…）追加；每条含巡检/门禁结果、决策与进行中的事项。当前状态见 `WORK.md`。
+
+## [2026-09-25] R17 | 审计整改收口 + COV/SPLIT2 + 两轮重评（**8.7/10**）
+
+- **审计报告**（`docs/compose/reports/2026-09-25-project-audit.md`）：首评 **5.9** → 整改前 **7.7**（§2）→ 第一轮重评 **8.5**（§10）→ **第二轮正式重评 8.7（§11）**；本会话 **31 笔提交**
+- **P1 六项全闭环**：规则集（B/SIM/UP/C901 + 行宽 120）· 覆盖率基线 · **硬编码 57→0（带护栏）** · `work/` 审计器入仓 · 两仓推送 · `local_summary` 自愈 LM Studio `.internal\temp`
+- **P2 六小项 + 重构 A–D**：`lint_report` argparse · 卡片去重裁定 · 延迟剖析（**340→138 ms**）· markdownlint 挂门禁 · 巡检器拆 9 个 `_stage_*` · 仪表盘 v4 归档 · 删 `node_modules/`+`.tools/`（≈12.8 MB）
+- **SPLIT**：`sync.py::ingest` **229→54 行**（先补 14 例分支级夹具测试）· **COV**：`scripts/` **26.9%→41.7%**（TOTAL **53.9%**，+64 例 → **643 passed**）
+- **测试实测揪出 3 个真 bug（已修+回归）**：日报空 `_gap` **KeyError 崩** · 健康分把“LLM 未知”当满分（总分虚高）· `card_tags` 块写法只读首个 tag
+- **巡检**：24 步 exit 0（239 s，健康 **92/100**）· 预算 **25,114/30,000** · 两仓 ahead=**0**
+- **新发现待办**：6 张 `experience/` 卡缺 `status`（`check_card_frontmatter` 不报）；金标准集 22 条已无区分度（recall 100%）；SPLIT2 余 8 个 C901（待有测试）
+
 ## [2026-09-23] R16 | 每日巡检 exit 2（13 Lint）· 修复进行中
 
 - **巡检**（patrol_runner v3，快照 `retro/snapshot-2026-09-23.json`）：⚠️ lint total=13 = invalid 12 + schema_drift 1；auto_fix_lint「无修复」；LM Studio 可用（~2s，info）；missing_query P0/P1=0（已归档 `.sync/state/missing_daily_2026-09-23.md`）；sleep 候选 0
@@ -28,8 +42,6 @@
 
 **当前状态**：中枢仓 `origin/master = c98f8c2`（工作区干净）；向量库 378→381 张；五权威区 rules 29 / blueprints 93 / methodology 54 / longterm 8 / projects 28
 **遗留**：无阻塞项；主仓他人在制文件（mcp_server.py 等）未认领
-
-# RUNLOG.md（迭代日志 · 只追加 · 最新在前）
 
 ## [2026-08-17] R6 | 中文语义召回增强（jieba 分词 + IDF 加权）
 
