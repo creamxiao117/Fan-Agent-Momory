@@ -187,3 +187,47 @@ def test_ingest_llm_create_highconf_same_name_still_conflicts(tmp_path):
     # 权威区原卡未被覆盖
     body = (root / "longterm" / "exp-a.md").read_text(encoding="utf-8")
     assert "常规做法" in body
+
+
+# ---------- 2026-09-26 create 漏写 confidence 修复（本轮新增，先红后绿）----------
+
+
+def test_ingest_llm_create_missing_conf_weak_sim_promotes(tmp_path):
+    """LLM 判 create 但**漏写 confidence 字段**（parse_decision 填 0.0）：
+    当向量预过滤无强相似候选（最高 cosine < 0.75）→ 应自动入区，不落冲突区。"""
+    called: list[int] = []
+
+    def _chat(_prompt, _root):
+        called.append(1)
+        # 注意：无 confidence 字段（模拟本地小模型漏写）
+        return '{"action":"create","target":null,"reason":"主题不同无重复"}'
+
+    root = bootstrap(tmp_path)
+    _seed_authority(root, "exp-a.md", "在线支付时序分析的常规做法")
+    # 实测相似度 0.6172 ∈ [0.55, 0.75)（probe_fixture_scores.py 2026-09-26 实测）
+    _make_draft(root, "trae", "exp-b.md", "在线支付时序分析的进阶技巧补充")
+    stat = ingest(root, "trae", chat_fn=_chat)
+    assert stat["duplicate"] == 1, "必须走 LLM 去重分支（否则本测试恒绿）"
+    assert called, "chat_fn 未被调用——没走到 LLM 分支"
+    assert stat["promoted"] == 1, stat
+    assert (root / "longterm" / "exp-b.md").exists()
+    assert not list((root / ".sync" / "conflicts").glob("*.md")), "弱相似 create 不应落冲突区"
+
+
+def test_ingest_llm_create_missing_conf_strong_sim_still_conflicts(tmp_path):
+    """护栏（防过修）：同样漏写 confidence，但候选**强相似**（相同 body，cosine=1.0 ≥0.75）
+    → 仍必须落冲突区交人工，不得无条件放行。"""
+    called: list[int] = []
+
+    def _chat(_prompt, _root):
+        called.append(1)
+        return '{"action":"create","target":null,"reason":"看着不同"}'  # 无 confidence 字段
+
+    root = bootstrap(tmp_path)
+    _seed_authority(root, "exp-a.md", "这是一条在线支付日志解析的经验卡片")
+    _make_draft(root, "trae", "exp-b.md", "这是一条在线支付日志解析的经验卡片")
+    stat = ingest(root, "trae", chat_fn=_chat)
+    assert stat["duplicate"] == 1
+    assert called, "chat_fn 未被调用"
+    assert list((root / ".sync" / "conflicts").glob("trae_exp-b.md")), "强相似必须进冲突区"
+    assert (root / "longterm" / "exp-a.md").exists(), "权威区原卡不得被覆盖"

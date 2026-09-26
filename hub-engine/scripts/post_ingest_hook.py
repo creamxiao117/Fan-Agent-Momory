@@ -44,6 +44,13 @@ SECTION_TITLES = {
     "exp": _TITLES["experience"],  # 非权威区 type 也登记 INDEX
     "note": _TITLES["experience"],  # 注释类合并入经验区
     "retro": "## 沉淀通道",  # retro 是 append-only 留痕，不入主索引
+    # 单数 type 别名（2026-09-26 修）：card.type 是单数（rule/blueprint/project）而
+    # _TITLES 键是目录名（rules/...）→ 旧代码 SECTION_TITLES.get(card_type) 恒
+    # None，三类新卡静默不登记 INDEX。键一致性由 tests/test_post_ingest_hook.py
+    # ::test_section_titles_covers_all_type_dir 锁死（防两份表漂移）。
+    "rule": _TITLES["rules"],
+    "blueprint": _TITLES["blueprints"],
+    "project": _TITLES["projects"],
 }
 
 

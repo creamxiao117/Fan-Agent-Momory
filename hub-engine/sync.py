@@ -30,6 +30,13 @@ TYPE_DIR = {
     "longterm": "longterm",
     "project": "projects",
 }
+
+# create 自动入区的相似度第二判据（2026-09-26）：LLM 判 create 且 target=null、
+# 但 confidence 漏写（parse_decision 填 0.0）时，用**确定性相似度**兜底——
+# 向量预过滤无强相似候选（最高 cosine < 此值）→ 放行自动入区；>= 阈值仍交人工。
+# 实测 2026-09-26 三张真实 conf=0.0 卡：0.664/0.655/0.696 均 < 0.75（会放行）。
+# 护栏测试：test_ingest_llm_create_missing_conf_strong_sim_still_conflicts（>=0.75 必红）。
+CREATE_AUTO_MAX_SIM = 0.75
 # （2026-09-02 清理）原 _NON_AUTH_TYPES = {exp,note,retro} 为死常量：定义后无消费，
 # 跳过逻辑实际由 TYPE_DIR.get(card.type) is None 分支承担（sync.py ingest 内），已删除。
 # HIGH_RISK 已统一到 common/constants.py（含 rule + methodology）
@@ -419,12 +426,19 @@ def _handle_duplicate_draft(root: Path, platform: str, p: Path, card, cands: lis
         return
     # 反哺经验(2026-08-21)：LLM 高置信判 create（新卡、与候选主题不同无重复，target=null）
     # → 视作无有效候选，低风险卡型直接自动入区；rule 仍须人工；权威区同名冲突仍交冲突区兜底
-    if (
-        decision
+    # 2026-09-26 补第二判据：本地小模型常**漏写 confidence 字段**（parse_decision 填 0.0），
+    # LLM 明确判 create 却因 0.0 < 0.8 被卡进冲突区（当日 6 张中 3 张中招，全靠人工复核）。
+    # 改用确定性相似度兜底：target=null 且无强相似候选（最高 cosine < CREATE_AUTO_MAX_SIM）
+    # → 放行；否则仍交人工（误判代价 > 放行代价，且 memory_diff 可回退，lint/audit 可兜底）。
+    create_ok = (
+        bool(decision)
         and decision["action"] == "create"
-        and decision.get("confidence", 0) >= 0.8
-        and card.type not in HIGH_RISK
-    ):
+        and (
+            decision.get("confidence", 0) >= 0.8
+            or (decision.get("target") is None and (not cands or max(s for _, s in cands) < CREATE_AUTO_MAX_SIM))
+        )
+    )
+    if create_ok and card.type not in HIGH_RISK:
         dst_c = root / TYPE_DIR.get(card.type) / p.name
         if dst_c.exists():
             _put_into_conflicts(

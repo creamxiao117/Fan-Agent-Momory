@@ -64,3 +64,31 @@ def test_main_dry_run_plans_named_card(tmp_path, capsys):
     assert "dry-run" in out and "x" in out
     # 未写盘（dry-run 不碰文件；且不调 git）
     assert not (tmp_path / "INDEX-experience.md").exists()
+
+
+# ---------- 2026-09-26 单数 type 别名修复（漏登记 INDEX）----------
+
+
+def _typed_card(p: Path, ctype: str, body: str) -> Path:
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(f"---\ntype: {ctype}\ntags:\n- a\n---\n\n{body}", encoding="utf-8")
+    return p
+
+
+def test_section_titles_covers_all_type_dir():
+    """防漏登记：sync.TYPE_DIR 的全部 card.type（含单数 rule/blueprint/project）
+    必须都能映射到 INDEX 分区标题，否则 hook 对该 type 静默 `continue`（2026-09-26 缺陷）。"""
+    from scripts.post_ingest_hook import SECTION_TITLES
+    from sync import TYPE_DIR
+
+    missing = sorted(t for t in TYPE_DIR if t not in SECTION_TITLES)
+    assert not missing, f"card.type {missing} 无对应分区标题 → 新卡静默不登记 INDEX"
+
+
+def test_main_dry_run_plans_blueprint_card(tmp_path, capsys):
+    """type=blueprint（单数）新卡须被规划进 blueprints 分区（修复前因缺别名而漏规划）。"""
+    (tmp_path / "INDEX.md").write_text("# idx\n", encoding="utf-8")
+    _typed_card(tmp_path / "blueprints" / "bp.md", "blueprint", "# 标题\n\n蓝图摘要段落。\n")
+    assert main(["--root", str(tmp_path), "--names", "bp.md", "--dry-run"]) == 0
+    out = capsys.readouterr().out
+    assert "dry-run" in out and "bp" in out, f"blueprint 卡未被规划: {out}"

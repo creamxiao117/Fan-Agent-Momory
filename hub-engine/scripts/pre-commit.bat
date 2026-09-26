@@ -15,7 +15,7 @@ echo [pre-commit] hub-engine ruff 门禁启动（Windows）...
 
 REM 检测 .py 文件
 set STAGED_PY=
-for /f "delims=" %%i in ('git diff --cached --name-only --diff-filter=ACM ^| findstr /r "\.py$"') do (
+for /f "delims=" %%i in ('git diff --cached --name-only --diff-filter=ACMR ^| findstr /r "\.py$"') do (
     set STAGED_PY=!STAGED_PY! %%i
 )
 

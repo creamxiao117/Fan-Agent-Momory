@@ -37,7 +37,7 @@ echo "[pre-commit] hub-engine 门禁启动..."
 # ---------- 0) 编码门禁（中文/非 ASCII 场景）----------
 ENC_SCRIPT="hub-engine/scripts/check_encoding.py"
 if [ -f "$ENC_SCRIPT" ]; then
-    STAGED_TEXT=$(git diff --cached --name-only --diff-filter=ACM \
+    STAGED_TEXT=$(git diff --cached --name-only --diff-filter=ACMR \
         | grep -E '\.(py|ps1|bat|cmd|vbs|js|ts|tsx|cs|c|cpp|h|hpp|go|rs|java|md|txt|json|yaml|yml|toml|ini|cfg|xml|csv)$|pre-commit' || true)
     if [ -n "$STAGED_TEXT" ]; then
         # shellcheck disable=SC2086
@@ -86,7 +86,7 @@ echo "[pre-commit] ✅ 预算门禁通过"
 # 配置（.markdownlint.json / .markdownlintignore）早已存在但**无任何门禁**；
 # 存量违规集中在 2 份历史文档 → 已加进 .markdownlintignore 作基线（不改写历史）。
 # 必须在“无 .py 则 exit 0”之前跑，否则纯文档提交会绕过本门禁。
-STAGED_MD=$(git diff --cached --name-only --diff-filter=ACM | grep "\.md$" || true)
+STAGED_MD=$(git diff --cached --name-only --diff-filter=ACMR | grep "\.md$" || true)
 if [ -n "$STAGED_MD" ]; then
     if command -v markdownlint >/dev/null 2>&1; then
         echo "[pre-commit] 跑 markdownlint（$(echo "$STAGED_MD" | wc -l) 个 .md）..."
@@ -102,7 +102,7 @@ fi
 
 # ---------- 1) ruff 门禁 ----------
 # 检测 .py 文件 staged
-STAGED_PY=$(git diff --cached --name-only --diff-filter=ACM | grep "\.py$" || true)
+STAGED_PY=$(git diff --cached --name-only --diff-filter=ACMR | grep "\.py$" || true)
 if [ -z "$STAGED_PY" ]; then
     echo "[pre-commit] 无 .py 文件 staged，跳过 ruff 门禁"
     exit 0
