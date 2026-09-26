@@ -19,9 +19,11 @@
 - **自查回归已修**（审计 §11.9）：P1-c 给 `hub_orchestrator.py` 加 `from common.config import …` 时漏了 `sys.path` 引导 ⇒ 2026-09-26 06:00 Hermes 任务 `ModuleNotFoundError` 真挂一场（绝对路径 + 任意 cwd）；护栏测试又捐出 **3 个同病脚本**（`bootstrap_hub` / `demo_e2e` / **`hub_mcp_launcher`（MCP 启动链）**）一并修；新增 `tests/test_script_bootstrap.py`（静态扫 + 反例端到端）
 - **Hermes 定时任务精简**（7 → 5）：删 2 个与 Windows 计划任务重复的（中枢每日健康快照 agent 版、5 平台健康检查）；2 个 LLM 任务改脚本；新写 `hub_daily_cron.py`（6 工具 + 日报 + 补卡候选 + 睡眠候选 + 快照提交→一条 07:30 链）与 `recall_review_cron.py`（召回回归 + 可定位性 + 缺口汇总）；**全部任务模型改 mimo-v2.6-flash@xiaomi（effort=low）**；时间 **07:30 / 07:40 / 07:50 + 周六 08:00 / 08:10**；**当日再取消微信推送（5 个任务全 `deliver=local`）+ 微信通道整体停用**（`platforms.weixin.enabled: false` + `hermes gateway restart`；实证日志：“explicitly disabled … will NOT start its adapter” + “Gateway running with 1 platform(s)”）。验证：`hermes cron run` 两个新脚本任务均 succeeded · 模型一次性 prompt 回“可用” · 详见卡片 `projects/hermes-cron-jobs`
 
-## 本轮小结（R17 收尾 · 2026-09-25 → 09-26）
+## 阶段总结（R17 收尾 · 2026-09-25 → 09-26）
 
-**一句话**：把审计报告里的欠债从“已登记”改成“已还完”——保真优先、每步都留可复算的证据，并顺手捐出 6 个真 bug。
+> **完整版：`docs/compose/reports/2026-09-26-stage-summary.md`**（量化对比表 / 分层做了什么 / 自查回归与教训 / 证据索引 / 遗留与下一阶段 / 提交明细）
+
+**一句话**：把审计报告里的欠债从“已登记”改成“已还完”——保真优先、每步都留可复算的证据，并顺手捐出 6 个真 bug；再把真在跑的定时任务从 7 个精简到 5 个、修好 4 个长期失败的、统一换模型、关掉微信外发。
 
 | 主题 | 做了什么 | 硬证据 |
 |:--|:--|:--|
@@ -34,8 +36,10 @@
 | **自查回归** | P1-c 引入的导入回归 + 3 个同病脚本 | 巡检 24 步 exit 0 |
 | **Hermes 定时任务** | 7 → 5，模型统一 mimo-v2.6-flash，07:30 起每 10 分钟 | 两个新任务 run succeeded |
 
-**当前基线**：测试 **683 passed / 4 skipped** · 覆盖率 **56.3%** · C901 **0** · 巡检 24 步 exit 0（248 s，健康 92/100）·
-预算 25,011/30,000 · 审计重评 **8.7/10** · **两仓 ahead=0**。
+**当前基线**：测试 **683 passed / 4 skipped** · 覆盖率 **56.3%** · C901 **0** · 巡检 24 步 exit 0（264 s，健康 92/100）·
+预算 25.0K/30,000 · 审计重评 **8.7/10** · 两仓 ahead=0 · 调度：Windows 4 任务 + Hermes **5 任务（零自动外发）**。
+
+**遗留**：T1 重跑（**≥2026-10-07**，判据在 `WORK.md`）；E501 78 处；首调延迟 6.7 s；单机依赖/无 CI。
 
 ## [2026-09-23] R16 | 每日巡检 exit 2（13 Lint）· 修复进行中
 

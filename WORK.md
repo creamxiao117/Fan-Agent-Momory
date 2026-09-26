@@ -1,8 +1,8 @@
 # WORK.md（当前状态 · 唯一来源）
 
-更新于：2026-09-25 · **审计 P1 六项 / P2 六小项 / 重构 A–D / SPLIT / COV / D1 / D2 / R1 均收口；重评 7.7 → 8.5 → 8.7/10（§11）**；只剩 T1（时间门）
+更新于：2026-09-26 · **审计 P1 六项 / P2 六小项 / 重构 A–D / SPLIT / COV / D1 / D2 / R1 / patrol 拆包 / 调度治理 均收口；重评 7.7 → 8.5 → 8.7/10（§11）**；只剩 T1（时间门）
 
-> 过程明细 `docs/superpowers/retro/work-history.md`｜T1 基线 `docs/compose/metrics/2026-09-23-t1-baseline.md`｜清理留档 `docs/compose/cleanup/`｜**审计（§11 即最新评分）：`docs/compose/reports/2026-09-25-project-audit.md`**
+> 过程明细 `docs/superpowers/retro/work-history.md`｜T1 基线 `docs/compose/metrics/2026-09-23-t1-baseline.md`｜清理留档 `docs/compose/cleanup/`｜**全面分析（§11 即最新评分）：`docs/compose/reports/2026-09-25-project-audit.md`**｜**阶段总结：`docs/compose/reports/2026-09-26-stage-summary.md`**
 
 ## 当前状态
 
