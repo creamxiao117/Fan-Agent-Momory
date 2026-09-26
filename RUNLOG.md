@@ -12,6 +12,7 @@
 - **巡检**：24 步 exit 0（239 s，健康 **92/100**）· 预算 **25,114/30,000** · 两仓 ahead=**0**
 - **新发现待办**：6 张 `experience/` 卡缺 `status`（`check_card_frontmatter` 不报）；金标准集 22 条已无区分度（recall 100%）；SPLIT2 余 8 个 C901（待有测试）
 - **D1/D1b 当日已收口**（审计 §11.5）：6 张补 `status` + 4 张补空 `tags`；`common/frontmatter.py` 新增 raw 层 `raw_frontmatter()`/`missing_required_keys()`，门禁与修复器同步升至 V1.1（缺 `type`/`status`/`updated` → 阻断并可一键修）；顺手修掉修复器漏 `deprecated` 的潜在错改。验证：469 张卡门禁 0 警告 · 测试 **652 passed** · 巡检 exit 0
+- **D2 当日已收口**（审计 §11.6）：金标准 **22 → 58 条**（+39：8 条真实日志改写 + 31 条区域补写；−3：目标卡是 candidate）；建立**夹具体检**（目标卡必须存在且 active/reference，否则 exit 2 且“修夹具不改阈值”）；@1 从饱和 86% 恢复分辨力（word **98%/79%**、char 100%/70%）；**顺带揪出向量冠军保底“补首位”缺陷**（带假 score=0.0 抢位）→ 改补末位；权重新集合上扫 1.0–2.0 同分 ⇒ 保留 1.5。验证：测试 **661 passed** · 巡检 exit 0（248 s）
 
 ## [2026-09-23] R16 | 每日巡检 exit 2（13 Lint）· 修复进行中
 

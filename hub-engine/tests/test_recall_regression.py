@@ -13,6 +13,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from scripts.recall_regression import (
     GOLD,
+    GOLD_MAX_SLUG_WORDS_IN_QUERY,
+    GOLD_SLUG_WORD_ALLOWLIST,
     MODES,
     PRODUCTION_MODE,
     _rank_of,
@@ -25,8 +27,12 @@ class _FakeCard:
 
 
 def test_gold_set_size() -> None:
-    """金标准集应有 20 条（少于 20 则统计意义不足）。"""
-    assert len(GOLD) >= 20
+    """金标准集应有 ≥ 20 条（少于 20 则统计意义不足）。
+
+    2026-09-25 D2 扩到 58 条（@1 在 22 条上已饱和）；集合只能变大或持平，
+    若需减少应在 commit message 里说明理由。
+    """
+    assert len(GOLD) >= 40
 
 
 def test_gold_slugs_unique_and_nonempty() -> None:
@@ -40,13 +46,21 @@ def test_gold_slugs_unique_and_nonempty() -> None:
 def test_gold_queries_not_verbatim_summaries() -> None:
     """查询不得是 slug 的字面改写（防"自欺"：抄原文会让检索容易得毫无意义）。
 
-    判据：查询里不应出现 slug 的英文词（去掉连字符后按词比对）。
+    判据（2026-09-25 D2 细化）：
+    1. slug 中的**描述性**词（≥ 5 字符）不得出现在查询里；
+    2. 实体/技术名（`GOLD_SLUG_WORD_ALLOWLIST`）不算泄漏 —— 问"Hypertrace 是干什么的"
+       是自然提问，不是抄答案；
+    3. 但无论是否在白名单，**任何查询都不得命中 ≥ 3 个 slug 词**（那已是整句 slug 改写）。
     """
     for case in GOLD:
         words = [w for w in case.slug.replace("_", "-").split("-") if len(w) >= 5]
-        query_lower = case.query.lower()
-        leaked = [w for w in words if w in query_lower]
+        hits = [w for w in words if w in case.query.lower()]
+        leaked = [w for w in hits if w not in GOLD_SLUG_WORD_ALLOWLIST]
         assert not leaked, f"「{case.query}」直接抄了 slug 词 {leaked}"
+        assert len(hits) <= GOLD_MAX_SLUG_WORDS_IN_QUERY, (
+            f"「{case.query}」命中了 {len(hits)} 个 slug 词 {hits}（上限 {GOLD_MAX_SLUG_WORDS_IN_QUERY}），"
+            "等于把卡名改写成问句"
+        )
 
 
 def test_production_mode_is_a_real_mode() -> None:

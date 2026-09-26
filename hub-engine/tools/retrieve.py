@@ -47,6 +47,8 @@ _VEC_POOL = 20  # 融合前每个通道的召回池大小（>top_k，给次要�
 # 2026-09-24 实测（22 条金标准，word 模式，recall@5 / recall@1）：
 #   等权 1.0/1.0 → 95% / 77% ；word 1.0 / vec 1.5 → 95% / 82% ；vec 2.0 → 95% / 86%
 # 取 1.5：拿满 recall@1 收益且改动最温和（配合冠军保底后 100% / 86%）。
+# 2026-09-25 D2 在 **58 条**上复扫 1.0/1.25/1.5/1.75/2.0 → 全部 98% / 76%（对权重不敏感）。
+# 结论：保持 1.5 不变（旧调参样本太小，本轮只做反向验证，不为无差别指标动参数）。
 _WORD_WEIGHT = 1.0
 _VEC_WEIGHT = 1.5
 
@@ -515,7 +517,7 @@ def _rrf_fuse(
 
 
 def _with_vector_champion(fused: list[tuple[Card, float]], vec_scored, top_k: int) -> list[tuple[Card, float]]:
-    """向量冠军保底：向量通道第 1 名若被融合挤出，补进首位。
+    """向量冠军保底：向量通道第 1 名若被融合挤出，补进**末位**（不抢榜首）。
 
     为什么需要（2026-09-24 实测，P0-B 真因）：RRF 只看位序不看强度。
     一条**只有向量命中**的卡（如 `hypothesis-property-based-testing-blueprint`，
@@ -523,9 +525,20 @@ def _with_vector_champion(fused: list[tuple[Card, float]], vec_scored, top_k: in
     普通卡因「两通道都上榜」各得两份 rank 分而反超它 —— 强证据被判负，目标掉出 top-5。
 
     语义上：向量通道的**榜首**是单条最强的语义证据；若融合把它挤掉，说明融合在
-    掩盖证据而不是综合证据。故保底保留它并置首位 —— 实测 recall@5 95%→**100%**，
-    唯一未命中项（即上述蓝图）被救回。这是 `_fused_semantic` 里「通道退化自修复」
-    的推广：退化阈值只处理‘整条通道失效’，本函数处理‘单条强证据被淹没’。
+    掩盖证据而不是综合证据。故保底保留它。
+
+    **为什么是末位而不是首位（2026-09-25，D2 实测改）**：补首位时它带着假的
+    `score=0.0`（并未参与 RRF），却把“两通道都真命中的卡”挤到它后面 —— 分数与位次语义不一致，
+    且实测榜首常是噪声卡（如把 `auto-promote-empty-today-rule` 推上首位）。三种排布在
+    **58 条金标准**（word/char）上的对比：
+
+    | 排布 | word @5 / @1 | char @5 / @1 |
+    | -- | --: | --: |
+    | 冠军置首位（旧） | 98% / 76% | 100% / 69% |
+    | **冠军补末位（现）** | **98% / 78%** | **100% / 69%** |
+    | 取消保底 | 98% / 78% | **98%（丢掉蓝图守卫条）** / 69% |
+
+    ⇒ 补末位严格优于两个备选：保住保底带来的 @5 收益，同时不再抢位。
     """
     if not vec_scored:
         return fused[:top_k]
@@ -533,7 +546,10 @@ def _with_vector_champion(fused: list[tuple[Card, float]], vec_scored, top_k: in
     champ_path = str(getattr(champ, "path", "") or "")
     if champ_path and any(str(getattr(c, "path", "") or "") == champ_path for c, _ in fused):
         return fused[:top_k]
-    return [(champ, 0.0), *fused[: top_k - 1]]
+    out = list(fused[:top_k])
+    if len(out) >= top_k:
+        out = out[: top_k - 1]
+    return [*out, (champ, 0.0)]
 
 
 def _fused_semantic(root: Path, query: str, top_k: int = 5, n: int = 2, mode: str = "char") -> list[tuple[Card, float]]:
@@ -586,6 +602,9 @@ def retrieve_with_meta(
     都是 word，而**函数默认是 char**，三处不一致。实测（20 条金标准 recall@5）：
     word **100%** / char 90%（recall@1：80% / 75%）—— 旧的「char 更优」结论
     （docstring 里的 2026-08-31 记录）是在短路 bug 存在时得出的，已被推翻。
+
+    D2 在 **58 条**上复测（2026-09-25）：word **98% / 78%**、char **100% / 69%**
+    —— word 仍赢在 @1（排序质量），char 赢在 @5 但更少把目标放在首位。
     """
     if not query.strip():
         return "empty", []

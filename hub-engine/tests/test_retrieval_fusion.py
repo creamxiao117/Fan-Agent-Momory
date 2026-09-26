@@ -1,4 +1,4 @@
-# @version V1.0 / 2026-09-24 / 双通道融合的「强证据不被淹没」契约
+# @version V1.1 / 2026-09-25 / 双通道融合的「强证据不被淹没」契约
 """融合层回归：向量冠军保底 + 通道权重。
 
 ## 背景（2026-09-24，P0-B 真因）
@@ -8,8 +8,17 @@
 因为 RRF 只看位序不看强度，"两通道都上榜"的普通卡各拿两份 rank 分，反超"只有向量命中"的强目标。
 
 两条修法各有契约，本文件分别钉死：
-1. `_with_vector_champion`：向量榜首被挤出时必须补进首位（补的是**证据**，不是偏爱）
+1. `_with_vector_champion`：向量榜首被挤出时必须补回结果集（补的是**证据**，不是偏爱）
 2. `_rrf_fuse` 的通道权重：向量通道权重 > 词袋（词袋在中文短查询上噪声大）
+
+## V1.1（2026-09-25，D2 实测改）：补**末位**而不是首位
+
+58 条金标准上三种排布对比（word/char @5 / @1）：置首 98%/76% · 100%/69%；
+**补末位 98%/78% · 100%/69%**；取消保底 98%/78% · 98%/69%（char @5 掉到 98%）。
+
+原因：补首位时冠军带的是假 `score=0.0`（未参与 RRF），却排在真正双通道命中卡之前 ——
+分数与位次语义不一致，且实测榜首常是噪声卡（曾把 `auto-promote-empty-today-rule` 推上首位，
+把真实目标挤出 top-5）。补末位保留“不丢强证据”的收益，不再抢位。
 """
 
 from __future__ import annotations
@@ -32,15 +41,20 @@ def _card(slug: str, ctype: str = "exp") -> Card:
     return Card(type=ctype, path=Path(f"C:/hub/{ctype}/{slug}.md"))
 
 
-def test_champion_promoted_to_front_when_crowded_out():
-    """向量榜首不在融合结果里 ⇒ 补进首位，其余顺延（不丢原结果）。"""
+def test_champion_appended_last_when_crowded_out():
+    """向量榜首不在融合结果里 ⇒ 补进**末位**（V1.1：不抢真命中卡的位次）。
+
+    D2 实测背景：补首位时冠军带假 score=0.0 却排在双通道真命中卡之前 ⇒
+    word @1 76% ；补末位后 @1 78% 而 @5 不变（保留保底收益）。
+    """
     champ = _card("vector-champion", "blueprint")
     fused = [(_card("a"), 0.03), (_card("b"), 0.029)]
     vec = [(champ, 0.67), (_card("a"), 0.55)]
 
     out = _with_vector_champion(fused, vec, top_k=3)
 
-    assert [c.path.stem for c, _ in out] == ["vector-champion", "a", "b"]
+    assert [c.path.stem for c, _ in out] == ["a", "b", "vector-champion"]
+    assert out[-1][1] == 0.0  # 位次与分数语义一致：未参与 RRF ⇒ 最低分放最后
 
 
 def test_champion_not_duplicated_when_already_present():
@@ -60,11 +74,12 @@ def test_champion_noop_when_vector_channel_empty():
 
 
 def test_champion_keeps_top_k_size():
-    """补首位不得让结果集变大（调用方按 top_k 消费）。"""
+    """补末位不得让结果集变大（调用方按 top_k 消费）：末位腾位。"""
     fused = [(_card(f"c{i}"), 0.1 - i * 0.01) for i in range(5)]
     out = _with_vector_champion(fused, [(_card("champ"), 0.9)], top_k=5)
     assert len(out) == 5
-    assert out[-1][0].path.stem == "c3"  # 末位被挤出，而不是追加成第 6 条
+    assert out[:4] == fused[:4]
+    assert out[-1][0].path.stem == "champ"
 
 
 def test_vector_channel_outweighs_word_channel_on_equal_rank():

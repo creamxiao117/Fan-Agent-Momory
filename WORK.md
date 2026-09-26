@@ -6,12 +6,12 @@
 
 ## 当前状态
 
-- 启动链曾 136K → **现测 25.1K/30,000 PASS**（`cd hub-engine && .venv\Scripts\python.exe -m scripts.startup_budget`）
+- 启动链曾 136K → **现测 25.2K/30,000 PASS**（`python -m scripts.startup_budget`）
 - 分层：L0（AGENTS / CHARTER / **本文件** / 根 INDEX 目录版）→ L1 四型（`hub-engine/tools/task_tier.py`）→ L2 检索
 - 安全底座常驻：单写者+§4 守护+ledger；query-first + 交回用户 + 回写
 - 分项帽：AGENTS≤2500 / CHARTER≤1500 / WORK≤5000 / INDEX≤20000（和 29,000 ≤ 总帽 30,000；不变量有测试看守）
-- **测试 652 passed / 4 skipped / 0 failed**；**ruff 新规则集（B/SIM/UP/C901）全绿**；lint 干净；**巡检 24 步 exit 0**（249 s，健康 92/100）
-- **检索 recall@5 100% / recall@1 86%**（22 条金标准；word 蓝图佔位 9.0% / char 12.0%）；向量回归 100%；首调 6.7 s（进程级一次性）· 稳态 4–145 ms
+- **测试 661 passed / 4 skipped / 0 failed**；**ruff 新规则集（B/SIM/UP/C901）全绿**；lint 干净；**巡检 24 步 exit 0**（248 s，健康 92/100）
+- **检索（D2 扩容后 58 条金标准）word recall@5 98% / @1 79%**、char 100% / 70%；向量回归 100%；首调 6.7 s（进程级一次性）· 稳态 4–145 ms
 - **覆盖率 54.0%**（生产代码；tools/ 85.5% · common/ 91.1% · 顶层 67.6% · commands/ 62.9% · **scripts/ 41.8%**）；**两仓均已推送 origin**；`work/` 只剩 `_archive/`；**审计重评 8.7/10（§11）**
 
 ## 活跃待办
@@ -20,7 +20,7 @@
 | -- | --- | --- |
 | **T1** | 量「规则遵循/返工」改造前后 | **重跑 ≥2026-10-07**：`python -m scripts.rule_following_timeseries`；判据见下 |
 | **SPLIT2** | 拆 C901 基线余下 **8 个**函数 | 集中在 CLI `main()`/报表函数，**待有测试后再动**（审计 §11.4 清单） |
-| **D2** | 金标准集 **22 → 40+** | 检索 recall 已 100%，需扩容才有区分度（审计 §11.4） |
+| **R1** | 金标准唯一真未命中项：`memory-hub-card-promotion` | 待定位后补 tag 或改卡内词面（审计 §11.6）；不为单条调参 |
 
 ### T1 重跑判据（可证伪）
 
@@ -33,10 +33,10 @@
 ## 门禁（都必须在跑，不只是"代码里有"）
 
 - **提交时**（`.git/hooks/pre-commit` V1.3，源 `hub-engine/scripts/pre-commit`）：编码 → **预算** → markdownlint → ruff check → ruff format
-- **每日 07:30** `AgentHub-DailyPatrol` → `scripts/run_patrol.cmd` → `hub-engine/scripts/patrol_runner.py`（**24 步**：lint / pytest / ruff / startup_budget / 向量回归【含 `--fail-below 0.8`】/ 平台三项 / autofix）
-- **每日 06:00** `AgentHub-NightlyConsolidate` → `scripts/nightly_consolidate.cmd`（distill→build-vectors→sleep→local-summary；**仅 build-vectors 失败才非零**）
+- **每日 07:30** `AgentHub-DailyPatrol` → `scripts/run_patrol.cmd`（**24 步**：lint / pytest / ruff / startup_budget / 向量回归【含 `--fail-below 0.8`】/ 平台三项 / autofix）
+- **每日 06:00** `AgentHub-NightlyConsolidate` → `scripts/nightly_consolidate.cmd`（distill→build-vectors→sleep→local-summary）
 - **每日 06:00** `AgentHub-SecretSentry` → `scripts/secret_sentry.cmd`（误报 **26 → 0**）
-- **手动**：`python -m scripts.recall_regression`（22 金标准，退出码 2 = 未达 90%）；`python -m scripts.index_locatability_bench --rev <rev>`；`python -m scripts.audit_dead_modules`（零引用审计，**有假阳性须复查**）；**覆盖率** `pytest --cov=. --cov-report=term:skip-covered`（基线 40.0%，实测 53.9%，暂不设 fail_under）
+- **手动**：`python -m scripts.recall_regression`（**58 条金标准**，退出码 2 = 未达 90% 或夹具失效）；`python -m scripts.index_locatability_bench --rev <rev>`；`python -m scripts.audit_dead_modules`（零引用审计，**有假阳性须复查**）；**覆盖率** `pytest --cov=.`（基线 40.0%，实测 54.0%）
 - 验收：`.venv\Scripts\python.exe -m pytest` → **652 通过 / 4 跳过 / 0 失败**；`startup_budget` 退出码 0
 
 ## 已闭环（本迭代；明细见各留档与 `work-history.md`）
@@ -52,9 +52,10 @@
 - **重构 A–D**：巡检器拆分（9 个 `_stage_*`）· 仪表盘 v4 归归档 · 删 `node_modules/`+`.tools/`（≈12.8 MB）· `work/` 定为只读归档区
 - **历史遗留清理**：逐项取证（tracked 记 blob SHA、untracked 先归档）；留档 `docs/compose/cleanup/`
 - **SPLIT 收口**：`sync.py::ingest` **229 → 54 行**（先补 **14 例分支级夹具测试**再抽函数，前后同一套测试全绿）
-- **COV 收口**：`scripts/` 覆盖率 **26.9% → 41.8%**（TOTAL 54.0%），+73 例测试；顺带修 3 个真 bug（日报崩 / 健康分虚高 / `card_tags` 只读首 tag，详审计 §11.2）
-- **D1/D1b 收口**（审计 §11.5）：6 张卡补 `status` + 4 张补空 `tags`；门禁与修复器升 V1.1（raw 层必填字段检查：缺即阻断、可一键修）；顺手修掉修复器漏 `deprecated` 的潜在错改
+- **COV 收口**：`scripts/` 覆盖率 **26.9% → 41.8%**（TOTAL 54.0%），+73 例测试；顺带修 3 个真 bug（详审计 §11.2）
+- **D1/D1b 收口**（审计 §11.5）：6 张卡补 `status` + 4 张补空 `tags`；门禁与修复器升 V1.1（必填字段缺失即阻断、可一键修）；顺手修掉修复器漏 `deprecated` 的潜在错改
 - **SPLIT2（部分）**：C901 超阈 **16 → 8**（`run_patrol`/`auto_flywheel.run`/`sync.ingest`/`print_report`/`check_alerts`/`_format_6panel_section`）；余 8 个已登记在 `pyproject.toml` 基线，待有测试再拆
+- **D2 收口**（审计 §11.6）：金标准 **22 → 58 条**（+39 含 8 条真实日志；剔除 3 条 candidate 目标）；@1 恢复分辨力（word **98%/79%**、char 100%/70%）；顺带揪出冠军保底“补首位”抢位缺陷 → 改补末位；夹具体检（卡存在且 active/reference）入脚本+单测
 - **重评两轮**：同一口径重测 → **加权 7.7 → 8.5（§10）→ 8.7/10（§11）**；代码卫生 6.0→**8.3**、可维护性 6.0→**8.4**、测试与门禁 8.5→**9.3**
 - **secret_sentry** 26 误报 → 0；**首评总分 5.9 → 7.7（整改前） → 8.5 → 8.7（重评两轮）**
 
@@ -64,7 +65,7 @@
 - **解释器必须用 `.venv\Scripts\python.exe`**：系统 python 缺 jieba，会让 9 个检索/分词测试**静默跳过**（假绿）
 - 中枢卡提交须 `git -C AgentMemoryHub`（嵌套 git，外层已 gitignore）；巡检脏文件单独分笔提交
 - embed 配置以 `AgentMemoryHub/system/config.yaml` 为准（生效单源；`hub-engine/config/engine.config.yaml` 仅兜底）
-- **外层超时必须 > 内层超时**（pytest 步骤外 420s / 内 180s；曾因外 120s < 内导致内层永不生效）
+- **外层超时必须 > 内层超时**（pytest 外 420s / 内 180s；曾因外 120s < 内导致内层永不生效）
 - **夹具里的期望卡名会随卡片生命周期漂移**：归档卡片时必须同步检查引用它的夹具（否则门禁数学上无法达标）
 - **LM Studio 缺 `%LMSTUDIO_HOME%\.internal\temp` 会让所有模型 JIT 加载 400**（`mkdtemp ENOENT`）；`local_summary.py` 现已**自愈**（建回目录并重试一次）
 - **文档里写的命令必须来自被跟踪文件**：`work/` 是 gitignore 草稿区，写进去就制造悬空引用（审计 I-4 / M-3 同一病）
