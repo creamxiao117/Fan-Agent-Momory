@@ -74,12 +74,34 @@ def test_champion_noop_when_vector_channel_empty():
 
 
 def test_champion_keeps_top_k_size():
-    """补末位不得让结果集变大（调用方按 top_k 消费）：末位腾位。"""
+    """保底不得让结果集变大（调用方按 top_k 消费）：末位腾位。"""
     fused = [(_card(f"c{i}"), 0.1 - i * 0.01) for i in range(5)]
     out = _with_vector_champion(fused, [(_card("champ"), 0.9)], top_k=5)
     assert len(out) == 5
     assert out[:4] == fused[:4]
     assert out[-1][0].path.stem == "champ"
+
+
+def test_top2_vector_evidence_both_guaranteed_at_tail():
+    """V1.2（R1 实测）：保底前 **2** 条语义证据，而非只看第 1 名。
+
+    58 条金标准上：保 1 条 word @5 98%（`memory-hub-card-promotion` 向量第 2 却被
+    融合挤掉）；保 2 条 @5 100%；保 3/4 条反而伤 char @5（过度占位）。
+    """
+    champ, second = _card("vec-1"), _card("vec-2")
+    fused = [(_card("a"), 0.03), (_card("b"), 0.02)]
+    out = _with_vector_champion(fused, [(champ, 0.67), (second, 0.62)], top_k=4)
+
+    assert [c.path.stem for c, _ in out] == ["a", "b", "vec-1", "vec-2"]
+    assert all(score == 0.0 for _c, score in out[-2:])
+
+
+def test_only_requested_champion_count_is_guaranteed():
+    """保底不得越过 `_CHAMPION_KEEP`（第 3 名不该被硬塞进来）"""
+    fused = [(_card("a"), 0.03)]
+    vec = [(_card("v1"), 0.67), (_card("v2"), 0.62), (_card("v3"), 0.58)]
+    out = _with_vector_champion(fused, vec, top_k=5)
+    assert [c.path.stem for c, _ in out] == ["a", "v1", "v2"]
 
 
 def test_vector_channel_outweighs_word_channel_on_equal_rank():

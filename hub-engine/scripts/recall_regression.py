@@ -38,8 +38,10 @@
    `deprecated`（内容已并入 `global-rules` / `memory-injection-pattern`），检索按设计排除它们 ⇒
    那不是检索缺口、是**夹具造错了**。
 
-**已知未命中 1 条**（有意保留为红样例，避免"永远全绿的度量"）：
-`新写好的卡怎么晋升到权威区` → `memory-hub-card-promotion`（见审计 §11.6）。
+**R1 已关闭（2026-09-25 当日）**：`新写好的卡怎么晋升到权威区` → `memory-hub-card-promotion`
+首轮真未命中（向量第 2，但被融合挤出）；两条腿修好：① 融合保底从“只保向量第 1”
+推广到“保前 2”（word @5 98% → **100%**，char 不变）；② 该卡补 4 个内容主题 tag。
+⇒ 当前 58 条上 **word 100% / char 100%**（@1 79% / 72%，分辨力落在 @1）。
 
 ## 用法
 
@@ -224,7 +226,7 @@ GOLD: tuple[GoldCase, ...] = (
     GoldCase(
         "新写好的卡怎么晋升到权威区",
         "memory-hub-card-promotion",
-        note="D2/**已知未命中**（检索缺口，见审计 §11.6）",
+        note="D2/补写 methodology（R1：曾为唯一真未命中，已由融合保底 top-2 修好）",
     ),
     GoldCase("CAD 命令自动化模板长什么样", "cad-automation-command-template", note="D2/补写 methodology"),
     GoldCase("OmniRoute 在本机是怎么部署的", "omniroute-local-deployment", note="D2/补写 projects"),

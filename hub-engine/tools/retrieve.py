@@ -516,40 +516,53 @@ def _rrf_fuse(
     return [(card_by_id[cid], summed[cid]) for cid, _ in ranked[:top_k]]
 
 
+# 向量保底保留条数（见 `_with_vector_champion` 的实测表）
+_CHAMPION_KEEP = 2
+
+
 def _with_vector_champion(fused: list[tuple[Card, float]], vec_scored, top_k: int) -> list[tuple[Card, float]]:
-    """向量冠军保底：向量通道第 1 名若被融合挤出，补进**末位**（不抢榜首）。
+    """向量榜首保底：向量通道前 `_CHAMPION_KEEP` 名若被融合挤出，补进**末位**（不抢榜首）。
 
     为什么需要（2026-09-24 实测，P0-B 真因）：RRF 只看位序不看强度。
     一条**只有向量命中**的卡（如 `hypothesis-property-based-testing-blueprint`，
     向量相似度 **0.6704**，领先第 2 名 0.107）在词袋通道无名次，而排在 2-6 位的
     普通卡因「两通道都上榜」各得两份 rank 分而反超它 —— 强证据被判负，目标掉出 top-5。
 
-    语义上：向量通道的**榜首**是单条最强的语义证据；若融合把它挤掉，说明融合在
-    掩盖证据而不是综合证据。故保底保留它。
+    语义上：向量通道的**榜首区**是单条最强的语义证据；若融合把它挤掉，说明融合在
+    掩盖证据而不是综合证据。故保底保留它们。
 
     **为什么是末位而不是首位（2026-09-25，D2 实测改）**：补首位时它带着假的
     `score=0.0`（并未参与 RRF），却把“两通道都真命中的卡”挤到它后面 —— 分数与位次语义不一致，
-    且实测榜首常是噪声卡（如把 `auto-promote-empty-today-rule` 推上首位）。三种排布在
-    **58 条金标准**（word/char）上的对比：
+    且实测榜首常是噪声卡（如把 `auto-promote-empty-today-rule` 推上首位）。
 
-    | 排布 | word @5 / @1 | char @5 / @1 |
+    **为什么是 2 条而不是 1 条（2026-09-25，R1 实测改）**：只保第 1 名时，**第 2 名**同样是
+    单通道强证据，仍会被“双通道都上榜”卡挤掉（典型：`memory-hub-card-promotion`
+    向量第 2，但 58 条金标准里唯一真未命中）。四种保底条数实测（58 条）：
+
+    | 保底条数 | word @5 / @1 | char @5 / @1 |
     | -- | --: | --: |
-    | 冠军置首位（旧） | 98% / 76% | 100% / 69% |
-    | **冠军补末位（现）** | **98% / 78%** | **100% / 69%** |
-    | 取消保底 | 98% / 78% | **98%（丢掉蓝图守卫条）** / 69% |
+    | 1（旧） | 98% / 79% | 100% / 72% |
+    | **2（现）** | **100% / 79%** | **100% / 72%** |
+    | 3 | 100% / 79% | 96% / 72% |
+    | 4 | 100% / 79% | 95% / 72% |
 
-    ⇒ 补末位严格优于两个备选：保住保底带来的 @5 收益，同时不再抢位。
+    ⇒ 取 2：把 recall@5 补满且不损伤 char 通道；3 条以上开始过度占位（char @5 反而降）。
+    保底补的是**证据**（前两条语义榜首），不是偏爱；补位在末，不抢真命中卡的位次。
     """
     if not vec_scored:
         return fused[:top_k]
-    champ = vec_scored[0][0]
-    champ_path = str(getattr(champ, "path", "") or "")
-    if champ_path and any(str(getattr(c, "path", "") or "") == champ_path for c, _ in fused):
+    seen = {str(getattr(c, "path", "") or "") for c, _ in fused}
+    extra: list[tuple[Card, float]] = []
+    for card, _score in vec_scored[:_CHAMPION_KEEP]:
+        path = str(getattr(card, "path", "") or "")
+        if not path or path in seen:
+            continue
+        seen.add(path)
+        extra.append((card, 0.0))
+    if not extra:
         return fused[:top_k]
-    out = list(fused[:top_k])
-    if len(out) >= top_k:
-        out = out[: top_k - 1]
-    return [*out, (champ, 0.0)]
+    out = list(fused[: max(top_k - len(extra), 0)])
+    return [*out, *extra][:top_k]
 
 
 def _fused_semantic(root: Path, query: str, top_k: int = 5, n: int = 2, mode: str = "char") -> list[tuple[Card, float]]:
