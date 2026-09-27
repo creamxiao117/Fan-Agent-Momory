@@ -219,6 +219,36 @@ def _sig(full: Path) -> tuple[float, int] | None:
         return None
 
 
+def _full_path(root: Path, p: Path) -> Path:
+    """card.path → 规范绝对路径；防 `--root` 相对传参造成的 root 双重拼接。
+
+    card.path 形态取决于建索引时 root 的传法：root 绝对 → card.path 绝对（无恙）；
+    root 相对（如 `--root AgentMemoryHub`）→ 是「含 root 名」的相对串
+    （_CorpusIndex 以原样 root 拼 glob）。旧 build 直接 `Path(root)/p` 再 resolve
+    ⇒ 双拼出 `<root>/<root名>/…` 污染库（2026-09-27 发现，存量 459/459 条全中，
+    按此路径开文件 100% 不存在；检索侧因 MCP 按 slug/rel_path 解析而未故障）。
+    判据：候选路径**真实存在**才采用；全不存在退回候选 1（保持旧行为可复现）。
+    """
+    root_abs = Path(root).resolve()
+    cands: list[Path] = []
+    if p.is_absolute():
+        cands.append(p.resolve())
+        # 双前缀形态 `<root>/<root名>/…` → 剥一层
+        if str(p).startswith(str(root_abs)):
+            rel = p.relative_to(root_abs)
+            if rel.parts and rel.parts[0] == root_abs.name:
+                cands.append(root_abs / Path(*rel.parts[1:]))
+    else:
+        c_in_root = (root_abs / p).resolve()  # p 相对 root（标准形态）
+        c_in_parent = (root_abs.parent / p).resolve()  # p 含 root 名（相对 root 父目录）
+        # 含 root 名 → parent 单层形态优先：存在性与缺省回退都取单层，杜绝再落双前缀
+        cands = [c_in_parent, c_in_root] if p.parts and p.parts[0] == root_abs.name else [c_in_root, c_in_parent]
+    for c in cands:
+        if c.is_file():
+            return c
+    return cands[0]
+
+
 def _scan_cards(root: Path):
     """按 _ACTIVE_DIRS 遍历 active 卡（与 retrieve._index 同源目录）"""
     from tools.retrieve import _index  # 复用已缓存的进程内索引（含 mtime 失效）
@@ -350,7 +380,10 @@ def build(root: Path) -> dict:
             # 是项目根时才匹配，其它 CWD 下向量通道**静默退化为 0 命中**
             # （2026-09-23 实测：cwd=项目根 向量 3/6，cwd=hub-engine 0/6）。
             # 存绝对路径后，检索不再依赖 CWD。
-            full = str(card.path if card.path.is_absolute() else (Path(root) / card.path).resolve())
+            # ⚠️ 2026-09-27 修复：`--root` 相对传参时 card.path 已含 root 名，直接再拼
+            # root ⇒ 双前缀污染（存量 459/459）；改经 _full_path 归一（存在性判据 +
+            # 剥重复 root 段），scan_stale 同步修正（否则全部误报 stale）。
+            full = str(_full_path(root, card.path))
             current.add(full)
             sig = _sig(card.path)
             old = existing.get(full)
@@ -439,16 +472,17 @@ def scan_stale(root: Path) -> dict:
         finally:
             conn.close()
     for card in _scan_cards(root):
-        sig = _sig(card.path)
+        full = _full_path(root, card.path)
+        sig = _sig(full)
         if sig is None:
             continue
         mtime = sig[0]
-        row = synced.get(str(card.path))
+        row = synced.get(str(full))
         if row is None or mtime > row:
             sub = getattr(card, "type", "unknown") or "unknown"
             stale_by_dir[sub] = stale_by_dir.get(sub, 0) + 1
             if len(examples) < 3:
-                examples.append(str(card.path))
+                examples.append(str(full))
     total = sum(stale_by_dir.values())
     return {"stale_by_dir": stale_by_dir, "total": total, "path_examples": examples}
 

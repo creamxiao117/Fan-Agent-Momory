@@ -14,7 +14,7 @@ from tools.retrieve import (
     retrieve,
     semantic_vector_retrieve,
 )
-from tools.semsearch import build, db_path, scan_stale, set_embed_backend, vector_scores
+from tools.semsearch import _full_path, build, db_path, scan_stale, set_embed_backend, vector_scores
 
 
 def _fake_embed(fn=None):
@@ -381,3 +381,49 @@ def test_scan_stale_reports_all_when_db_missing(tmp_path):
     _fake_embed()
     report = scan_stale(root)
     assert report["total"] >= 2  # dll-lock + blunder 都未同步
+
+
+def test_full_path_normalizes_all_forms(tmp_path, monkeypatch):
+    """_full_path 归一（2026-09-27 P1）：相对 --root 的各形态 card.path 均归到真实单层绝对路径。"""
+    hub = tmp_path / "Hub"
+    (hub / "rules").mkdir(parents=True)
+    real = hub / "rules" / "x.md"
+    real.write_text("body", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)  # 模拟 CLI 在父目录以 --root Hub 启动
+
+    # 标准形态：p 相对 root
+    assert _full_path(Path("Hub"), Path("rules/x.md")) == real.resolve()
+    # 历史形态：p 含 root 名（_CorpusIndex 原样拼 root）→ 旧 build 在此双拼出 Hub/Hub/…
+    assert _full_path(Path("Hub"), Path("Hub/rules/x.md")) == real.resolve()
+    # 污染形态：绝对双前缀 → 剥一层
+    assert _full_path(Path("Hub"), hub / "Hub" / "rules" / "x.md") == real.resolve()
+    # MCP 形态：绝对 root + 绝对 p
+    assert _full_path(hub, real) == real.resolve()
+    # 全不存在 → 退回候选 1（旧行为可复现，不抛错）
+    miss = _full_path(Path("Hub"), Path("Hub/rules/none.md"))
+    # 缺省回退取单层 parent 形态（分隔符无关，路径对象直比）
+    assert not miss.is_file() and miss == (tmp_path / "Hub" / "rules" / "none.md").resolve()
+
+
+def test_build_relative_root_writes_single_layer_paths(tmp_path, monkeypatch):
+    """回归（2026-09-27 P1）：--root 相对传参时库内 path 必须可直接开文件、scan_stale 零误报。"""
+    import sqlite3
+
+    root = bootstrap(tmp_path)
+    _seed(root)
+    _fake_embed()
+    monkeypatch.chdir(root.parent)
+    rel = Path(root.name)
+
+    stats = build(rel)
+    assert stats["inserted"] >= 2 and stats["embedded"] >= 2
+
+    conn = sqlite3.connect(db_path(rel))
+    try:
+        paths = [r[0] for r in conn.execute("SELECT path FROM docs")]
+    finally:
+        conn.close()
+    assert paths, "库内应有行"
+    assert all(Path(q).is_file() for q in paths), f"库内 path 无法开文件（双前缀回归）: {paths[:3]}"
+    # 键一致的已同步库 → scan_stale 零误报（旧形态不一致会把全部卡误报 stale）
+    assert scan_stale(rel)["total"] == 0
