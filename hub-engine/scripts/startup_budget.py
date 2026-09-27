@@ -24,7 +24,11 @@ LIMITS: list[tuple[str, str, int]] = [
     ("AGENTS.md", "AGENTS.md", 2_500),
     ("CHARTER.md", "CHARTER.md", 1_500),
     ("WORK.md", "WORK.md", 5_000),
-    ("INDEX.md", "AgentMemoryHub/INDEX.md", 20_000),
+    (
+        "INDEX.md",
+        "AgentMemoryHub/INDEX.md",
+        22_000,
+    ),  # 2026-09-27 调 20k→22k：257 卡 + T1 条目化登记自然涨（先例 09-23 14k→20k），TOTAL 30_000 不动
 ]
 
 
