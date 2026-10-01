@@ -1,16 +1,16 @@
 # WORK.md（当前状态 · 唯一来源）
 
-更新于：2026-09-26 · **审计 P1 六项 / P2 六小项 / 重构 A–D / SPLIT / COV / D1 / D2 / R1 / patrol 拆包 / 调度治理 均收口；重评 7.7 → 8.5 → 8.7/10（§11）**；只剩 T1（时间门）
+更新于：2026-10-01 · **审计 P1 六项 / P2 六小项 / 重构 A–D / SPLIT / COV / D1 / D2 / R1 / patrol 拆包 / 调度治理 均收口；重评 7.7 → 8.5 → 8.7/10（§11）**；只剩 T1（时间门）；**本轮：不变量归位（消 4 天红灯）+ 单源/定形改造进行中（R2）**
 
-> 过程明细 `docs/superpowers/retro/work-history.md`｜T1 基线 `docs/compose/metrics/2026-09-23-t1-baseline.md`｜清理留档 `docs/compose/cleanup/`｜**全面分析（§11 即最新评分）：`docs/compose/reports/2026-09-25-project-audit.md`**｜**阶段总结：`docs/compose/reports/2026-09-26-stage-summary.md`**
+> 过程明细 `docs/superpowers/retro/work-history.md`｜T1 基线 `docs/compose/metrics/2026-09-23-t1-baseline.md`｜清理留档 `docs/compose/cleanup/`｜**全面分析（§11 即最新评分）：`docs/compose/reports/2026-09-25-project-audit.md`**｜**阶段总结：`docs/compose/reports/2026-09-26-stage-summary.md`**｜**R2 计划（单源派生 + L0 定形）：`docs/compose/plans/2026-10-01-single-source-l0-shape.md`（Task 1 已落地）**
 
 ## 当前状态
 
 - 启动链曾 136K → **现测 25.2K/30,000 PASS**（`python -m scripts.startup_budget`）
 - 分层：L0（AGENTS / CHARTER / **本文件** / 根 INDEX 目录版）→ L1 四型（`hub-engine/tools/task_tier.py`）→ L2 检索
 - 安全底座常驻：单写者+§4 守护+ledger；query-first + 交回用户 + 回写
-- 分项帽：AGENTS≤2500 / CHARTER≤1500 / WORK≤5000 / INDEX≤20000（和 29,000 ≤ 总帽 30,000；不变量有测试看守）
-- **测试 683 passed / 4 skipped / 0 failed**；**ruff 新规则集（B/SIM/UP/C901）全绿**；lint 干净；**巡检 24 步 exit 0**（248 s，健康 92/100）
+- 分项帽：AGENTS≤1600 / CHARTER≤1000 / WORK≤5000 / INDEX≤22000（和 29,600 ≤ 总帽 30,000；不变量已上提到 `startup_budget` 自身校验，pre-commit 可拦）
+- **测试 691 passed / 4 skipped / 0 failed**（09-27→10-01 抬帽破不变量致 2 红 4 天，10-01 修复）；**ruff 新规则集全绿**；lint 干净；**巡检 24 步**（248 s；红灯期 exit=1，修复后待复跑）
 - **检索（D2 扩容后 58 条金标准）word recall@5 98% / @1 79%**、char 100% / 70%；向量回归 100%；首调 6.7 s（进程级一次性）· 稳态 4–145 ms
 - **覆盖率 56.3%**（生产代码；tools/ 85.8% · common/ 91.1% · 顶层 67.6% · commands/ 63.5% · **patrol/ 86.2%** · scripts/ 42.6%）；**两仓均已推送 origin**；`work/` 只剩 `_archive/`；**审计重评 8.7/10（§11）**
 

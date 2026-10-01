@@ -101,6 +101,35 @@ def test_main_reports_l1_lines(capsys):
     assert "L1[" in out, f"应打印 L1 分项，实际: {out}"
 
 
+def test_limits_invariant_is_enforced_by_script(monkeypatch):
+    """抬帽破不变量必须被**脚本自己**打红（不能只靠 pytest 看守）。
+
+    回归背景：2026-09-27 抬 INDEX 帽 20k→22k 使合计 31_000 > 30_000，
+    而断言只写在 pytest 里 → pre-commit（跑的就是 startup_budget）照常放行，
+    红灯存活 4 天。
+    """
+    from scripts import startup_budget as sb
+
+    monkeypatch.setattr(sb, "LIMITS", [("INDEX.md", "AgentMemoryHub/INDEX.md", sb.TOTAL_LIMIT + 1)])
+    assert sb.check_limits_invariant(), "破不变量必须报错"
+
+    monkeypatch.setattr(sb, "LIMITS", [("INDEX.md", "AgentMemoryHub/INDEX.md", sb.TOTAL_LIMIT)])
+    assert sb.check_limits_invariant() == [], "顶到总帽（相等）仍合法"
+
+
+def test_main_fails_on_invariant_break(monkeypatch, tmp_path: Path, capsys):
+    """main() 必须把不变量违规转成非 0 退出码（pre-commit 才能拦）"""
+    from scripts import startup_budget as sb
+
+    for _name, rel, _cap in sb.LIMITS:
+        p = tmp_path / rel
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text("ok", encoding="utf-8")
+    monkeypatch.setattr(sb, "LIMITS", [("INDEX.md", "AgentMemoryHub/INDEX.md", sb.TOTAL_LIMIT + 1)])
+    assert sb.main(["--root", str(tmp_path)]) == 1
+    assert "帽值口径违规" in capsys.readouterr().out
+
+
 def test_main_exit_codes(tmp_path: Path, capsys):
     for _name, rel, _cap in LIMITS:
         p = tmp_path / rel

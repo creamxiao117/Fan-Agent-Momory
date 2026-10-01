@@ -12,23 +12,30 @@ TOTAL_LIMIT = 30_000
 # (显示名, 相对仓库根路径, 单文件帽)
 #
 # 设计不变量：**分项帽之和 ≤ TOTAL_LIMIT**（否则总闸永远先于分项帽触发，
-# 分项帽失去「防单点回潮」意义）。本组合计 29_000，留 1K 余量（同 spec S3）。
+# 分项帽失去「防单点回潮」意义）。由 `check_limits_invariant()` 在 main() 里
+# 硬校验——**不能只写在 pytest 里**（原因见下）。
 #
 # 2026-09-23 重新配平：INDEX 帽 14_000 → 20_000（A4 当时为压到 14K 曾用
 # `slim_index --max-desc 10` 机械截断描述，INDEX 里 239/251 条变成读不懂的
 # 半截词如「GitHub 仓库选…」——**省了字符但丢了信息**）。
 # 现改为用卡自身摘要（scripts/regen_index_desc.py，边界断句 ≤40 字），
-# INDEX 自然涨到 ~18K。为保证不变量，其余三项帽相应收紧，
-# 但均仍高于实际值：AGENTS 1.4K<2.5K / CHARTER 0.8K<1.5K / WORK 3.1K<5K。
+# INDEX 自然涨到 ~18K。为保证不变量，其余三项帽相应收紧。
+#
+# 2026-09-27 把 INDEX 帽 20k→22k 时**未同步收紧**其余三项 ⇒ 合计 31_000 > 30_000，
+# 不变量被破；而当时该断言只写在 tests/test_startup_budget.py 里，pre-commit 跑的
+# 正是本脚本（不看不变量）→ 照常放行，红灯在巡检里存活 4 天（09-28~10-01 全 exit=1）。
+# 2026-10-01：不变量上提到本脚本硬校验（pre-commit 即可拦），并重新配平
+# AGENTS 2.5k→1.6k / CHARTER 1.5k→1.0k（均仍高于实测 1.42k / 0.78k），
+# 合计 29_600，留 400 余量。
 LIMITS: list[tuple[str, str, int]] = [
-    ("AGENTS.md", "AGENTS.md", 2_500),
-    ("CHARTER.md", "CHARTER.md", 1_500),
+    ("AGENTS.md", "AGENTS.md", 1_600),
+    ("CHARTER.md", "CHARTER.md", 1_000),
     ("WORK.md", "WORK.md", 5_000),
     (
         "INDEX.md",
         "AgentMemoryHub/INDEX.md",
         22_000,
-    ),  # 2026-09-27 调 20k→22k：257 卡 + T1 条目化登记自然涨（先例 09-23 14k→20k），TOTAL 30_000 不动
+    ),  # 2026-09-27 调 20k→22k（先例 09-23 14k→20k），TOTAL 30_000 不动
 ]
 
 
@@ -124,6 +131,19 @@ def check(texts: dict[str, int]) -> list[str]:
     return errs
 
 
+def check_limits_invariant() -> list[str]:
+    """分项帽之和 ≤ TOTAL_LIMIT（空列表=通过）。
+
+    回归背景（2026-09-27 → 2026-10-01）：抬 INDEX 帽 20k→22k 使合计 31_000 > 30_000，
+    而该断言当时只写在 pytest 里 → pre-commit（跑的就是本脚本）照常放行，
+    红灯在巡检里存活 4 天无人发现。故上提到脚本自身硬校验。
+    """
+    total = sum(c for _name, _rel, c in LIMITS)
+    if total > TOTAL_LIMIT:
+        return [f"分项帽之和 {total} > 总帽 {TOTAL_LIMIT}（帽值口径违规）"]
+    return []
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="启动链 L0 + L1 预算门禁")
     ap.add_argument("--root", type=Path, default=_repo_root(), help="仓库根")
@@ -135,7 +155,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"[{mark}] {r['name']}: {r['chars']} (cap {r['cap']})")
     total = sum(texts.values())
     print(f"[TOTAL] {total} / {TOTAL_LIMIT}")
-    errs = check(texts)
+    errs = check(texts) + check_limits_invariant()
 
     # ── L1（按任务型补读）──────────────────────────────────────────────
     try:
