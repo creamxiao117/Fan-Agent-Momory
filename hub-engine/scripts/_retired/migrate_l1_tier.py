@@ -1,3 +1,11 @@
+# @status: retired
+# @retired_at: 2026-10-01
+# @original_path: hub-engine/scripts/migrate_l1_tier.py
+# @superseded_by: hub-engine/scripts/card_fields.py
+# @reason: 一次性迁移已完成（7 张 L1 卡写入 l1_tier）
+# @retired_from_commit: a7e941b
+# @restore: git checkout a7e941b -- hub-engine/scripts/migrate_l1_tier.py && git mv hub-engine/scripts/migrate_l1_tier.py hub-engine/scripts/migrate_l1_tier.py
+
 # 一次性迁移（2026-10-01 · Task 6）：把 L1 卡集合从**手写清单**迁到**卡自身 frontmatter**。
 #
 # 背景（计划 docs/compose/plans/2026-10-01-single-source-l0-shape.md 的 Task 6）：

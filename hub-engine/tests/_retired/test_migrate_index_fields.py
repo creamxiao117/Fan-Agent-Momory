@@ -1,3 +1,11 @@
+# @status: retired
+# @retired_at: 2026-10-01
+# @original_path: hub-engine/tests/test_migrate_index_fields.py
+# @superseded_by: hub-engine/tests/test_set_index_meta.py
+# @reason: 随一次性迁移脚本退役；卡字段安全写入由 card_fields + test_set_index_meta 覆盖
+# @retired_from_commit: a7e941b
+# @restore: git checkout a7e941b -- hub-engine/tests/test_migrate_index_fields.py && git mv hub-engine/tests/test_migrate_index_fields.py hub-engine/tests/test_migrate_index_fields.py
+
 """一次性迁移脚本的单测（纯函数部分）。
 
 为何要测：`_insert_fields` / `_yaml_line` 处理的是**卡 frontmatter 的写入**——

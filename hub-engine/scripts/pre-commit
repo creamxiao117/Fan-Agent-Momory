@@ -144,15 +144,17 @@ else
 fi
 
 # 1. ruff check
+# --force-exclude：归档区（`_retired/`，见 .ruff.toml / hub-engine/pyproject.toml）
+# 即使被打包成 staged 文件也不应检查（2026-10-01；否则归档件会以旧规范把提交搞红）。
 echo "[pre-commit] 跑 ruff check..."
-if ! $RUFF_CMD check $STAGED_PY 2>&1; then
+if ! $RUFF_CMD check --force-exclude $STAGED_PY 2>&1; then
     echo "[pre-commit] ❌ ruff check 未通过，commit 阻断"
     exit 1
 fi
 
 # 2. ruff format --check
 echo "[pre-commit] 跑 ruff format --check..."
-if ! $RUFF_CMD format --check $STAGED_PY 2>&1; then
+if ! $RUFF_CMD format --check --force-exclude $STAGED_PY 2>&1; then
     echo "[pre-commit] ❌ ruff format --check 不一致，commit 阻断"
     exit 2
 fi

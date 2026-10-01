@@ -1,3 +1,11 @@
+# @status: retired
+# @retired_at: 2026-10-01
+# @original_path: hub-engine/tests/test_slim_index.py
+# @superseded_by: hub-engine/tests/test_render_index.py
+# @reason: 随 slim_index 退役（被测对象已归档）
+# @retired_from_commit: a7e941b
+# @restore: git checkout a7e941b -- hub-engine/tests/test_slim_index.py && git mv hub-engine/tests/test_slim_index.py hub-engine/tests/test_slim_index.py
+
 # hub-engine/tests/test_slim_index.py
 from scripts.slim_index import slim_line, slim_text
 

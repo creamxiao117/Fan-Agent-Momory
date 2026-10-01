@@ -1,3 +1,11 @@
+# @status: retired
+# @retired_at: 2026-10-01
+# @original_path: hub-engine/scripts/analyze_experience_dupes.py
+# @superseded_by: （无）
+# @reason: 去重复分析：结论已沉淀为卡；merge/dedup 系脚本已被裁定禁止执行（WORK.md）
+# @retired_from_commit: a7e941b
+# @restore: git checkout a7e941b -- hub-engine/scripts/analyze_experience_dupes.py && git mv hub-engine/scripts/analyze_experience_dupes.py hub-engine/scripts/analyze_experience_dupes.py
+
 # @version V1.0 / 2026-09-23 / pi / 只读分析：experience 目录是否还有真实重复卡
 
 """T15（B1）经验去重的**只读**前置分析。

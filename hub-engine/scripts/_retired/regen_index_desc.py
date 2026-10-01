@@ -1,3 +1,11 @@
+# @status: retired
+# @retired_at: 2026-10-01
+# @original_path: hub-engine/scripts/regen_index_desc.py
+# @superseded_by: hub-engine/scripts/render_index.py
+# @reason: 描述列重建并入渲染器（描述取自卡自身 index_desc / 正文摘要；上限单一来源 common/index_limits）
+# @retired_from_commit: a7e941b
+# @restore: git checkout a7e941b -- hub-engine/scripts/regen_index_desc.py && git mv hub-engine/scripts/regen_index_desc.py hub-engine/scripts/regen_index_desc.py
+
 # hub-engine/scripts/regen_index_desc.py
 """INDEX 描述重建：用卡自身的摘要（`extract_summary`）替换描述列。
 

@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# @status: forbidden-guarded：实测会误杀互补卡，仅作反面教材保留（WORK.md 禁止执行）
 # ⚠️ 一次性脚本（已消费）—— 2026-09-23 加护栏，禁止重跑
 #
 # 为什么不删而是加护栏：
@@ -17,11 +18,11 @@
 #   3. **非幂等**：重跑会重复前置 DEPRECATED 注释。
 #   4. 无 dry-run，直接写盘。
 #
-# 现状：经验去重已用**只读分析 + 人工裁定**完成（见 python -m scripts.analyze_experience_dupes）：
+# 现状：经验去重已用**只读分析 + 人工裁定**完成（见 scripts/_retired/analyze_experience_dupes.py（已于 2026-10-01 退役归档））：
 #   220 张中仅一组真重复（ingest-probe-a ≡ cross-repo-index-commit，正文逐字相同）
 #   → 已作废；pluginhub v1.1/v1.2 判定为互补、均保留。
 #
-# 确需再做去重：用 python -m scripts.analyze_experience_dupes 出只读候选清单，逐对人工裁定，
+# 确需再做去重：用 scripts/_retired/analyze_experience_dupes.py（已于 2026-10-01 退役归档） 出只读候选清单，逐对人工裁定，
 # 再用 `status: deprecated` + `superseded_by` 显式作废。不要复活本脚本。
 import sys
 
@@ -35,7 +36,7 @@ _REFUSAL = """\
   3) 非幂等、无 dry-run，直接写盘。
 
 经验去重已完成（只读分析 + 人工裁定）：220 张中仅 1 组真重复，已作废。
-如需再做：python -m scripts.analyze_experience_dupes（只读候选）→ 人工裁定
+如需再做：scripts/_retired/analyze_experience_dupes.py（已于 2026-10-01 退役归档）（只读候选）→ 人工裁定
        → 用 status: deprecated + superseded_by 显式作废。
 """
 

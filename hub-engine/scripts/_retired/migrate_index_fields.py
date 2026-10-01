@@ -1,3 +1,11 @@
+# @status: retired
+# @retired_at: 2026-10-01
+# @original_path: hub-engine/scripts/migrate_index_fields.py
+# @superseded_by: hub-engine/scripts/set_index_meta.py
+# @reason: 一次性迁移已完成（69 卡写入 index_desc/index_note）；后续同类写入走 set_index_meta
+# @retired_from_commit: a7e941b
+# @restore: git checkout a7e941b -- hub-engine/scripts/migrate_index_fields.py && git mv hub-engine/scripts/migrate_index_fields.py hub-engine/scripts/migrate_index_fields.py
+
 # 一次性迁移（2026-10-01）：把人工索引描述/注解迁回**卡 frontmatter**
 # （`index_desc` / `index_note`），让 INDEX 完全由卡派生（单一真相）。
 #

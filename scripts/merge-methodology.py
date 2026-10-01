@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# @status: forbidden-guarded：实测会截断内容，仅作反面教材保留（WORK.md 禁止执行）
 # ⚠️ 一次性脚本（已消费）—— 2026-09-23 加护栏，禁止重跑
 #
 # 为什么不删而是加护栏：

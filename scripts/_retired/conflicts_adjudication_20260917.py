@@ -1,3 +1,11 @@
+# @status: retired
+# @retired_at: 2026-10-01
+# @original_path: scripts/conflicts_adjudication_20260917.py
+# @superseded_by: （无）
+# @reason: 2026-09-17 冲突裁定一次性任务，已留档 docs/ + retro/
+# @retired_from_commit: a7e941b
+# @restore: git checkout a7e941b -- scripts/conflicts_adjudication_20260917.py && git mv scripts/conflicts_adjudication_20260917.py scripts/conflicts_adjudication_20260917.py
+
 # @version V1.0 / 2026-09-17 / Hermes / conflicts 区 17 组逐组裁决 dry-run 清单
 """只读取证：扫 .sync/conflicts/ 全部未决卡，逐组产出裁决依据与建议处置。
 

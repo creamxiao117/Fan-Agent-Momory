@@ -584,10 +584,16 @@ Expected: pytest **0 failed**（当前基线 687 passed / 2 failed / 4 skipped�
 
 ## 附带裁定项（本计划记录，不擅自删除）
 
-- `scripts/slim_index.py` + `tests/test_slim_index.py`：机械截断已被 09-23 裁定为有害，L0 定形后无用途 → 建议归档（零引用 ≠ 死代码，删除前逐个确认入口）
-- `scripts/regen_index_desc.py`：能力并入渲染器后保留 CLI 兼容期一轮，再裁定退役
-- `scripts/fix_index_registry.py`：同理（它的职责将完全由 `render_index --write` 覆盖）
-- markdownlint 当前**未安装在 PATH**（`node_modules` 已删）：提交纯文档时门禁会「跳过不阻断」——建议本轮顺手恢复安装，否则新文档的 lint 约束形同建议
+> **已于 2026-10-01 执行**：退役清单与归档见 `docs/compose/cleanup/2026-10-01-retire-list.md`。
+> 共归档 **16 件**（`.py` / 测试 / `.cmd`）到 `_retired/`，逐件带 `@status: retired` 头与
+> `@restore` 命令；机器可读清单 `RETIRED.json` 由守卫测试 `tests/test_retired_archive.py`
+> 双向校对。`merge-methodology.py` / `deduplicate-experience.py` **刻意保留**（反面教材 +
+> 护栏），打的是 `forbidden-guarded` 而非 `retired`，不得归入归档区。
+
+- `scripts/slim_index.py` + `tests/test_slim_index.py`：机械截断已被 09-23 裁定为有害 → **已归档**
+- `scripts/regen_index_desc.py`：能力并入渲染器 → **已归档**（活文件里指向它的注释已改）
+- `scripts/fix_index_registry.py`：职责完全由 `render_index --write` 覆盖 → **已归档**
+- markdownlint 已确认为**已安装**（Git Bash 下可用；提交时门禁实际生效，非「跳过」）
 
 ## 风险与缓解
 

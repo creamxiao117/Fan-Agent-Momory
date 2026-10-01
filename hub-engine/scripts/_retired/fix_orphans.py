@@ -1,3 +1,11 @@
+# @status: retired
+# @retired_at: 2026-10-01
+# @original_path: hub-engine/scripts/fix_orphans.py
+# @superseded_by: hub-engine/scripts/render_index.py
+# @reason: 同 fix_index_registry：补登记职责被渲染取代（lint 仍负责“检测”）
+# @retired_from_commit: a7e941b
+# @restore: git checkout a7e941b -- hub-engine/scripts/fix_orphans.py && git mv hub-engine/scripts/fix_orphans.py hub-engine/scripts/fix_orphans.py
+
 # @version V2.0 / 2026-09-23 / Hermes + pi / INDEX 未登记卡补登（合并 register_missing_index）
 """INDEX 未登记卡补登器（幂等）。
 

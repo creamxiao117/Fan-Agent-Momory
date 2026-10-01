@@ -1,3 +1,4 @@
+# @status: manual-cli：lint 只检测 type/目录不一致，本脚本是人工修复入口
 # @version V1.0 / 2026-09-18 / Hermes / 修复卡 type↔目录不一致 + 跨目录去重
 import shutil
 from pathlib import Path

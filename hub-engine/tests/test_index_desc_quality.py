@@ -1,16 +1,19 @@
-# @version V1.0 / 2026-09-23 / pi / INDEX 摘要质量测试：边界断句 / BOM 容错 / 卡摘要重建
+# @version V1.1 / 2026-10-01 / pi / INDEX 摘要质量测试：边界断句 / BOM 容错（卡摘要重建已退役）
 
-"""INDEX 摘要质量（2026-09-23）。
+"""INDEX 摘要质量（2026-09-23 立，2026-10-01 收瘦）。
 
 背景：A4 用 `slim_index --max-desc 10` 机械字符截断，INDEX 里 239/251 条变成
 读不懂的半截词（`GitHub 仓库选…`）——省了字符却丢了信息。现改为用卡自身摘要
 （`extract_summary`）+ 子句边界断句，本文件锁住这些行为。
+
+2026-10-01：`slim_index` / `regen_index_desc` 退役（见 scripts/_retired/RETIRED.json），
+本文件随之删去 regen 段的用例；描述上限改由 common/index_limits 单一来源 +
+`tests/test_index_limits.py` 看守。
 """
 
 from pathlib import Path
 
 from scripts.post_ingest_hook import cut_at_boundary, extract_summary
-from scripts.regen_index_desc import _build_card_index, regen_text
 
 
 def _card(p: Path, body: str, bom: bool = False) -> Path:
@@ -104,57 +107,3 @@ def test_extract_summary_respects_max_len(tmp_path):
     p = _card(tmp_path / "long.md", "# 标题\n\n" + "一" * 100 + "。后续内容\n")
     got = extract_summary(p, max_len=40)
     assert len(got) <= 40, f"应受 max_len 约束，实际 {len(got)}"
-
-
-# ---------------------------------------------------------------- regen_index_desc
-
-
-def test_regen_rewrites_resolvable_cards_and_keeps_legend(tmp_path):
-    """能解析到卡的条目被重建；目录图例行/笔记行原样保留"""
-    hub = tmp_path / "hub"
-    _card(hub / "experience" / "my-card.md", "# 我的卡片标题\n")
-    cards = _build_card_index(hub)
-    assert "my-card" in cards
-
-    text = (
-        "## 经验（experience/）\n"
-        "- experience/    经验（踩坑/排障/实测结论）\n"
-        "- my-card    旧的被截断描述…\n"
-        "- 不是卡的条目    这行不能被改\n"
-    )
-    new, stats = regen_text(text, cards, max_desc=40)
-    assert "旧的被截断描述" not in new
-    assert "- my-card    我的卡片标题" in new
-    assert "- experience/    经验（踩坑/排障/实测结论）" in new, "图例行不得改动"
-    assert "- 不是卡的条目    这行不能被改" in new, "无法解析的条目不得改动"
-    assert stats["rewritten"] == ["my-card"]
-    assert "不是卡的条目" in stats["unresolved"]
-
-
-def test_regen_is_idempotent(tmp_path):
-    """重跑不应产生变化（幂等）"""
-    hub = tmp_path / "hub"
-    _card(hub / "rules" / "c.md", "# 卡片标题\n")
-    cards = _build_card_index(hub)
-    text = "- c    旧描述\n"
-    once, _ = regen_text(text, cards, max_desc=40)
-    twice, stats2 = regen_text(once, cards, max_desc=40)
-    assert once == twice
-    assert stats2["unchanged"] == ["c"]
-    assert stats2["rewritten"] == []
-
-
-def test_regen_leaves_line_when_summary_empty(tmp_path):
-    """卡存在但取不到摘要 → 不写空描述（保留原行，避免把描述清空）"""
-    hub = tmp_path / "hub"
-    p = hub / "rules" / "empty.md"
-    p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(
-        "---\ntype: rule\ntags:\n- a\nupdated: 2026-09-23\nstatus: active\n---\n",
-        encoding="utf-8",
-    )
-    cards = _build_card_index(hub)
-    text = "- empty    原有描述\n"
-    new, stats = regen_text(text, cards, max_desc=40)
-    assert new == text, "取不到摘要时不得清空描述"
-    assert stats["empty_summary"] == ["empty"]

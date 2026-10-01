@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# @status: manual-cli：改 rules/ 卡前的纪律动作（须人工执行）
 import shutil
 import time
 from pathlib import Path

@@ -8,8 +8,8 @@ INDEX 一致性此前散落三套实现，同一契约各写各的：
 | 位置 | 自带的实现 |
 |:--|:--|
 | `audit_index.py` | `INDEX_ENTRY_RE` / `NESTED_ENTRY_RE`（**权威正则**）+ `AUTHORITY_DIRS` |
-| `fix_orphans.py` | `SECTION_TITLES`（目录→分区标题） |
-| `fix_index_registry.py` | `_CARD_SECTION_TOKENS` + `_is_card_section`（另一套分区判定）|
+| `fix_orphans.py`（已退役）| `SECTION_TITLES`（目录→分区标题） |
+| `fix_index_registry.py`（已退役）| `_CARD_SECTION_TOKENS` + `_is_card_section`（另一套分区判定）|
 
 后果：`- rules/  说明` 这类目录图例行，在一处被当登记、在另一处不是；
 `fix_orphans` 甚至曾用 `f"- {slug}" in text` **子串**匹配 → slug `foo` 被
@@ -21,12 +21,13 @@ INDEX 一致性此前散落三套实现，同一契约各写各的：
   不再手写第二份 token 列表——两处手工维护必然漂移
 - **slug 解析**：按行精确匹配（禁止子串语义）
 
-下游：`fix_orphans.py`（补登未登记卡）、`fix_index_registry.py`（幽灵 slug 纠偏）。
+下游（**两个工具均于 2026-10-01 退役** → `scripts/_retired/`，此处属历史叙述）：
+它们曾负责补登未登记卡 / 幽灵 slug 纠偏；现在“索引 == 卡文件”由 `render_index` 保证。
 
-## 裁定：两个工具**保持分开**（2026-09-23 用户拍板）
+## 裁定：两个工具**当时保持分开**（2026-09-23 用户拍板；2026-10-01 双双退役）
 两者是**同一一致性问题的两个方向**，不是同一件事的两份实现：
 
-| 方向 | 现象 | 工具 |
+| 方向 | 现象 | 当时的工具（现已退役） |
 |:--|:--|:--|
 | 文件有 / INDEX 无 | 新卡未登记 | `fix_orphans.py`（**追加**登记行） |
 | INDEX 有 / 文件无 | 幽灵 slug（登记名 ≠ 文件名） | `fix_index_registry.py`（**改名/纠偏**） |

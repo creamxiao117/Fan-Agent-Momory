@@ -1,3 +1,11 @@
+# @status: retired
+# @retired_at: 2026-10-01
+# @original_path: hub-engine/scripts/slim_index.py
+# @superseded_by: hub-engine/scripts/render_index.py
+# @reason: 机械字符截断（2026-09-23 已证伪：239/251 条变半截词）；枚举迁出 L0 后无可截之物
+# @retired_from_commit: a7e941b
+# @restore: git checkout a7e941b -- hub-engine/scripts/slim_index.py && git mv hub-engine/scripts/slim_index.py hub-engine/scripts/slim_index.py
+
 # hub-engine/scripts/slim_index.py
 """INDEX 目录化：卡行描述裁到 ≤max_desc 字符，标题/注释/目录说明行保留。
 

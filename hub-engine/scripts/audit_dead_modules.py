@@ -45,6 +45,7 @@ SKIP_DIRS = {
     ".pytest_cache",
     ".ruff_cache",
     "work",
+    "_retired",  # 2026-10-01：退役归档区（它们本就“零引用”，不该再占名单）
 }
 
 REF_EXTS = {
@@ -77,10 +78,37 @@ def iter_ref_files() -> list[Path]:
     return out
 
 
+def ref_patterns(stem: str) -> list[re.Pattern[str]]:
+    """模块名 → 视为「有引用」的匹配形态（抽成函数以便单测）。
+
+    2026-10-01 修：**加可选的包前缀**。此前只认 `import X` / `from X`，不认
+    `from scripts.X import …`——而本仓跨模块导入**全部**用带前缀写法（E402 bootstrap
+    风格，如 `from scripts.card_fields import set_fields`）⇒ 工具系统性误报「零引用」。
+    这直接危险：退役裁决依赖这份名单（实测漏报 `scripts/card_fields.py`）。
+    """
+    s = re.escape(stem)
+    prefix = r"(?:[\w.]+\.)?"  # 可选包前缀：scripts. / hub_engine.tools. …
+    return [
+        re.compile(rf"\bimport\s+{prefix}{s}\b"),
+        re.compile(rf"\bfrom\s+{prefix}{s}\b"),
+        re.compile(rf"{s}\.py"),
+        re.compile(rf"[\"'/]{s}[\"']"),
+        # CLI 调用形态：python -m scripts.<stem> / -m <stem>
+        re.compile(rf"-m\s+scripts\.{s}\b"),
+        re.compile(rf"-m\s+{s}\b"),
+    ]
+
+
 def main() -> int:
     # 只审**非测试**模块：tests/ 由 pytest 自动发现，无需被 import；
     # 且它们本身就是回归保护，不能当"死代码"。
-    modules = sorted(p for p in ENGINE.rglob("*.py") if "__pycache__" not in p.parts and "tests" not in p.parts)
+    # 2026-10-01：排除 `_retired/`（已退役归档区）——它们本就该零引用，
+    # 留在名单里只会淹没真正待裁的活代码。
+    modules = sorted(
+        p
+        for p in ENGINE.rglob("*.py")
+        if "__pycache__" not in p.parts and "tests" not in p.parts and "_retired" not in p.parts
+    )
     print(f"hub-engine 下 .py（不含 tests）: {len(modules)}")
 
     ref_files = iter_ref_files()
@@ -95,17 +123,7 @@ def main() -> int:
 
     dead: list[Path] = []
     for m in modules:
-        stem = m.stem
-        # 匹配形态：import x / from x import / x.py / "x" / x'  ...
-        pats = [
-            re.compile(rf"\bimport\s+{re.escape(stem)}\b"),
-            re.compile(rf"\bfrom\s+{re.escape(stem)}\b"),
-            re.compile(rf"{re.escape(stem)}\.py"),
-            re.compile(rf"[\"'/]{re.escape(stem)}[\"']"),
-            # CLI 调用形态：python -m scripts.<stem> / -m <stem>
-            re.compile(rf"-m\s+scripts\.{re.escape(stem)}\b"),
-            re.compile(rf"-m\s+{re.escape(stem)}\b"),
-        ]
+        pats = ref_patterns(m.stem)
         hits = 0
         for p, blob in blobs.items():
             if p == m:

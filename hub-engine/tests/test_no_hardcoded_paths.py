@@ -34,6 +34,7 @@ _SKIP_DIRS = {
     ".venv",
     ".tools",
     "work",
+    "_retired",  # 2026-10-01：归档区保真留档（可能故意保留旧写法），不再当门禁对象
     "_t1_deps",
     "_t1_venv",
     "node_modules",
@@ -106,8 +107,13 @@ def test_whitelist_entries_are_real_and_not_stale():
 
 
 def test_guard_covers_the_repo_root_scripts_dir():
-    """护栏必须真的扫到仓根 scripts/ 与 hub-engine/scripts/（防止 SKIP_DIRS 写错）。"""
+    """护栏必须真的扫到仓根 scripts/ 与 hub-engine/scripts/（防止 SKIP_DIRS 写错）。
+
+    2026-10-01：正向对照从 `scripts/daily_growth.py`（已退役归档）改为
+    `scripts/backup-rules.py`（活脚本）。
+    """
     scanned = {p.relative_to(_REPO).as_posix() for p in _iter_py()}
-    assert "scripts/daily_growth.py" in scanned
+    assert "scripts/backup-rules.py" in scanned
     assert "hub-engine/scripts/bootstrap_hub.py" in scanned
     assert not any(s.startswith("work/") for s in scanned), "work/ 是本地草稿区，应排除"
+    assert not any("_retired/" in s for s in scanned), "归档区已退役，不再当门禁对象"

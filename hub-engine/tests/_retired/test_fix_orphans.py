@@ -1,3 +1,11 @@
+# @status: retired
+# @retired_at: 2026-10-01
+# @original_path: hub-engine/tests/test_fix_orphans.py
+# @superseded_by: hub-engine/tests/test_lint.py
+# @reason: 随 fix_orphans 退役；孤儿检测由 tools/lint.py + tests/test_lint.py 覆盖
+# @retired_from_commit: a7e941b
+# @restore: git checkout a7e941b -- hub-engine/tests/test_fix_orphans.py && git mv hub-engine/tests/test_fix_orphans.py hub-engine/tests/test_fix_orphans.py
+
 # @version V1.0 / 2026-09-23 / pi / fix_orphans V2.0 测试（合并 register_missing_index 后）
 
 """`fix_orphans` V2.0 单测。

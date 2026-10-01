@@ -1,3 +1,11 @@
+# @status: retired
+# @retired_at: 2026-10-01
+# @original_path: hub-engine/scripts/fix_index_registry.py
+# @superseded_by: hub-engine/scripts/render_index.py
+# @reason: 补登记/修登记：渲染器保证“索引 == 卡文件”，登记漂移的前提不复存在
+# @retired_from_commit: a7e941b
+# @restore: git checkout a7e941b -- hub-engine/scripts/fix_index_registry.py && git mv hub-engine/scripts/fix_index_registry.py hub-engine/scripts/fix_index_registry.py
+
 # @version V1.0 / 2026-09-11 / Hermes / INDEX 登记一致性修复器（幽灵 slug 自动纠偏）
 """INDEX.md 登记一致性修复器（幂等，默认 dry-run）。
 

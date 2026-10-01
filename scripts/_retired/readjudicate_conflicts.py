@@ -1,3 +1,11 @@
+# @status: retired
+# @retired_at: 2026-10-01
+# @original_path: scripts/readjudicate_conflicts.py
+# @superseded_by: （无）
+# @reason: 配套冲突重裁一次性脚本；裁定表已落盘
+# @retired_from_commit: a7e941b
+# @restore: git checkout a7e941b -- scripts/readjudicate_conflicts.py && git mv scripts/readjudicate_conflicts.py scripts/readjudicate_conflicts.py
+
 # @version V1.0 / 2026-09-18 / Hermes / conflicts 区过期降级项 LLM 重判（本地链）
 """C 项：对 .sync/conflicts/ 中"09-15 修复前"产生的降级项（review/0.0 + 网关不可用）
 用当前已修好的本地链（smart_chat → LM Studio 1234）重跑 LLM 判决。

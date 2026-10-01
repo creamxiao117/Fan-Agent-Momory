@@ -93,7 +93,7 @@ def read_diff_since(root: Path, since_ts: float | None, max_records: int = 200) 
 # 直接返回会得到 4 字符垃圾描述（如「结论先行」）→ 必须继续找下一段实质内容。
 _BOILERPLATE_HEADINGS = {"结论先行", "一句话结论", "摘要", "概述", "结论", "背景"}
 
-# 摘要默认上限（INDEX 传更小的帽；见 scripts/regen_index_desc.py）
+# 摘要默认上限（INDEX 描述上限见 common/index_limits：蓝图 800 / 其余 250）
 _SUMMARY_MAX = 80
 
 # 子句边界字符：只收录**真正的子句终止/分隔号**。

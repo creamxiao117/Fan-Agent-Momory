@@ -1,3 +1,11 @@
+# @status: retired
+# @retired_at: 2026-10-01
+# @original_path: scripts/resolve_conflicts_20260918.py
+# @superseded_by: （无）
+# @reason: 2026-09-18 冲突解决一次性脚本；结果已并入中枢
+# @retired_from_commit: a7e941b
+# @restore: git checkout a7e941b -- scripts/resolve_conflicts_20260918.py && git mv scripts/resolve_conflicts_20260918.py scripts/resolve_conflicts_20260918.py
+
 # @version V1.0 / 2026-09-18 / Hermes / conflicts 区裁决执行（移入 _resolved_）
 """A 项：把已裁决的冲突组移入 .sync/conflicts/_resolved_20260918/。
 

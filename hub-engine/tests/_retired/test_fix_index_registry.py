@@ -1,3 +1,11 @@
+# @status: retired
+# @retired_at: 2026-10-01
+# @original_path: hub-engine/tests/test_fix_index_registry.py
+# @superseded_by: hub-engine/tests/test_render_index.py
+# @reason: 随 fix_index_registry 退役
+# @retired_from_commit: a7e941b
+# @restore: git checkout a7e941b -- hub-engine/tests/test_fix_index_registry.py && git mv hub-engine/tests/test_fix_index_registry.py hub-engine/tests/test_fix_index_registry.py
+
 """fix_index_registry 单测：幽灵 slug 纠偏（title / 日期前缀）、护栏、散文行不误报"""
 
 from pathlib import Path

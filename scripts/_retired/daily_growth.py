@@ -1,3 +1,11 @@
+# @status: retired
+# @retired_at: 2026-10-01
+# @original_path: scripts/daily_growth.py
+# @superseded_by: hub-engine/scripts/hub_daily_cron.py + flywheel_cron.py
+# @reason: 旧日常链被 Hermes 晨间链取代；配套 .cmd 内写死另一 worktree 的绝对路径（已失效）
+# @retired_from_commit: a7e941b
+# @restore: git checkout a7e941b -- scripts/daily_growth.py && git mv scripts/daily_growth.py scripts/daily_growth.py
+
 # @version V1.0 / 2026-09-09 / Hermes / 中枢每日 star-distill+T1 飞轮主脚本
 """
 AgentMemoryHub 每日成长主脚本（star-distill + T1 迭代验证）
