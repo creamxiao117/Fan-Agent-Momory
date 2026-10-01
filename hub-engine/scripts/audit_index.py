@@ -24,7 +24,9 @@ from pathlib import Path
 # 登记行正则与权威区清单已上移到契约模块（2026-09-23）。
 # 为何上移：本模块的错位检查要用 index_consistency.expected_index_file()，
 # 而契约模块又需这两个正则 -> 循环导入。契约模块应为**叶子**，故由其持有正则。
+from common import index_limits as _limits
 from common.index_files import KNOWN_INDEX_FILES, index_files
+from common.index_limits import desc_limit_for_section as _desc_limit
 from scripts.index_consistency import (
     AUTHORITY_DIRS,
     INDEX_ENTRY_RE,
@@ -33,11 +35,10 @@ from scripts.index_consistency import (
     expected_index_file,
 )
 
-# 描述长度上限：按分区差异化（2026-09-11 用户裁定）
-# 蓝图描述承载「技术路径 A/B/C + 判级 + 状态」，250 字符必然截断决策信息 → 单独放宽到 800；
-# 其他分区维持 250（防摘要退化为正文）。
-DESC_LIMIT_DEFAULT = 250
-DESC_LIMIT_BLUEPRINTS = 800
+# 描述长度上限：**单一事实源** common/index_limits（2026-10-01 抽取）。
+# 此前本文件定义、派生侧另按 40 字硬切 → 派生与校验分头漂移，而门禁不会红。
+DESC_LIMIT_DEFAULT = _limits.DESC_LIMIT_DEFAULT
+DESC_LIMIT_BLUEPRINTS = _limits.DESC_LIMIT_BLUEPRINTS
 
 # 所有可能承载卡登记行的 INDEX 文件（**单一来源** common/index_files；
 # 2026-10-01 改：此前只审根 INDEX/或在多处硬编码文件名——新增分册就会漏改）。
@@ -45,9 +46,9 @@ DESC_LIMIT_BLUEPRINTS = 800
 INDEX_FILES_AUDITED: tuple[str, ...] = KNOWN_INDEX_FILES
 
 
-def _desc_limit(section: str) -> int:
-    """分区标题 → 描述长度上限（按标题内目录名判定，避免中文标题改写后失效）。"""
-    return DESC_LIMIT_BLUEPRINTS if "blueprints" in section else DESC_LIMIT_DEFAULT
+def _desc_limit_of(section: str) -> int:
+    """兼容旧调用名（实现已委派给 common/index_limits）"""
+    return _desc_limit(section)
 
 
 # _ghost_index 检查时额外纳入非权威区（experience/notes/retro）避免误报
@@ -221,6 +222,23 @@ def _check_misrouted(root: Path) -> list[dict]:
     return issues
 
 
+def _parse_all_indexes(root: Path) -> tuple[dict[str, list[str]], list[dict]]:
+    """合并**全部分册**的条目（2026-10-01）。
+
+    历史坑：本维度只读根 INDEX.md → 枚举迁到 INDEX-full.md 后，278 条权威区条目被
+    误报「未登记」（假阳性洪流会把真问题埋掉）。与 tools/lint 同类修法：集合口径
+    统一走 common/index_files。
+    """
+    by_slug: dict[str, list[str]] = {}
+    entries: list[dict] = []
+    for p in index_files(root):
+        part_by, part_entries = _parse_index(p)
+        for slug, descs in part_by.items():
+            by_slug.setdefault(slug, []).extend(descs)
+        entries.extend(part_entries)
+    return by_slug, entries
+
+
 def audit(root: Path) -> dict:
     """主审计：返回 issues 列表 + 统计。
 
@@ -236,7 +254,7 @@ def audit(root: Path) -> dict:
             "stats": stats,
         }
 
-    by_slug, entries = _parse_index(index_path)
+    by_slug, entries = _parse_all_indexes(root)
     stats["total_index_entries"] = len(entries)
     files_by_slug = _authority_files(root)
     stats["total_files"] = len(files_by_slug)

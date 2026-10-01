@@ -297,7 +297,9 @@ def _plan_entries(root: Path, diffs: list[dict]) -> list[tuple[str, str, str, st
 
 
 # 渲染产物：由 scripts.render_index 全量重建，**禁止手写**（写入方必须走渲染）
-RENDERED_INDEX_FILES: frozenset[str] = frozenset({"INDEX.md", "INDEX-full.md"})
+# 2026-10-01：INDEX-experience.md 也纳入渲染（它是最后一个手写维护的索引，实测出现
+# 7 条陈旧重复登记 + 1 条 8 字描述——手写索引必然重演“枚举与卡不同步”）。
+RENDERED_INDEX_FILES: frozenset[str] = frozenset({"INDEX.md", "INDEX-full.md", "INDEX-experience.md"})
 
 
 def _apply_plan(root: Path, planned: list[tuple[str, str, str, str]]) -> tuple[list[str], set[str]]:

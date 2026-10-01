@@ -18,6 +18,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from common.frontmatter import Card, try_read_card, validate_card
+from common.index_limits import desc_limit_for_dir
 
 # 参与派生的目录（与 tools/retrieve.py 的 _ACTIVE_DIRS 同口径：五权威区 + experience）
 CARD_DIRS: tuple[str, ...] = (
@@ -33,7 +34,15 @@ CARD_DIRS: tuple[str, ...] = (
 NON_CARD_NAMES: frozenset[str] = frozenset({"log.md"})
 NON_CARD_PREFIXES: tuple[str, ...] = ("lint-report-", "INDEX")
 
-DEFAULT_SUMMARY_MAX = 40
+DEFAULT_SUMMARY_MAX = 250
+
+# 分目录的摘要上限：**单一来源 common/index_limits**（2026-09-11 裁定的 250/800）。
+# 历史坑：此处曾按 40 字硬切（那是为 L0 预算设的约束）→ INDEX 里出现 142 条
+# 半截句/仓库 id，而校验侧允许 250/800 ⇒ **门禁不会红**，破损描述长期存活。
+# 2026-10-01 枚举移出 L0 后，40 字约束失去理由，故与校验侧对齐。
+SUMMARY_MAX_BY_DIR: dict[str, int] = {
+    d: desc_limit_for_dir(d) for d in ("rules", "methodology", "longterm", "projects", "blueprints", "experience")
+}
 
 
 class RegistryError(Exception):
@@ -116,9 +125,10 @@ def _index_note(card: Card) -> str:
     return note
 
 
-def scan(hub: Path | None = None, *, summary_max: int = DEFAULT_SUMMARY_MAX) -> list[CardMeta]:
+def scan(hub: Path | None = None, *, summary_max: int | None = None) -> list[CardMeta]:
     """扫描卡片目录 → CardMeta 列表（按 CARD_DIRS 顺序 + slug 升序，稳定可复现）。
 
+    `summary_max=None` → 按目录取默认值（蓝图 120，其余 40；见 SUMMARY_MAX_BY_DIR）。
     任一卡解析失败或 `validate_card` 报错 → 汇总后一次性抛 `RegistryError`，
     消息含**全部**坏卡相对路径（便于一次修完）。
     """
@@ -129,6 +139,7 @@ def scan(hub: Path | None = None, *, summary_max: int = DEFAULT_SUMMARY_MAX) -> 
         d = root / sub
         if not d.is_dir():
             continue
+        limit = summary_max if summary_max is not None else SUMMARY_MAX_BY_DIR.get(sub, DEFAULT_SUMMARY_MAX)
         for p in sorted(d.glob("*.md")):
             if not _is_card_file(p):
                 continue
@@ -151,7 +162,7 @@ def scan(hub: Path | None = None, *, summary_max: int = DEFAULT_SUMMARY_MAX) -> 
                     tags=tuple(str(t) for t in card.tags),
                     reuse_count=int(card.reuse_count or 0),
                     title=_title_of(card),
-                    summary=_index_desc(card, p, summary_max),
+                    summary=_index_desc(card, p, limit),
                     note=_index_note(card),
                 )
             )
@@ -186,6 +197,7 @@ def example_slugs(cards: list[CardMeta], dir_name: str, n: int = 3) -> list[str]
 __all__ = [
     "CARD_DIRS",
     "DEFAULT_SUMMARY_MAX",
+    "SUMMARY_MAX_BY_DIR",
     "CardMeta",
     "RegistryError",
     "by_dir",

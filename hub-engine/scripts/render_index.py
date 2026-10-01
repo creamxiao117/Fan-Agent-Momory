@@ -35,11 +35,18 @@ from tools.hub_registry import CARD_DIRS, CardMeta, RegistryError, example_slugs
 
 L0_NAME = "INDEX.md"
 FULL_NAME = "INDEX-full.md"
-REQUIRED_FILES: tuple[str, ...] = (L0_NAME, FULL_NAME)
+EXPERIENCE_NAME = "INDEX-experience.md"
+REQUIRED_FILES: tuple[str, ...] = (L0_NAME, FULL_NAME, EXPERIENCE_NAME)
 
-# 全量清单覆盖的目录 = **现根 INDEX 枚举的五个权威区**（experience 自 09-23 起
-# 独立成 INDEX-experience.md，本渲染器不接管，避免一次改动跨两个分册）。
+# 全量清单覆盖的目录 = **现根 INDEX 枚举的五个权威区**（experience 单独成册，见 render_experience）
 FULL_DIRS: tuple[str, ...] = tuple(d for d in CARD_DIRS if d != "experience")
+
+_EXP_HEADER = """# 中枢索引 · 经验分册（INDEX-experience，L2 按需）
+
+> **渲染产物，禁止手改**（2026-10-01 起）：由 `python -m scripts.render_index --write` 生成。
+> 为何纳入渲染：此前本册是**最后一个手写维护的索引**——实测漂移到 7 条陈旧重复登记
+> （蓝图/方法论卡的历史条目）+ 1 条 8 字描述；手写索引必然重复“枚举与卡不同步”这个病。
+"""
 
 _HEADER = """# 中枢索引 · 全量清单（INDEX-full，L2 按需）
 
@@ -124,6 +131,20 @@ def render_l0(cards: list[CardMeta]) -> str:
     return "".join(lines)
 
 
+def render_experience(cards: list[CardMeta]) -> str:
+    """渲染经验分册（experience 整区）。
+
+    与 `render_full` 分开：文件名/分区不同，但**同源同法**（卡文件 → 行）。
+    """
+    rows = sorted((c for c in cards if c.dir == "experience"), key=lambda c: c.slug)
+    parts = [_EXP_HEADER]
+    if rows:
+        parts.append(f"\n{SECTION_TITLES['experience']}\n\n")
+        parts.append("\n".join(_line(c) for c in rows))
+        parts.append("\n")
+    return "".join(parts)
+
+
 def parse_entries(text: str) -> dict[str, str]:
     """解析 INDEX 文本 → {slug: 描述}（正则复用 index_consistency，不另写一份）。"""
     out: dict[str, str] = {}
@@ -137,7 +158,7 @@ def parse_entries(text: str) -> dict[str, str]:
 def read_indexes(hub: Path) -> dict[str, str]:
     """读现有分册 → {slug: 描述}（合并根 INDEX 与经验分册）。"""
     out: dict[str, str] = {}
-    for name in (L0_NAME, "INDEX-experience.md"):
+    for name in (L0_NAME, EXPERIENCE_NAME):
         p = hub / name
         if p.exists():
             out.update(parse_entries(p.read_text(encoding="utf-8-sig", errors="ignore")))
@@ -152,7 +173,11 @@ def check(hub: Path | None = None) -> list[str]:
         cards = scan(root)
     except RegistryError as e:
         return [f"派生失败：{e}"]
-    for name, text in ((FULL_NAME, render_full(cards)), (L0_NAME, render_l0(cards))):
+    for name, text in (
+        (FULL_NAME, render_full(cards)),
+        (EXPERIENCE_NAME, render_experience(cards)),
+        (L0_NAME, render_l0(cards)),
+    ):
         target = root / name
         if not target.exists():
             errs.append(f"{name} 不存在（先跑 `--write`）")
@@ -175,6 +200,7 @@ def write(hub: Path | None = None) -> list[str]:
 
     with _WriteLock(root):
         (root / FULL_NAME).write_text(render_full(cards), encoding="utf-8")
+        (root / EXPERIENCE_NAME).write_text(render_experience(cards), encoding="utf-8")
         (root / L0_NAME).write_text(render_l0(cards), encoding="utf-8")
     return []
 
@@ -240,7 +266,7 @@ def main(argv: list[str] | None = None) -> int:
             for e in errs:
                 print(f"FAIL: {e}")
             return 1
-        print(f"[OK] 已渲染 {FULL_NAME} + {L0_NAME}")
+        print(f"[OK] 已渲染 {FULL_NAME} + {EXPERIENCE_NAME} + {L0_NAME}")
         return 0
     # 默认（含 --check）走检查口径
     errs = check(args.root)
@@ -248,7 +274,7 @@ def main(argv: list[str] | None = None) -> int:
         for e in errs:
             print(f"FAIL: {e}")
         return 3
-    print(f"PASS: {L0_NAME} / {FULL_NAME} 与卡文件一致")
+    print(f"PASS: {L0_NAME} / {FULL_NAME} / {EXPERIENCE_NAME} 与卡文件一致")
     return 0
 
 
