@@ -84,6 +84,22 @@ def test_extract_summary_skips_table_and_code_lines(tmp_path):
     assert extract_summary(p) == "真正的结论段落。"
 
 
+def test_extract_summary_skips_list_lines(tmp_path):
+    """列表行（`- 仓库：gh-xxx`）不是摘要——否则蓝图卡会渲染成 `- 仓库：gh-…`
+
+    实测 2026-10-01：blueprint 卡正文首行常是 `- 仓库：gh-…` / `- 判级 B+` 等清单项，
+    把首个实质行当摘要会得到比人工描述更差的索引行（biopython 卡即此例）。
+    """
+    p = _card(
+        tmp_path / "listfirst.md",
+        "- 仓库：gh-biopython-biopython\n- 判级 B+\n\nBiopython：计算生物工具箱。\n",
+    )
+    assert extract_summary(p) == "Biopython：计算生物工具箱。"
+
+    p2 = _card(tmp_path / "starfirst.md", "* 星标：1.2k\n\n星标项不作为摘要。\n")
+    assert extract_summary(p2) == "星标项不作为摘要。"
+
+
 def test_extract_summary_respects_max_len(tmp_path):
     p = _card(tmp_path / "long.md", "# 标题\n\n" + "一" * 100 + "。后续内容\n")
     got = extract_summary(p, max_len=40)

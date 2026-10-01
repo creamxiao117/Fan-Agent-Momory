@@ -274,6 +274,15 @@ def test_summary_skips_list_lines(tmp_path):
 
 > **门禁**：Task 3b 未达标前**不得执行 Task 5**（否则 L0 定形会伴随信息降级）。
 
+**执行结果（2026-10-01）：Step 1–5 已完成，Step 6 待办**
+
+- Step 1：`_SKIP_PREFIXES` 加列表项前缀（先证红：`test_extract_summary_skips_list_lines`，红样本即 biopython 卡）
+- Step 2/3：新增两个**卡自有**字段：`index_desc`（覆盖描述列）/ `index_note`（追加注解，**逐字**不 strip）
+- 一次性迁移：`scripts/migrate_index_fields.py`（默认 dry-run）→ **9 张 `index_note` + 60 张 `index_desc`**
+- 硬判据：渲染 vs 现状 **491/491 条逐字一致**（注释型 0 / 陈旧型 0）；幽灵 0；未登记 10（真实漂移，渲染会补上）
+- 迁移前已备份规则卡；顺带修了 `scripts/backup-rules.py` 的崩溃 bug（循环变量遮蔽文件句柄 ⇒ 纪律脚本一直不可用）
+- **遗留（非阻塞）**：**142 条描述质量待校对**（硬截断 `…` / 仅仓库 id / 超 40 字；迁移前既有，不是本次引入）。复现命令：`python -m scripts.migrate_index_fields --proofread`
+
 ---
 
 ### Task 4: 消费方切源（零行为变化）

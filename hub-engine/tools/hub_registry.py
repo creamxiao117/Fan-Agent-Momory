@@ -42,7 +42,13 @@ class RegistryError(Exception):
 
 @dataclass(frozen=True)
 class CardMeta:
-    """卡片派生元数据（字段全部来自卡自身，不臆造）。"""
+    """卡片派生元数据（字段全部来自卡自身，不臆造）。
+
+    `summary` = 索引描述：优先取卡 frontmatter 的 `index_desc`（卡自己声明的描述，
+    用于保留 ★/语言/判级 等选型元信息），否则用正文摘要（extract_summary）。
+    `note` = `index_note`（T1/status 等**追加注解**）：回写只动这一个字段，
+    不重写描述——避免「回写一次就制造一次漂移」（09-27 的历史形态）。
+    """
 
     slug: str
     rel_path: str
@@ -54,6 +60,7 @@ class CardMeta:
     reuse_count: int = 0
     title: str = ""
     summary: str = ""
+    note: str = ""
 
 
 def hub_root() -> Path:
@@ -93,6 +100,22 @@ def _summary_of(path: Path, max_len: int) -> str:
     return _EXTRACT_SUMMARY(path, max_len=max_len)
 
 
+def _index_desc(card: Card, path: Path, max_len: int) -> str:
+    """索引描述：`index_desc`（卡声明）优先，否则卡正文摘要。"""
+    declared = card.extra.get("index_desc")
+    if isinstance(declared, str) and declared.strip():
+        return declared.strip()
+    return _summary_of(path, max_len)
+
+
+def _index_note(card: Card) -> str:
+    """追加注解（T1/status 等），**逐字**拼在描述后（不 strip：前导空格也是迁移前的原样）。"""
+    note = card.extra.get("index_note")
+    if not isinstance(note, str) or not note.strip():
+        return ""
+    return note
+
+
 def scan(hub: Path | None = None, *, summary_max: int = DEFAULT_SUMMARY_MAX) -> list[CardMeta]:
     """扫描卡片目录 → CardMeta 列表（按 CARD_DIRS 顺序 + slug 升序，稳定可复现）。
 
@@ -128,7 +151,8 @@ def scan(hub: Path | None = None, *, summary_max: int = DEFAULT_SUMMARY_MAX) -> 
                     tags=tuple(str(t) for t in card.tags),
                     reuse_count=int(card.reuse_count or 0),
                     title=_title_of(card),
-                    summary=_summary_of(p, summary_max),
+                    summary=_index_desc(card, p, summary_max),
+                    note=_index_note(card),
                 )
             )
     if bad:

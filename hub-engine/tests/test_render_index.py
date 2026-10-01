@@ -48,6 +48,32 @@ def _hub(tmp_path: Path) -> Path:
     return hub
 
 
+def test_render_prefers_declared_index_desc_and_appends_note(tmp_path: Path):
+    """卡声明的 `index_desc` 覆盖正文摘要；`index_note` 追加在后（T1/status 回写口径）
+
+    为何需要：blueprint 卡的人工描述携带 ★/语言/判级 等**选型元信息**，
+    而正文摘要是首行短句——只靠摘要会降低索引可判性（Task 3b 实测 19 行）。
+    两者都在卡 frontmatter 里 = 仍是单一真相（不另建真相）。
+    """
+    hub = tmp_path / "AgentMemoryHub"
+    _card(hub, "rules", "plain-rule", "正文摘要一句话。")
+    p = hub / "rules" / "declared-rule.md"
+    p.write_text(
+        CARD.format(summary="正文摘要一句话。").replace(
+            "status: active",
+            "status: active\nindex_desc: COLMAP（12.8k★, C++/CUDA）SfM+MVS；判级 B+。"
+            "\nindex_note: （T1 09-30 ✅，reuse 2）",
+        ),
+        encoding="utf-8",
+    )
+
+    text = render_full(scan(hub))
+
+    assert "- declared-rule    COLMAP（12.8k★, C++/CUDA）SfM+MVS；判级 B+。（T1 09-30 ✅，reuse 2）" in text
+    assert "- plain-rule    正文摘要一句话。" in text
+    assert parse_entries(text)["declared-rule"].endswith("（T1 09-30 ✅，reuse 2）")
+
+
 def test_full_dirs_excludes_experience():
     """experience 自 09-23 起独立成 INDEX-experience.md，渲染器不接管（避免跨分册改动）"""
     assert "experience" not in FULL_DIRS

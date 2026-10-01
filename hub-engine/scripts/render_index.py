@@ -51,9 +51,14 @@ _HEADER = """# 中枢索引 · 全量清单（INDEX-full，L2 按需）
 
 
 def _line(meta: CardMeta) -> str:
-    """单条登记行：`- slug    <≤40 字摘要>`（描述取自卡自身，缺摘要时退标题）。"""
+    """单条登记行：`- slug    <描述>[注解]`。
+
+    描述 = 卡 frontmatter `index_desc`（卡声明）或卡正文摘要；
+    注解 = 卡 frontmatter `index_note`（T1/status 回写用，直接拼接不加分隔符）。
+    缺描述时退标题，再退「（无摘要）」——绝不产无法解析的裸登记行。
+    """
     desc = meta.summary or meta.title or "（无摘要）"
-    return f"- {meta.slug}    {desc}"
+    return f"- {meta.slug}    {desc}{meta.note}"
 
 
 def render_full(cards: list[CardMeta]) -> str:
@@ -160,7 +165,7 @@ def report(hub: Path | None = None, out=None) -> int:
         print(f"[FAIL] 派生失败：{e}", file=out)
         return 1
     old = read_indexes(root)
-    new = {c.slug: (c.summary or c.title or "（无摘要）") for c in cards}
+    new = {c.slug: f"{(c.summary or c.title or '（无摘要）')}{c.note}" for c in cards}
     diff = _classify(old, new)
     print(f"卡数={len(cards)}  现有登记={len(old)}  渲染行={len(new)}", file=out)
     for key, label in (

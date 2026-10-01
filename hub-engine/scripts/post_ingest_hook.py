@@ -108,7 +108,10 @@ _OPEN_BRACKETS = "（([【「『"
 _CLOSE_BRACKETS = "）)]】」』"
 
 # 正文中不作为摘要候选的行首（表格/代码围栏/HTML 注释）
-_SKIP_PREFIXES = ("|", "```", "<!--", ">")
+# 取摘要时跳过的行首前缀（表格/代码/注释/引用 + **列表项**）。
+# 2026-10-01 加列表项：blueprint 卡正文首行常是 `- 仓库：gh-…` / `- 判级 B+` 等
+# 清单行，当作摘要会渲染出比人工描述更差的索引行（biopython 卡实测）。
+_SKIP_PREFIXES = ("|", "```", "<!--", ">", "-", "*", "+")
 
 
 def cut_at_boundary(text: str, max_len: int) -> str:

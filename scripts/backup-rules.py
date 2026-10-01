@@ -24,12 +24,12 @@ def backup_rules():
         total_chars += size
 
     manifest = BACKUP_PATH / "manifest.txt"
-    with open(manifest, "w", encoding="utf-8") as f:
-        f.write(f"Rule files backup ({DATE})\n")
-        f.write("=" * 50 + "\n\n")
-        for f in files:
-            f.write(f"{f.name}: {f.stat().st_size} chars\n")
-        f.write(f"\nTotal: {len(files)} files, {total_chars:,} chars\n")
+    # 2026-10-01 修：内层循环变量曾复用 `f`，遮蔽了文件句柄 → AttributeError（脚本直接崩）
+    with open(manifest, "w", encoding="utf-8") as mf:
+        mf.write(f"Rule files backup ({DATE})\n")
+        mf.write("=" * 50 + "\n\n")
+        mf.writelines(f"{p.name}: {p.stat().st_size} chars\n" for p in files)
+        mf.write(f"\nTotal: {len(files)} files, {total_chars:,} chars\n")
 
     print(f"\nBackup completed! Location: {BACKUP_PATH}")
     return BACKUP_PATH
