@@ -128,6 +128,7 @@ _STEP_CALLS = [
     ("pytest", lambda hub, eng: patrol._step_pytest(eng)),
     ("ruff", lambda hub, eng: patrol._step_ruff(eng)),
     ("startup_budget", lambda hub, eng: patrol._step_startup_budget()),
+    ("render_check", lambda hub, eng: patrol._step_render_check(hub)),
     ("build_vectors", lambda hub, eng: patrol._step_build_vectors(hub, eng)),
     ("router_sync", lambda hub, eng: patrol._step_router_sync(hub, eng)),
     ("vector_regression", lambda hub, eng: patrol._step_vector_regression(hub, eng)),
@@ -161,11 +162,14 @@ def _registered_step_names() -> list[str]:
 
 
 def test_step_table_covers_every_registered_step():
-    """任何新增的巡检步骤都必须有测试条目（漏了这里会红）。"""
+    """任何新增的巡检步骤都必须有测试条目（漏了这里会红）。
+
+    2026-10-01：注册步骤 24 → **25**（新增 render_check：INDEX 渲染产物一致性）。
+    """
     registered = set(_registered_step_names())
     covered = {name for name, _ in _STEP_CALLS}
     assert registered - covered == set(), f"新增步骤未覆盖: {sorted(registered - covered)}"
-    assert len(registered) >= 24, f"注册步骤数异常: {len(registered)}"
+    assert len(registered) >= 25, f"注册步骤数异常: {len(registered)}"
 
 
 @pytest.mark.parametrize(("name", "call"), _STEP_CALLS, ids=[n for n, _ in _STEP_CALLS])

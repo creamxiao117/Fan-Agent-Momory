@@ -63,6 +63,7 @@ from scripts.patrol.steps import (
     _step_platform_sync_check,
     _step_platform_unregistered,
     _step_pytest,
+    _step_render_check,
     _step_router_sync,
     _step_ruff,
     _step_startup_budget,
@@ -103,6 +104,7 @@ __all__ = [
     "_step_platform_sync_check",
     "_step_platform_unregistered",
     "_step_pytest",
+    "_step_render_check",
     "_step_router_sync",
     "_step_ruff",
     "_step_status_snapshot",
@@ -182,6 +184,8 @@ def _stage_quality(root: Path, engine_dir: Path) -> StageResult:
     stage.steps.append(_run_step("pytest", "质量门禁", lambda: _step_pytest(engine_dir)))
     stage.steps.append(_run_step("ruff", "质量门禁", lambda: _step_ruff(engine_dir)))
     stage.steps.append(_run_step("startup_budget", "质量门禁", lambda: _step_startup_budget()))
+    # 2026-10-01 单源改造：INDEX.md / INDEX-full.md 是渲染产物 → 与卡文件不一致即红
+    stage.steps.append(_run_step("render_check", "质量门禁", lambda: _step_render_check(root)))
     return stage
 
 

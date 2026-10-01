@@ -10,7 +10,7 @@
 - 分层：L0（AGENTS / CHARTER / **本文件** / **根 INDEX 能力图**）→ L1 四型（`hub-engine/tools/task_tier.py`）→ L2 检索（全量分册 `INDEX-full.md` / `INDEX-experience.md`，渲染产物）
 - 安全底座常驻：单写者+§4 守护+ledger；query-first + 交回用户 + 回写
 - 分项帽：AGENTS≤2000 / CHARTER≤1000 / WORK≤5000 / INDEX≤12000（和 20,000 ≤ 30,000；不变量由脚本自身看守 + **L0 形状门禁**取代批帽）
-- **测试 733 passed / 4 skipped / 0 failed**（09-27→10-01 抬帽破不变量致 2 红 4 天，10-01 修复）；**ruff 全绿**；lint 干净；**巡检 24 步**（待复跑）
+- **测试 733 passed / 4 skipped / 0 failed**（09-27→10-01 抬帽破不变量致 2 红 4 天，10-01 修复）；**ruff 全绿**；lint 干净；**巡检 25 步**（待复跑）
 - **检索（D2 扩容后 58 条金标准）word recall@5 98% / @1 79%**、char 100% / 70%；向量回归 100%；首调 6.7 s（进程级一次性）· 稳态 4–145 ms
 - **覆盖率 56.3%**（生产代码；tools/ 85.8% · common/ 91.1% · 顶层 67.6% · commands/ 63.5% · **patrol/ 86.2%** · scripts/ 42.6%）；**两仓均已推送 origin**；`work/` 只剩 `_archive/`
 
@@ -31,7 +31,7 @@
 ## 门禁（都必须在跑，不只是"代码里有"）
 
 - **提交时**（`.git/hooks/pre-commit` V1.3，源 `hub-engine/scripts/pre-commit`）：编码 → **预算** → markdownlint → ruff check → ruff format
-- **每日 07:30** `AgentHub-DailyPatrol` → `scripts/run_patrol.cmd`（**24 步**：lint / pytest / ruff / startup_budget / 向量回归【含 `--fail-below 0.8`】/ 平台三项 / autofix）
+- **每日 07:30** `AgentHub-DailyPatrol` → `scripts/run_patrol.cmd`（**25 步**：lint / pytest / ruff / startup_budget / render_check / 向量回归【含 `--fail-below 0.8`】/ 平台三项 / autofix）
 - **每日 00:35** `AgentHub-NightlyConsolidate` → `scripts/nightly_consolidate.cmd`（distill→build-vectors→sleep→local-summary）
 - **每日 06:00** `AgentHub-SecretSentry` → `scripts/secret_sentry.cmd`（误报 **26 → 0**）
 - **每日 09:00** `PluginHub-PytestTempClean`（临时目录清理）

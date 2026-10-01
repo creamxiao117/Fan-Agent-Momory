@@ -227,6 +227,37 @@ def _step_ruff(engine_dir: Path) -> StepResult:
         )
 
 
+def _step_render_check(root: Path) -> StepResult:
+    """INDEX 渲染产物一致性（2026-10-01 单源改造新增）。
+
+    为何需要：L0（INDEX.md）与全量分册（INDEX-full.md）都是**渲染产物**，
+    事实源是卡文件。手动编辑产物（或卡改了忘重渲）会让索引与中枢不一致——
+    而这种不一致在形制上是「静默」的（不影响检索，只影响人读）。
+    口径同 `ruff format --check`：不一致即红，`render_index --write` 一键修。
+    """
+    from scripts.render_index import check as render_check
+
+    errs = render_check(root)
+    if errs:
+        return StepResult(
+            name="render_check",
+            stage="质量门禁",
+            status="fail",
+            exit_code=1,
+            output=(
+                "❌ INDEX 渲染产物与卡文件不一致（手改或卡改了未重渲）："
+                + "；".join(errs)
+                + "。修法：`cd hub-engine && python -m scripts.render_index --write`"
+            ),
+        )
+    return StepResult(
+        name="render_check",
+        stage="质量门禁",
+        status="pass",
+        output="✅ INDEX.md / INDEX-full.md 与卡文件一致（渲染产物无手改）",
+    )
+
+
 def _step_startup_budget() -> StepResult:
     """L0 + L1 预算门禁（spec S3 挂巡检；L1 部分 2026-09-23 新增）。
 
