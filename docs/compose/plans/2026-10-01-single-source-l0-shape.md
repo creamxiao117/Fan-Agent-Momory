@@ -135,7 +135,7 @@ Expected: pytest 全绿；`startup_budget` 输出 `[OK] INDEX.md: 21923 (cap 220
 
 **Interfaces:**
 
-- Produces: `CardMeta`（`slug` / `rel_path` / `dir` / `type` / `status` / `tags` / `title` / `summary` / `updated` / `t1_verified` / `reuse_count`）
+- Produces: `CardMeta`（`slug` / `rel_path` / `dir` / `type` / `status` / `tags` / `title` / `summary` / `updated` / `reuse_count`）——**不含 T1 字段**：T1 事实目前只写在卡正文散文里（无 frontmatter 字段），不臆造（字段化见 Task 3b）
 - Produces: `RegistryError(Exception)`；`scan(hub: Path) -> list[CardMeta]`（解析/校验失败即抛，消息含文件名清单）
 - Produces: `by_dir(cards) -> dict[str, list[CardMeta]]`、`example_slugs(cards, dir, n=3) -> list[str]`（按 `reuse_count` 降序、`updated` 降序取前 n）
 - Consumes: `common.frontmatter.try_read_card` / `validate_card`、`scripts.post_ingest_hook.extract_summary`
@@ -237,6 +237,45 @@ Expected: 手工改一行 → `--check` 退出码 3，`--write` 后退出码 0 �
 
 ---
 
+### Task 3b: 描述质量对齐（**Task 3 实测新增的硬前置**）
+
+Task 3 执行后对真实中枢跑 `--report`，暴露出一个原计划未预见的缺口：**渲染描述会低于现有手写描述**。实测（2026-10-01）：
+
+| 项 | 数量 | 含义 |
+| --- | --- | --- |
+| 卡片数 / 现有登记 | 501 / 491 | `scan` 501 卡 438ms，空摘要 0 |
+| 幽灵登记 | 0 | 现有索引无悬空条目 |
+| 未登记（渲染会补上） | 10 | 真实漂移（含 `bge-small-zh-sqlite-vector-search` 等） |
+| 摘要漂移·注释型 | 9 | 人工追加的 `status=…｜T1 09-xx ✅` 后缀，frontmatter 里无对应字段 |
+| 摘要漂移·陈旧型 | 42 | INDEX 行未随卡重建；其中 **24 条渲染结果明显更差** |
+
+根因：blueprint 卡正文首行常是 `- 仓库：gh-…` 列表行或结构化信息（★/判级/status），而 `extract_summary` 取「首个实质行」→ 渲染出 `- 仓库：gh-biopython-biopython —…` 这类劣于人工描述的结果。**若直接切 L0，等于把 24 行降级 + 丢 9 条注释**（09-23 机械截断的教训重演）。
+
+**Files:**
+
+- Modify: `hub-engine/scripts/post_ingest_hook.py`（`_SKIP_PREFIXES` 与摘要取样）
+- Modify: `hub-engine/tools/hub_registry.py`（注解派生）
+- Modify: 9 张带注释的卡 frontmatter + 24 张需校对的卡
+- Modify: `hub-engine/scripts/render_index.py`（渲染注解列）
+
+- [ ] **Step 1: 先证红**：以 `-` 开头的列表行不得当摘要
+
+```python
+# tests/test_index_desc_quality.py（已有文件，扩充）
+def test_summary_skips_list_lines(tmp_path):
+    """正文首行是 `- 仓库：gh-xxx` 时不得把它当摘要（实测 biopython 卡）"""
+```
+
+- [ ] **Step 2: T1/status 注释字段化**：卡 frontmatter 增 `t1_verified: 'YYYY-MM-DD'`（可选字段，不填则无注解）；渲染时由卡拼出注解列
+- [ ] **Step 3: 对照测试**：9 张卡拼出的注解必须与旧后缀**逐字相等**（迁移零漂移）
+- [ ] **Step 4: 24 条人工校对**（一次性），校对后由 `--check` 冻结
+- [ ] **Step 5: 复跑 `--report`**，**硬判据：注释型 = 0 且「渲染更差」= 0**；未登记 10 条属真实漂移（渲染补上）
+- [ ] **Step 6: 改 Hermes T1 回写口径**：由「改 INDEX 行」改为「写卡 frontmatter 字段」，否则下次回写又会把注解写回索引（新漂移源）
+
+> **门禁**：Task 3b 未达标前**不得执行 Task 5**（否则 L0 定形会伴随信息降级）。
+
+---
+
 ### Task 4: 消费方切源（零行为变化）
 
 **Files:**
@@ -298,7 +337,7 @@ Expected: 全绿；`--check` 退出码 0
 - Produces: `startup_budget.L0_ENTRY_RE` —— **直接复用** `audit_index.INDEX_ENTRY_RE`（唯一权威正则，字符集不含 `/`，因此目录图例行天然不匹配）；**不新建第二份正则**
 - Produces: `startup_budget.check_l0_shape(text: str) -> list[str]`
 
-- [ ] **Step 1: 形状断言先证红**
+- [ ] **Step 1: 形状断言先证红**（前置：Task 3b 的判据已达标）
 
 ```python
 # hub-engine/tests/test_l0_shape.py
