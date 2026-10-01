@@ -287,6 +287,14 @@ def test_summary_skips_list_lines(tmp_path):
 
 ### Task 4: 消费方切源（零行为变化）
 
+> **执行结果（2026-10-01 已完成）**：新增 `hub-engine/common/index_files.py`
+> （`KNOWN_INDEX_FILES` + 自动发现 `INDEX*.md` + `all_index_text`），四处读方统一走它：
+> `tools/lint.py`（orphans/ghosts）、`scripts/audit_index.py`（含 `INDEX-full.md`）、
+> `scripts/fix_orphans.py`、`scripts/index_locatability_bench.py`；
+> 写方（`post_ingest_hook`）改为**渲染产物不得手写**（`RENDERED_INDEX_FILES` ⇒ 调 `render_index`），
+> `regen_index_desc.py` 对渲染产物直接**拒绕**并指向 `render_index`。
+> 新増守护测试：新分册无需改代码即被审计。
+
 **Files:**
 
 - Modify: `hub-engine/tools/lint.py`（`find_orphans` / `find_index_ghosts` 退役；新增 `registry_ok` / `invalid` 口径）
@@ -345,6 +353,14 @@ Expected: 全绿；`--check` 退出码 0
 
 - Produces: `startup_budget.L0_ENTRY_RE` —— **直接复用** `audit_index.INDEX_ENTRY_RE`（唯一权威正则，字符集不含 `/`，因此目录图例行天然不匹配）；**不新建第二份正则**
 - Produces: `startup_budget.check_l0_shape(text: str) -> list[str]`
+
+> **执行结果（2026-10-01 已完成）**：
+> `render_l0()` 已实现（使用约定 3 条 + 能力图每目录 1 行 + 沉淀通道）；
+> `write()` 一次渲染 L0 + 全量两产物，`--check` 两产物都查；
+> 映射翻转为 `rules/methodology/longterm/projects/blueprints → INDEX-full.md`。
+> 实测：**INDEX.md 21923 → 1176 字符**（帽降 22000 → 12000）；L0 合计 **8524/30000**；
+> `check_l0_shape` 在真实中枢为 0 违规、对 per-card 行可打红；
+> 测试总数 **733 passed / 4 skipped / 0 failed**（新增 `tests/test_l0_shape.py`：C1 解耦 + C2 形状可证红）。
 
 - [ ] **Step 1: 形状断言先证红**（前置：Task 3b 的判据已达标）
 

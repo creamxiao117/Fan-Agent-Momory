@@ -85,16 +85,19 @@ SECTION_TITLES: dict[str, str] = {
     "experience": "## 经验（experience/）",
 }
 
-# 分区 → **写入哪个 INDEX 文件**（2026-09-23 裁定）
+# 分区 → **写入哪个 INDEX 文件**（2026-10-01 单源改造后）
 #
-# 背景：A4 已把 experience 整区从根 INDEX 拆到 INDEX-experience.md（保 L0 ≤ 14K→20K 帽），
-# 根 INDEX 里只留一句**指针**（“详见 INDEX-experience.md”）。
-# 但两个写入方（`post_ingest_hook` / `fix_orphans`）当时把 index_path 硬编码为
-# `root/INDEX.md` → **experience 卡又被追加回根 INDEX**，既白涨 L0、又把条目放错文件。
-# 实测：2026-09-23 某经验卡被登记到根 INDEX 的 L180（该区本应只有指针）。
-# 本映射即是修复：写入前先按目录选文件。
+# 背景：
+#   - 2026-09-23（A4）：experience 整区从根 INDEX 拆到 INDEX-experience.md。
+#   - 2026-10-01（单源改造）：**权威区枚举行整体移出 L0**——根 INDEX.md 变成
+#     「能力图」（per-card 行 = 0，形状由 startup_budget.check_l0_shape 看守），
+#     五权威区条目改由 **INDEX-full.md**（渲染产物，L2）承载。
+#     experience 仍走自己的分册（未被渲染器接管，见 render_index.FULL_DIRS）。
+#
+# 本映射即是「条目该住哪个文件」的唯一事实源：读方/写方/audit 均走它，
+# 不再各自硬编码（09-23 拆 experience 时写入方漏改的根因）。
 INDEX_FILE_FOR_DIR: dict[str, str] = {
-    d: ("INDEX-experience.md" if d == "experience" else "INDEX.md") for d in SECTION_TITLES
+    d: ("INDEX-experience.md" if d == "experience" else "INDEX-full.md") for d in SECTION_TITLES
 }
 
 

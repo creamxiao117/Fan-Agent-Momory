@@ -7,8 +7,13 @@
 1. 本文件（路由 + 铁律）
 2. `CHARTER.md` —— 目标与边界
 3. `WORK.md` —— **仅当前状态/待办**（历史见 `docs/superpowers/retro/work-history.md`）
-4. `AgentMemoryHub/INDEX.md` —— **目录版**（卡名+一行摘要；全文走检索）
+4. `AgentMemoryHub/INDEX.md` —— **L0 能力图**（每目录 1 行：数量 + 示例 + 怎么查；
+   **与卡数解耦**，形状由 `startup_budget.check_l0_shape` 看守）
 5. 简报 `briefs/*.md` 若有
+
+> 全量卡登记属 **L2**：五权威区见 `AgentMemoryHub/INDEX-full.md`，经验见
+> `AgentMemoryHub/INDEX-experience.md`。两个 L2 分册都是 `render_index` 的渲染产物（禁止手改）；
+> 找卡优先走检索（`engine.py retrieve` / MCP `hub_search`），分册用于确定性翻阅。
 
 不依赖历史聊天；事实来源=WORK 当前态 + 中枢。
 

@@ -16,8 +16,14 @@ from scripts.fix_orphans import detect_missing, main, registered_slugs
 
 
 def _index(tmp_path: Path, body: str) -> Path:
+    """写 L0 INDEX.md + L2 INDEX-full.md（同一分区骨架）。
+
+    2026-10-01 单源改造后：权威区条目住 INDEX-full.md，而 fix_orphans 的
+    CLI 仍要求根 INDEX.md 存在（前置检查）——故夹具两份都写。
+    """
     p = tmp_path / "INDEX.md"
     p.write_text(body, encoding="utf-8")
+    (tmp_path / "INDEX-full.md").write_text(body, encoding="utf-8")
     return p
 
 
@@ -116,11 +122,11 @@ def test_main_apply_registers_and_is_idempotent(tmp_path, capsys):
     root = tmp_path / "hub"
     _card(root, "rules/alpha.md", "Alpha 规则")
     _card(root, "methodology/beta.md", "Beta 方法论")
-    idx = _index(root, "## 规则（rules/）\n\n## 方法论（methodology/）\n")
+    _index(root, "## 规则（rules/）\n\n## 方法论（methodology/）\n")
 
     assert main(["--root", str(root), "--apply"]) == 0
-    text = idx.read_text(encoding="utf-8")
-    assert "- alpha" in text
+    text = (root / "INDEX-full.md").read_text(encoding="utf-8")
+    assert "- alpha" in text, "权威区条目应写入 INDEX-full.md（非 L0）"
     assert "- beta" in text
     capsys.readouterr()
 

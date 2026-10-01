@@ -31,7 +31,7 @@ import argparse
 from pathlib import Path
 
 from scripts.index_consistency import INDEX_ENTRY_RE, SECTION_TITLES
-from tools.hub_registry import CARD_DIRS, CardMeta, RegistryError, hub_root, scan
+from tools.hub_registry import CARD_DIRS, CardMeta, RegistryError, example_slugs, hub_root, scan
 
 L0_NAME = "INDEX.md"
 FULL_NAME = "INDEX-full.md"
@@ -78,13 +78,50 @@ def render_full(cards: list[CardMeta]) -> str:
     return "".join(parts)
 
 
-def render_l0(cards: list[CardMeta]) -> str:
-    """渲染 L0 能力图（Task 5 启用）。
+_L0_HEADER = """# 中枢索引（L0 能力图）
 
-    契约：**每个目录 1 行**，示例 slug 内联且 ≤3 个 → 行数与卡数解耦，
-    因此 `startup_budget.check_l0_shape()`（禁 per-card 登记行）永不失效。
+> **渲染产物，禁止手改**：由 `python -m scripts.render_index --write` 从卡文件生成，
+> 手改会被 `--check` 打红（模型同 `ruff format --check`）。
+
+## 使用约定（各平台执行前必读）
+
+1. 执行前先查中枢：**确定性**读本图 / `INDEX-full.md` / 目录；**语义**走
+   `python hub-engine/engine.py retrieve --root <中枢> "<问题>"` 或 MCP `hub_search`。命中再执行。
+2. 不确定的内容交回用户，不得臆测、不得凭空捏造历史经验。
+3. 查询出好结果回写经验卡（查询产物回写）。
+
+## 能力图
+
+**本文件行数与卡数解耦**：只列目录能力与示例，不列 per-card 登记行（形状由
+`startup_budget.check_l0_shape` 看守）——因此新增卡片不会推高 L0 预算，也不需要人工批帽。
+具体卡名与描述：五个权威区全量见 `INDEX-full.md`，经验见 `INDEX-experience.md`。
+"""
+
+# 能力图每行的示例 slug 上限（内联，不换行）
+L0_EXAMPLES_PER_DIR = 3
+
+
+def render_l0(cards: list[CardMeta]) -> str:
+    """渲染 L0 能力图。
+
+    契约（形状门禁看守，与卡数**解耦**）：
+    - 每个目录 **1 行**（目录不存在则不出现行）
+    - 示例 slug 内联且 ≤ `L0_EXAMPLES_PER_DIR` 个
+    - **不得出现 per-card 登记行**（`- <slug>    <描述>`）
     """
-    raise NotImplementedError("Task 5 启用：L0 定形渲染")
+    lines = [_L0_HEADER]
+    for sub in CARD_DIRS:
+        rows = [c for c in cards if c.dir == sub]
+        if not rows:
+            continue
+        examples = " · ".join(example_slugs(cards, sub, L0_EXAMPLES_PER_DIR))
+        if sub == "experience":
+            # experience 整区在 L2 分册（09-23 裁定），L0 只留指针
+            lines.append(f"\n- {sub + '/':<14}{len(rows):>4} 张 → 详见 INDEX-experience.md（L2）")
+            continue
+        lines.append(f"\n- {sub + '/':<14}{len(rows):>4} 张｜示例：{examples}")
+    lines.append("\n\n## 沉淀通道\n\n> 各平台内容先写入 `.sync/drafts/<platform>_draft/`，经同步器校验后提升。\n")
+    return "".join(lines)
 
 
 def parse_entries(text: str) -> dict[str, str]:
@@ -112,22 +149,23 @@ def check(hub: Path | None = None) -> list[str]:
     root = Path(hub) if hub is not None else hub_root()
     errs: list[str] = []
     try:
-        text = render_full(scan(root))
+        cards = scan(root)
     except RegistryError as e:
         return [f"派生失败：{e}"]
-    target = root / FULL_NAME
-    if not target.exists():
-        errs.append(f"{FULL_NAME} 不存在（先跑 `--write`）")
-    elif target.read_text(encoding="utf-8-sig") != text:
-        errs.append(f"{FULL_NAME} 与卡文件不一致（被手改或未重渲染）→ 跑 `--write` 修复")
+    for name, text in ((FULL_NAME, render_full(cards)), (L0_NAME, render_l0(cards))):
+        target = root / name
+        if not target.exists():
+            errs.append(f"{name} 不存在（先跑 `--write`）")
+        elif target.read_text(encoding="utf-8-sig") != text:
+            errs.append(f"{name} 与卡文件不一致（被手改或未重渲染）→ 跑 `--write` 修复")
     return errs
 
 
 def write(hub: Path | None = None) -> list[str]:
-    """`--write`：渲染落盘（单写者锁内）。返回错误列表（空=成功）。"""
+    """`--write`：渲染 L0 + 全量两个产物并落盘（单写者锁内）。"""
     root = Path(hub) if hub is not None else hub_root()
     try:
-        text = render_full(scan(root))
+        cards = scan(root)
     except RegistryError as e:
         return [f"派生失败：{e}"]
     try:
@@ -136,7 +174,8 @@ def write(hub: Path | None = None) -> list[str]:
         from contextlib import nullcontext as _WriteLock  # type: ignore[assignment]
 
     with _WriteLock(root):
-        (root / FULL_NAME).write_text(text, encoding="utf-8")
+        (root / FULL_NAME).write_text(render_full(cards), encoding="utf-8")
+        (root / L0_NAME).write_text(render_l0(cards), encoding="utf-8")
     return []
 
 
@@ -201,7 +240,7 @@ def main(argv: list[str] | None = None) -> int:
             for e in errs:
                 print(f"FAIL: {e}")
             return 1
-        print(f"[OK] 已渲染 {FULL_NAME}")
+        print(f"[OK] 已渲染 {FULL_NAME} + {L0_NAME}")
         return 0
     # 默认（含 --check）走检查口径
     errs = check(args.root)
@@ -209,7 +248,7 @@ def main(argv: list[str] | None = None) -> int:
         for e in errs:
             print(f"FAIL: {e}")
         return 3
-    print(f"PASS: {FULL_NAME} 与卡文件一致")
+    print(f"PASS: {L0_NAME} / {FULL_NAME} 与卡文件一致")
     return 0
 
 

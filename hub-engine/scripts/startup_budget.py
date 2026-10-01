@@ -24,18 +24,19 @@ TOTAL_LIMIT = 30_000
 # 2026-09-27 把 INDEX 帽 20k→22k 时**未同步收紧**其余三项 ⇒ 合计 31_000 > 30_000，
 # 不变量被破；而当时该断言只写在 tests/test_startup_budget.py 里，pre-commit 跑的
 # 正是本脚本（不看不变量）→ 照常放行，红灯在巡检里存活 4 天（09-28~10-01 全 exit=1）。
-# 2026-10-01：不变量上提到本脚本硬校验（pre-commit 即可拦），并重新配平
-# AGENTS 2.5k→1.6k / CHARTER 1.5k→1.0k（均仍高于实测 1.42k / 0.78k），
-# 合计 29_600，留 400 余量。
+# 2026-10-01：不变量上提到本脚本硬校验（pre-commit 即可拦）。同日单源改造后
+# L0 从 21.9K 降到 ~1.2K（枚举迁出 L0），总帽余量充裕，故 AGENTS 恢复 2.0k
+# （实测 1.68k，足装 L2 分册指针等路由信息）。
 LIMITS: list[tuple[str, str, int]] = [
-    ("AGENTS.md", "AGENTS.md", 1_600),
+    ("AGENTS.md", "AGENTS.md", 2_000),
     ("CHARTER.md", "CHARTER.md", 1_000),
     ("WORK.md", "WORK.md", 5_000),
     (
         "INDEX.md",
         "AgentMemoryHub/INDEX.md",
-        22_000,
-    ),  # 2026-09-27 调 20k→22k（先例 09-23 14k→20k），TOTAL 30_000 不动
+        12_000,
+    ),  # 2026-10-01 单源改造：L0 改为「能力图」（per-card 行=0，形状由 check_l0_shape 看守）
+    # 实测 ~9.4K；数字帽降为兜底（防散文回潮），不再随卡数增长、永不需人批。
 ]
 
 
@@ -144,6 +145,31 @@ def check_limits_invariant() -> list[str]:
     return []
 
 
+# ── L0 形状门禁（2026-10-01：**取代人工批帽**的主门禁）──────────────────────
+#
+# 数字帽只能管「多大」，管不了「为什么会长」——L0 里只要有与卡数成正比的枚举行，
+# 顶帽就是数学必然（先例：09-23 14k→20k、09-27 20k→22k，各只多撑 1-2 天）。
+# 本断言守护的是**形状**：L0 不得出现 per-card 登记行。它与卡数无关，永远不会
+# 「顶帽」，因此不需要人批；要往 L0 加枚举，门禁先红。
+
+
+def check_l0_shape(text: str) -> list[str]:
+    """L0（INDEX.md）形状断言：出现 per-card 登记行即违规（空列表=通过）。
+
+    登记行正则**复用** audit_index.INDEX_ENTRY_RE（唯一权威正则）：
+    其字符集不含 `/`，故能力图的目录图例行（`- rules/  35 张｜…`）天然不匹配。
+    """
+    from scripts.audit_index import INDEX_ENTRY_RE
+
+    bad = [line.strip() for line in text.splitlines() if INDEX_ENTRY_RE.match(line)]
+    if bad:
+        return [
+            f"INDEX.md 出现 {len(bad)} 条 per-card 登记行（L0 只允许能力图；"
+            f"全量清单属 INDEX-full.md，由 render_index 渲染）如：{bad[0][:60]}"
+        ]
+    return []
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="启动链 L0 + L1 预算门禁")
     ap.add_argument("--root", type=Path, default=_repo_root(), help="仓库根")
@@ -156,6 +182,13 @@ def main(argv: list[str] | None = None) -> int:
     total = sum(texts.values())
     print(f"[TOTAL] {total} / {TOTAL_LIMIT}")
     errs = check(texts) + check_limits_invariant()
+    # L0 形状（主门禁：与卡数解耦、永不需人批）——只对真实存在的 INDEX.md 生效
+    l0_path = args.root / "AgentMemoryHub" / "INDEX.md"
+    if l0_path.exists():
+        shape_errs = check_l0_shape(l0_path.read_text(encoding="utf-8"))
+        for e in shape_errs:
+            print(f"[SHAPE] {e}")
+        errs += shape_errs
 
     # ── L1（按任务型补读）──────────────────────────────────────────────
     try:

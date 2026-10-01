@@ -1,18 +1,18 @@
 # WORK.md（当前状态 · 唯一来源）
 
-更新于：2026-10-01 · **审计 P1 六项 / P2 六小项 / 重构 A–D / SPLIT / COV / D1 / D2 / R1 / patrol 拆包 / 调度治理 均收口；重评 7.7 → 8.5 → 8.7/10（§11）**；只剩 T1（时间门）；**本轮：不变量归位（消 4 天红灯）+ 单源/定形改造进行中（R2）**
+更新于：2026-10-01 · **审计 P1 六项 / P2 六小项 / 重构 A–D / SPLIT / COV / D1 / D2 / R1 / patrol 拆包 / 调度治理 均收口；重评 7.7 → 8.5 → 8.7/10（§11）**；只剩 T1（时间门）；**本轮：单源/定形改造（R2）进行中**
 
 > 过程明细 `docs/superpowers/retro/work-history.md`｜T1 基线 `docs/compose/metrics/2026-09-23-t1-baseline.md`｜清理留档 `docs/compose/cleanup/`｜**全面分析（§11 即最新评分）：`docs/compose/reports/2026-09-25-project-audit.md`**｜**阶段总结：`docs/compose/reports/2026-09-26-stage-summary.md`**｜**R2 计划（单源派生 + L0 定形）：`docs/compose/plans/2026-10-01-single-source-l0-shape.md`（Task 1 已落地）**
 
 ## 当前状态
 
-- 启动链曾 136K → **现测 25.2K/30,000 PASS**（`python -m scripts.startup_budget`）
-- 分层：L0（AGENTS / CHARTER / **本文件** / 根 INDEX 目录版）→ L1 四型（`hub-engine/tools/task_tier.py`）→ L2 检索
+- L0 实测 **8579/30000**（INDEX 1176，枚举已迁 L2 分册）；**形状门禁看守，新增卡不再顶帽**
+- 分层：L0（AGENTS / CHARTER / **本文件** / **根 INDEX 能力图**）→ L1 四型（`hub-engine/tools/task_tier.py`）→ L2 检索（全量分册 `INDEX-full.md` / `INDEX-experience.md`，渲染产物）
 - 安全底座常驻：单写者+§4 守护+ledger；query-first + 交回用户 + 回写
-- 分项帽：AGENTS≤1600 / CHARTER≤1000 / WORK≤5000 / INDEX≤22000（和 29,600 ≤ 总帽 30,000；不变量已上提到 `startup_budget` 自身校验，pre-commit 可拦）
-- **测试 691 passed / 4 skipped / 0 failed**（09-27→10-01 抬帽破不变量致 2 红 4 天，10-01 修复）；**ruff 新规则集全绿**；lint 干净；**巡检 24 步**（248 s；红灯期 exit=1，修复后待复跑）
+- 分项帽：AGENTS≤2000 / CHARTER≤1000 / WORK≤5000 / INDEX≤12000（和 20,000 ≤ 30,000；不变量由脚本自身看守 + **L0 形状门禁**取代批帽）
+- **测试 733 passed / 4 skipped / 0 failed**（09-27→10-01 抬帽破不变量致 2 红 4 天，10-01 修复）；**ruff 全绿**；lint 干净；**巡检 24 步**（待复跑）
 - **检索（D2 扩容后 58 条金标准）word recall@5 98% / @1 79%**、char 100% / 70%；向量回归 100%；首调 6.7 s（进程级一次性）· 稳态 4–145 ms
-- **覆盖率 56.3%**（生产代码；tools/ 85.8% · common/ 91.1% · 顶层 67.6% · commands/ 63.5% · **patrol/ 86.2%** · scripts/ 42.6%）；**两仓均已推送 origin**；`work/` 只剩 `_archive/`；**审计重评 8.7/10（§11）**
+- **覆盖率 56.3%**（生产代码；tools/ 85.8% · common/ 91.1% · 顶层 67.6% · commands/ 63.5% · **patrol/ 86.2%** · scripts/ 42.6%）；**两仓均已推送 origin**；`work/` 只剩 `_archive/`
 
 ## 活跃待办
 
@@ -52,7 +52,7 @@
 - **patrol 拆包**（§11.8）：`patrol_runner.py` **1,597 → 477 行**；AST 纯搬运 53/53；`test_patrol_cli.py` 守护入口（防假绿）
 - **导入回归修复**（§11.9）：P1-c 漏 `sys.path` 引导 ⇒ Hermes 任务真挂；护栏又捐出 3 个同病脚本；`test_script_bootstrap.py`
 - **Hermes 定时任务精简**：**7 → 5** + 模型统一 `mimo-v2.6-flash@xiaomi` + 07:30 起每 10 min + **取消微信推送（全部 `deliver=local`）** + **微信通道整体停用**（卡 `projects/hermes-cron-jobs`）
-- **重评两轮**：同一口径重测 → **7.7 → 8.5（§10）→ 8.7/10（§11）**；**首评 5.9 → 现 8.7**
+- **重评两轮**：7.7 → 8.5 → **8.7/10**（§10/§11）；首评 5.9
 
 ## 禁止 / 注意
 
@@ -62,7 +62,7 @@
 - embed 配置以 `AgentMemoryHub/system/config.yaml` 为准（生效单源；`hub-engine/config/engine.config.yaml` 仅兜底）
 - **外层超时必须 > 内层超时**（pytest 外 420s / 内 180s；曾因外 120s < 内导致内层永不生效）
 - **夹具里的期望卡名会随卡片生命周期漂移**：归档卡片时必须同步检查引用它的夹具（否则门禁数学上无法达标）
-- **LM Studio 缺 `%LMSTUDIO_HOME%\.internal\temp` 会让所有模型 JIT 加载 400**（`mkdtemp ENOENT`）；`local_summary.py` 现已**自愈**（建回目录并重试一次）
+- **LM Studio 缺 `%LMSTUDIO_HOME%\.internal\temp` 会让所有模型 JIT 加载 400**；`local_summary.py` 已自愈
 - **文档里写的命令必须来自被跟踪文件**：`work/` 是 gitignore 草稿区，写进去就制造悬空引用（审计 I-4 / M-3 同一病）
 - **零引用 ≠ 死代码**：`audit_dead_modules` 存在假阳性，删除前逐个人工看入口/注册表
 - 勿提交 `nul`（已清除的幽灵条目）

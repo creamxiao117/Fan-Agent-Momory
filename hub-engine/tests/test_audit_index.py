@@ -19,19 +19,27 @@ from scripts.bootstrap_hub import bootstrap
 
 
 def _hub(tmp_path: Path, root_index_extra: str = "") -> Path:
-    """最小中枢：根 INDEX（rules 区 + experience 指针区）+ 分册"""
+    """最小中枢：L0 能力图 + INDEX-full（权威区条目）+ 经验分册
+
+    2026-10-01 单源改造后归属：
+      - 五权威区条目 → INDEX-full.md（L2 渲染产物）
+      - experience 条目 → INDEX-experience.md
+      - INDEX.md（L0）= 能力图，**不得**出现 per-card 登记行（check_l0_shape 看守）
+    """
     root = bootstrap(tmp_path)
     (root / "rules" / "alpha.md").write_text(
         "---\ntype: rule\ntags:\n- a\nupdated: 2026-09-23\nstatus: active\n---\n\n# Alpha 规则\n",
         encoding="utf-8",
     )
     (root / "INDEX.md").write_text(
-        "## 规则（rules/）\n"
-        "- alpha    Alpha 规则\n"
-        "\n"
-        "## 经验（experience/）\n"
+        "# 中枢索引（L0 能力图）\n\n- rules/          1 张｜示例：alpha\n"
+        "\n## 经验（experience/）\n"
         "详见 INDEX-experience.md（L2 按需）；experience/ 目录按需检索。\n"
         f"{root_index_extra}",
+        encoding="utf-8",
+    )
+    (root / "INDEX-full.md").write_text(
+        "# 中枢索引 · 全量清单（INDEX-full，L2 按需）\n\n## 规则（rules/）\n- alpha    Alpha 规则\n",
         encoding="utf-8",
     )
     (root / "INDEX-experience.md").write_text(
@@ -104,7 +112,7 @@ def test_detects_authority_section_inside_experience_file(tmp_path):
     hits = [i for i in audit(root)["issues"] if i["type"] == "misrouted_entry"]
     assert hits, "分册里的 rules 分区条目应被报错位"
     assert hits[0]["in_file"] == "INDEX-experience.md"
-    assert hits[0]["expected_file"] == "INDEX.md"
+    assert hits[0]["expected_file"] == "INDEX-full.md"
 
 
 def test_prose_sections_are_not_flagged(tmp_path):

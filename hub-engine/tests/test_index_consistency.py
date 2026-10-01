@@ -85,15 +85,16 @@ def test_section_for_dir_covers_all_card_dirs():
 
 
 def test_experience_routes_to_split_file():
-    """experience 必须写入 INDEX-experience.md，而非根 INDEX。
+    """experience → INDEX-experience.md；**五权威区 → INDEX-full.md**（不是 L0 根 INDEX）。
 
-    回归背景：A4 把 experience 整区拆出后，两个写入方仍硬编码 `root/INDEX.md`
-    → 经验卡被追加回根 INDEX（白涨 L0 + 条目放错文件）。
-    实测 2026-09-23：某经验卡被登记到根 INDEX L180，而该区本应只有指针。
+    回归背景①（2026-09-23）：A4 把 experience 整区拆出后，两个写入方仍硬编码
+    `root/INDEX.md` → 经验卡被追加回根 INDEX（白涨 L0 + 条目放错文件）。
+    回归背景②（2026-10-01 单源改造）：权威区条目整体移出 L0 → 目标改 INDEX-full.md。
+    若仍写根 INDEX：L0 会被枚举行重新涨满（人工批帽的死循环回来）。
     """
     assert index_file_for_dir("experience") == "INDEX-experience.md"
     for d in ("rules", "methodology", "longterm", "projects", "blueprints"):
-        assert index_file_for_dir(d) == "INDEX.md", f"{d} 应写入根 INDEX"
+        assert index_file_for_dir(d) == "INDEX-full.md", f"{d} 应写入 L2 全量分册"
 
 
 def test_index_file_mapping_covers_every_section_dir():
