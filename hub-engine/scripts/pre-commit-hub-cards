@@ -59,6 +59,8 @@ fi
 
 STAGED_MD=$(git diff --cached --name-only --diff-filter=ACMR \
     | grep -E '^(rules|blueprints|methodology|longterm|projects|experience|notes)/.*\.md$' || true)
+# 注：`--diff-filter` 不含 D（删除）——**刻意为之**：删除无内容可校验，
+# 而「删卡后索引不同步」这件真正危险的事由上面的渲染一致性检查兜住（2026-10-01 实测）。
 
 if [ -z "$STAGED_MD" ]; then
     echo "[hub-cards] 无卡片 .md staged，跳过卡片双门禁"

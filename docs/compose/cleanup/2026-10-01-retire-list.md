@@ -74,7 +74,18 @@
 | `AgentMemoryHub/.backup/**` | `backup-rules.py` 的本地保险副本（已 ignore） | 保留（只占本地磁盘） |
 | `AgentMemoryHub/retro/snapshot-2026-10-01.json` | 巡检快照产物，**未被 ignore 也未跟踪** | **待裁**：要么纳入 git（历史快照可比对），要么加进 `.gitignore`（推荐后者，与 `patrol.log` 同口径） |
 
-## 4. 校验机制（防止归档腐化）
+## 5. 卡与本地残留处置（2026-10-01，维护者裁定）
+
+| 对象 | 处置 | 证据/后果 | 恢复 |
+|:--|:--|:--|:--|
+| 中枢卡 `experience/20260908-170346-mavis-v1.0-接入范式落地测试.md` | **删除** | 正文只有「接入范式落地测试 / 测试内容」（thin card）；删除后 `audit_index` 由「1 low（描述过短）」转为 **✅ 健康**，条目 501 → 500 | `git -C AgentMemoryHub cat-file -p 9a2b7dd9e03951a1b5c78479b2ea275e5c8c08e5 > <路径>` |
+| `hub-engine/scripts/work/report_full.json` | **删除**（本地残留） | 已被 `.gitignore:23`（`work/`）忽略的未跟踪产物，无信息价值 | 无需恢复 |
+| `AgentMemoryHub/retro/snapshot-2026-10-01.json` | **不动（修正前一轮建议）** | 原建议“加 ignore”**有误**：中枢已有 **39 个快照被跟踪**，且 07:30 晨间链提交的是**前一天**的快照（实证：`4485c85` 在 10-01 提交 `snapshot-2026-09-30.json`）⇒ 当日快照未跟踪是**正常时序**，次日 07:30 会被提交 | — |
+
+> 教训（写入本文件以免重蹈）：判断「这是个残留」之前先查**同类文件的既成约定**
+> （`git ls-files` + 最近一次提交的文件清单），否则会拿“修复”去破一个本来正常的时序。
+
+## 6. 校验机制（防止归档腐化）
 
 `hub-engine/tests/test_retired_archive.py` 钉死三条不变量：
 
@@ -84,7 +95,7 @@
    （引号内的路径调用、`from/import`、`-m scripts.X`；反引号里的历史叙述不算）；
 4. 附加：保留体必须自报 `@status:`（`manual-cli` / `forbidden-guarded`），否则下次清理会误删。
 
-## 5. 恢复方式
+## 7. 恢复方式
 
 ```bash
 # 按标签里的 @restore（最省事）

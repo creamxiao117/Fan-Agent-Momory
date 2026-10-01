@@ -578,9 +578,10 @@ Expected: pytest **0 failed**（当前基线 687 passed / 2 failed / 4 skipped�
 **验收基线（2026-10-01 全链路巡检）**：`lint orphans=0 ghosts=0`、`L0 8708/30000`、
 `render_check 403ms ✅`、`pytest 755 passed / 4 skipped / 0 failed`、**总体退出码 0（全绿）**。
 
-**已知遗留（1 项，low）**：`20260908-170346-mavis-v1.0-接入范式落地测试` 描述 8 字符
-——那卡本身正文就只有「接入范式落地测试 / 测试内容」（**thin card**，不是描述问题）；
-补内容或归档需维护者裁定，不得臆造。
+**已知遗留（原 1 项 low，已于 2026-10-01 处置）**：`20260908-170346-mavis-v1.0-接入范式落地测试`
+是 thin card（正文仅「测试内容」）——维护者裁定**删除**（非臆造补内容），删除后 `audit_index`
+由「1 low」转为 **✅ 健康**（条目 501 → 500）。卡 blob SHA 与恢复命令见
+`docs/compose/cleanup/2026-10-01-retire-list.md` §5。
 
 ## 附带裁定项（本计划记录，不擅自删除）
 
