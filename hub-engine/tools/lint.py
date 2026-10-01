@@ -5,6 +5,7 @@ from datetime import date
 from pathlib import Path
 
 from common.frontmatter import today_date, try_read_card, validate_card
+from common.index_files import all_index_text, index_files
 
 # 仅 5 个权威区目录
 AUTHORITY_DIRS = (
@@ -96,10 +97,10 @@ def find_index_ghosts(root: Path) -> list[str]:
     否则 2026-09-02 权威区收缩后，73 张 experience 历史登记会被误判幽灵。
     """
     root = Path(root)
-    index_path = root / "INDEX.md"
-    if not index_path.exists():
+    index_files_found = index_files(root)
+    if not index_files_found:
         return []
-    index_text = index_path.read_text(encoding="utf-8")
+    index_text = all_index_text(root)
     ghosts = []
     existing = {p.stem for sub, p, card in _all_cards(root)}
     for sub in _NON_AUTH_INDEX_DIRS:
@@ -120,11 +121,14 @@ def find_index_ghosts(root: Path) -> list[str]:
 
 
 def find_orphans(root: Path) -> list[Path]:
-    """无入链指向的页面（INDEX.md 不计入引用）"""
+    """无入链指向的页面（**全部** INDEX 分册不计入引用）
+
+    2026-10-01：读方改为 `common.index_files.all_index_text`（索引文件集合单一来源）。
+    此前只读根 INDEX.md——L0 定形后蓝图行搬到 INDEX-full.md 时，150 张蓝图会被误判为
+    孤儿（patrol 直接变红）。同类事故曾在 09-23 拆分 experience 时发生过。
+    """
     root = Path(root)
-    index_text = ""
-    if (root / "INDEX.md").exists():
-        index_text = (root / "INDEX.md").read_text(encoding="utf-8")
+    index_text = all_index_text(root)
     orphans = []
     for _sub, p, card in _all_cards(root):
         if card is None or card.status in ("archived", "reference"):

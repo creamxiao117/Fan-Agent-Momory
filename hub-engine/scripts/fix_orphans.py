@@ -48,6 +48,7 @@ from pathlib import Path
 _THIS = Path(__file__).resolve().parent
 sys.path.insert(0, str(_THIS.parent))  # hub-engine/
 
+from common.index_files import KNOWN_INDEX_FILES, index_files
 from scripts.index_consistency import (
     AUTHORITY_DIRS,
     SECTION_TITLES,
@@ -61,8 +62,9 @@ from scripts.post_ingest_hook import append_to_index, extract_summary
 #   `_CARD_SECTION_TOKENS`，同一契约两份实现必然漂移（2026-09-23 收敛）。
 
 
-# 所有可能承载卡登记行的 INDEX 文件（experience 已拆到分册，2026-09-23）
-INDEX_FILES = ("INDEX.md", "INDEX-experience.md")
+# 所有索引文件（登记行可能住在任一分册）的集合口径：**单一来源** common/index_files。
+# 2026-10-01 改：此前 INDEX_FILES 在此与 audit_index 各硬编码一份——新增分册必漏改。
+INDEX_FILES: tuple[str, ...] = KNOWN_INDEX_FILES
 
 
 def registered_slugs_all(root: Path) -> set[str]:
@@ -72,10 +74,8 @@ def registered_slugs_all(root: Path) -> set[str]:
     已登记的经验卡会被误报为“未登记”并被重复补登。
     """
     out: set[str] = set()
-    for name in INDEX_FILES:
-        p = root / name
-        if p.exists():
-            out |= registered_slugs(p)
+    for p in index_files(root):
+        out |= registered_slugs(p)
     return out
 
 

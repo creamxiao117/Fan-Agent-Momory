@@ -296,14 +296,37 @@ def _plan_entries(root: Path, diffs: list[dict]) -> list[tuple[str, str, str, st
     return planned
 
 
+# 渲染产物：由 scripts.render_index 全量重建，**禁止手写**（写入方必须走渲染）
+RENDERED_INDEX_FILES: frozenset[str] = frozenset({"INDEX.md", "INDEX-full.md"})
+
+
 def _apply_plan(root: Path, planned: list[tuple[str, str, str, str]]) -> tuple[list[str], set[str]]:
-    """逐个登记 → (已登记的 slug, 实际写入过的索引文件集合)"""
+    """逐个登记 → (已登记的 slug, 实际写入过的索引文件集合)。
+
+    2026-10-01（单源改造）：**渲染产物**（INDEX.md / INDEX-full.md）一律**不再手写**——
+    卡文件落盘后由 `scripts.render_index` 全量重建（否则又会出现「回写一次就漂移一次」，
+    同 09-23 experience 拆分后写入方漏改那一类）。只有非渲染分册
+    （INDEX-experience.md）仍走 append。
+    """
     added: list[str] = []
     written_files: set[str] = set()
+    needs_render = False
     for target_name, section_title, slug, summary in planned:
+        if target_name in RENDERED_INDEX_FILES:
+            needs_render = True
+            continue
         if append_to_index(root / target_name, section_title, slug, summary):
             added.append(slug)
             written_files.add(target_name)
+    if needs_render:
+        from scripts.render_index import FULL_NAME, L0_NAME
+        from scripts.render_index import write as render_write
+
+        errs = render_write(root)
+        if errs:
+            print(f"渲染失败: {errs}", file=sys.stderr)
+        else:
+            written_files |= {L0_NAME, FULL_NAME}
     return added, written_files
 
 

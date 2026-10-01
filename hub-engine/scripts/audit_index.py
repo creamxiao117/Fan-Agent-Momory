@@ -24,6 +24,7 @@ from pathlib import Path
 # 登记行正则与权威区清单已上移到契约模块（2026-09-23）。
 # 为何上移：本模块的错位检查要用 index_consistency.expected_index_file()，
 # 而契约模块又需这两个正则 -> 循环导入。契约模块应为**叶子**，故由其持有正则。
+from common.index_files import KNOWN_INDEX_FILES, index_files
 from scripts.index_consistency import (
     AUTHORITY_DIRS,
     INDEX_ENTRY_RE,
@@ -38,9 +39,10 @@ from scripts.index_consistency import (
 DESC_LIMIT_DEFAULT = 250
 DESC_LIMIT_BLUEPRINTS = 800
 
-# 被审计的 INDEX 文件（2026-09-23）：根 INDEX + experience 分册。
-# 此前只审根 INDEX，导致分册 216 条完全无人看管，也查不出“登记到了错文件”。
-INDEX_FILES_AUDITED = ("INDEX.md", "INDEX-experience.md")
+# 所有可能承载卡登记行的 INDEX 文件（**单一来源** common/index_files；
+# 2026-10-01 改：此前只审根 INDEX/或在多处硬编码文件名——新增分册就会漏改）。
+# 历史：此前只审根 INDEX，导致分册 216 条完全无人看管，也查不出“登记到了错文件”。
+INDEX_FILES_AUDITED: tuple[str, ...] = KNOWN_INDEX_FILES
 
 
 def _desc_limit(section: str) -> int:
@@ -195,10 +197,8 @@ def _check_misrouted(root: Path) -> list[dict]:
     本条即把“人工撞见”变成“门禁自动发现”。
     """
     issues: list[dict] = []
-    for fname in INDEX_FILES_AUDITED:
-        fpath = root / fname
-        if not fpath.exists():
-            continue
+    for fpath in index_files(root):
+        fname = fpath.name
         _by, fentries = _parse_index(fpath)
         for entry in fentries:
             want = expected_index_file(entry.get("section", ""))

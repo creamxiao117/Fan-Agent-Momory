@@ -46,8 +46,26 @@ def _types(result: dict) -> list[str]:
 
 
 def test_audits_both_index_files():
-    """两个 INDEX 文件都必须被审计（此前只审根 INDEX，分册 216 条无人看管）"""
-    assert INDEX_FILES_AUDITED == ("INDEX.md", "INDEX-experience.md")
+    """全部分册都必须被审计（此前只审根 INDEX，分册 216 条无人看管）
+
+    2026-10-01：集合口径改为 common/index_files（新增 INDEX-full.md 自动纳入），
+    断言随之改为「子集 + 自动发现」——不再把文件名写死在测试里，
+    否则下次再拆分册又要改测试（同一个病）。
+    """
+    assert set(INDEX_FILES_AUDITED) >= {"INDEX.md", "INDEX-experience.md", "INDEX-full.md"}
+
+
+def test_audit_discovers_index_split_files(tmp_path):
+    """新增分册（如 INDEX-full.md）**无需改代码**即被审计（防「拆分后读方漏改」）
+
+    手法：把本该住经验分册的条目放进新分册 → 若新分册根本没被读，就报不出错位。
+    """
+    root = _hub(tmp_path)
+    (root / "INDEX-full.md").write_text(
+        "# 全量\n\n## 经验（experience/）\n- beta    B 条目应住经验分册\n", encoding="utf-8"
+    )
+
+    assert "misrouted_entry" in _types(audit(root)), "新分册必须进入审计视野"
 
 
 def test_clean_hub_has_no_misrouted_issue(tmp_path):

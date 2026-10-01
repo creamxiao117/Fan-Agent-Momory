@@ -30,6 +30,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from common.index_files import KNOWN_INDEX_FILES, all_index_text
 from common.vector import tokenize
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -145,18 +146,15 @@ def card_tags(slug: str) -> list[str]:
 def load_index(rev: str | None) -> dict[str, str]:
     """slug → INDEX 描述行；rev 为 None 时读工作区。
 
-    注意：INDEX.md 在**嵌套的中枢仓**（外层仓 gitignore 它），所以必须
+    注意：INDEX 分册在**嵌套的中枢仓**（外层仓 gitignore 它），所以必须
     `git -C AgentMemoryHub` 取历史，且路径相对中枢根。
+    2026-10-01：文件集合改走 common/index_files（新增分册自动纳入，不再硬编码）。
     """
     if rev is None:
-        blob = "\n".join(
-            (HUB_DIR / name).read_text(encoding="utf-8-sig")
-            for name in ("INDEX.md", "INDEX-experience.md")
-            if (HUB_DIR / name).exists()
-        )
+        blob = all_index_text(HUB_DIR)
     else:
         blob = ""
-        for name in ("INDEX.md", "INDEX-experience.md"):
+        for name in KNOWN_INDEX_FILES:
             r = subprocess.run(
                 ["git", "-C", str(HUB_DIR), "show", f"{rev}:{name}"],
                 capture_output=True,

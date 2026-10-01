@@ -28,7 +28,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from scripts.post_ingest_hook import extract_summary
+from scripts.post_ingest_hook import RENDERED_INDEX_FILES, extract_summary
 
 # 卡行：`- slug` 或 `- **slug**`，后跟 2+ 空格与描述（与 audit_index 的解析口径一致）
 _CARD_LINE = re.compile(r"^- (?:\*\*)?([^\s*]+)(?:\*\*)?(\s{2,})(.+)$")
@@ -112,6 +112,16 @@ def main(argv: list[str] | None = None) -> int:
     for t in targets:
         if not t.exists():
             print(f"[skip] 不存在: {t}")
+            continue
+        # 2026-10-01（单源改造）：渲染产物不得手改——本脚本的职责已被
+        # scripts.render_index 取代（描述取自卡自身 index_desc / 摘要）。
+        # 继续在此重写描述列 = 「手改渲染产物」→ 立刻被 --check 打红。
+        if t.name in RENDERED_INDEX_FILES:
+            print(
+                f"[拒绝] {t.name} 是渲染产物（由 scripts.render_index 生成）——"
+                "请改用 `python -m scripts.render_index --write`；"
+                "若需卡自身声明的描述，请在卡 frontmatter 写 index_desc。"
+            )
             continue
         raw = t.read_text(encoding="utf-8-sig")
         newline = "\r\n" if "\r\n" in raw else "\n"
