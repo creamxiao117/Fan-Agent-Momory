@@ -426,28 +426,34 @@ Expected: `[OK] INDEX.md: ~9350 (cap 12000)`、`[TOTAL] ~16300 / 30000`、`PASS`
 
 ### Task 6: L1 派生（消掉同一个病在 L1 的复发）
 
+> **执行结果（2026-10-01 已完成）**：`l1_cards(root)` 由卡 frontmatter `l1_tier` 派生
+> （7 张卡：code 3 / hub 3 / sync 2，其中双平台一致性卡同属 hub+sync）；
+> `check_l1_shape` 单型 ≤3 张（形状断言已进 `startup_budget.check_tiers`）；
+> 迁移脚本 `scripts/migrate_l1_tier.py`（dry-run 默认）+ 对照测试
+> 「派生集合 == 手写基准快照」（迁移零漂移证明）；AGENTS.md 路由表改为派生顺序 + 声明来源。
+> 字段名用 `l1_tier` 而非 `tier`：后者已被卡用于重要度（task/iron）。
+
 **Files:**
 
-- Modify: `hub-engine/tools/task_tier.py`（`L1_CARDS` 常量 → `l1_cards(root) -> dict[Tier, list[str]]`）
-- Modify: 8 张 rules 卡 frontmatter（加 `l1_tier`，取值 `code` / `hub` / `sync`，可为 list）
-- Modify: `hub-engine/tests/test_task_tier.py`、`hub-engine/scripts/startup_budget.py`
+- Modify: `hub-engine/tools/task_tier.py`（`L1_CARDS` 常量 → `l1_cards(root)`）
+- Create: `hub-engine/scripts/migrate_l1_tier.py`（一次性迁移）
+- Modify: 7 张 rules 卡 frontmatter（`l1_tier`）
+- Modify: `hub-engine/tests/test_task_tier.py`、`hub-engine/scripts/startup_budget.py`、`AGENTS.md`
 
 **Interfaces:**
 
-- Produces: `task_tier.l1_cards(root: Path | None) -> dict[Tier, list[str]]`（`root=None` 时用默认中枢路径）
-- Produces: `startup_budget.L1_MAX_CARDS_PER_TIER = 3`（形状断言：单型 ≤3 张）
+- Produces: `task_tier.l1_cards(root: Path | None) -> dict[Tier, list[str]]`
+- Produces: `task_tier.check_l1_shape(tier_cards) -> list[str]`、`L1_MAX_CARDS_PER_TIER = 3`
 
 - [ ] **Step 1: 对照测试（迁移正确性证明）**
 
 ```python
 def test_derived_l1_equals_legacy_map():
-    """派生集合必须与旧手写 L1_CARDS 逐字相等（迁移零漂移）"""
-    assert l1_cards(HUB) == LEGACY_SNAPSHOT
+    """派生集合必须与旧手写清单集合相等（迁移零漂移）"""
+    assert l1_cards() == LEGACY_SNAPSHOT  # 集合口径
 ```
 
-`LEGACY_SNAPSHOT` 抄自当前 `L1_CARDS`（code 3 / hub 3 / sync 2）。
-
-- [ ] **Step 2: 迁移 8 张卡 frontmatter 并切换实现**；`startup_budget.measure_tiers` 改调 `l1_cards()`
+- [ ] **Step 2: 迁移卡 frontmatter 并切换实现**；`startup_budget.measure_tiers` 改调 `l1_cards()`
 - [ ] **Step 3: 形状断言**：单型 >3 张 → 违规（防「顺手再加一张」复发成 L1 ratchet）
 - [ ] **Step 4: 验证**
 
@@ -457,7 +463,7 @@ cd hub-engine
 ..\.venv\Scripts\python.exe -m scripts.startup_budget
 ```
 
-Expected: `L1[code] 9356 (cap 15000)` 等四行不变；pytest 全绿
+Expected: L1 四行仍在 15K 内；pytest 全绿
 
 ---
 
@@ -465,15 +471,16 @@ Expected: `L1[code] 9356 (cap 15000)` 等四行不变；pytest 全绿
 
 **Files:**
 
-- Modify: `hub-engine/scripts/pre-commit`（+ `render_index --check`，退出码 6）
-- Modify: `hub-engine/scripts/patrol/steps.py`（+ `render_index_check` 步；`lint` 字段名同步）
-- Modify: `hub-engine/tests/test_patrol_steps.py`、`hub-engine/tests/test_patrol_cli.py`（巡检步数 24 → 25 的契约）
-- Modify: `scripts/nightly_consolidate.cmd`（+ `render_index --write`，紧随 ingest 之后）
-- Modify: `hub-engine/scripts/pre-commit` 头部版本注释 V1.3 → V1.4
+- Modify: `hub-engine/scripts/pre-commit`（V1.3 → V1.4：+ 渲染可复现校验，退出码 6）
+- Modify: `hub-engine/scripts/pre-commit-hub-cards`（V1.1 → V1.2：+ 无条件渲染校验）
+- Modify: `hub-engine/scripts/patrol/steps.py`（+ `_step_render_check`）
+- Modify: `hub-engine/scripts/patrol_runner.py`、`hub-engine/scripts/patrol/__init__.py`（注册 + `__all__`）
+- Modify: `hub-engine/tests/test_patrol_steps.py`（`_STEP_CALLS` + 24 → 25 步契约）
+- Modify: `scripts/nightly_consolidate.cmd`（+ 2.5/4 render-index）
 
-- [ ] **Step 1: pre-commit 加 `--check`**（在预算门禁之后、markdownlint 之前；仅当 staged 含 `.md` 或 `hub-engine/**` 时跑）
+- [ ] **Step 1: pre-commit 加 `--check`**
 - [ ] **Step 2: patrol 加步**，并同步「24 步」契约测试与 WORK.md 描述
-- [ ] **Step 3: 夜间渲染**，保证 INDEX-full.md 次日晨报可读
+- [ ] **Step 3: 夜间渲染**，保证三份产物次日晨报可读
 - [ ] **Step 4: 验证**
 
 > **执行结果（2026-10-01 已完成）**：`_step_render_check` 上巡检（**24 → 25 步**，阶段 2 紧跟 startup_budget），
@@ -481,8 +488,8 @@ Expected: `L1[code] 9356 (cap 15000)` 等四行不变；pytest 全绿
 > 渲染一致性检查**无条件跑**（INDEX\*.md 不在卡片目录里，若挂在「有卡片 staged」分支下，
 > 单独提交一个手改的 INDEX-full.md 就会绕过它），已**先证红**：手改 INDEX-full.md → 钩子 exit 6 阻断。
 > 端到端验收：`patrol_runner` **总体退出码 0（全绿）**，`lint orphans=0 ghosts=0`、
-> `startup_budget L0 8539/30000`、`render_check 431ms ✅`、`pytest 734 passed`。
-> 尚未做：夜间 `nightly_consolidate.cmd` 挂钩与 `pre-commit`（外层）加 `--check`（低优先，巡检+hub 钩子已覆盖）。
+> `startup_budget L0 8708/30000`、`render_check 403ms ✅`、`pytest 755 passed`；
+> 夜间链已补 2.5/4 `render-index`（best-effort，每日巡检 render_check 兜底）。
 
 ---
 
@@ -551,8 +558,29 @@ Expected: pytest **0 failed**（当前基线 687 passed / 2 failed / 4 skipped�
 | `tests/test_post_ingest_hook.py` | 不再手改 INDEX 文本（改为触发渲染） |
 | `tests/test_platform_and_bench_scripts.py` | bench 读 `INDEX-full.md` |
 | `tests/test_patrol_steps.py`、`test_patrol_cli.py` | 巡检 24 → 25 步契约 |
-| `tests/test_task_tier.py` | `L1_CARDS` 常量 → `l1_cards()` 函数 |
+| `tests/test_task_tier.py` | `L1_CARDS` 常量 → `l1_cards()` 函数（已乘） |
+| `tests/test_index_limits.py`（新） | 描述上限两侧同源 |
+| `tests/test_set_index_meta.py`（新） | 回写入口 + 安全写盘（BOM/换行/YAML） |
 | `tests/test_slim_index.py`、`tests/test_index_desc_quality.py` | `slim_index` 使命结束，**待裁**（见下） |
+
+## 改造后追加完成项（超出原计划，2026-10-01）
+
+| 项 | 为何加 | 证据 |
+| --- | --- | --- |
+| 描述质量 142 → 0 | Task 3b 遗留的「描述读不懂」直接损害蓝图层选型 | `proofread_index_desc`：15 自动（注解拆分/H1 替换）+ 3 人工 |
+| 描述上限单一来源 `common/index_limits`（250/800） | 真病因：派生侧按 40 硬切、校验侧允许 250/800 ⇒ **门禁不会红** | `tests/test_index_limits.py` 铉死两侧同源 |
+| `INDEX-experience.md` 纳入渲染 | 它是**最后一个手写维护的索引**，实测 7 条陈旧重复登记 | audit 从 8 项 → 1 项 |
+| `audit_index` 合并全分册 | 枚举迁出根 INDEX 后，278 条被误报「未登记」 | 假阳性洪流消失 |
+| `set_index_meta` + `card_fields` | T1/状态回写需要「一条命令」代替手改索引 | `tests/test_set_index_meta.py`（13 例） |
+| L1 派生（Task 6） | 手写清单 + 固定帽 ≈ L0 同病 | `l1_cards()` + 单型 ≤3 形状断言 |
+| 门禁 V1.4 / hub V1.2 + 夜间 2.5/4 | 产物与卡必须可验证为一致；夜间 ingest 后重渲 | 两钩子均**先证红**（exit 6） |
+
+**验收基线（2026-10-01 全链路巡检）**：`lint orphans=0 ghosts=0`、`L0 8708/30000`、
+`render_check 403ms ✅`、`pytest 755 passed / 4 skipped / 0 failed`、**总体退出码 0（全绿）**。
+
+**已知遗留（1 项，low）**：`20260908-170346-mavis-v1.0-接入范式落地测试` 描述 8 字符
+——那卡本身正文就只有「接入范式落地测试 / 测试内容」（**thin card**，不是描述问题）；
+补内容或归档需维护者裁定，不得臆造。
 
 ## 附带裁定项（本计划记录，不擅自删除）
 

@@ -254,7 +254,7 @@ def _step_render_check(root: Path) -> StepResult:
         name="render_check",
         stage="质量门禁",
         status="pass",
-        output="✅ INDEX.md / INDEX-full.md 与卡文件一致（渲染产物无手改）",
+        output="✅ INDEX.md / INDEX-full.md / INDEX-experience.md 与卡文件一致（渲染产物无手改）",
     )
 
 
