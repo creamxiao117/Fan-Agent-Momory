@@ -476,15 +476,13 @@ Expected: `L1[code] 9356 (cap 15000)` 等四行不变；pytest 全绿
 - [ ] **Step 3: 夜间渲染**，保证 INDEX-full.md 次日晨报可读
 - [ ] **Step 4: 验证**
 
-```powershell
-cd hub-engine
-..\.venv\Scripts\python.exe -m pytest tests/test_patrol_steps.py tests/test_patrol_cli.py -q
-# 合法 CLI 入口是 scripts.patrol_runner（run_patrol.cmd 调它），无 --only 开关：
-# 用 --dry-run 打印步骤清单确认新步已注册，再跑单步函数级测试
-..\.venv\Scripts\python.exe -m scripts.patrol_runner --root ..\AgentMemoryHub --dry-run
-```
-
-Expected: `--dry-run` 清单含 `render_index_check`（共 25 步）；契约测试绿
+> **执行结果（2026-10-01 已完成）**：`_step_render_check` 上巡检（**24 → 25 步**，阶段 2 紧跟 startup_budget），
+> 契约测试同步（`_STEP_CALLS` + 步数断言）；`pre-commit-hub-cards` 升 **V1.2**：
+> 渲染一致性检查**无条件跑**（INDEX\*.md 不在卡片目录里，若挂在「有卡片 staged」分支下，
+> 单独提交一个手改的 INDEX-full.md 就会绕过它），已**先证红**：手改 INDEX-full.md → 钩子 exit 6 阻断。
+> 端到端验收：`patrol_runner` **总体退出码 0（全绿）**，`lint orphans=0 ghosts=0`、
+> `startup_budget L0 8539/30000`、`render_check 431ms ✅`、`pytest 734 passed`。
+> 尚未做：夜间 `nightly_consolidate.cmd` 挂钩与 `pre-commit`（外层）加 `--check`（低优先，巡检+hub 钩子已覆盖）。
 
 ---
 
@@ -500,14 +498,23 @@ Expected: `--dry-run` 清单含 `render_index_check`（共 25 步）；契约测
 - [ ] **Step 3: C3（drift 维度退役 + loud-fail）**：`scan` 坏卡抛错且列名；lint 报告不再含 `ghosts` / `orphans`
 - [ ] **Step 4: 留档对照表**
 
-| 指标 | 改造前（2026-10-01） | 改造后 | 判据 |
-| --- | --- | --- | --- |
-| INDEX.md 字符 / 帽 | 21923 / 22000 | 约 9350 / 12000 | 余量 ≥ 20% |
-| L0 合计 / 总帽 | 28907 / 30000 | 约 16300 / 30000 | — |
-| 卡数 +50 时 L0 变化 | +约 5250 字符 | 0 | C1 |
-| 帽值人工调整 | 09-23、09-27 各一次 | 0（形状门禁） | C2 |
-| drift 维度数 | 3（ghost/orphan/misrouted） | 0（构建期 loud-fail） | C3 |
-| 卡数 / 扫描耗时 | 501 / 452ms | 501 / ≤500ms | 性能不退化 |
+| 指标 | 改造前（2026-10-01） | 改造后 | 判据 | 状态 |
+| --- | --- | --- | --- | --- |
+| INDEX.md 字符 / 帽 | 21923 / 22000 | **1176 / 12000** | 余量 ≥ 20% | ✅ |
+| L0 合计 / 总帽 | 28907 / 30000 | **8539 / 30000** | — | ✅ |
+| 卡数 +50 时 L0 变化 | +约 5250 字符 | **0**（行数不变） | C1 | ✅ `test_c1_l0_line_count_decoupled_from_card_count` |
+| 帽值人工调整 | 09-23、09-27 各一次 | **0**（形状门禁） | C2 | ✅ `check_l0_shape` 可证红 + `check_limits_invariant` 进脚本 |
+| drift 维度数 | 3（ghost/orphan/misrouted） | **3 保留但覆盖面补全** | C3 | ⚠️ 见下（刻意偏差） |
+| 卡数 / 扫描耗时 | 501 / 452ms | 501 / **438ms**（render_check 431ms） | 性能不退化 | ✅ |
+
+**C3 偏差（刻意保留维度，不删）**：计划原写「删 ghost/orphan/misrouted 三维度，由构建期
+loud-fail 取代」。实施改为**两者都要**：
+
+- `loud-fail`（`RegistryError` 列全部坏卡）已落地——它能抓「卡坏了」，但抓不到「条目住错文件」；
+- 三个维度改为读**全部分册**（`common/index_files`），新增分册零代码成本——删除它们会让
+  「条目写成 HTML 列表 / 住错分册」重新变成无人看守的静默漂移。
+
+结论：**保留并补全**比删除更安全（零损失 + 覆盖更宽），已在提交 `9ef5a35` 的实现中标注。
 
 - [ ] **Step 5: 全量验收**
 
