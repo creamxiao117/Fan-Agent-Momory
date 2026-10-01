@@ -1,5 +1,5 @@
 @echo off
-rem == AgentHub nightly consolidation (distill -> build-vectors -> sleep -> local-summary) ==
+rem == AgentHub nightly consolidation (distill -> build-vectors -> render-index -> sleep -> local-summary) ==
 rem -- ENCODING CONTRACT (rules/chinese-text-encoding-discipline) --------------
 rem  Keep this file ANSI (pure ASCII) + CRLF. Pin BOTH ends:
 rem    chcp 65001 here  +  PYTHONUTF8=1 / PYTHONIOENCODING=utf-8 for the child.
@@ -53,6 +53,15 @@ echo [%date% %time%] -- 2/4 build-vectors -- >> "%LOG%"
 "%PY%" engine.py build-vectors --root "%ROOT%" >> "%LOG%" 2>&1
 set "RC_VEC=%ERRORLEVEL%"
 echo [%date% %time%]    build-vectors exit=%RC_VEC% >> "%LOG%"
+
+rem -- 2.5/4 render INDEX products (2026-10-01) --------------------------------
+rem  INDEX.md / INDEX-full.md / INDEX-experience.md are RENDER products (source of
+rem  truth = card files). distill may have added/changed cards, so re-render here;
+rem  best-effort: a failed render is logged but does not fail the task (the daily
+rem  patrol step render_check turns the drift red the next morning).
+echo [%date% %time%] -- 2.5/4 render-index -- >> "%LOG%"
+"%PY%" -m scripts.render_index --write --root "%ROOT%" >> "%LOG%" 2>&1
+echo [%date% %time%]    render-index exit=%ERRORLEVEL% >> "%LOG%"
 
 echo [%date% %time%] -- 3/4 sleep-consolidate -- >> "%LOG%"
 "%PY%" scripts\hub_sleep_consolidate.py --root "%ROOT%" --since-days 7 --max-candidates 5 >> "%LOG%" 2>&1

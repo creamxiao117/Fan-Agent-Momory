@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
-# @version V1.3 / 2026-09-25 / Hermes + pi / hub-engine 四道提交门禁钩子
+# @version V1.4 / 2026-10-01 / Hermes + pi / hub-engine 五道提交门禁（+ 渲染逻辑可复现性）
 #
-# 作用（四道门禁，先编码 → 再预算 → 再 markdown → 后 ruff）：
+# 作用（五道门禁，先编码 → 再预算/形状 → 再渲染逻辑 → 再 markdown → 后 ruff）：
 #   0) 编码门禁：staged 文本文件跑 check_encoding.py，非 UTF-8 / BOM 不合规 /
 #      乱码串残留 / .vbs 含非 ASCII → 阻断（依据 rules/chinese-text-encoding-discipline v1.0）
-#   0.5) 启动链预算门禁（L0 ≤30K + L1 各任务型 ≤15K）→ 超标阻断
+#   0.5) 启动链预算门禁（L0 ≤30K + **L0 形状**（无 per-card 行）+ L1 各型 ≤15K/≤3 张）→ 超标阻断
+#   0.6) 渲染可复现性（仅当改到渲染/派生逻辑）：render_index --check 不复现当前产物 → 阻断
 #   0.8) markdownlint（仅 staged .md）→ 违规阻断（存量基线见 .markdownlintignore）
 #   1) ruff check  → 不通过则阻断
 #   2) ruff format --check → 不一致则阻断
@@ -26,7 +27,8 @@
 #   2 = 阻断（ruff format --check 不一致）
 #   3 = 阻断（markdownlint 未通过，2026-09-25 新增）
 #   4 = 阻断（编码门禁未通过）
-#   5 = 阻断（启动链预算超帽）
+#   5 = 阻断（启动链预算/形状超限）
+#   6 = 阻断（渲染产物不可复现，2026-10-01 新增）
 #
 # 兼容：Windows + Linux + macOS（Git Bash）
 
@@ -71,13 +73,31 @@ if [ -f "$BUDGET_SCRIPT" ]; then
         L1_LINE=$(echo "$BUDGET_OUT" | grep -cE '^\[OK\] L1\[' || true)
         echo "[pre-commit] ✅ 预算门禁通过（${TOTAL_LINE:-L0 OK}；L1 分型 ${L1_LINE} 项）"
     else
-        echo "$BUDGET_OUT" | grep -E '^\[(OVER|FAIL|TOTAL)\]|^FAIL' || echo "$BUDGET_OUT"
-        echo "[pre-commit] ❌ 启动链预算超帽（L0 总和/分项帽 或 L1 分型/悬空卡名），commit 阻断"
-        echo "[pre-commit] 修法：瘦身对应文件，或按需调整 scripts/startup_budget.py 的 LIMITS/L1_LIMIT"
+        echo "$BUDGET_OUT" | grep -E '^\[(OVER|SHAPE|FAIL|TOTAL)\]|^FAIL' || echo "$BUDGET_OUT"
+        echo "[pre-commit] ❌ 启动链预算/形状门禁未通过（L0 总和、分项帽、L0 per-card 行或 L1 分型/卡数），commit 阻断"
+        echo "[pre-commit] 修法：瘦身对应文件；L0 出现登记行 ⇒ 用 python -m scripts.render_index --write 重渲"
         exit 5
     fi
 else
     echo "[pre-commit] ⚠️ 找不到 $BUDGET_SCRIPT，跳过预算门禁"
+fi
+
+# ---------- 0.6) 索引渲染一致性（2026-10-01）----------
+# 为何要：INDEX.md / INDEX-full.md / INDEX-experience.md 都是 `render_index` 的**渲染产物**。
+# 只在「渲染器自身被改」时跑（提交链里 INDEX 文件住在嵌套中枢仓，普通提交看不到它们）：
+#   改了渲染/派生逻辑 → 必须证明它仍能复现当前产物，否则产物会在下次渲染时安静变形。
+# 退出码 6（与中枢仓钩子保持一致）。
+RENDER_LOGIC_STAGED=$(git diff --cached --name-only --diff-filter=ACMR \
+    | grep -E '^hub-engine/(scripts/render_index\.py|tools/hub_registry\.py|common/index_(files|limits)\.py)$' || true)
+if [ -n "$RENDER_LOGIC_STAGED" ] && [ -f "hub-engine/scripts/render_index.py" ]; then
+    echo "[pre-commit] 渲染器逻辑有改动 → 校验产物可复现性..."
+    if RENDER_OUT=$(cd hub-engine && python -m scripts.render_index --check 2>&1); then
+        echo "[pre-commit] ✅ 渲染产物与卡文件一致（逻辑改动未使现有产物变形）"
+    else
+        echo "$RENDER_OUT" | grep -E '^FAIL' || echo "$RENDER_OUT"
+        echo "[pre-commit] ❌ 渲染产物不一致：重跑 python -m scripts.render_index --write 并一并提交产物"
+        exit 6
+    fi
 fi
 
 echo "[pre-commit] ✅ 预算门禁通过"

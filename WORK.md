@@ -30,9 +30,9 @@
 
 ## 门禁（都必须在跑，不只是"代码里有"）
 
-- **提交时**（`.git/hooks/pre-commit` V1.3，源 `hub-engine/scripts/pre-commit`）：编码 → **预算** → markdownlint → ruff check → ruff format
+- **提交时**（`.git/hooks/pre-commit` V1.4，源 `hub-engine/scripts/pre-commit`）：编码 → 预算+**L0 形状** → 渲染可复现 → markdownlint → ruff
 - **每日 07:30** `AgentHub-DailyPatrol` → `scripts/run_patrol.cmd`（**25 步**：lint / pytest / ruff / startup_budget / render_check / 向量回归【含 `--fail-below 0.8`】/ 平台三项 / autofix）
-- **每日 00:35** `AgentHub-NightlyConsolidate` → `scripts/nightly_consolidate.cmd`（distill→build-vectors→sleep→local-summary）
+- **每日 00:35** `AgentHub-NightlyConsolidate` → `scripts/nightly_consolidate.cmd`（distill→build-vectors→**render-index**→sleep→local-summary）
 - **每日 06:00** `AgentHub-SecretSentry` → `scripts/secret_sentry.cmd`（误报 **26 → 0**）
 - **每日 09:00** `PluginHub-PytestTempClean`（临时目录清理）
 - **Hermes 链（5 个，07:30 起每 10 min；模型统一 `mimo-v2.6-flash@xiaomi`，全部 `deliver=local`）**：07:30 晨间日报 → 07:40 草稿提升 → 07:50 star-distill+T1（唯一 agent）→ 周六 08:00 召回评测 → 周六 08:10 SkillHub；**微信通道已整体停用**（`platforms.weixin.enabled: false` + gateway 重启，入/出站均停；详卡 `projects/hermes-cron-jobs`）
