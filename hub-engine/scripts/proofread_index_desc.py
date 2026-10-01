@@ -26,6 +26,7 @@ import argparse  # noqa: E402
 import re  # noqa: E402
 from pathlib import Path  # noqa: E402
 
+from scripts.card_fields import set_fields  # noqa: E402
 from scripts.post_ingest_hook import cut_at_boundary  # noqa: E402
 from tools.hub_registry import SUMMARY_MAX_BY_DIR, CardMeta, hub_root, scan  # noqa: E402
 
@@ -88,42 +89,6 @@ def classify(hub: Path, cards: list[CardMeta]) -> dict[str, list[tuple[str, str,
     return groups
 
 
-def _yaml_line(key: str, value: str) -> str:
-    import yaml
-
-    return yaml.safe_dump(
-        {key: value}, allow_unicode=True, default_flow_style=False, width=10**6, sort_keys=False
-    ).strip()
-
-
-def _set_fields(text: str, fields: dict[str, str]) -> str:
-    """写入/替换 frontmatter 字段（保留原换行风格）。"""
-    lines = text.splitlines(keepends=True)
-    newline = "\r\n" if lines[0].endswith("\r\n") else "\n"
-    end = None
-    seen = 0
-    slots: dict[str, int] = {}
-    for i, ln in enumerate(lines):
-        if ln.strip() == "---":
-            seen += 1
-            if seen == 2:
-                end = i
-                break
-        for key in fields:
-            if ln.startswith(f"{key}:"):
-                slots[key] = i
-    if end is None:
-        raise ValueError("frontmatter 未闭合")
-    for key, value in fields.items():
-        rendered = _yaml_line(key, value) + newline
-        if key in slots:  # 已存在 → 原地替换
-            lines[slots[key]] = rendered
-        else:  # 不存在 → 插到 frontmatter 末尾
-            lines.insert(end, rendered)
-            end += 1
-    return "".join(lines)
-
-
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="索引描述质量校对（一次性）")
     ap.add_argument("--root", type=Path, default=None)
@@ -164,10 +129,7 @@ def main(argv: list[str] | None = None) -> int:
         for slug, _old, fields in auto:
             if not fields:
                 continue
-            p = hub / by_slug[slug].rel_path
-            raw = p.read_bytes()
-            enc = "utf-8-sig" if raw[:3] == b"\xef\xbb\xbf" else "utf-8"
-            p.write_text(_set_fields(raw.decode(enc), fields), encoding=enc)
+            set_fields(hub / by_slug[slug].rel_path, fields)
             written += 1
     print(f"[OK] 已改写 {written} 条（index_desc / index_note）")
     return 0
