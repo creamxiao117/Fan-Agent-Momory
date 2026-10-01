@@ -20,8 +20,14 @@
 
 from __future__ import annotations
 
-import argparse
+# bootstrap：让此脚本可独立从任何 cwd 调用（外部调度器用绝对路径跑时不能 ModuleNotFoundError）
+# 回归背景：2026-09-26 曾因缺引导让 Hermes 任务真挂（见 tests/test_script_bootstrap.py 守护）
 import sys
+from pathlib import Path as _P
+
+sys.path.insert(0, str(_P(__file__).resolve().parents[1]))  # hub-engine/
+
+import argparse
 from pathlib import Path
 
 from scripts.index_consistency import INDEX_ENTRY_RE, SECTION_TITLES
