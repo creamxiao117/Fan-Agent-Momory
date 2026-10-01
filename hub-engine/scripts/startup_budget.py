@@ -72,7 +72,7 @@ def measure_tiers(root: Path | None = None) -> list[dict]:
     不当失败。但若中枢**存在**而某个 L1 卡名找不到文件，那是真实的
     "路由悬空"，必报（比超预算更危险）。
     """
-    from tools.task_tier import L1_CARDS  # 局部导入：避免无 tools 环境时不可用
+    from tools.task_tier import l1_cards  # 局部导入：避免无 tools 环境时不可用
 
     hub = (root or _repo_root()) / "AgentMemoryHub"
     # 降级：无中枢目录，或中枢里连一个权威卡目录都没有 → 不视为真实中枢，
@@ -81,7 +81,8 @@ def measure_tiers(root: Path | None = None) -> list[dict]:
     if not hub.is_dir() or not any((hub / d).is_dir() for d in _CARD_DIRS):
         return []
     rows: list[dict] = []
-    for tier, slugs in L1_CARDS.items():
+    # 卡集合由卡自身 frontmatter `l1_tier` 派生（2026-10-01；不再手写清单）
+    for tier, slugs in l1_cards(hub).items():
         total = 0
         missing: list[str] = []
         for s in slugs:
@@ -98,12 +99,19 @@ def check_tiers(rows: list[dict]) -> list[str]:
     """返回 L1 预算违规（空列表=通过）。
 
     - 单任务型合计 > L1_LIMIT → 违规（防单张长卡或堆积回潮）
+    - 单任务型卡数 > L1_MAX_CARDS_PER_TIER → 违规（形状断言，2026-10-01 新增）
     - L1 卡名找不到对应文件 → 违规（路由指向不存在的卡，比超预算更危险）
     """
+    from tools.task_tier import L1_MAX_CARDS_PER_TIER
+
     errs: list[str] = []
     for r in rows:
         if r["chars"] > L1_LIMIT:
             errs.append(f"L1[{r['tier']}] {r['chars']} > {L1_LIMIT}")
+        if r["count"] > L1_MAX_CARDS_PER_TIER:
+            errs.append(
+                f"L1[{r['tier']}] 卡数 {r['count']} > {L1_MAX_CARDS_PER_TIER}（新增须挤掉一张：删旧卡的 l1_tier 字段）"
+            )
         if r["missing"]:
             errs.append(f"L1[{r['tier']}] 卡不存在: {r['missing']}")
     return errs

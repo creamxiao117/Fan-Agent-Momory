@@ -29,9 +29,12 @@
 | 型 | 判定（关键词兜底，判不出=light） | L1 规则卡（只读核心节/全文按需） |
 | --- | --- | --- |
 | light | 默认、问答、查状态 | （无，仅 L0） |
-| code | commit/ruff/pytest/patch/PR/改代码 | chinese-text-encoding-discipline · agent-code-discipline-iron-rule · multi-language-style-config |
+| code | commit/ruff/pytest/patch/PR/改代码 | agent-code-discipline-iron-rule · chinese-text-encoding-discipline · multi-language-style-config |
 | hub | 中枢/ingest/rules/experience/回写 | dual-platform-coherence-discipline · global-rules · memory-hub-distill-last |
 | sync | sync/push/注入/跨平台 | cross-platform-sync-rule · dual-platform-coherence-discipline |
+
+> 卡集合由**卡自身 frontmatter `l1_tier`** 派生（`tools.task_tier.l1_cards()`），非手写清单；
+> 单型 ≤3 张（`L1_MAX_CARDS_PER_TIER`，形状断言）；新增一张须挤出旧的一张。
 
 升型廉价：动作变重再补读 L1；只升不降。完整关键词见 `hub-engine/tools/task_tier.py`。
 
