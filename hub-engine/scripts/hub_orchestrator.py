@@ -73,16 +73,16 @@ TASKS = [
         30,
     ),
     (
-        "knowledge_gap",
+        # 2026-10-02：`knowledge_gap` 与 `missing_query` 为同一职责（未命中查询统计），
+        # 前者已退役并改调保留者（见 hub-engine/scripts/inventory.py 的 DECLARED_DUPLICATES）。
+        "missing_query",
         [
             "python",
-            "hub-engine/scripts/knowledge_gap.py",
-            "--hub-root",
+            "hub-engine/scripts/missing_query.py",
+            "--root",
             ".",
-            "--hours",
-            "24",
         ],
-        30,
+        60,
     ),
     (
         "skill_candidate",

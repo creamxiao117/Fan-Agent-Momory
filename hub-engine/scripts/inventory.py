@@ -145,21 +145,9 @@ DECLARED_DUPLICATES: list[dict] = [
         "retire": ["scripts/index_consistency", "scripts/audit_index"],
         "why": "INDEX 一致性的唯一实现 = 渲染器 --check；另两个自称同一职责（均带『一致性』）",
     },
-    {
-        "keep": "scripts/missing_query",
-        "retire": ["scripts/knowledge_gap"],
-        "why": "未命中查询统计：missing_query 覆盖 knowledge_gap 的全部能力",
-    },
-    {
-        "keep": "scripts/check_encoding",
-        "retire": ["scripts/nightly_log_encoding_check", "scripts/strip_bom"],
-        "why": "编码检查/修复的唯一实现：--fix 已吸收 BOM 剥离与行尾规范化",
-    },
-    {
-        "keep": "scripts/capability_scan",
-        "retire": ["scripts/platform_unregistered"],
-        "why": "未登记平台检测并入能力实测态扫描（同一把尺子）",
-    },
+    # 2026-10-02 已物理退役（不再登记；verify_declarations 只验证"仍在磁盘"的声明）：
+    #   missing_query / knowledge_gap · check_encoding / nightly_log_encoding_check+strip_bom ·
+    #   capability_scan / platform_unregistered · audit_dead_modules（被本模块吸收）
     # 注：`scripts/audit_dead_modules` 已于 2026-10-02 git rm（本模块吸收其引用扫描并换 AST 实现）
     # —— 已被物理删除者不再登记（`verify_declarations` 只验证"仍在磁盘"的声明）。
 ]

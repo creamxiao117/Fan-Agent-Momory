@@ -172,7 +172,6 @@ def test_step_contract(patrol_tree, monkeypatch, name, call):
         "stale_detect.py",
         "platform_sync.py",
         "platform_healthcheck.py",
-        "platform_unregistered.py",
     )
     monkeypatch.setattr(patrol_steps, "_run_cmd", FakeCmd(0, '{"cards": 1}'))
     monkeypatch.setattr(subprocess, "run", FakeRun(0, "ok"))
