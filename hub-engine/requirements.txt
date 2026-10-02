@@ -1,4 +1,9 @@
+# hub-engine 运行依赖（与 pyproject.toml 对齐；两处不同步会导致「装了能跑/换机就断」的假绿）
 PyYAML>=6.0
 requests>=2.31
 pytest>=8.0
 jieba>=0.42  # 中文词模式（可选，缺失时回退字符 n-gram）
+mcp>=2.0,<3  # MCP stdio 服务；**必须 2.x**（2.0 起才有 Server.add_request_handler，1.26 装了也起不来）
+#   证据：experience/mcp-server-mcp-version-mismatch.md（2026-08-28 实测 1.26 不可用）
+#   2026-10-02：.venv 由缺包→补装 mcp 2.2.0，hub_mcp_smoke 冒烟 PASS
+

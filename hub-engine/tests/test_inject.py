@@ -11,12 +11,15 @@ def test_inject_writes_block(tmp_path):
 
 
 def test_inject_idempotent(tmp_path):
+    """幂等：托管块唯一；第二次调用字节级不变（V2.0 起用 BEGIN 标记断言，比标题串更稳）"""
     target = tmp_path / "user_profile.md"
     target.write_text("", encoding="utf-8")
     inject_instruction(target)
+    once = target.read_bytes()
     inject_instruction(target)
     text = target.read_text(encoding="utf-8")
-    assert text.count("## 统一记忆中枢") == 1
+    assert text.count("<!-- BEGIN memory-hub-bridge") == 1
+    assert target.read_bytes() == once, "第二次注入必须字节级不变"
 
 
 def test_inject_refreshes_stale_hub_location(tmp_path):
@@ -30,9 +33,44 @@ def test_inject_refreshes_stale_hub_location(tmp_path):
     target.write_text(stale, encoding="utf-8")
     inject_instruction(target)
     text = target.read_text(encoding="utf-8")
-    assert text.count("## 统一记忆中枢") == 1
+    assert text.count("<!-- BEGIN memory-hub-bridge") == 1, "旧无标记块应被整体移除（不得新旧并存）"
     assert "D:\\AIwork\\AgentMemoryHub" not in text
     assert "中枢位置：" + hub_location() in text
+
+
+def test_inject_top_position_is_very_top(tmp_path):
+    """`--top`：托管块必须在文件最顶部（memory-injection-pattern §2「放最顶部」）"""
+    target = tmp_path / "AGENTS.md"
+    target.write_text("# 用户长期记忆\n\n已有内容\n", encoding="utf-8")
+    inject_instruction(target, position="top")
+    text = target.read_text(encoding="utf-8")
+    assert text.startswith("<!-- BEGIN memory-hub-bridge"), "块必须位于首行之前"
+    assert text.index("<!-- END memory-hub-bridge") < text.index("# 用户长期记忆")
+    assert "已有内容" in text, "原有内容不得丢失"
+
+
+def test_inject_top_is_bytewise_idempotent(tmp_path):
+    target = tmp_path / "AGENTS.md"
+    target.write_text("# 既有\n\n正文\n", encoding="utf-8")
+    inject_instruction(target, position="top")
+    once = target.read_bytes()
+    inject_instruction(target, position="top")
+    assert target.read_bytes() == once
+    assert target.read_text(encoding="utf-8").count("<!-- BEGIN memory-hub-bridge") == 1
+
+
+def test_inject_top_migrates_legacy_bottom_block(tmp_path):
+    """迁移：旧的底部署名块 + 正文 → 块移到顶部，正文保留，旧块不残留"""
+    target = tmp_path / "AGENTS.md"
+    target.write_text("", encoding="utf-8")
+    inject_instruction(target)  # 先按旧口径写在底部
+    target.write_text("# 正文\n\n" + target.read_text(encoding="utf-8"), encoding="utf-8")
+    inject_instruction(target, position="top")
+    text = target.read_text(encoding="utf-8")
+    assert text.startswith("<!-- BEGIN memory-hub-bridge")
+    assert text.count("<!-- BEGIN memory-hub-bridge") == 1
+    assert "# 正文" in text
+    assert text.index("# 正文") > text.index("<!-- END memory-hub-bridge")
 
 
 def test_inject_new_instruction_mentions_bootstrap(tmp_path):
