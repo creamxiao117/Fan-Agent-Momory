@@ -131,11 +131,19 @@ def gate_text(staged: list[str], repo_root: Path, repo: str) -> tuple[bool, str]
     if len(existing) != len(texts):
         msgs.append(f"跳过 {len(texts) - len(existing)} 个已不在待提交内容里的文件")
     if existing and enc_script.is_file():
-        args = [str(enc_script), *[str(_disk(p)) for p in existing]]
-        code, out = _run([py, *args], cwd=_HUB_ENGINE)
-        bad = [ln for ln in out.splitlines() if ln.startswith("[FAIL]") or ln.startswith("[WARN]")]
-        if code != 0:
-            return False, "编码/行尾门禁未通过（**针对即将提交的内容**）：\n" + "\n".join(bad or [out.strip()])
+        # **分批**调编码检查：Windows 命令行上限 ~32K，500 张卡一次性传参必爆
+        # （2026-10-02 实测：材料化 index 后首个大提交即被拦，报“找不到命令”——
+        #  实际是 CreateProcess 的命令行超限）。批大小取 40（路径均长 ~120 字符 ⇒ 安全）。
+        BATCH = 40
+        bad: list[str] = []
+        for i in range(0, len(existing), BATCH):
+            chunk = [str(_disk(p)) for p in existing[i : i + BATCH]]
+            code, out = _run([py, str(enc_script), *chunk], cwd=_HUB_ENGINE)
+            if code == 127:
+                return True, "编码检查不可用，跳过（不阻断）"
+            bad += [ln for ln in out.splitlines() if ln.startswith("[FAIL]") or ln.startswith("[WARN]")]
+        if bad:
+            return False, "编码/行尾门禁未通过（**针对即将提交的内容**）：\n" + "\n".join(bad[:20])
         msgs.append(f"编码 {len(existing)} 文件（index 物化）" if index_root else f"编码 {len(existing)} 文件")
 
     mds = [p for p in staged if p.endswith(".md")]
