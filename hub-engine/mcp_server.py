@@ -79,6 +79,10 @@ INDEX_SCHEMA = {
 BOOTSTRAP_SCHEMA = {
     "type": "object",
     "properties": {
+        # 规范参数（2026-10-02 口径统一）：light|code|hub|sync|project
+        "task_tier": {"type": "string"},
+        # deprecated 别名（dll|code|project|debug|ideation|generic），取值逐值锁定，
+        # 解析入口唯一 = tools/task_tier.resolve_kind / scope_for
         "task_kind": {"type": "string"},
         "context": {"type": "string"},
         "platform": {"type": "string"},
@@ -86,8 +90,9 @@ BOOTSTRAP_SCHEMA = {
         "include_body": {"type": "boolean"},
         "compress_level": {"type": "integer"},
     },
-    "required": ["task_kind"],
 }
+# 注意：**不再** required 任一字段 —— 两者都空等价旧 generic 宽范围（保持迁移前行为），
+# 而 light 型由 handler 短路（skipped=true，不写审计）。
 INGEST_SCHEMA = {
     "type": "object",
     "properties": {
@@ -173,7 +178,7 @@ def build_server(root: Path) -> Server:
                 ),
                 Tool(
                     name="hub_bootstrap",
-                    description="任务级引导：按 task_kind 分类检索生成引导块",
+                    description="任务级引导：按任务型（task_tier：light/code/hub/sync/project）分类检索生成引导块",
                     inputSchema=BOOTSTRAP_SCHEMA,
                     _meta={"ui": {"resourceUri": _UI_META["hub_bootstrap"]}},
                 ),

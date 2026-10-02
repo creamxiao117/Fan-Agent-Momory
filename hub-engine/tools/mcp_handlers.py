@@ -20,6 +20,7 @@ from tools.safe_patch_handler import (
     hub_safe_patch,  # noqa: F401  转发供 H.hub_safe_patch
 )
 from tools.snippet import extract_snippet
+from tools.task_tier import FALLBACK_KIND, resolve_kind, scope_for
 
 DEFAULT_EXCERPT = 200
 SUBDIR_BY_TYPE = {
@@ -32,14 +33,10 @@ SUBDIR_BY_TYPE = {
     "retro": "retro",
     "blueprint": "blueprints",
 }
-TASK_KIND_TYPES = {
-    "dll": ("rules", "projects"),
-    "code": ("rules", "methodology", "projects"),
-    "project": ("longterm", "methodology", "blueprints"),
-    "debug": ("projects", "experience"),
-    "ideation": ("blueprints", "methodology", "experience"),
-    "generic": ("rules", "methodology", "longterm", "projects"),
-}
+# TASK_KIND_TYPES 于 2026-10-02 迁往 tools/task_tier.py（口径单一事实源）。
+# 此处**不再**定义分型知识；既有 import（tests / 文档）请改从 task_tier 取。
+# 兼容背书：迁移前取值被 LEGACY_KIND_SCOPE 逐值锁定，
+# 见 tests/test_task_tier.py::test_legacy_kind_types_unchanged。
 
 
 def _hit(
@@ -290,18 +287,36 @@ def hub_index(
 
 def hub_bootstrap(
     root: Path,
-    task_kind: str,
+    task_tier: str = "",
+    task_kind: str = "",
     context: str = "",
     platform: str = "unknown",
     top_k: int = 3,
     include_body: bool = False,
     compress_level: int = 0,
 ) -> dict:
-    kinds = TASK_KIND_TYPES.get(task_kind)
-    if kinds is None:
-        task_kind = "generic"
-        kinds = TASK_KIND_TYPES["generic"]
+    # 口径唯一来源 = tools/task_tier：task_tier（规范）> task_kind（deprecated 别名）
+    # 两者都空 → 等价旧 generic 宽范围（保持迁移前行为）
+    requested = (task_tier or task_kind or FALLBACK_KIND).strip().lower()
+    # 未知名字回显为 generic（**保持迁移前行为**：旧实现对未知 kind 归一为 "generic"）
+    resolved_kind = (
+        requested if scope_for(requested) != scope_for(FALLBACK_KIND) or requested == FALLBACK_KIND else FALLBACK_KIND
+    )
+    tier = resolve_kind(requested)
+    kinds = scope_for(requested)
     top_k = max(1, min(10, int(top_k)))
+    if tier == "light" or not kinds:
+        # light 型 = 不检索：明确返回 skipped，且**不写审计**（避免污染检索统计）
+        return {
+            "ok": True,
+            "task_tier": "light",
+            "task_kind": resolved_kind,
+            "skipped": True,
+            "reason": "light 型不检索（无取数范围）",
+            "blocks": [],
+            "markdown": "",
+            "hit_count": 0,
+        }
     _, scored = retrieve_with_meta(root, context, top_k=20, mode="word")
     blocks = []
     for sub in kinds:
@@ -342,14 +357,17 @@ def hub_bootstrap(
             "action": "bootstrap",
             "platform": platform,
             "ok": True,
-            "task_kind": task_kind,
+            "task_tier": tier,
+            "task_kind": resolved_kind,
             "types": list(kinds),
             "category_hits": {b["kind"]: len(b["hits"]) for b in blocks},
         },
     )
     return {
         "ok": True,
-        "task_kind": task_kind,
+        "task_tier": tier,
+        "task_kind": resolved_kind,
+        "hit_count": sum(len(b["hits"]) for b in blocks),
         "snapshot_at": snapshot,
         "blocks": blocks,
         "markdown": markdown,

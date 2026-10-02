@@ -7,11 +7,13 @@ from scripts.bootstrap_hub import bootstrap
 from sync import ingest
 from tools.mcp_handlers import (
     SUBDIR_BY_TYPE,
-    TASK_KIND_TYPES,
     hub_bootstrap,
     hub_search,
 )
 from tools.mcp_policy import AUTHORITY_DIRS, resolve_slug
+
+# 分型取数口径的单一事实源已迁到 tools/task_tier（2026-10-02 口径统一）
+from tools.task_tier import TASK_KIND_TYPES
 
 BLUEPRINT_TEXT = """---
 type: blueprint

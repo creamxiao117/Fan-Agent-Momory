@@ -1,5 +1,33 @@
-# hub-engine/tools/task_tier.py
-"""任务分型（spec S2 四型）与 L1 规则卡路由——AGENTS 路由表的代码侧单一事实源。"""
+r"""任务分型与检索范围 —— **唯一事实源**（口径统一，2026-10-02 裁定）。
+
+## 为何重写（这是"两套分型"的根治）
+
+此前仓内**并存两套分型**，键集不相交、知识重复：
+
+| 套 | 位置 | 取值 | 用途 |
+|---|---|---|---|
+| A | 本模块 | `light \| code \| hub \| sync` | AGENTS 路由 → 补读哪些 L1 卡 |
+| B | `tools/mcp_handlers.TASK_KIND_TYPES` | `dll \| code \| project \| debug \| ideation \| generic` | `hub_bootstrap` → 检索哪些子区 |
+
+后果：加一个型要改两处；pi 接入时必然会写出第三套（本仓已三次复发"手写枚举→漂移"：
+L0 INDEX 枚举行 / `L1_CARDS` 清单 / `tier` 覆盖 7%）。
+
+## 现在的一张表
+
+- `Tier` —— **规范型**（`classify()` 的返回域，`AGENTS.md` 路由依据）。新增 `project`
+  （立项/蓝图），因为「立项必查蓝图」是 `rules/global-rules.md` 的铁律，
+  不能因归一而丢失。
+- `TIER_SCOPE` —— 型 → 检索子区（`hub_bootstrap` 的取数口径）。这是型**派生**出的范围。
+- `LEGACY_KIND_SCOPE` / `LEGACY_KIND_ALIAS` —— 旧 `task_kind` 的**入参兼容层**：
+  取值与迁移前快照**逐值相等**（由 `tests/test_task_tier.py::test_legacy_kind_types_unchanged`
+  锁死），故既有调用方（trae / mavis / deepseek / workbuddy / 文档）**零行为回归**。
+- `scope_for()` / `resolve_kind()` —— **唯一解析入口**。任何新代码不得自行拼子区清单。
+
+## 命名避坑
+
+不要复用 `L0/L1/L2` 作为等级名——它们已被 `scripts/startup_budget.py` 占为**预算分层**
+（L0 常驻 / L1 按型 / L2 检索）。记忆可信度分级另开 `grade` 轴（见架构重构计划 M1）。
+"""
 
 from __future__ import annotations
 
@@ -7,8 +35,83 @@ import re
 from pathlib import Path
 from typing import Literal
 
-Tier = Literal["light", "code", "hub", "sync"]
+Tier = Literal["light", "code", "hub", "sync", "project"]
 
+# ── 唯一表 ①：规范型 → 检索子区 ─────────────────────────────────
+# light = 不检索（`scope_for("light")` 返回空元组；hub_bootstrap 对 light 短路且不写审计）
+TIER_SCOPE: dict[Tier, tuple[str, ...]] = {
+    "light": (),
+    "code": ("rules", "methodology", "projects"),
+    "hub": ("rules", "methodology", "experience"),
+    "sync": ("rules", "methodology"),
+    "project": ("longterm", "methodology", "blueprints"),
+}
+
+# ── 唯一表 ②：旧 task_kind 兼容层（取值 = 2026-10-02 迁移前快照，逐值不变）──
+# 为何保留独立取值而不并入所属型的 TIER_SCOPE：迁移前 `debug` 只查 projects+experience、
+# `dll` 只查 rules+projects，都是**有意收窄**的（少注入 = 少 token）。归一会放宽它们，
+# 属行为变更，不在"口径统一"的授权范围内。故此处只做「别名 + 原范围」登记，
+# 让漂移可见、改动集中在一处（想收窄/放宽只改这张表）。
+LEGACY_KIND_SCOPE: dict[str, tuple[str, ...]] = {
+    "dll": ("rules", "projects"),
+    "code": ("rules", "methodology", "projects"),
+    "project": ("longterm", "methodology", "blueprints"),
+    "debug": ("projects", "experience"),
+    "ideation": ("blueprints", "methodology", "experience"),
+    "generic": ("rules", "methodology", "longterm", "projects"),
+}
+
+# 旧名 → 规范型（供 resolve_kind 报告与统计；`dll`/`debug` 都是 `code` 的领域特例）
+LEGACY_KIND_ALIAS: dict[str, Tier] = {
+    "dll": "code",
+    "code": "code",
+    "debug": "code",
+    "project": "project",
+    "ideation": "project",
+    "generic": "hub",
+    # 规范型名同时是合法入参（幂等）
+    "light": "light",
+    "hub": "hub",
+    "sync": "sync",
+}
+
+# 未知名字的兜底：保持迁移前行为（`generic` 的宽范围）
+FALLBACK_KIND = "generic"
+
+
+def resolve_kind(name: str) -> Tier:
+    """任意分型名 → 规范型。未知名回退 `hub`（= 旧 `generic` 的所属型）。"""
+    key = (name or "").strip().lower()
+    if key in LEGACY_KIND_ALIAS:
+        return LEGACY_KIND_ALIAS[key]
+    if key in TIER_SCOPE:
+        return key  # type: ignore[return-value]
+    return "hub"
+
+
+def scope_for(name: str) -> tuple[str, ...]:
+    """**唯一取数入口**：任意分型名 → 检索子区。
+
+    解析顺序（保持迁移前行为）：
+      1) 旧 task_kind 名（`dll`/`debug`/`ideation`/`generic` …）→ 其登记范围
+      2) 规范型名（`light`/`code`/`hub`/`sync`/`project`）→ `TIER_SCOPE`
+      3) 未知 → `generic` 的宽范围
+    """
+    key = (name or "").strip().lower()
+    if key in LEGACY_KIND_SCOPE:
+        return LEGACY_KIND_SCOPE[key]
+    if key in TIER_SCOPE:
+        return TIER_SCOPE[key]  # type: ignore[index]
+    return LEGACY_KIND_SCOPE[FALLBACK_KIND]
+
+
+# ── 派生视图：旧常量由表渲染（单一事实源；消费方零改动）──────────
+# 保留本名以兼容既有 import（mcp_handlers / tests / 文档）——
+# 但**取值只能来自上面两张表**，此处不得出现任何手写字面量。
+TASK_KIND_TYPES: dict[str, tuple[str, ...]] = {k: scope_for(k) for k in LEGACY_KIND_SCOPE}
+
+
+# ── 关键词分型 ────────────────────────────────────────────────
 # 关键词 → 型；classify 时按 _ORDER 优先级，同型命中即返回
 _KEYWORDS: dict[Tier, tuple[str, ...]] = {
     "hub": (
@@ -33,6 +136,16 @@ _KEYWORDS: dict[Tier, tuple[str, ...]] = {
         "修 bug",
         "改代码",
     ),
+    # project 置于最后：仅在 hub/sync/code 都不命中时才判为立项型（保守，不改既有判定）
+    "project": (
+        "立项",
+        "蓝图",
+        "选型",
+        "新项目",
+        "技术路径",
+        "方案对比",
+        "ideation",
+    ),
 }
 
 
@@ -43,7 +156,7 @@ def _hit(kw: str, text: str) -> bool:
     return kw in text
 
 
-_ORDER: tuple[Tier, ...] = ("hub", "sync", "code")
+_ORDER: tuple[Tier, ...] = ("hub", "sync", "code", "project")
 
 # ── L1 卡集合：由**卡自身 frontmatter `l1_tier`** 派生（2026-10-01）────────────
 #
@@ -73,7 +186,7 @@ def l1_cards(root: Path | None = None) -> dict[Tier, list[str]]:
 
     base = _P(root) if root is not None else _P(__file__).resolve().parents[2] / "AgentMemoryHub"
     rules = base / "rules"
-    out: dict[Tier, list[str]] = {t: [] for t in ("light", "code", "hub", "sync")}
+    out: dict[Tier, list[str]] = {t: [] for t in TIER_SCOPE}
     if not rules.is_dir():
         return out
     for p in sorted(rules.glob("*.md")):
@@ -114,3 +227,20 @@ def classify(prompt: str) -> Tier:
             if _hit(kw.lower(), text):
                 return tier
     return "light"
+
+
+__all__ = [
+    "FALLBACK_KIND",
+    "L1_MAX_CARDS_PER_TIER",
+    "L1_TIER_FIELD",
+    "LEGACY_KIND_ALIAS",
+    "LEGACY_KIND_SCOPE",
+    "TASK_KIND_TYPES",
+    "TIER_SCOPE",
+    "Tier",
+    "check_l1_shape",
+    "classify",
+    "l1_cards",
+    "resolve_kind",
+    "scope_for",
+]

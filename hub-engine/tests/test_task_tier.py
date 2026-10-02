@@ -1,5 +1,27 @@
+from pathlib import Path
+
 # hub-engine/tests/test_task_tier.py
-from tools.task_tier import check_l1_shape, classify, l1_cards
+from tools.task_tier import (
+    LEGACY_KIND_SCOPE,
+    TASK_KIND_TYPES,
+    TIER_SCOPE,
+    check_l1_shape,
+    classify,
+    l1_cards,
+    resolve_kind,
+    scope_for,
+)
+
+# 迁移基准快照（2026-10-02，口径统一**之前**的 TASK_KIND_TYPES 逐值快照）。
+# 用途：证明「统一 = 单表 + 别名登记」，而非偷偷改行为——legacy 键取值必须一字不差。
+LEGACY_KIND_SNAPSHOT = {
+    "dll": ("rules", "projects"),
+    "code": ("rules", "methodology", "projects"),
+    "project": ("longterm", "methodology", "blueprints"),
+    "debug": ("projects", "experience"),
+    "ideation": ("blueprints", "methodology", "experience"),
+    "generic": ("rules", "methodology", "longterm", "projects"),
+}
 
 # 迁移基准快照（2026-10-01）：**手写清单退出前**的最后状态。
 # 用途：证明「派生集合 == 手写集合」（迁移零漂移），而不是凭感觉切换。
@@ -49,7 +71,8 @@ def test_l1_shape_flags_over_cap():
 
 def test_l1_cards_missing_hub_is_empty(tmp_path):
     """中枢缺失时降级为空（不是失败）——与 startup_budget 口径一致"""
-    assert l1_cards(tmp_path / "nowhere") == {"light": [], "code": [], "hub": [], "sync": []}
+    empty = {"light": [], "code": [], "hub": [], "sync": [], "project": []}
+    assert l1_cards(tmp_path / "nowhere") == empty
 
 
 def test_l1_cards_multi_tier_card(tmp_path):
@@ -108,3 +131,62 @@ def test_l1_covers_all_tiers():
     assert any("encoding" in c for c in cards["code"])
     assert "dual-platform-coherence-discipline" in cards["hub"]
     assert "cross-platform-sync-rule" in cards["sync"]
+
+
+# ── 口径统一（2026-10-02）新增契约 ─────────────────────────────
+
+
+def test_legacy_kind_types_unchanged():
+    """迁移零漂移：legacy task_kind 的取数范围逐值等于迁移前快照。
+
+    （同 LEGACY_L1_CARDS 的证明手法：先锁旧值，再切实现，避免"统一"变成偷偷改行为。）
+    """
+    assert dict(TASK_KIND_TYPES) == LEGACY_KIND_SNAPSHOT
+    assert dict(LEGACY_KIND_SCOPE) == LEGACY_KIND_SNAPSHOT
+
+
+def test_tier_scope_is_single_source():
+    """TASK_KIND_TYPES 必须是**派生物**：与两张表逐值一致，且不含额外键。"""
+    derived = {k: scope_for(k) for k in LEGACY_KIND_SCOPE}
+    assert derived == TASK_KIND_TYPES
+    # 规范型名也走同一入口
+    for tier, scope in TIER_SCOPE.items():
+        assert scope_for(tier) == scope, f"{tier} 取数范围与 TIER_SCOPE 不一致"
+
+
+def test_mcp_handlers_no_longer_defines_taxonomy():
+    """防复发：分型知识不得回到 mcp_handlers（否则又是两套）。"""
+    import tools.mcp_handlers as H
+
+    assert not hasattr(H, "TASK_KIND_TYPES"), "mcp_handlers 不应再定义/转出分型表"
+    src = Path(H.__file__).read_text(encoding="utf-8") if H.__file__ else ""
+    for legacy_key in LEGACY_KIND_SNAPSHOT:
+        assert f'"{legacy_key}": (' not in src, f"mcp_handlers 里又出现了 `{legacy_key}` 的手写范围"
+
+
+def test_five_tiers_defined():
+    assert set(TIER_SCOPE) == {"light", "code", "hub", "sync", "project"}
+    assert TIER_SCOPE["light"] == (), "light = 不检索"
+    assert scope_for("light") == ()
+
+
+def test_resolve_kind_maps_legacy_names():
+    assert resolve_kind("dll") == "code"
+    assert resolve_kind("debug") == "code"
+    assert resolve_kind("ideation") == "project"
+    assert resolve_kind("generic") == "hub"
+    assert resolve_kind("project") == "project"
+    assert resolve_kind("whatever") == "hub", "未知回退 generic 的所属型"
+
+
+def test_classify_project_tier():
+    assert classify("给新项目立项，先做技术路径选型") == "project"
+    assert classify("按蓝图选型：方案对比") == "project"
+    # 既有优先级不变：hub/sync/code 仍先于 project
+    assert classify("立项之后 commit 并跑 ruff") == "code"
+    assert classify("把立项经验 ingest 进中枢") == "hub"
+
+
+def test_project_tier_is_not_in_l1_cards_by_default():
+    """新增型不得自动带 L1 卡（L1 由卡自身 l1_tier 声明，不能凭空造）。"""
+    assert l1_cards()["project"] == []

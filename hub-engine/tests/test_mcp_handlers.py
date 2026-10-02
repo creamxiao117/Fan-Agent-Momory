@@ -220,3 +220,58 @@ def test_reuse_bump_minimal_diff(tmp_path):
     assert "reuse_count: 4" in after
     # 除 reuse_count 行外完全一致
     assert before.replace("reuse_count: 3", "reuse_count: 4") == after
+
+
+# ── 口径统一（2026-10-02）：task_tier 规范参数 + light 短路 ────────────
+
+
+def _audit_lines(root: Path) -> int:
+    return sum(len(f.read_text(encoding="utf-8").splitlines()) for f in query_log_files(root) if f.exists())
+
+
+def test_bootstrap_accepts_canonical_task_tier(tmp_path):
+    """规范参数 task_tier 与旧 task_kind 走**同一解析入口**（tools/task_tier）。"""
+    root = bootstrap(tmp_path)
+    _seed(root)
+    res = hub_bootstrap(root, task_tier="code", context="改代码并 commit", platform="pi")
+    assert res["ok"] and res["task_tier"] == "code"
+    assert res["task_kind"] == "code"
+    assert set(res["blocks"] and [b["kind"] for b in res["blocks"]]) <= {
+        "rules",
+        "methodology",
+        "projects",
+    }
+
+
+def test_bootstrap_light_is_skipped_and_writes_no_audit(tmp_path):
+    """light = 不检索：短路返回 skipped，且**不写审计**（否则污染检索统计）。"""
+    root = bootstrap(tmp_path)
+    _seed(root)
+    before = _audit_lines(root)
+    res = hub_bootstrap(root, task_tier="light", context="今天天气不错", platform="pi")
+    assert res["ok"] is True
+    assert res["skipped"] is True
+    assert res["task_tier"] == "light"
+    assert res["blocks"] == [] and res["markdown"] == ""
+    assert _audit_lines(root) == before, "light 型不得写审计"
+
+
+def test_bootstrap_project_tier_scopes_to_blueprints(tmp_path):
+    (root := bootstrap(tmp_path))
+    (root / "blueprints" / "b.md").write_text(
+        "---\ntype: blueprint\ntags: [tech-path]\nupdated: 2026-10-02\nstatus: reference\n"
+        "reuse_count: 0\n---\n立项技术路径：先把候选方案列全再选型。\n",
+        encoding="utf-8",
+    )
+    res = hub_bootstrap(root, task_tier="project", context="立项技术路径选型", platform="pi")
+    assert res["task_tier"] == "project"
+    assert "blueprints" in {b["kind"] for b in res["blocks"]}
+
+
+def test_bootstrap_legacy_kind_still_works(tmp_path):
+    """旧 task_kind 入参不被破坏（trae/mavis/deepseek 等既有调用方零回归）。"""
+    root = bootstrap(tmp_path)
+    _seed(root)
+    res = hub_bootstrap(root, "dll", context="改了 DLL 被锁", platform="trae")
+    assert res["ok"] and res["task_kind"] == "dll"
+    assert res["task_tier"] == "code", "dll 是 code 型的领域特例"

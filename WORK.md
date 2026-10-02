@@ -7,7 +7,7 @@
 ## 当前状态
 
 - L0 实测 **8579/30000**（INDEX 1176，枚举已迁 L2 分册）；**形状门禁看守，新增卡不再顶帽**
-- 分层：L0（AGENTS / CHARTER / **本文件** / **根 INDEX 能力图**）→ L1 四型（`hub-engine/tools/task_tier.py`）→ L2 检索（全量分册 `INDEX-full.md` / `INDEX-experience.md`，渲染产物）
+- 分层：L0（AGENTS / CHARTER / **本文件** / **根 INDEX 能力图**）→ L1 五型（`hub-engine/tools/task_tier.py`）→ L2 检索（全量分册 `INDEX-full.md` / `INDEX-experience.md`，渲染产物）
 - 安全底座常驻：单写者+§4 守护+ledger；query-first + 交回用户 + 回写
 - 分项帽：AGENTS≤2000 / CHARTER≤1000 / WORK≤5000 / INDEX≤12000（和 20,000 ≤ 30,000；不变量由脚本自身看守 + **L0 形状门禁**取代批帽）
 - **测试 733 passed / 4 skipped / 0 failed**（09-27→10-01 抬帽破不变量致 2 红 4 天，10-01 修复）；**ruff 全绿**；lint 干净；**巡检 25 步 exit 0**（含 render_check；健康 92/100）

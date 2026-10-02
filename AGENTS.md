@@ -24,7 +24,7 @@
 - 不确定交回用户，不臆测、不捏造历史经验
 - 查询结果回写经验卡（ingest/回写纪律）
 
-## 任务分型 → L1 卡（代码口径 `hub-engine/tools/task_tier.py` 的 `L1_CARDS`）
+## 任务分型 → L1 卡（代码口径 `hub-engine/tools/task_tier.py` 的 `l1_cards()`）
 
 | 型 | 判定（关键词兜底，判不出=light） | L1 规则卡（只读核心节/全文按需） |
 | --- | --- | --- |
@@ -32,9 +32,11 @@
 | code | commit/ruff/pytest/patch/PR/改代码 | agent-code-discipline-iron-rule · chinese-text-encoding-discipline · multi-language-style-config |
 | hub | 中枢/ingest/rules/experience/回写 | dual-platform-coherence-discipline · global-rules · memory-hub-distill-last |
 | sync | sync/push/注入/跨平台 | cross-platform-sync-rule · dual-platform-coherence-discipline |
+| project | 立项/蓝图/选型/新项目/技术路径 | （待声明） |
 
 > 卡集合由**卡自身 frontmatter `l1_tier`** 派生（`tools.task_tier.l1_cards()`），非手写清单；
 > 单型 ≤3 张（`L1_MAX_CARDS_PER_TIER`，形状断言）；新增一张须挤出旧的一张。
+> 型↔检索区同表（`TIER_SCOPE`）；旧 `task_kind` 降为别名入参，唯一入口 `scope_for()`。
 
 升型廉价：动作变重再补读 L1；只升不降。完整关键词见 `hub-engine/tools/task_tier.py`。
 
