@@ -7,15 +7,12 @@
 
 from __future__ import annotations
 
-import json
 import os
 import subprocess
 import sys
-from datetime import datetime
 from pathlib import Path
 
 from scripts.patrol.core import (
-    _LOCAL_TZ,
     PatrolReport,
     StepResult,
     _run_cmd,
@@ -24,37 +21,6 @@ from scripts.patrol.core import (
 _HUB_ENGINE_DIR = Path(__file__).resolve().parents[2]
 if str(_HUB_ENGINE_DIR) not in sys.path:
     sys.path.insert(0, str(_HUB_ENGINE_DIR))
-
-
-def _llm_pre_check() -> StepResult:
-    """阶段 1-1: 本地 LLM 服务前置检测（LM Studio）。"""
-    try:
-        from tools.llm_health import LLMHealthChecker
-
-        # 默认本地 LM Studio 端口 1234
-        checker = LLMHealthChecker.get_instance("http://localhost:1234")
-        status = checker.get_status()
-        models_str = ", ".join(status.models[:3]) if status.models else "无模型"
-        rt_ms = round(status.response_time * 1000, 1)
-        output = f"✅ 本地 LLM (LM Studio) 可用 · {len(status.models)} 模型 · 响应 {rt_ms}ms" + (
-            f" · {models_str}" if models_str != "无模型" else ""
-        )
-        return StepResult(
-            name="llm_check",
-            stage="基础设施",
-            status="pass",
-            exit_code=0,
-            output=output,
-        )
-    except Exception as e:
-        return StepResult(
-            name="llm_check",
-            stage="基础设施",
-            status="warn",  # v3: 基础设施不可用降为 warn，不阻塞其他步骤
-            exit_code=0,  # v3: 不再返回 exit_code=3 影响总体
-            error=str(e),
-            output=f"⚠️ 本地 LLM (LM Studio) 不可用: {e}",
-        )
 
 
 def _check_config_integrity(root: Path) -> StepResult:
@@ -314,46 +280,6 @@ def _step_startup_budget() -> StepResult:
 # ----- 阶段 3: 飞轮活跃度 -----
 
 
-def _step_build_vectors(root: Path, engine_dir: Path) -> StepResult:
-    """向量增量更新。依赖本地 LLM 可用性。"""
-    exit_code, stdout, stderr = _run_cmd(
-        [
-            sys.executable,
-            str(engine_dir / "engine.py"),
-            "build-vectors",
-            "--root",
-            str(root),
-        ],
-        cwd=engine_dir,
-        timeout=300,
-    )
-    last_line = (stdout or stderr or "(无输出)").strip().splitlines()[-1] if (stdout or stderr) else "(无输出)"
-    if exit_code == 0:
-        return StepResult(
-            name="build_vectors",
-            stage="飞轮活跃度",
-            status="pass",
-            exit_code=0,
-            output=f"✅ 向量构建: {last_line}",
-        )
-    elif exit_code == 2:
-        return StepResult(
-            name="build_vectors",
-            stage="飞轮活跃度",
-            status="warn",
-            exit_code=2,
-            output=f"⚠️ 向量通道退化: {last_line}",
-        )
-    else:
-        return StepResult(
-            name="build_vectors",
-            stage="飞轮活跃度",
-            status="fail",
-            exit_code=exit_code,
-            output=f"❌ 向量构建失败: {last_line}",
-        )
-
-
 def _step_router_sync(root: Path, engine_dir: Path) -> StepResult:
     """路由表同步检查。"""
     sync_script = engine_dir / "scripts" / "router_sync.py"
@@ -431,39 +357,6 @@ def _step_vector_regression(root: Path, engine_dir: Path) -> StepResult:
         )
 
 
-def _step_metrics_daily(root: Path, engine_dir: Path) -> StepResult:
-    """每日指标聚合。"""
-    metrics_script = engine_dir / "scripts" / "metrics_daily.py"
-    if not metrics_script.is_file():
-        return StepResult(
-            name="metrics_daily",
-            stage="数据质量",
-            status="skip",
-            exit_code=0,
-            output="⏭️ metrics_daily.py 不存在，跳过",
-        )
-    exit_code, stdout, stderr = _run_cmd(
-        [sys.executable, str(metrics_script), "--root", str(root)],
-        cwd=engine_dir,
-        timeout=30,
-    )
-    if exit_code == 0:
-        return StepResult(
-            name="metrics_daily",
-            stage="数据质量",
-            status="pass",
-            exit_code=0,
-            output=f"✅ 指标聚合: {(stdout or '').strip()[:200]}",
-        )
-    return StepResult(
-        name="metrics_daily",
-        stage="数据质量",
-        status="warn",
-        exit_code=exit_code,
-        output=f"⚠️ 指标聚合: {(stderr or stdout).strip()[:200]}",
-    )
-
-
 def _step_hub_review(root: Path, engine_dir: Path) -> StepResult:
     """今日审核清单。"""
     review_script = engine_dir / "scripts" / "hub_review_today.py"
@@ -498,105 +391,6 @@ def _step_hub_review(root: Path, engine_dir: Path) -> StepResult:
 
 
 # ----- 阶段 5: 报告生成与归档 -----
-
-
-def _step_status_snapshot(root: Path, engine_dir: Path) -> StepResult:
-    """生成健康快照（调用升级后的 _cmd_status）。"""
-    exit_code, stdout, stderr = _run_cmd(
-        [
-            sys.executable,
-            str(engine_dir / "engine.py"),
-            "status",
-            "--root",
-            str(root),
-            "--json",
-        ],
-        cwd=engine_dir,
-        timeout=60,
-    )
-    if exit_code in (0, 2):
-        try:
-            json.loads(stdout)
-            return StepResult(
-                name="status_snapshot",
-                stage="报告归档",
-                status="pass",
-                exit_code=exit_code,
-                output=f"✅ 快照生成 (exit={exit_code})",
-            )
-        except json.JSONDecodeError:
-            pass
-    return StepResult(
-        name="status_snapshot",
-        stage="报告归档",
-        status="fail",
-        exit_code=exit_code,
-        output=f"❌ 快照生成失败: {(stderr or stdout).strip()[:200]}",
-    )
-
-
-def _save_snapshot_archive(root: Path, engine_dir: Path, *, no_overwrite: bool = False) -> StepResult:
-    """将快照归档到 retro/ 目录。支持防覆盖模式。"""
-    retro_dir = root / "retro"
-    retro_dir.mkdir(parents=True, exist_ok=True)
-    today = datetime.now(_LOCAL_TZ).date().isoformat()
-    snap_path = retro_dir / f"snapshot-{today}.json"
-
-    # === 幂等保护：防覆盖 ===
-    if no_overwrite and snap_path.is_file():
-        try:
-            existing = json.loads(snap_path.read_text(encoding="utf-8"))
-            if existing.get("generated_at", "") and today in existing["generated_at"]:
-                return StepResult(
-                    name="archive_snapshot",
-                    stage="报告归档",
-                    status="pass",
-                    exit_code=0,
-                    output=f"⏭️ 今日快照已存在，跳过归档 (幂等保护): {snap_path}",
-                )
-        except (json.JSONDecodeError, KeyError, OSError):
-            pass  # 存在但损坏，允许覆盖
-
-    # 生成一次 JSON 快照并写入
-    exit_code, stdout, stderr = _run_cmd(
-        [
-            sys.executable,
-            str(engine_dir / "engine.py"),
-            "status",
-            "--root",
-            str(root),
-            "--json",
-        ],
-        cwd=engine_dir,
-        timeout=60,
-    )
-    if exit_code in (0, 2):
-        try:
-            data = json.loads(stdout)
-            snap_path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
-            return StepResult(
-                name="archive_snapshot",
-                stage="报告归档",
-                status="pass",
-                exit_code=0,
-                output=f"✅ 快照已归档: {snap_path}",
-            )
-        except (json.JSONDecodeError, OSError) as e:
-            return StepResult(
-                name="archive_snapshot",
-                stage="报告归档",
-                status="fail",
-                exit_code=1,
-                error=str(e),
-                output=f"❌ 归档失败: {e}",
-            )
-    return StepResult(
-        name="archive_snapshot",
-        stage="报告归档",
-        status="fail",
-        exit_code=exit_code,
-        output=f"❌ 快照生成失败: {(stderr or stdout).strip()[:200]}",
-    )
 
 
 # ============================================================================
@@ -767,56 +561,6 @@ def _step_auto_pytest_fix(root: Path, engine_dir: Path) -> StepResult:
     )
 
 
-def _step_auto_sleep_filter(root: Path, engine_dir: Path) -> StepResult:
-    """auto_sleep_filter: sleep 候选假信号自动过滤。"""
-    fix_script = engine_dir / "scripts" / "auto_sleep_filter.py"
-    if not fix_script.is_file():
-        return StepResult(
-            name="auto_sleep_filter",
-            stage="自动修复",
-            status="skip",
-            output="⏭️ auto_sleep_filter.py 不存在，跳过",
-        )
-    _exit_code, stdout, stderr = _run_cmd(
-        [sys.executable, str(fix_script), "--root", str(root), "--since-days", "3"],
-        cwd=engine_dir,
-        timeout=60,
-    )
-    text = (stdout or stderr or "").strip()
-    return StepResult(
-        name="auto_sleep_filter",
-        stage="自动修复",
-        status="pass",
-        exit_code=0,
-        output=f"✅ {text[:200]}",
-    )
-
-
-def _step_auto_process_sleep(root: Path, engine_dir: Path) -> StepResult:
-    """auto_process_sleep: sleep 候选自动补 tag / 生成草稿。"""
-    fix_script = engine_dir / "scripts" / "auto_process_sleep.py"
-    if not fix_script.is_file():
-        return StepResult(
-            name="auto_process_sleep",
-            stage="自动修复",
-            status="skip",
-            output="⏭️ auto_process_sleep.py 不存在，跳过",
-        )
-    _exit_code, stdout, stderr = _run_cmd(
-        [sys.executable, str(fix_script), "--root", str(root), "--since-days", "3"],
-        cwd=engine_dir,
-        timeout=60,
-    )
-    text = (stdout or stderr or "").strip()
-    return StepResult(
-        name="auto_process_sleep",
-        stage="自动修复",
-        status="pass",
-        exit_code=0,
-        output=f"✅ {text[:200]}",
-    )
-
-
 def _step_auto_review_today(root: Path, engine_dir: Path) -> StepResult:
     """auto_review_today: review_today 按 type 分类自动过/留。"""
     fix_script = engine_dir / "scripts" / "auto_review_today.py"
@@ -878,96 +622,3 @@ def _generate_suggestions(report: PatrolReport) -> list[str]:
         suggestions.append("✅ 系统健康，自动修复层已处理完毕，无需额外操作")
 
     return suggestions
-
-
-def _step_platform_sync_check(root: Path, engine_dir: Path) -> StepResult:
-    """平台 MCP 块一致性（platform_sync.py dry-run）。漂移 → exit 1（告警级，不阻断）。"""
-    script = engine_dir / "scripts" / "platform_sync.py"
-    if not script.exists():
-        return StepResult(
-            name="platform_sync",
-            stage="平台一致性",
-            status="skip",
-            output="platform_sync.py 缺失",
-        )
-    exit_code, stdout, stderr = _run_cmd(
-        [sys.executable, str(script), "--root", str(root)], cwd=engine_dir, timeout=120
-    )
-    lines = [s.strip() for s in ((stdout or "") + (stderr or "")).splitlines() if s.strip()]
-    drift = [s for s in lines if ("需同步" in s or "❌" in s)]
-    if exit_code == 0:
-        return StepResult(
-            name="platform_sync",
-            stage="平台一致性",
-            status="pass",
-            exit_code=0,
-            output="✅ MCP 块与 platforms.yaml 一致",
-        )
-    return StepResult(
-        name="platform_sync",
-        stage="平台一致性",
-        status="fail",
-        exit_code=1,
-        output="⚠️ 检出漂移: " + " | ".join(drift or lines[-2:])[:300],
-    )
-
-
-def _step_platform_healthcheck(root: Path, engine_dir: Path) -> StepResult:
-    """5+ 平台统一健康检查（platform_healthcheck.py）。非绿 → exit 1。"""
-    script = engine_dir / "scripts" / "platform_healthcheck.py"
-    if not script.exists():
-        return StepResult(
-            name="platform_healthcheck",
-            stage="平台一致性",
-            status="skip",
-            output="platform_healthcheck.py 缺失",
-        )
-    exit_code, stdout, stderr = _run_cmd([sys.executable, str(script)], cwd=engine_dir, timeout=180)
-    lines = [s.strip() for s in ((stdout or "") + (stderr or "")).splitlines() if s.strip()]
-    bad = [s for s in lines if ("YELLOW" in s or "RED" in s)]
-    if exit_code == 0:
-        return StepResult(
-            name="platform_healthcheck",
-            stage="平台一致性",
-            status="pass",
-            exit_code=0,
-            output="✅ 平台健康检查全 GREEN",
-        )
-    return StepResult(
-        name="platform_healthcheck",
-        stage="平台一致性",
-        status="fail",
-        exit_code=1,
-        output="⚠️ 非绿平台: " + " | ".join(bad)[:300],
-    )
-
-
-def _step_platform_unregistered(root: Path, engine_dir: Path) -> StepResult:
-    """未接入平台提示（platform_unregistered.py）。纯信息级，恒为 pass。"""
-    script = engine_dir / "scripts" / "platform_unregistered.py"
-    if not script.exists():
-        return StepResult(
-            name="platform_unregistered",
-            stage="平台一致性",
-            status="skip",
-            output="platform_unregistered.py 缺失",
-        )
-    _exit_code, stdout, _stderr = _run_cmd(
-        [sys.executable, str(script), "--root", str(root)], cwd=engine_dir, timeout=120
-    )
-    cand = [s.strip() for s in (stdout or "").splitlines() if s.strip().startswith("•")]
-    if not cand:
-        return StepResult(
-            name="platform_unregistered",
-            stage="平台一致性",
-            status="pass",
-            exit_code=0,
-            output="✅ 无未接入平台候选",
-        )
-    return StepResult(
-        name="platform_unregistered",
-        stage="平台一致性",
-        status="pass",
-        exit_code=0,
-        output=f"ℹ️ {len(cand)} 个候选待接入: " + " | ".join(cand)[:300],
-    )

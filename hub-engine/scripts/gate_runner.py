@@ -113,26 +113,30 @@ def gate_text(staged: list[str], repo_root: Path, repo: str) -> tuple[bool, str]
     ]
 
     def _disk(p: str) -> Path:
-        """staged 路径 → 磁盘路径（中枢仓需换算；**已从工作树消失的文件不参与检查**）。
+        """staged 路径 → **待检查的磁盘路径**（优先 index 物化版，退化到工作树）。
 
-        为何要过滤：`--diff-filter=ACMR` 会包含"在 index 里但工作树已删"的文件
-        （如 staged 后又 rm），此时编码检查会报"路径不存在" ⇒ **假红**。
-        假红正是把人推回 `--no-verify` 的机制，必须避免。
+        为何优先 index：见 `_materialize_index` 的 docstring（漏放 + 误伤两个缺陷）。
+        物化失败（不可能在正常仓里发生）才退到工作树，并在输出里说明。
         """
         base = repo_root if repo == "outer" else (_HUB_ENGINE.parent / "AgentMemoryHub")
+        if index_root is not None:
+            cand = index_root / p
+            if cand.is_file():
+                return cand
         return base / p
 
+    index_root = _materialize_index(repo_root)
     existing = [p for p in texts if _disk(p).is_file()]
     msgs: list[str] = []
     if len(existing) != len(texts):
-        msgs.append(f"跳过 {len(texts) - len(existing)} 个已不在工作树的 staged 文件")
+        msgs.append(f"跳过 {len(texts) - len(existing)} 个已不在待提交内容里的文件")
     if existing and enc_script.is_file():
         args = [str(enc_script), *[str(_disk(p)) for p in existing]]
         code, out = _run([py, *args], cwd=_HUB_ENGINE)
         bad = [ln for ln in out.splitlines() if ln.startswith("[FAIL]") or ln.startswith("[WARN]")]
         if code != 0:
-            return False, "编码/行尾门禁未通过：\n" + "\n".join(bad or [out.strip()])
-        msgs.append(f"编码 {len(existing)} 文件")
+            return False, "编码/行尾门禁未通过（**针对即将提交的内容**）：\n" + "\n".join(bad or [out.strip()])
+        msgs.append(f"编码 {len(existing)} 文件（index 物化）" if index_root else f"编码 {len(existing)} 文件")
 
     mds = [p for p in staged if p.endswith(".md")]
     if mds:
@@ -150,25 +154,27 @@ def gate_text(staged: list[str], repo_root: Path, repo: str) -> tuple[bool, str]
 def _materialize_index(repo_root: Path) -> Path | None:
     """把 **git index（即"即将提交"的内容）** 写到临时目录，返回该目录。
 
-    为何要这一步（本任务的核心）：`render_index --check` 若直接読**工作树**，则
-    工作树里**任何人**未提交的卡改动都会把别人的提交打红——这正是
-    「无条件跑渲染检查 → 训练所有人用 `--no-verify`」的机制根因。
-    用 `git checkout-index -a --prefix=<tmp>/` 取的是 **index** 而非工作树，
-    于是门禁语义变成：**你即将提交的 INDEX 与 你即将提交的卡 是否一致**。
+    为何要这一步（本任务的核心）：门禁若直接読**工作树**，就存在两个真实缺陷——
+      1. 工作树里**任何人**未提交的卡改动会把别人的提交打红（→ 训练大家用 `--no-verify`）；
+      2. **staged 内容与工作树不一致时，检查的不是真正要提交的东西**
+         （2026-10-02 实测：`rules/global-rules.md` 的 blob 带着双 CR 进了仓，
+         而当时编码门禁读的是已被 `--fix` 修好的工作树 ⇒ 漏放）。
+
+    `git checkout-index -a --prefix=<tmp>/` 取的是 **index**：
+      ① 门禁语义变成"你即将提交的东西是否合规"（既不误伤他人，也不漏放自己）；
+      ② 对"staged 后又改了工作树"的情形也算得准。
     """
     import tempfile
 
-    tmp = Path(tempfile.mkdtemp(prefix="gate-render-"))
-    code, out = _run(["git", "checkout-index", "-a", f"--prefix={tmp}{os.sep}"], cwd=repo_root)
-    if code != 0:
-        return None
-    return tmp if (tmp / "hub.config.yaml").is_file() else None
+    tmp = Path(tempfile.mkdtemp(prefix="gate-index-"))
+    code, _out = _run(["git", "checkout-index", "-a", f"--prefix={tmp}{os.sep}"], cwd=repo_root)
+    return tmp if code == 0 else None
 
 
 def gate_l0(staged: list[str], repo_root: Path, repo: str) -> tuple[bool, str]:
     py = _python()
     msgs: list[str] = []
-    # 1) 启动链预算 + L0 形状 + L1 形状（読工作树：它审的就是本人正在改的那几个 L0 文件）
+    # 启动链预算 + L0 形状 + L1 形状（読工作树：它审的就是本人正在改的那几个 L0 文件）
     code, out = _run([py, "-m", "scripts.startup_budget"], cwd=_HUB_ENGINE)
     if code == 127:
         msgs.append("startup_budget 跳过")
@@ -179,17 +185,17 @@ def gate_l0(staged: list[str], repo_root: Path, repo: str) -> tuple[bool, str]:
         total = next((ln for ln in out.splitlines() if ln.startswith("[TOTAL]")), "")
         msgs.append(total or "预算 OK")
 
-    # 2) 渲染产物可复现性。中枢仓：**只看即将提交的内容**（index），因此
-    #    「他人未提交的卡改动」不再阻断你的提交——这是本任务的核心收益。
-    root_arg = ["--root", str(_materialize_index(repo_root))] if repo == "hub" else []
-    if repo == "hub" and not root_arg[1:]:
+    # 渲染产物可复现性。中枢仓：**只看即将提交的内容**（index 物化）
+    tmp_index = _materialize_index(repo_root) if repo == "hub" else None
+    root_arg = ["--root", str(tmp_index)] if (repo == "hub" and tmp_index) else []
+    if repo == "hub" and not root_arg:
         msgs.append("渲染检查跳过（无法物化 index）")
         return True, " + ".join(msgs)
     import shutil
 
     code, out = _run([py, "-m", "scripts.render_index", "--check", *root_arg], cwd=_HUB_ENGINE)
-    if root_arg:
-        shutil.rmtree(root_arg[1], ignore_errors=True)
+    if tmp_index:
+        shutil.rmtree(tmp_index, ignore_errors=True)
     if code != 0:
         fails = [ln for ln in out.splitlines() if ln.startswith("FAIL")]
         return False, "渲染产物与卡文件不一致（针对**即将提交的内容**）：\n" + "\n".join(fails or [out.strip()])

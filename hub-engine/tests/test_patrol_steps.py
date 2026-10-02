@@ -24,11 +24,9 @@
 
 from __future__ import annotations
 
-import json
-import re
 import subprocess
 import types
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -121,55 +119,39 @@ class FakeRun:
 # ---------------------------------------------------------------------------
 
 _STEP_CALLS = [
-    ("llm_check", lambda hub, eng: patrol._llm_pre_check()),
-    ("config_integrity", lambda hub, eng: patrol._check_config_integrity(hub)),
-    ("file_integrity", lambda hub, eng: patrol._check_file_integrity(hub)),
-    ("lint", lambda hub, eng: patrol._step_lint(hub)),
-    ("pytest", lambda hub, eng: patrol._step_pytest(eng)),
-    ("ruff", lambda hub, eng: patrol._step_ruff(eng)),
-    ("startup_budget", lambda hub, eng: patrol._step_startup_budget()),
-    ("render_check", lambda hub, eng: patrol._step_render_check(hub)),
-    ("build_vectors", lambda hub, eng: patrol._step_build_vectors(hub, eng)),
-    ("router_sync", lambda hub, eng: patrol._step_router_sync(hub, eng)),
-    ("vector_regression", lambda hub, eng: patrol._step_vector_regression(hub, eng)),
-    ("metrics_daily", lambda hub, eng: patrol._step_metrics_daily(hub, eng)),
-    ("hub_review", lambda hub, eng: patrol._step_hub_review(hub, eng)),
-    ("status_snapshot", lambda hub, eng: patrol._step_status_snapshot(hub, eng)),
-    ("archive_snapshot", lambda hub, eng: patrol._save_snapshot_archive(hub, eng)),
-    ("auto_fix_lint", lambda hub, eng: patrol._step_auto_fix_lint(hub, eng)),
-    ("auto_pytest_env_fix", lambda hub, eng: patrol._step_auto_pytest_fix(hub, eng)),
-    ("auto_sleep_filter", lambda hub, eng: patrol._step_auto_sleep_filter(hub, eng)),
-    ("auto_process_sleep", lambda hub, eng: patrol._step_auto_process_sleep(hub, eng)),
-    ("auto_review_today", lambda hub, eng: patrol._step_auto_review_today(hub, eng)),
-    ("verify_after_fix", lambda hub, eng: patrol._step_verify_after_fix(eng, {})),
-    ("freshness_check", lambda hub, eng: patrol._step_freshness_check(hub, eng)),
-    ("platform_sync", lambda hub, eng: patrol._step_platform_sync_check(hub, eng)),
-    (
-        "platform_healthcheck",
-        lambda hub, eng: patrol._step_platform_healthcheck(hub, eng),
-    ),
-    (
-        "platform_unregistered",
-        lambda hub, eng: patrol._step_platform_unregistered(hub, eng),
-    ),
+    ("lint", lambda hub, eng: patrol.pipeline.IMPL["_step_library_health"](hub, eng)),
+    ("render_check", lambda hub, eng: patrol.pipeline.IMPL["_step_render_check_p"](hub, eng)),
+    ("recall", lambda hub, eng: patrol.pipeline.IMPL["_step_recall"](hub, eng)),
+    ("reconcile", lambda hub, eng: patrol.pipeline.IMPL["_step_reconcile"](hub, eng)),
+    ("secret_sentry", lambda hub, eng: patrol.pipeline.IMPL["_step_secret_sentry"](hub, eng)),
+    ("encoding", lambda hub, eng: patrol.pipeline.IMPL["_step_encoding"](hub, eng)),
+    ("tests", lambda hub, eng: patrol.pipeline.IMPL["_step_tests"](hub, eng)),
+    ("snapshot", lambda hub, eng: patrol.pipeline.IMPL["_step_snapshot"](hub, eng)),
 ]
 
 
 def _registered_step_names() -> list[str]:
-    """从源码静态提取 `_run_step("name", ...)` 的注册名（顺序即执行顺序）。"""
-    src = (Path(patrol.__file__)).read_text(encoding="utf-8")
-    return re.findall(r'_run_step\(\s*"([a-z_0-9]+)"', src)
+    """注册步骤名（顺序即执行顺序）。
+
+    2026-10-02（M0.5/Task 7）：25 步 → **8 步**，注册表从"正则扫 patrol_runner 源码"
+    改为读 `patrol.pipeline.STEP_ORDER`——**表即事实源**，扫源码只是它的旧代理。
+    """
+    from scripts.patrol.pipeline import STEP_ORDER
+
+    return list(STEP_ORDER)
 
 
 def test_step_table_covers_every_registered_step():
     """任何新增的巡检步骤都必须有测试条目（漏了这里会红）。
 
-    2026-10-01：注册步骤 24 → **25**（新增 render_check：INDEX 渲染产物一致性）。
+    2026-10-02（M0.5/Task 7）：**25 步 → 8 步**。巡检职责收口为
+    「观测 + 对账 + 1 份快照」；生产步骤（ingest/build-vectors/distill/sleep）归夜间链，
+    真值拦截归提交门禁（3 道 scope-gated）。故这里断言的**是 8**，不再是 ≥25。
     """
     registered = set(_registered_step_names())
     covered = {name for name, _ in _STEP_CALLS}
     assert registered - covered == set(), f"新增步骤未覆盖: {sorted(registered - covered)}"
-    assert len(registered) >= 25, f"注册步骤数异常: {len(registered)}"
+    assert len(registered) == 8, f"巡检应为 8 步（职责收口），实际 {len(registered)}"
 
 
 @pytest.mark.parametrize(("name", "call"), _STEP_CALLS, ids=[n for n, _ in _STEP_CALLS])
@@ -238,13 +220,6 @@ def test_run_step_keeps_registered_name_over_function_default():
 # ---------------------------------------------------------------------------
 # 基础设施
 # ---------------------------------------------------------------------------
-
-
-def test_llm_check_degrades_to_warn_without_blocking(monkeypatch):
-    """LM Studio 不可用 ⇒ warn 且 exit_code=0（v3 起不阻塞整体巡检）。"""
-    monkeypatch.setattr("tools.llm_health.LLMHealthChecker.get_instance", classmethod(_boom))
-    r = patrol._llm_pre_check()
-    assert r.status == "warn" and r.exit_code == 0 and "不可用" in r.output
 
 
 def test_config_integrity_pass_on_complete_tree(patrol_tree):
@@ -352,17 +327,6 @@ def test_startup_budget_runs_against_real_repo():
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize(
-    ("rc", "status", "exit_code"),
-    [(0, "pass", 0), (2, "warn", 2), (5, "fail", 5)],
-)
-def test_build_vectors_exit_code_mapping(patrol_tree, monkeypatch, rc, status, exit_code):
-    hub, engine = patrol_tree
-    monkeypatch.setattr(patrol_steps, "_run_cmd", FakeCmd(rc, "{'inserted': 1}"))
-    r = patrol._step_build_vectors(hub, engine)
-    assert r.status == status and r.exit_code == exit_code
-
-
 def test_router_sync_skips_when_script_missing(patrol_tree):
     hub, engine = patrol_tree
     r = patrol._step_router_sync(hub, engine)
@@ -406,15 +370,6 @@ def test_vector_regression_below_threshold_is_warn(patrol_tree, monkeypatch):
     assert r.status == "warn" and r.exit_code == 2
 
 
-def test_metrics_daily_skip_and_warn(patrol_tree, monkeypatch):
-    hub, engine = patrol_tree
-    assert patrol._step_metrics_daily(hub, engine).status == "skip"
-    _touch(engine, "metrics_daily.py")
-    monkeypatch.setattr(patrol_steps, "_run_cmd", FakeCmd(1, "", "聚合失败"))
-    r = patrol._step_metrics_daily(hub, engine)
-    assert r.status == "warn" and "聚合失败" in r.output
-
-
 def test_hub_review_skip_and_pass(patrol_tree, monkeypatch):
     hub, engine = patrol_tree
     assert patrol._step_hub_review(hub, engine).status == "skip"
@@ -427,50 +382,6 @@ def test_hub_review_skip_and_pass(patrol_tree, monkeypatch):
 # ---------------------------------------------------------------------------
 # 报告归档
 # ---------------------------------------------------------------------------
-
-
-def test_status_snapshot_requires_valid_json(patrol_tree, monkeypatch):
-    hub, engine = patrol_tree
-    monkeypatch.setattr(patrol_steps, "_run_cmd", FakeCmd(0, "not-json"))
-    assert patrol._step_status_snapshot(hub, engine).status == "fail"
-
-    monkeypatch.setattr(patrol_steps, "_run_cmd", FakeCmd(2, json.dumps({"cards": 1})))
-    r = patrol._step_status_snapshot(hub, engine)
-    assert r.status == "pass" and r.exit_code == 2  # exit=2（有告警）仍算快照可用
-
-
-def test_archive_snapshot_writes_retro_file(patrol_tree, monkeypatch):
-    hub, engine = patrol_tree
-    monkeypatch.setattr(patrol_steps, "_run_cmd", FakeCmd(0, json.dumps({"cards": {"rules": 3}})))
-    r = patrol._save_snapshot_archive(hub, engine)
-    today = datetime.now(_CN_TZ).date().isoformat()
-    snap = hub / "retro" / f"snapshot-{today}.json"
-    assert r.status == "pass" and snap.is_file()
-    assert json.loads(snap.read_text(encoding="utf-8"))["cards"]["rules"] == 3
-
-
-def test_archive_snapshot_no_overwrite_is_idempotent(patrol_tree, monkeypatch):
-    """同日快照已存在 ⇒ 跳过覆盖（幂等保护，防手滑重跑覆盖基线）。"""
-    hub, engine = patrol_tree
-    today = datetime.now(_CN_TZ).date().isoformat()
-    snap = hub / "retro" / f"snapshot-{today}.json"
-    snap.write_text(json.dumps({"generated_at": f"{today}T08:00:00+08:00"}), encoding="utf-8")
-
-    fake = FakeCmd(0, json.dumps({"cards": {}}))
-    monkeypatch.setattr(patrol_steps, "_run_cmd", fake)
-    r = patrol._save_snapshot_archive(hub, engine, no_overwrite=True)
-    assert r.status == "pass" and "幂等保护" in r.output
-    assert fake.calls == [], "幂等命中时不应再调子进程"
-
-
-def test_archive_snapshot_broken_existing_file_is_overwritten(patrol_tree, monkeypatch):
-    """存在但损坏 ⇒ 允许覆盖（否则坏基线永久卡死归档）。"""
-    hub, engine = patrol_tree
-    today = datetime.now(_CN_TZ).date().isoformat()
-    (hub / "retro" / f"snapshot-{today}.json").write_text("{ 坏 json", encoding="utf-8")
-    monkeypatch.setattr(patrol_steps, "_run_cmd", FakeCmd(0, json.dumps({"cards": {}})))
-    r = patrol._save_snapshot_archive(hub, engine, no_overwrite=True)
-    assert r.status == "pass" and "已归档" in r.output
 
 
 # ---------------------------------------------------------------------------
@@ -503,19 +414,6 @@ def test_auto_pytest_env_fix_outer_timeout_exceeds_inner(patrol_tree, monkeypatc
     monkeypatch.setattr(patrol_steps, "_run_cmd", fake)
     patrol._step_auto_pytest_fix(hub, engine)
     assert fake.last["timeout"] >= 420
-
-
-@pytest.mark.parametrize("step_name", ["auto_sleep_filter", "auto_process_sleep"])
-def test_sleep_autofix_passes_three_day_window(patrol_tree, monkeypatch, step_name):
-    """sleep 类修复只看近 3 天（窗口写错会扫全量、把老候选反复翻出来）。"""
-    hub, engine = patrol_tree
-    _touch(engine, f"{step_name}.py")
-    fake = FakeCmd(0, "处理 2 条")
-    monkeypatch.setattr(patrol_steps, "_run_cmd", fake)
-    fn = getattr(patrol, f"_step_{step_name}")
-    r = fn(hub, engine)
-    assert r.status == "pass"
-    assert fake.last["argv"][-2:] == ["--since-days", "3"]
 
 
 def test_auto_review_today_skip_and_pass(patrol_tree, monkeypatch):
@@ -563,29 +461,3 @@ def test_freshness_check_timeout_is_fail(patrol_tree, monkeypatch):
     monkeypatch.setattr(subprocess, "run", FakeRun(raise_timeout=True))
     r = patrol._step_freshness_check(hub, engine)
     assert r.status == "fail" and r.output == "timeout"
-
-
-def test_platform_sync_drift_is_fail_exit1(patrol_tree, monkeypatch):
-    hub, engine = patrol_tree
-    assert patrol._step_platform_sync_check(hub, engine).status == "skip"
-    _touch(engine, "platform_sync.py")
-    monkeypatch.setattr(patrol_steps, "_run_cmd", FakeCmd(1, "❌ trae 需同步", ""))
-    r = patrol._step_platform_sync_check(hub, engine)
-    assert r.status == "fail" and r.exit_code == 1 and "需同步" in r.output
-
-
-def test_platform_healthcheck_lists_non_green(patrol_tree, monkeypatch):
-    hub, engine = patrol_tree
-    _touch(engine, "platform_healthcheck.py")
-    monkeypatch.setattr(patrol_steps, "_run_cmd", FakeCmd(1, "trae RED 会话超时", ""))
-    r = patrol._step_platform_healthcheck(hub, engine)
-    assert r.status == "fail" and r.exit_code == 1 and "RED" in r.output
-
-
-def test_platform_unregistered_is_informational_only(patrol_tree, monkeypatch):
-    """未接入平台提示恒为 pass（信息级，不制造红灯）。"""
-    hub, engine = patrol_tree
-    _touch(engine, "platform_unregistered.py")
-    monkeypatch.setattr(patrol_steps, "_run_cmd", FakeCmd(0, "• cursor\n• windsurf", ""))
-    r = patrol._step_platform_unregistered(hub, engine)
-    assert r.status == "pass" and r.exit_code == 0 and "2 个候选待接入" in r.output
