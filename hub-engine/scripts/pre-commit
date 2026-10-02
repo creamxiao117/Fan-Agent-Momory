@@ -1,165 +1,30 @@
 #!/usr/bin/env bash
-# @version V1.4 / 2026-10-01 / Hermes + pi / hub-engine 五道提交门禁（+ 渲染逻辑可复现性）
+# @version V3.0 / 2026-10-02 / pi / 三道 **scope-gated** 提交门禁（线数从 ~180 降到 ~10）
 #
-# 作用（五道门禁，先编码 → 再预算/形状 → 再渲染逻辑 → 再 markdown → 后 ruff）：
-#   0) 编码门禁：staged 文本文件跑 check_encoding.py，非 UTF-8 / BOM 不合规 /
-#      乱码串残留 / .vbs 含非 ASCII → 阻断（依据 rules/chinese-text-encoding-discipline v1.0）
-#   0.5) 启动链预算门禁（L0 ≤30K + **L0 形状**（无 per-card 行）+ L1 各型 ≤15K/≤3 张）→ 超标阻断
-#   0.6) 渲染可复现性（仅当改到渲染/派生逻辑）：render_index --check 不复现当前产物 → 阻断
-#   0.8) markdownlint（仅 staged .md）→ 违规阻断（存量基线见 .markdownlintignore）
-#   1) ruff check  → 不通过则阻断
-#   2) ruff format --check → 不一致则阻断
+# 本文件只是**薄包装**；门禁逻辑全在 `hub-engine/scripts/gate_runner.py`（Python，可单测）。
 #
-# 触发原因：
-#   - 2026-09-10 trae work ruff format 48 文件 2 天未 commit 未报警（实证）
-#   - 2026-09-19 中文文本/路径乱码规范落地，把「人工跑 check_encoding.py」升级为提交时自动阻断
-#   - 2026-09-23 **预算门禁上提到提交时**。原因：该门禁此前只挂每日巡检 →
-#     超帽改动最长可存活 24h（2026-09-23 实测巡检曾连续 18 天未跑，见
-#     scripts/rule_following_timeseries.py）。原先「怕拖慢提交」的顾虑经实测否定：
-#     预算检查仅 **~84ms**（系统 python）。巡检仍保留该步（双保险）。
+# 为何重写（M0.5/Task 6）：
+#   旧版 6 道门禁（编码/预算/渲染/markdownlint/ruff×2）里，
+#   - 编码检查与渲染检查**各被实现两遍**（外层钩子 + 中枢钩子）⇒ 必然漂移；
+#   - 渲染检查**无条件跑** ⇒ 工作树里**任何人**未提交的卡改动会阻断**任何**提交
+#     ⇒ 实际效果是训练所有人用 `--no-verify`，从而让全部门禁一起失效
+#       （巡检曾连续 18 天未跑，同一机制）。
 #
+# 现在：门禁触发范围由 **staged 内容**决定（见 `common/gate_scope.py`）：
+#   code = staged 含未归档 .py        → ruff check + format
+#   text = staged 含文本/.md/pre-commit → check_encoding + markdownlint
+#   l0   = staged 触及 L0 面           → startup_budget + render_index --check
+# 绝大多数提交只跑其中一道；改 L0 才跑重的那道。
+#
+# 退出码（由 gate_runner 给出）：0 通过 / 1 code / 2 text / 3 l0
 # 安装：cp hub-engine/scripts/pre-commit .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit
-# 绕过：git commit --no-verify（仅在明确知情时使用，并在 commit message 里说明原因）
-#
-# 退出码：
-#   0 = 通过
-#   1 = 阻断（ruff check 报错）
-#   2 = 阻断（ruff format --check 不一致）
-#   3 = 阻断（markdownlint 未通过，2026-09-25 新增）
-#   4 = 阻断（编码门禁未通过）
-#   5 = 阻断（启动链预算/形状超限）
-#   6 = 阻断（渲染产物不可复现，2026-10-01 新增）
-#
-# 兼容：Windows + Linux + macOS（Git Bash）
+# 绕过：`git commit --no-verify`——**本版的目标就是让它的合法用途归零**；若门禁故障请当场修。
 
-set -e
+set -u
 
-echo "[pre-commit] hub-engine 门禁启动..."
+PY="python"
+for cand in ".venv/Scripts/python.exe" ".venv/bin/python" "python3"; do
+    if [ -x "$cand" ] || command -v "$cand" >/dev/null 2>&1; then PY="$cand"; break; fi
+done
 
-# ---------- 0) 编码门禁（中文/非 ASCII 场景）----------
-ENC_SCRIPT="hub-engine/scripts/check_encoding.py"
-if [ -f "$ENC_SCRIPT" ]; then
-    STAGED_TEXT=$(git diff --cached --name-only --diff-filter=ACMR \
-        | grep -E '\.(py|ps1|bat|cmd|vbs|js|ts|tsx|cs|c|cpp|h|hpp|go|rs|java|md|txt|json|yaml|yml|toml|ini|cfg|xml|csv)$|pre-commit' || true)
-    if [ -n "$STAGED_TEXT" ]; then
-        # shellcheck disable=SC2086
-        if ENC_OUT=$(python "$ENC_SCRIPT" $STAGED_TEXT 2>&1); then
-            ENC_RC=0
-        else
-            ENC_RC=$?
-        fi
-        # 只回显问题项，避免 100+ 行 PASS 刷屏
-        echo "$ENC_OUT" | grep -E "^\[(FAIL|WARN)\]" || true
-        if [ "$ENC_RC" -ne 0 ]; then
-            echo "[pre-commit] ❌ 编码门禁未通过（见上），commit 阻断"
-            echo "[pre-commit] 修法：按 rules/chinese-text-encoding-discipline 重写该文件编码"
-            exit 4
-        fi
-        echo "[pre-commit] ✅ 编码门禁通过（$(echo "$STAGED_TEXT" | wc -l | tr -d ' ') 个文件）"
-    else
-        echo "[pre-commit] 无文本文件 staged，跳过编码门禁"
-    fi
-else
-    echo "[pre-commit] ⚠️ 找不到 $ENC_SCRIPT，跳过编码门禁"
-fi
-
-# ---------- 0.5) 启动链预算门禁（L0 + L1）----------
-# 实测仅 ~84ms，故上提到提交时：避免超帽改动存活到下一次巡检（最长 24h）。
-# 中枢缺失时 startup_budget 自行降级（L1 返回空、不对抗非零），不会误阻。
-BUDGET_SCRIPT="hub-engine/scripts/startup_budget.py"
-if [ -f "$BUDGET_SCRIPT" ]; then
-    if BUDGET_OUT=$(cd hub-engine && python -m scripts.startup_budget 2>&1); then
-        TOTAL_LINE=$(echo "$BUDGET_OUT" | grep -E '^\[TOTAL\]' | head -1 || true)
-        L1_LINE=$(echo "$BUDGET_OUT" | grep -cE '^\[OK\] L1\[' || true)
-        echo "[pre-commit] ✅ 预算门禁通过（${TOTAL_LINE:-L0 OK}；L1 分型 ${L1_LINE} 项）"
-    else
-        echo "$BUDGET_OUT" | grep -E '^\[(OVER|SHAPE|FAIL|TOTAL)\]|^FAIL' || echo "$BUDGET_OUT"
-        echo "[pre-commit] ❌ 启动链预算/形状门禁未通过（L0 总和、分项帽、L0 per-card 行或 L1 分型/卡数），commit 阻断"
-        echo "[pre-commit] 修法：瘦身对应文件；L0 出现登记行 ⇒ 用 python -m scripts.render_index --write 重渲"
-        exit 5
-    fi
-else
-    echo "[pre-commit] ⚠️ 找不到 $BUDGET_SCRIPT，跳过预算门禁"
-fi
-
-# ---------- 0.6) 索引渲染一致性（2026-10-01）----------
-# 为何要：INDEX.md / INDEX-full.md / INDEX-experience.md 都是 `render_index` 的**渲染产物**。
-# 只在「渲染器自身被改」时跑（提交链里 INDEX 文件住在嵌套中枢仓，普通提交看不到它们）：
-#   改了渲染/派生逻辑 → 必须证明它仍能复现当前产物，否则产物会在下次渲染时安静变形。
-# 退出码 6（与中枢仓钩子保持一致）。
-RENDER_LOGIC_STAGED=$(git diff --cached --name-only --diff-filter=ACMR \
-    | grep -E '^hub-engine/(scripts/render_index\.py|tools/hub_registry\.py|common/index_(files|limits)\.py)$' || true)
-if [ -n "$RENDER_LOGIC_STAGED" ] && [ -f "hub-engine/scripts/render_index.py" ]; then
-    echo "[pre-commit] 渲染器逻辑有改动 → 校验产物可复现性..."
-    if RENDER_OUT=$(cd hub-engine && python -m scripts.render_index --check 2>&1); then
-        echo "[pre-commit] ✅ 渲染产物与卡文件一致（逻辑改动未使现有产物变形）"
-    else
-        echo "$RENDER_OUT" | grep -E '^FAIL' || echo "$RENDER_OUT"
-        echo "[pre-commit] ❌ 渲染产物不一致：重跑 python -m scripts.render_index --write 并一并提交产物"
-        exit 6
-    fi
-fi
-
-echo "[pre-commit] ✅ 预算门禁通过"
-
-# ---------- 0.8) markdownlint 门禁（2026-09-25 审计 P2-f）----------
-# 配置（.markdownlint.json / .markdownlintignore）早已存在但**无任何门禁**；
-# 存量违规集中在 2 份历史文档 → 已加进 .markdownlintignore 作基线（不改写历史）。
-# 必须在“无 .py 则 exit 0”之前跑，否则纯文档提交会绕过本门禁。
-STAGED_MD=$(git diff --cached --name-only --diff-filter=ACMR | grep "\.md$" || true)
-if [ -n "$STAGED_MD" ]; then
-    if command -v markdownlint >/dev/null 2>&1; then
-        echo "[pre-commit] 跑 markdownlint（$(echo "$STAGED_MD" | wc -l) 个 .md）..."
-        if ! markdownlint $STAGED_MD 2>&1; then
-            echo "[pre-commit] ❌ markdownlint 未通过，commit 阻断（修文或加 .markdownlintignore 基线）"
-            exit 3
-        fi
-        echo "[pre-commit] ✅ markdownlint 通过"
-    else
-        echo "[pre-commit] ⚠️ markdownlint 未安装，跳过（不阻断）"
-    fi
-fi
-
-# ---------- 1) ruff 门禁 ----------
-# 检测 .py 文件 staged
-STAGED_PY=$(git diff --cached --name-only --diff-filter=ACMR | grep "\.py$" || true)
-if [ -z "$STAGED_PY" ]; then
-    echo "[pre-commit] 无 .py 文件 staged，跳过 ruff 门禁"
-    exit 0
-fi
-
-echo "[pre-commit] 检测到 .py staged 文件:"
-echo "$STAGED_PY" | sed 's/^/  /'
-
-# 优先用 python -m ruff（兼容所有平台），回退到 ruff 命令
-RUFF_CMD=""
-if command -v ruff >/dev/null 2>&1; then
-    RUFF_CMD="ruff"
-elif python -m ruff --version >/dev/null 2>&1; then
-    RUFF_CMD="python -m ruff"
-else
-    echo "[pre-commit] ⚠️ ruff 未安装（PATH 或 python -m 都没），跳过门禁"
-    echo "[pre-commit] 安装提示：pip install ruff"
-    exit 0  # 缺工具不阻断（避免 CI 误判）
-fi
-
-# 1. ruff check
-# --force-exclude：归档区（`_retired/`，见 .ruff.toml / hub-engine/pyproject.toml）
-# 即使被打包成 staged 文件也不应检查（2026-10-01；否则归档件会以旧规范把提交搞红）。
-echo "[pre-commit] 跑 ruff check..."
-if ! $RUFF_CMD check --force-exclude $STAGED_PY 2>&1; then
-    echo "[pre-commit] ❌ ruff check 未通过，commit 阻断"
-    exit 1
-fi
-
-# 2. ruff format --check
-echo "[pre-commit] 跑 ruff format --check..."
-if ! $RUFF_CMD format --check --force-exclude $STAGED_PY 2>&1; then
-    echo "[pre-commit] ❌ ruff format --check 不一致，commit 阻断"
-    exit 2
-fi
-
-echo "[pre-commit] ✅ ruff 门禁通过"
-
-echo "[pre-commit] ✅ 全部门禁通过，commit 允许"
-exit 0
+exec "$PY" hub-engine/scripts/gate_runner.py --repo outer
