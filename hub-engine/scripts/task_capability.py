@@ -76,6 +76,43 @@ def skillhub_skills(root: Path) -> dict[str, Path]:
     return out
 
 
+def router_records(root: Path) -> dict[str, dict]:
+    """SkillHub `router.yaml` 里各能力的 `{name: 记录}` —— **deploy_scope / kind 的唯一源**。
+
+    为什么不读 `skill.yaml`：Task 16 把「能不能任务级装」声明在**路由记录**上
+    （`router/schema.yaml` 里 `deploy_scope` 就在那一层），读第二处必然漂移。
+    不可达返回空 dict（不猜）。
+    """
+    from common.config import HubConfig, external_path
+
+    hub_path = external_path("skillhub", root) or (HubConfig.load(root).data.get("external_paths") or {}).get(
+        "skillhub"
+    )
+    if not hub_path:
+        return {}
+    f = Path(str(hub_path)) / "router" / "router.yaml"
+    if not f.is_file():
+        return {}
+    try:
+        import yaml
+
+        data = yaml.safe_load(f.read_text(encoding="utf-8")) or {}
+    except Exception:  # noqa: BLE001 - 解析失败一律当「读不到」，不猜
+        return {}
+    out: dict[str, dict] = {}
+    for r in data.get("skills") or []:
+        if isinstance(r, dict) and r.get("name"):
+            out[str(r["name"])] = r
+    return out
+
+
+def deploy_scope_of(root: Path, skill: str) -> str:
+    """`deploy_scope`：声明缺失时按 `always` 处理（**保守**：宁可不许临时装，也不许静默常驻）。"""
+    rec = router_records(root).get(skill) or {}
+    scope = str(rec.get("deploy_scope") or "always").strip()
+    return scope or "always"
+
+
 # ── 账本（追加式；残留检测的输入）─────────────────────────────────
 
 
@@ -127,6 +164,15 @@ def install(root: Path, skill: str, project: Path, *, force: bool = False) -> tu
     src = skillhub_skills(root).get(skill)
     if src is None:
         return False, f"SkillHub 里没有技能 {skill!r}（不猜路径；先确认已登记）"
+    # Task 16 门槛：只有「声明为任务级/按需」的能力才允许装到项目里。
+    # 常驻（always）的能力本就装在客户端 —— 再往项目里装一份是重复部署，会把
+    # 「临时装」变成「到处都有一份」，正是本模块要防的退化。
+    scope = deploy_scope_of(root, skill)
+    if scope == "always" and not force:
+        return False, (
+            f"技能 {skill!r} 的 deploy_scope=always（常驻，本就装在客户端）——"
+            "拒绝任务级重复部署；确实需要请加 --force，或在 SkillHub 声明 deploy_scope: task/on-demand"
+        )
     dst = target_dir(project, skill)
     if dst.exists() and not force:
         return False, f"目标已存在：{dst}（加 --force 覆盖；拒绝静默覆盖用户内容）"
@@ -207,7 +253,13 @@ def main(argv: list[str] | None = None) -> int:
     root = args.root or (_HUB_ENGINE.parent / "AgentMemoryHub")
     if args.action == "list":
         skills = skillhub_skills(root)
+        recs = router_records(root)
+        taskable = [n for n in sorted(skills) if str((recs.get(n) or {}).get("deploy_scope") or "always") != "always"]
         print(f"SkillHub 可安装技能 {len(skills)} 个：" + ", ".join(sorted(skills)[:20]))
+        print(
+            f"其中声明为可任务级装的（deploy_scope=task/on-demand）{len(taskable)} 个："
+            + (", ".join(taskable) if taskable else "（无 —— 存量技能尚未声明；装它们需 --force）")
+        )
         return 0
     if args.action == "residue":
         res = residue(root, args.days)

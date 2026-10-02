@@ -12,26 +12,48 @@ import yaml
 
 from scripts.task_capability import (
     append_ledger,
+    deploy_scope_of,
     install,
     ledger_rows,
     remove,
     residue,
+    router_records,
     skillhub_skills,
     target_dir,
     verify,
 )
 
 
-def _hub(tmp_path: Path, skills: dict[str, str]) -> Path:
-    """造一个带 SkillHub 的中枢根：{技能名: SKILL.md 内容}。"""
+def _hub(tmp_path: Path, skills: dict[str, str], scopes: dict[str, str] | None = None) -> Path:
+    """造一个带 SkillHub 的中枢根：`{技能名: SKILL.md 内容}`。
+
+    `scopes` 写进 SkillHub 的 `router/router.yaml`（**deploy_scope 的唯一源**，M2/Task 16）；
+    默认把测试技能声明为 `task` —— 不声明的技能按 `always` 处理，**不允许任务级装**。
+    """
+    scopes = scopes or {}
     hub = tmp_path / "AgentMemoryHub"
     (hub / "system").mkdir(parents=True, exist_ok=True)
     sh = tmp_path / "SkillHub"
+    records = []
     for name, body in skills.items():
         d = sh / "skills" / "shared" / name
         d.mkdir(parents=True, exist_ok=True)
         (d / "SKILL.md").write_text(body, encoding="utf-8")
         (d / "extra.txt").write_text("payload", encoding="utf-8")
+        records.append(
+            {
+                "name": name,
+                "slot": "shared",
+                "invoke": "model",
+                "trigger": [name],
+                "forgot": [f"not-{name}"],
+                "deploy_scope": scopes.get(name, "task"),
+            }
+        )
+    (sh / "router").mkdir(parents=True, exist_ok=True)
+    (sh / "router" / "router.yaml").write_text(
+        yaml.safe_dump({"version": 1, "skills": records}, allow_unicode=True), encoding="utf-8"
+    )
     (hub / "hub.config.yaml").write_text(
         yaml.safe_dump({"external_paths": {"skillhub": str(sh)}}, allow_unicode=True), encoding="utf-8"
     )
@@ -115,3 +137,38 @@ def test_residue_detects_unsettled_task_installs(tmp_path):
 
     remove(hub, "alpha", project)
     assert residue(hub, days=0) == [], "卸载后不得再报残留"
+
+
+def test_install_refuses_always_scope(tmp_path):
+    """M2/Task 16 门槛：`deploy_scope=always`（常驻）的能力**拒绝任务级装**。
+
+    常驻的本就装在客户端——再往项目里装一份是重复部署，
+    会把「临时装」变成「到处都有一份」，正是本模块要防的退化。
+    """
+    hub = _hub(tmp_path, {"resident": "# r\n"}, scopes={"resident": "always"})
+    project = tmp_path / "proj"
+    ok, detail = install(hub, "resident", project)
+    assert not ok and "always" in detail and "拒绝" in detail
+    assert not target_dir(project, "resident").exists()
+    # 确实需要时可用 --force 越过
+    ok2, _ = install(hub, "resident", project, force=True)
+    assert ok2
+
+
+def test_install_allows_declared_task_scope(tmp_path):
+    """声明 `deploy_scope: task` 或 `on-demand` 的能力可以装（**声明是装的前提**）。"""
+    hub = _hub(tmp_path, {"t1": "# t\n", "o1": "# o\n"}, scopes={"t1": "task", "o1": "on-demand"})
+    project = tmp_path / "proj"
+    assert install(hub, "t1", project)[0] is True
+    assert install(hub, "o1", project)[0] is True
+
+
+def test_no_router_records_means_always(tmp_path):
+    """读不到 SkillHub 路由记录时按 `always` 处理（**保守**：宁可不许临时装，也不许静默常驻）。"""
+    hub = _hub(tmp_path, {"alpha": "# a\n"})
+    (hub / "hub.config.yaml").write_text(
+        yaml.safe_dump({"external_paths": {"skillhub": str(tmp_path / "nope")}}, allow_unicode=True),
+        encoding="utf-8",
+    )
+    assert deploy_scope_of(hub, "alpha") == "always"
+    assert router_records(hub) == {}

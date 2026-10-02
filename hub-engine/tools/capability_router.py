@@ -77,11 +77,17 @@ def suggest(root: Path, context: str, platform: str = "pi", limit: int = MAX_SUG
         sc, hit, bad = score_skill(s, context)
         if sc <= 0:
             continue
+        # M2/Task 16：把 `deploy_scope` 带进建议 —— 否则调用方不知道
+        # 「这条是常驻（已在客户端）还是可以任务级临时装」
+        scope = str(s.get("deploy_scope") or "always").strip() or "always"
         scored.append(
             {
                 "name": s.get("name"),
                 "slot": s.get("slot"),
                 "invoke": s.get("invoke"),
+                "kind": s.get("kind") or "skill",
+                "deploy_scope": scope,
+                "task_installable": scope in {"task", "on-demand"},
                 "score": sc,
                 "hit": hit,
                 "forgot": bad,
