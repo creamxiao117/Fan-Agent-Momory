@@ -182,16 +182,19 @@ def by_dir(cards: list[CardMeta]) -> dict[str, list[CardMeta]]:
 
 
 def example_slugs(cards: list[CardMeta], dir_name: str, n: int = 3) -> list[str]:
-    """某目录的示例 slug（reuse_count 降序 → updated 降序 → slug 升序，取前 n）。
+    """某目录的示例 slug（**仅按 slug 升序**，取前 n）。
 
-    用于 L0 能力图的内联示例：上限 n 与「内联不换行」共同保证 L0 行数恒定。
-    多趟稳定排序（Python sort 稳定），避免手写复合键的降序陷阱。
+    为何**不再**按 reuse_count / updated 排序（2026-10-02 裁定，真根因取证）：
+      L0 能力图是**渲染产物 + `--check` 门禁**。若排序键含使用计数或修改时间，
+      则任何一次**日常数据扰动**（reuse_count 由 MCP 命中自动 +1、卡被工具重写 bump
+      `updated`）都会改变 L0 文本 ⇒ `render_index --check` 例行变红 ⇒ 阻断每一次提交
+      ⇒ 实际效果是训练所有人用 `--no-verify`，让全部提交门禁一起失效。
+      （2026-10-02 实测：仅 10 张卡的 reuse_count 自增，就让 INDEX.md 与渲染结果不一致。）
+
+    裁定：**渲染产物必须只是「卡集合」的纯函数**。「哪张最常用」是数据，
+    应由检索排序与报表体现，不进 L0。
     """
-    rows = [c for c in cards if c.dir == dir_name]
-    rows.sort(key=lambda c: c.slug)
-    rows.sort(key=lambda c: c.updated, reverse=True)
-    rows.sort(key=lambda c: -c.reuse_count)
-    return [c.slug for c in rows[:n]]
+    return sorted(c.slug for c in cards if c.dir == dir_name)[:n]
 
 
 __all__ = [

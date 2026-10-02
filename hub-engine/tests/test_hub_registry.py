@@ -22,7 +22,7 @@ from tools.hub_registry import (
 CARD = """---
 type: rule
 tags: [demo, 示例]
-updated: '2026-10-01'
+updated: '{updated}'
 status: active
 reuse_count: {reuse}
 ---
@@ -33,9 +33,16 @@ reuse_count: {reuse}
 """
 
 
-def _card(path: Path, title: str = "示例卡", reuse: int = 0, *, extra_fm: str = "") -> Path:
+def _card(
+    path: Path,
+    title: str = "示例卡",
+    reuse: int = 0,
+    *,
+    updated: str = "2026-10-01",
+    extra_fm: str = "",
+) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(CARD.format(title=title, reuse=reuse) + extra_fm, encoding="utf-8")
+    path.write_text(CARD.format(title=title, reuse=reuse, updated=updated) + extra_fm, encoding="utf-8")
     return path
 
 
@@ -141,14 +148,27 @@ def test_by_dir_groups_in_card_dirs_order(tmp_path: Path):
     assert [c.slug for c in grouped["rules"]] == ["r"]
 
 
-def test_example_slugs_prefers_reuse_count(tmp_path: Path):
-    hub = tmp_path / "AgentMemoryHub"
-    _card(hub / "rules" / "low.md", reuse=0)
-    _card(hub / "rules" / "high.md", reuse=9)
-    _card(hub / "rules" / "mid.md", reuse=5)
-    _card(hub / "rules" / "excluded.md", reuse=1)
+def test_example_slugs_is_churn_independent(tmp_path: Path):
+    """L0 示例必须是**卡集合的纯函数**：reuse_count / updated 变动不得改变渲染结果。
 
-    assert example_slugs(scan(hub), "rules", n=2) == ["high", "mid"]
+    回归背景（2026-10-02 实测，这是渲染门禁例行变红的真根因）：示例曾按 reuse_count
+    降序选择，而 reuse_count 由 MCP 命中自动 +1（日常数据扰动）⇒ 一次自增就让
+    `render_index --check` 变红 ⇒ 阻断**每一次**中枢提交 ⇒ 实际效果是
+    训练所有人用 `--no-verify`，从而让全部提交门禁一起失效。
+    """
+    hub = tmp_path / "AgentMemoryHub"
+    _card(hub / "rules" / "alpha.md", reuse=0, updated="2026-01-01")
+    _card(hub / "rules" / "beta.md", reuse=9, updated="2026-12-31")
+    _card(hub / "rules" / "gamma.md", reuse=5, updated="2026-06-01")
+
+    before = example_slugs(scan(hub), "rules", n=2)
+    # 模拟日常扰动：所有使用计数与修改时间都变了
+    _card(hub / "rules" / "alpha.md", reuse=99, updated="2026-12-31")
+    _card(hub / "rules" / "beta.md", reuse=0, updated="2026-01-01")
+    _card(hub / "rules" / "gamma.md", reuse=0, updated="2026-01-01")
+
+    assert example_slugs(scan(hub), "rules", n=2) == before
+    assert before == ["alpha", "beta"], "只按 slug 升序取前 n"
 
 
 def test_example_slugs_unknown_dir_is_empty(tmp_path: Path):

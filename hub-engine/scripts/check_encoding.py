@@ -1,4 +1,4 @@
-# @version V1.0 / 2026-09-19 / Hermes / 中文文本与路径编码全链路自检脚本
+# @version V1.1 / 2026-10-02 / pi / 新增第五道「行尾卫生」检查（双CR/裸CR/混合行尾）+ --fix / 中文文本与路径编码全链路自检脚本
 """编码自检脚本（rules/chinese-text-encoding-discipline 配套）。
 
 功能（四道检查，全部纯标准库、无第三方依赖）：
@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import argparse
 import codecs
+import re
 import sys
 import tempfile
 from pathlib import Path
@@ -115,6 +116,45 @@ def _record(level: str, target: str, detail: str) -> None:
     results.append((level, target, detail))
 
 
+# ── 第五道：行尾卫生 ──────────────────────────────────────────────
+# 合规形态仅两种：纯 LF（git 存储口径）与纯 CRLF（autocrlf 检出口径）。
+# 缺陷：双重 CR（"\r\r\n"）、裸 CR、CRLF 与裸 LF 混用。
+# 为何单列一道：git 视 "\r" 为**内容**，diff 与提交都不报错，缺陷可长期潜伏；
+# 而按「通用换行」读取的工具（Python open() 默认等）会把双重 CR 误读为两个换行
+# ⇒ 每行后多出一个空行。2026-10-02 实测：23 个已提交文件如此（含全部 L1 卡），
+# 并连带把 render_index --check 打红、阻断整仓提交。前四道检查均查不到。
+
+
+def eol_defect(raw: bytes) -> str | None:
+    """返回行尾缺陷说明；合规（纯 LF / 纯 CRLF）返回 None。"""
+    crlf = raw.count(b"\r\n")
+    lf = raw.count(b"\n")
+    bare_cr = raw.count(b"\r") - crlf
+    bare_lf = lf - crlf
+    double_cr = raw.count(b"\r\r\n")
+    if double_cr:
+        return f"双重 CR × {double_cr}（通用换行读取会多出空行）"
+    if bare_cr > 0:
+        return f"裸 CR × {bare_cr}（应为 CRLF 或 LF）"
+    if crlf > 0 and bare_lf > 0:
+        return f"混合行尾（CRLF × {crlf} / 裸 LF × {bare_lf}）"
+    return None
+
+
+def fix_eol(path: Path) -> bool:
+    """就地修行尾缺陷：连续 CR+LF → LF，孤立 CR → LF。
+
+    仅对有缺陷的文件生效；纯 LF / 纯 CRLF **一律不动**（返回 False）。
+    除行尾外不改任何字节（非空行内容逐行不变）。
+    """
+    raw = path.read_bytes()
+    if eol_defect(raw) is None:
+        return False
+    fixed = re.sub(rb"\r+\n", b"\n", raw).replace(b"\r", b"\n")
+    path.write_bytes(fixed)
+    return True
+
+
 def check_file(path: Path) -> None:
     """检查单个文件的编码 / BOM / 乱码串。"""
     ext = path.suffix.lower()
@@ -157,6 +197,11 @@ def check_file(path: Path) -> None:
             str(path),
             ".vbs 含非 ASCII 字符（WScript 按 ANSI 解析，必须纯 ASCII）",
         )
+
+    # 5) 行尾卫生（双 CR / 裸 CR / 混合行尾）
+    defect = eol_defect(raw)
+    if defect:
+        _record("FAIL", str(path), f"行尾不合规：{defect}（跑 --fix 修复）")
 
     _record("PASS", str(path), f"UTF-8 可解，BOM={'有' if has_bom else '无'}")
 
@@ -206,12 +251,23 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="中文文本与路径编码全链路自检")
     parser.add_argument("targets", nargs="*", help="要扫描的文件或目录（可多个）")
     parser.add_argument("--roundtrip", action="store_true", help="只跑中文路径 round-trip 测试")
+    parser.add_argument(
+        "--fix",
+        action="store_true",
+        dest="fix",
+        help="就地修行尾缺陷（连续 CR+LF → LF）；纯 LF/CRLF 不动",
+    )
     args = parser.parse_args(argv)
 
     if args.roundtrip:
         ok = roundtrip_path_test()
     else:
         files = iter_files([Path(t) for t in args.targets]) if args.targets else []
+        if args.fix:
+            fixed = [str(f) for f in files if fix_eol(f)]
+            for name in fixed:
+                _record("FIX", name, "行尾已规范化为 LF")
+            _record("PASS", "行尾修复", f"共修复 {len(fixed)} 个文件")
         for f in files:
             check_file(f)
         ok = roundtrip_path_test()
@@ -219,6 +275,8 @@ def main(argv: list[str] | None = None) -> int:
             _record("PASS", "扫描汇总", f"共检查 {len(files)} 个文本文件")
 
     for level, target, detail in results:
+        if level == "PASS" and target != "扫描汇总":
+            continue
         print(f"[{level}] {target} :: {detail}")
 
     fails = [r for r in results if r[0] == "FAIL"]
