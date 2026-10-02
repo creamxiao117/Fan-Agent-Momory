@@ -113,6 +113,12 @@ TASK_KIND_TYPES: dict[str, tuple[str, ...]] = {k: scope_for(k) for k in LEGACY_K
 
 # ── 关键词分型 ────────────────────────────────────────────────
 # 关键词 → 型；classify 时按 _ORDER 优先级，同型命中即返回
+#
+# 中英并重（2026-10-02 补）：本仓交互以中文为主，而早期关键词表以英文为主
+# ⇒ 实测「重构检索层并补测试」被判 `light`（一个真实 code 任务完全不检索）。
+# 补词时遵守两条：①只加**高区分度**词（如「重构」「跑测试」），不加泛词（如「写」）；
+# ②每加一个词都要问「它会不会误升 light→code」——误升的代价是每会话多付一次
+#   进程级冷启动（实测 ~5s，见 experience 卡）。
 _KEYWORDS: dict[Tier, tuple[str, ...]] = {
     "hub": (
         "中枢",
@@ -123,8 +129,20 @@ _KEYWORDS: dict[Tier, tuple[str, ...]] = {
         "agentmemoryhub",
         "回写",
         "confirm ",
+        "经验卡",
+        "沉淀",
+        "提炼",
     ),
-    "sync": ("sync", "push", "注入", "inject", "platform_bridge", "跨平台"),
+    "sync": (
+        "sync",
+        "push",
+        "注入",
+        "inject",
+        "platform_bridge",
+        "跨平台",
+        "同步平台",
+        "平台记忆",
+    ),
     "code": (
         "commit",
         "ruff",
@@ -135,6 +153,12 @@ _KEYWORDS: dict[Tier, tuple[str, ...]] = {
         "refactor",
         "修 bug",
         "改代码",
+        "重构",
+        "提交",
+        "跑测试",
+        "补测试",
+        "单测",
+        "测试用例",
     ),
     # project 置于最后：仅在 hub/sync/code 都不命中时才判为立项型（保守，不改既有判定）
     "project": (

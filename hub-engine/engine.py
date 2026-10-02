@@ -25,6 +25,7 @@ from commands import (  # noqa: I001  (must precede common.config — needs sys.
     cmd_status,
     cmd_sync,
     cmd_tidy,
+    cmd_tier_bootstrap,
 )
 
 # === P1 兼容 shim：保留旧 helper 名供测试 monkeypatch.setattr("engine._<name>", ...) ===
@@ -598,6 +599,19 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--root", required=True)
     p.add_argument("name")
     p.set_defaults(func=cmd_confirm)
+
+    p = sub.add_parser(
+        "tier-bootstrap",
+        help="会话级预取：任务分型 → 按型检索 → 输出可直接注入的引导块（与 MCP hub_bootstrap 同 handler）",
+    )
+    p.add_argument("--root", required=True)
+    p.add_argument("--context", default="", help="用户首条消息/当前意图（分型依据与检索 query）")
+    p.add_argument("--platform", default="pi", help="审计与 reuse 计数用的平台名")
+    p.add_argument("--tier", default="", help="强制指定规范型（light/code/hub/sync/project）；缺省自动判定")
+    p.add_argument("--top-k", type=int, default=3)
+    p.add_argument("--compress-level", type=int, default=1, help="正文压缩级别（0=原文，1-5 渐进压缩）")
+    p.add_argument("--json", action="store_true", help="输出 JSON（供 agent 扩展消费）")
+    p.set_defaults(func=cmd_tier_bootstrap)
 
     p = sub.add_parser("distill", help="复盘→候选规则")
     p.add_argument("--root", required=True)

@@ -190,3 +190,18 @@ def test_classify_project_tier():
 def test_project_tier_is_not_in_l1_cards_by_default():
     """新增型不得自动带 L1 卡（L1 由卡自身 l1_tier 声明，不能凭空造）。"""
     assert l1_cards()["project"] == []
+
+
+def test_classify_covers_chinese_task_words():
+    """中文任务词必须能升型（2026-10-02 回归）。
+
+    背景：本仓交互以中文为主，而早期关键词表以英文为主 ⇒ 实测「重构检索层并补测试」
+    被判 light（一个真实 code 任务完全不检索）。这条用例锁住"中文不退化"。
+    """
+    assert classify("重构检索层并补测试") == "code"
+    assert classify("把这次的结论沉淀成经验卡") == "hub"
+    assert classify("同步平台记忆") == "sync"
+    assert classify("给新项目立项，做技术路径选型") == "project"
+    # 泛词不得误升（误升 = 每会话多付一次进程级冷启动）
+    assert classify("今天天气怎么样") == "light"
+    assert classify("你是谁") == "light"

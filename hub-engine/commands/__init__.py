@@ -18,6 +18,7 @@ from commands.retrieve import cmd_retrieve
 from commands.status import cmd_status
 from commands.sync import cmd_sync
 from commands.tidy import cmd_tidy
+from commands.tier_bootstrap import cmd_tier_bootstrap
 
 __all__ = [
     "cmd_audit",
@@ -31,4 +32,5 @@ __all__ = [
     "cmd_status",
     "cmd_sync",
     "cmd_tidy",
+    "cmd_tier_bootstrap",
 ]
