@@ -26,6 +26,7 @@ from pathlib import Path
 # 让 commands/ 子包能 import tools/ scripts/ common/
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from tools.capability_router import suggest as capability_suggest  # noqa: E402
 from tools.mcp_handlers import hub_bootstrap  # noqa: E402
 from tools.task_tier import classify, resolve_kind, scope_for  # noqa: E402
 
@@ -47,11 +48,20 @@ def cmd_tier_bootstrap(args) -> int:
         top_k=getattr(args, "top_k", 3) or 3,
         compress_level=getattr(args, "compress_level", 1) or 0,
     )
+    # 能力建议（M3/Task 20）：把"本任务该用什么能力"接到任务开头，而不是靠模型临场想。
+    # **只建议不安装**（改客户端配置前需用户批准）。
+    platform = getattr(args, "platform", "pi") or "pi"
+    try:
+        caps = capability_suggest(root, args.context or "", platform=platform)
+    except Exception as exc:  # noqa: BLE001 - 能力建议失败不得拖垮记忆预取
+        caps = {"error": str(exc)[:200], "suggested": [], "missing": []}
+
     payload = {
         **res,
         "tier": resolve_kind(tier),
         "scope": list(scope_for(tier)),
         "hit_count": res.get("hit_count", 0),
+        "capabilities": caps,
         "elapsed_ms": int((time.perf_counter() - t0) * 1000),
     }
 
@@ -65,4 +75,11 @@ def cmd_tier_bootstrap(args) -> int:
         )
         if payload.get("markdown"):
             print(payload["markdown"])
+        caps = payload.get("capabilities") or {}
+        if caps.get("suggested"):
+            print("\n[能力建议]（只建议不安装）")
+            for s in caps["suggested"]:
+                flag = "需人工触发" if s.get("invoke") == "user" else "可自动触发"
+                state = "（未在本平台实测到）" if s in caps.get("missing", []) else "（已装）"
+                print(f"  - {s['name']} [{flag}]{state} :: {s['why']}")
     return 0
