@@ -23,6 +23,18 @@ from tools.snippet import extract_snippet
 from tools.task_tier import FALLBACK_KIND, resolve_kind, scope_for
 
 DEFAULT_EXCERPT = 200
+
+# ── grade → 注入分层（2026-10-02 M1/Task 15）────────────────────────
+# 解决的问题：铁律与"随手记的坑"此前在注入块里**同权**——agent 无法一眼看出
+# "哪条必须遵守、哪条只是参考"。分层后：铁律读全文，经验只给一行摘要。
+GRADE_ORDER = ("iron", "proven", "domain", "pitfall", "task")
+GRADE_SECTIONS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("## 铁律（必读全文）", ("iron",)),
+    ("## 已验证方案与领域事实", ("proven", "domain")),
+    ("## 相关经验与坑（先看坑）", ("pitfall", "task")),
+)
+# 分级摘要长度：iron 给足上下文（要照做），其余只给"值不值得点开"的判断依据
+EXCERPT_BY_GRADE = {"iron": 400, "proven": 220, "domain": 180, "pitfall": 200, "task": 140}
 SUBDIR_BY_TYPE = {
     "rule": "rules",
     "methodology": "methodology",
@@ -49,6 +61,7 @@ def _hit(
     compress_level: int = 0,
 ) -> dict:
     rel = card.path.relative_to(root).as_posix()
+    grade = str(card.extra.get("grade") or "").strip()
     h = {
         "slug": card.path.stem,
         "rel_path": rel,
@@ -57,7 +70,9 @@ def _hit(
         "tags": card.tags,
         "updated": card.updated,
         "channel": channel,
-        "excerpt": extract_snippet(card.body, query, DEFAULT_EXCERPT),
+        # grade 透出给消费方（pi 扩展按可信度决定读全文还是一行）
+        "grade": grade,
+        "excerpt": extract_snippet(card.body, query, EXCERPT_BY_GRADE.get(grade, DEFAULT_EXCERPT)),
     }
     if score is not None:
         h["score"] = round(score, 4)
@@ -341,13 +356,22 @@ def hub_bootstrap(
     blocks = [b for b in blocks if b["hits"]]  # 空类别不出现在引导块
     snapshot = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     lines = [f"## 中枢命中（本任务快照 @{snapshot}）"]
-    for b in blocks:
-        header = f"### {b['kind']}"
-        if b["kind"] == "rules":
-            header += "（必读全文）"
-        lines.append(header)
-        for h in b["hits"]:
-            lines.append(f"- {h['rel_path']} — {h['excerpt']}")
+    # 按 **grade** 分层渲染（而不是按子区分组）：agent 需要的顺序是
+    # "先别违反铁律 → 再参考已验证方案 → 最后看别人踩过的坑"，不是"先看 rules/ 再看 experience/"。
+    flat = [h for b in blocks for h in b["hits"]]
+    for title, grades in GRADE_SECTIONS:
+        picked = [h for h in flat if (h.get("grade") or "") in grades]
+        if not picked:
+            continue
+        lines.append(title)
+        for h in picked:
+            tag = f"[{h['grade']}] " if h.get("grade") else ""
+            lines.append(f"- {tag}{h['rel_path']} — {h['excerpt']}")
+    if len(lines) == 1:  # 全部 hit 都没有 grade（存量卡未标注）→ 退回平铺，不静默丢内容
+        for b in blocks:
+            lines.append(f"### {b['kind']}")
+            for h in b["hits"]:
+                lines.append(f"- {h['rel_path']} — {h['excerpt']}")
     markdown = "\n".join(lines)
     aid = audit_id()
     append_query_log(

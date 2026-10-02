@@ -182,17 +182,21 @@ def _hit(kw: str, text: str) -> bool:
 
 _ORDER: tuple[Tier, ...] = ("hub", "sync", "code", "project")
 
-# ── L1 卡集合：由**卡自身 frontmatter `l1_tier`** 派生（2026-10-01）────────────
+# ── L1 卡集合：由**卡自身 frontmatter `grade: iron`** 派生（2026-10-02 M1/Task 14）──
 #
-# 为何不再手写 `L1_CARDS` 清单（历史先例：L0 INDEX 枚举）：
-#   1. 手写枚举 = 与卡数同病——即便有 15K 帽，也会随卡片增长慢慢顶帽；
-#   2. 新增/退役 L1 卡要改两处（卡 + 清单），必然漂移；
-#   3. 门禁（startup_budget）要“卡不存在必报”，而清单本身就是漂移源。
-# 故改为：卡自己声明“我属于哪个任务型”（可多值：list），派生集合即是真相。
+# 演进史（两步，都是"把枚举挪进卡自己声明"）：
+#   ① 2026-10-01：手写 `L1_CARDS` 清单 → 卡声明 `l1_tier`（可多值）；
+#   ② 2026-10-02：`l1_tier` → **`grade: iron`**（可信度轴）。
 #
-# 字段名用 `l1_tier` 而**不是** `tier`：卡 frontmatter 已有 `tier: task|iron`（重要度），
-# 语义不同，不得覆用。
-L1_TIER_FIELD = "l1_tier"
+# 为何第二步值得做（不是换个字段名）：
+#   `l1_tier` 只回答"**读不读**"，而 agent 真正需要的是"**多可信/多强制**"——
+#   铁律要读全文、随手记的坑只要一行摘要。`grade` 同时承载这两件事，
+#   于是 "L1 集合" 与 "检索注入分层" 有了**同一个事实源**，不会各说各话。
+#
+# 零漂移保证：`grade` 的初值即由 `l1_tier` 卡回填为 iron（见 scripts/migrate_grade），
+#   故派生集合与迁移前**逐型相等**（tests/test_task_tier.py 的 LEGACY_L1_CARDS 锁定）。
+L1_GRADE_FIELD = "grade"
+L1_IRON = "iron"
 
 # 单型卡数上限（形状断言，防「顺手再加一张」复发成 L1 ratchet）
 L1_MAX_CARDS_PER_TIER = 3
@@ -217,8 +221,14 @@ def l1_cards(root: Path | None = None) -> dict[Tier, list[str]]:
         card = try_read_card(p)
         if card is None:
             continue
-        declared = card.extra.get(L1_TIER_FIELD)
+        # 卡是否属于"铁律"（= 该型每任务必读）
+        if str(card.extra.get(L1_GRADE_FIELD) or "").strip() != L1_IRON:
+            continue
+        # 归属哪个型：由 `l1_tier` 声明（可多值）；缺失则按目录兜底（rules/ ⇒ 全型必读）
+        declared = card.extra.get("l1_tier")
         tiers = declared if isinstance(declared, list) else [declared] if declared else []
+        if not tiers:
+            tiers = ["code", "hub", "sync"]  # 兜底：rules/ 下的 iron 卡视为全型相关
         for t in tiers:
             if isinstance(t, str) and t in out and t != "light":
                 out[t].append(p.stem)
@@ -255,8 +265,9 @@ def classify(prompt: str) -> Tier:
 
 __all__ = [
     "FALLBACK_KIND",
+    "L1_GRADE_FIELD",
+    "L1_IRON",
     "L1_MAX_CARDS_PER_TIER",
-    "L1_TIER_FIELD",
     "LEGACY_KIND_ALIAS",
     "LEGACY_KIND_SCOPE",
     "TASK_KIND_TYPES",

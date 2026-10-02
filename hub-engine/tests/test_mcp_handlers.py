@@ -275,3 +275,55 @@ def test_bootstrap_legacy_kind_still_works(tmp_path):
     res = hub_bootstrap(root, "dll", context="改了 DLL 被锁", platform="trae")
     assert res["ok"] and res["task_kind"] == "dll"
     assert res["task_tier"] == "code", "dll 是 code 型的领域特例"
+
+
+# ── M1/Task 15：检索/注入按 grade 分层 ─────────────────────────────
+
+
+def test_hits_carry_grade_and_grade_scaled_excerpt(tmp_path):
+    """hit 必须带 grade；摘要长度随可信度分档（铁律要能给足上下文）。"""
+    root = bootstrap(tmp_path)
+    _seed(root)
+    long_body = "这是一条铁律。" + "补充说明。" * 60
+    (root / "rules" / "iron-x.md").write_text(
+        "---\ntype: rule\ntags: [autocad]\nupdated: 2026-10-02\nstatus: active\n"
+        "grade: iron\nreuse_count: 0\n---\n" + long_body + "\n",
+        encoding="utf-8",
+    )
+    res = hub_search(root, "铁律", platform="t")
+    hit = next(h for h in res["hits"] if h["slug"] == "iron-x")
+    assert hit["grade"] == "iron"
+    assert len(hit["excerpt"]) > 200, "iron 卡摘要应比默认 200 更长"
+
+
+def test_bootstrap_markdown_is_grade_layered(tmp_path):
+    """注入块按「铁律 → 已验证 → 经验与坑」分层，而不是按目录分组。
+
+    回归背景：铁律与"随手记的坑"此前**同权**，agent 无法一眼分辨该照做还是仅供参考。
+    """
+    root = bootstrap(tmp_path)
+    (root / "rules" / "iron-x.md").write_text(
+        "---\ntype: rule\ntags: [dll]\nupdated: 2026-10-02\nstatus: active\ngrade: iron\n"
+        "reuse_count: 0\n---\nDLL 改后必须递增版本号。\n",
+        encoding="utf-8",
+    )
+    (root / "experience" / "pit.md").write_text(
+        "---\ntype: exp\ntags: [dll]\nupdated: 2026-10-02\nstatus: active\ngrade: pitfall\n"
+        "reuse_count: 0\n---\nDLL 被占用时覆盖会静默失败。\n",
+        encoding="utf-8",
+    )
+    # 用 hub 型（检索区含 experience）——code 型不查 experience，两张卡不会同时出现
+    res = hub_bootstrap(root, task_tier="hub", context="dll 改版本号 静默失败", platform="t")
+    md = res["markdown"]
+    assert "## 铁律（必读全文）" in md
+    assert "## 相关经验与坑（先看坑）" in md
+    assert md.index("## 铁律") < md.index("## 相关经验")
+
+
+def test_bootstrap_falls_back_to_flat_when_no_grade(tmp_path):
+    """存量卡未标注 grade 时**退回平铺**，不得静默丢内容。"""
+    root = bootstrap(tmp_path)
+    _seed(root)  # _seed 的卡没有 grade 字段
+    res = hub_bootstrap(root, task_tier="code", context="dll 版本号", platform="t")
+    assert res["markdown"].count("## ") >= 1
+    assert "dll-lock" in res["markdown"], "无 grade 时也必须把命中项列出来"

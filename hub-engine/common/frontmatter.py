@@ -31,6 +31,30 @@ KNOWN = {"type", "tags", "updated", "status", "reuse_count", "superseded_by"}
 # `scripts/fix_card_schema_drift.py`（修复器）——两者必须同一口径。
 REQUIRED_KEYS = ("type", "status", "updated")
 
+# ── grade：记忆**可信度/强制性**轴（2026-10-02 架构重构 M1）──────────────────
+#
+# 为何要另开一轴（而不是复用目录或 status）：
+#   目录表达**领域/形态**（rules/methodology/experience…），status 表达**生命周期**
+#   （candidate/active/deprecated…），两者都无法回答“这条我必须遵守吗？”——
+#   而这是 agent 消费记忆时最关键的一问（铁律 vs 随手记的坑，不能用同一权重检索）。
+#
+# 为何不叫 L0/L1/L2：那三个名字已被 `scripts.startup_budget.py` 占为**预算分层**。
+#
+# 为何**不复用** `tier` 字段：卡 frontmatter 已有 `tier: task|iron`（旧的重要度字段，
+# 覆盖率仅 7%），语义与本轴重叠但取值不同；M1 用 `grade` 建新轴，`tier` 于 Task 13
+# 迁移后退役，避免“同一概念两个字段名”的漂移。
+VALID_GRADES: frozenset[str] = frozenset({"iron", "proven", "domain", "task", "pitfall"})
+
+# 分目录的合法 grade 集（防止“蓝图被标成铁律”这类语义错位）
+GRADES_BY_DIR: dict[str, frozenset[str]] = {
+    "rules": frozenset({"iron", "proven", "domain", "task", "pitfall"}),
+    "blueprints": frozenset({"proven", "domain"}),
+    "methodology": frozenset({"iron", "proven", "domain", "pitfall"}),
+    "longterm": frozenset({"domain", "task"}),
+    "projects": frozenset({"domain", "proven"}),
+    "experience": frozenset({"task", "pitfall", "proven"}),
+}
+
 
 def raw_frontmatter(path: Path) -> dict:
     """读**原始** frontmatter（不经 Card 默认值兜底）；不可解析时返回 {}。
@@ -122,7 +146,13 @@ def write_card(card: Card) -> str:
 
 
 def validate_card(card: Card) -> list[str]:
-    """返回错误列表；空列表表示合法"""
+    """返回错误列表；空列表表示合法。
+
+    `grade`（2026-10-02 M1/Task 12 新增，**灰度口径**）：
+      - 只校验**取值合法性**（枚举 + 分目录约束），**不要求存在**；
+      - 缺失由 `scripts.migrate_grade` 批量回填，回填完成后再由形状门禁看守覆盖率；
+      - 这样新卡从前就是“可选字段”，不会因新增字段而让存量 506 张卡集体变 invalid。
+    """
     errs = []
     if card.type not in VALID_TYPES:
         errs.append(f"type 必须为 {sorted(VALID_TYPES)} 之一，当前: {card.type}")
@@ -130,6 +160,13 @@ def validate_card(card: Card) -> list[str]:
         errs.append(f"status 必须为 {sorted(VALID_STATUS)} 之一，当前: {card.status}")
     if not card.updated:
         errs.append("updated 必填（YYYY-MM-DD）")
+    grade = str(card.extra.get("grade") or "").strip()
+    if grade and grade not in VALID_GRADES:
+        errs.append(f"grade 必须为 {sorted(VALID_GRADES)} 之一，当前: {grade}")
+    if grade and card.path is not None:
+        allowed = GRADES_BY_DIR.get(card.path.parent.name)
+        if allowed and grade not in allowed:
+            errs.append(f"grade={grade} 不适用于 {card.path.parent.name}/（允许 {sorted(allowed)}）")
     return errs
 
 

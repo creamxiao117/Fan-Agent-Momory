@@ -80,7 +80,10 @@ def test_l1_cards_multi_tier_card(tmp_path):
     rules = tmp_path / "AgentMemoryHub" / "rules"
     rules.mkdir(parents=True)
     (rules / "multi.md").write_text(
-        "---\ntype: rule\ntags: [x]\nupdated: '2026-10-01'\nstatus: active\nl1_tier: [hub, sync]\n---\n\n# x\n",
+        # 2026-10-02（M1/Task 14）：L1 集合改由 `grade: iron` 派生，
+        # `l1_tier` 降为"归属哪个型"的声明（可多值）。
+        "---\ntype: rule\ntags: [x]\nupdated: '2026-10-01'\nstatus: active\n"
+        "grade: iron\nl1_tier: [hub, sync]\n---\n\n# x\n",
         encoding="utf-8",
     )
     derived = l1_cards(tmp_path / "AgentMemoryHub")
@@ -205,3 +208,35 @@ def test_classify_covers_chinese_task_words():
     # 泛词不得误升（误升 = 每会话多付一次进程级冷启动）
     assert classify("今天天气怎么样") == "light"
     assert classify("你是谁") == "light"
+
+
+# ── M1/Task 14：L1 集合改由 `grade: iron` 派生 ────────────────────
+
+
+def test_l1_requires_grade_iron(tmp_path):
+    """**非 iron 的卡不得进 L1**（这是"每任务必读"的门槛，不是"重要"的自称）。"""
+    rules = tmp_path / "AgentMemoryHub" / "rules"
+    rules.mkdir(parents=True)
+    (rules / "a.md").write_text(
+        "---\ntype: rule\ntags: [x]\nupdated: '2026-10-01'\nstatus: active\ngrade: proven\nl1_tier: hub\n---\n\n# a\n",
+        encoding="utf-8",
+    )
+    (rules / "b.md").write_text(
+        "---\ntype: rule\ntags: [x]\nupdated: '2026-10-01'\nstatus: active\ngrade: iron\nl1_tier: hub\n---\n\n# b\n",
+        encoding="utf-8",
+    )
+    derived = l1_cards(tmp_path / "AgentMemoryHub")
+    assert derived["hub"] == ["b"], "proven 卡即便声明 l1_tier 也不得进 L1"
+
+
+def test_l1_iron_without_l1_tier_falls_back_to_all_tiers(tmp_path):
+    """`rules/` 下的 iron 卡若未声明归属型 → 视为全型相关（兜底，不静默丢卡）。"""
+    rules = tmp_path / "AgentMemoryHub" / "rules"
+    rules.mkdir(parents=True)
+    (rules / "iron.md").write_text(
+        "---\ntype: rule\ntags: [x]\nupdated: '2026-10-01'\nstatus: active\ngrade: iron\n---\n\n# x\n",
+        encoding="utf-8",
+    )
+    derived = l1_cards(tmp_path / "AgentMemoryHub")
+    for tier in ("code", "hub", "sync"):
+        assert derived[tier] == ["iron"], f"{tier} 应兜底包含未声明归属的 iron 卡"
