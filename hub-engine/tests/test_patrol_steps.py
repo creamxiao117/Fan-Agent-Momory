@@ -121,6 +121,7 @@ class FakeRun:
 _STEP_CALLS = [
     ("lint", lambda hub, eng: patrol.pipeline.IMPL["_step_library_health"](hub, eng)),
     ("render_check", lambda hub, eng: patrol.pipeline.IMPL["_step_render_check_p"](hub, eng)),
+    ("audit", lambda hub, eng: patrol.pipeline.IMPL["_step_hub_audit"](hub, eng)),
     ("recall", lambda hub, eng: patrol.pipeline.IMPL["_step_recall"](hub, eng)),
     ("reconcile", lambda hub, eng: patrol.pipeline.IMPL["_step_reconcile"](hub, eng)),
     ("secret_sentry", lambda hub, eng: patrol.pipeline.IMPL["_step_secret_sentry"](hub, eng)),
@@ -135,6 +136,7 @@ def _registered_step_names() -> list[str]:
 
     2026-10-02（M0.5/Task 7）：25 步 → **8 步**，注册表从"正则扫 patrol_runner 源码"
     改为读 `patrol.pipeline.STEP_ORDER`——**表即事实源**，扫源码只是它的旧代理。
+    2026-10-02 补：+1 = `audit`（跨文件一致性体检，lint/render_check 看不见的那一类）。
     """
     from scripts.patrol.pipeline import STEP_ORDER
 
@@ -151,7 +153,9 @@ def test_step_table_covers_every_registered_step():
     registered = set(_registered_step_names())
     covered = {name for name, _ in _STEP_CALLS}
     assert registered - covered == set(), f"新增步骤未覆盖: {sorted(registered - covered)}"
-    assert len(registered) == 8, f"巡检应为 8 步（职责收口），实际 {len(registered)}"
+    # 2026-10-02：+1 = `audit`（hub_audit 系统性体检）——它覆盖 lint/render_check 看不见的
+    # **跨文件**一致性（悬空指针 / iron 是否绑 gate / 台账一致性 / 文档漂移 / 数据完整性）
+    assert len(registered) == 9, f"巡检应为 9 步，实际 {len(registered)}"
 
 
 @pytest.mark.parametrize(("name", "call"), _STEP_CALLS, ids=[n for n, _ in _STEP_CALLS])
@@ -460,3 +464,11 @@ def test_freshness_check_timeout_is_fail(patrol_tree, monkeypatch):
     monkeypatch.setattr(subprocess, "run", FakeRun(raise_timeout=True))
     r = patrol._step_freshness_check(hub, engine)
     assert r.status == "fail" and r.output == "timeout"
+
+
+def test_audit_step_registered():
+    """`audit` 步必须注册在巡检里（它覆盖 lint/render_check 看不见的跨文件一致性）。"""
+    from scripts.patrol.pipeline import STEP_ORDER
+
+    assert "audit" in STEP_ORDER
+    assert len(STEP_ORDER) == len(set(STEP_ORDER)), "步骤名不得重复"

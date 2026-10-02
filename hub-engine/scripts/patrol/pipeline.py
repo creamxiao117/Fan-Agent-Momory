@@ -65,6 +65,7 @@ from scripts.patrol.steps import (  # noqa: E402
     _step_vector_regression,
     _step_verify_after_fix,
 )
+from scripts.patrol.steps_audit import _step_hub_audit  # noqa: E402
 
 _LOCAL_TZ = timezone(timedelta(hours=+8))
 # 人读产物（`daily-*.md`）的保留天数。**不适用于 `snapshot-*.json`**：
@@ -75,6 +76,7 @@ SNAPSHOT_KEEP_DAYS = 90
 STEPS: tuple[tuple[str, str, str], ...] = (
     ("lint", "库健康", "_step_library_health"),
     ("render_check", "库健康", "_step_render_check_p"),
+    ("audit", "库一致性", "_step_hub_audit"),
     ("recall", "检索质量", "_step_recall"),
     ("reconcile", "平台对账", "_step_reconcile"),
     ("secret_sentry", "安全", "_step_secret_sentry"),
@@ -313,6 +315,7 @@ def _prune(retro: Path) -> int:
 IMPL = {
     "_step_library_health": _step_library_health,
     "_step_render_check_p": _step_render_check_p,
+    "_step_hub_audit": _step_hub_audit,
     "_step_recall": _step_recall,
     "_step_reconcile": _step_reconcile,
     "_step_secret_sentry": _step_secret_sentry,
@@ -323,7 +326,7 @@ IMPL = {
 
 
 def run_all(root: Path, engine_dir: Path, *, dry_run: bool = False) -> list[StepResult]:
-    """按注册表顺序跑完 8 步（仅供 runner 调用；每步的异常由 `_run_step` 兜底）。"""
+    """按注册表顺序跑完全部步骤（步数以 `STEPS` 为准；异常由 `_run_step` 兜底）。"""
     out: list[StepResult] = []
     for name, stage, fn_name in STEPS:
         if dry_run:

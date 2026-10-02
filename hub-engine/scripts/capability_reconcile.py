@@ -102,6 +102,56 @@ def budgets(root: Path) -> dict[str, int]:
     }
 
 
+def registry_coverage(root: Path) -> dict:
+    """SkillHub **登记覆盖率**：声明态（router.yaml）vs 实测态（各客户端技能目录）。
+
+    为什么需要它：2026-10-02 实测发现三个集合**并不重合** ——
+    75 条路由记录 / 47 个有 SKILL.md 的实现 / **103 个实测装过的技能名**。
+    也就是说：「能力通胀」的大头（85 个技能）**根本没进过登记表**，
+    而这恰恰是不可见的部分：没登记 ⇒ 没人知道它存在 ⇒ 没人裁它该不该常驻。
+
+    本函数只**计量**（软指标、只报不拦），把缺口从"看不见"变成"每次都看得见"。
+    不自动补登记：`trigger`/`forgot` 要靠人写，机器从名字编出来的路由会误命中
+    （误命中比没有更糟 —— 见 router/schema.yaml 开头）。
+    """
+    from common.config import HubConfig, external_path
+
+    hub_path = external_path("skillhub", root) or (HubConfig.load(root).data.get("external_paths") or {}).get(
+        "skillhub"
+    )
+    out: dict = {"available": False}
+    if not hub_path:
+        return out
+    sh = Path(str(hub_path))
+    f = sh / "router" / "router.yaml"
+    if not f.is_file():
+        return out
+    try:
+        import yaml
+
+        rows = (yaml.safe_load(f.read_text(encoding="utf-8")) or {}).get("skills") or []
+    except Exception:  # noqa: BLE001 - 读不到当"无法计量"，不猜
+        return out
+
+    recorded = {str(r["name"]) for r in rows if isinstance(r, dict) and r.get("name")}
+    mcp_records = {str(r["name"]) for r in rows if isinstance(r, dict) and str(r.get("kind") or "skill") == "mcp"}
+    impl = {p.parent.name for p in (sh / "skills").rglob("SKILL.md")}
+    installed = set()
+    for info in (actual(root).get("skills") or {}).values():
+        installed.update(info.get("skills") or [])
+
+    unregistered = sorted(installed - recorded)
+    unimplemented = sorted(recorded - impl - mcp_records)
+    return {
+        "available": True,
+        "recorded": len(recorded),
+        "implemented": len(impl),
+        "measured_installed": len(installed),
+        "unregistered_installed": unregistered,
+        "recorded_but_unimplemented": unimplemented,
+    }
+
+
 def _worst(costs: dict[str, dict]) -> dict:
     """最贵单平台（要在渲染里当一句话讲，所以在这里算清）。"""
     if not costs:
@@ -207,6 +257,7 @@ def reconcile(root: Path) -> dict:
         "budgets": {**rep["soft"], "per_platform_ratchet": rep["caps"]},
         "over_ratchet": rep["over_ratchet"],
         "over_target": rep["over_target"],
+        "registry": registry_coverage(root),
     }
 
 
@@ -251,6 +302,26 @@ def render(r: dict) -> str:
             f"  - ❌ {d['platform']} 超棘轮 {d['over']} token（{d['tokens']} > {d['cap']}）："
             "要么换掉旧能力，要么把新能力降级为 `conditional`/`not-installed`；**不得改基线**"
         )
+    reg = r.get("registry") or {}
+    if reg.get("available"):
+        lines.append("")
+        lines.append("### SkillHub 登记覆盖率（软指标：缺口要可见，不自动补登记）")
+        lines.append("")
+        lines.append(
+            f"- 登记记录 **{reg['recorded']}** / 有 SKILL.md 的实现 **{reg['implemented']}**"
+            f" / 实测装过的技能名 **{reg['measured_installed']}**"
+        )
+        lines.append(
+            f"- ⚠️ **实测装了但从未登记**：{len(reg['unregistered_installed'])} 个"
+            "（这些才是常驻成本的大头，且没人审过它们该不该常驻；补登记需人写 trigger/forgot，"
+            "机器从名字编路由会误命中）"
+        )
+        lines.append(
+            f"- ⚠️ **登记了却查无实现**（无 SKILL.md 且非 mcp）："
+            f"{len(reg['recorded_but_unimplemented'])} 个 —— 要么补实现，要么删记录"
+        )
+        if reg["recorded_but_unimplemented"]:
+            lines.append(f"  - {', '.join(reg['recorded_but_unimplemented'])}")
     if r["over_target"]:
         lines.append("")
         lines.append("### 降级候选（软目标，需用户批准后执行；**不拦提交**）")

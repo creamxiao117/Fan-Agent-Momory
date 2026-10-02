@@ -55,7 +55,7 @@ def find_type_dir_mismatch(root: Path) -> list[dict]:
         if not d.is_dir():
             continue
         for p in sorted(d.glob("*.md")):
-            if p.name == "log.md" or p.name.startswith("lint-report-"):
+            if _is_non_card(p):
                 continue
             card = try_read_card(p)
             if card is None:
@@ -149,15 +149,30 @@ def find_orphans(root: Path) -> list[Path]:
     return orphans
 
 
+# 非卡片文件（生成物/时间线）——它们**本就没有 frontmatter**，不是"schema 漂移"
+NON_CARD_PREFIXES = ("lint-report-", "daily-", "snapshot-", "report-", "patrol-")
+NON_CARD_NAMES = ("log.md", "README.md")
+
+
+def _is_non_card(p: Path) -> bool:
+    """是否是"生成物/时间线"这类**非卡片**文件（与 `_all_cards` 同口径）。
+
+    2026-10-02 修：`retro/daily-*.md` 由巡检第 9 步（snapshot）生成，**设计上就没有
+    frontmatter**；此前它被 `find_schema_drift` 当成"坏卡"报出来，导致巡检**永久**带
+    一条假告警 —— 正是"狼来了"式的门禁（长期假红 ⇒ 训练人忽略告警）。
+    """
+    return p.name in NON_CARD_NAMES or p.name.startswith(NON_CARD_PREFIXES)
+
+
 def _non_authority_cards(root: Path) -> list[tuple[str, Path, object]]:
-    """非权威区卡片；跳过时间线/报告等非卡片文件（与 _all_cards 同口径）"""
+    """非权威区卡片；**跳过生成物/时间线**（它们不是卡，不该做 frontmatter 校验）"""
     out = []
     for sub in NON_AUTHORITY_DIRS:
         d = root / sub
         if not d.exists():
             continue
         for p in sorted(d.glob("*.md")):
-            if p.name == "log.md" or p.name.startswith("lint-report-"):
+            if _is_non_card(p):
                 continue
             out.append((sub, p, try_read_card(p)))
     return out
