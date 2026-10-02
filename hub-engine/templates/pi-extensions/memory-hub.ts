@@ -290,6 +290,35 @@ export default function (pi: ExtensionAPI) {
     },
   });
 
+  pi.registerCommand("hub-cap", {
+    description: "任务级能力装配：/hub-cap list|install|verify|remove <技能名>（默认落点=项目级 .pi/skills/）",
+    handler: async (args, ctx) => {
+      if (!hub) {
+        ctx.ui.notify("未找到中枢：请设 AGENT_MEMORY_HUB 或在 <agent-dir>/mcp.json 配置 agent-memory-hub", "error");
+        return;
+      }
+      const raw = (args ?? "").trim();
+      const [action = "list", skill = ""] = raw.split(/\s+/);
+      if (!["list", "install", "verify", "remove", "residue"].includes(action)) {
+        ctx.ui.notify("用法：/hub-cap list|install|verify|remove|residue [技能名]", "warning");
+        return;
+      }
+      const repo = dirname(hub);
+      const py = join(repo, ".venv", "Scripts", "python.exe");
+      const script = join(repo, "hub-engine", "scripts", "task_capability.py");
+      const argv = [script, action, "--root", hub];
+      // install/remove 必须显式落到**项目级** .pi/skills/（task scope 的唯一落点）
+      if ((action === "install" || action === "remove") && skill) {
+        argv.push("--skill", skill, "--project", ctx.cwd);
+      } else if (action === "verify" && skill) {
+        argv.push("--skill", skill, "--project", ctx.cwd);
+      }
+      const r = await pi.exec(existsSync(py) ? py : "python", argv, { timeout: 60_000, cwd: repo });
+      const text = (r.stdout || r.stderr || "").trim();
+      ctx.ui.notify(text.slice(0, 1200) || `退出码 ${r.code}`, r.code === 0 ? "info" : "warning");
+    },
+  });
+
   pi.registerCommand("hub-off", {
     description: "本会话关闭中枢自动检索",
     handler: async (_args, ctx) => {

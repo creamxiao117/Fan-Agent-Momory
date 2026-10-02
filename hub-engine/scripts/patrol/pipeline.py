@@ -152,6 +152,12 @@ def _step_reconcile(root: Path, engine_dir: Path) -> StepResult:
         ),
         ("capability_scan", [sys.executable, "-m", "scripts.capability_scan", "--check"]),
         ("inventory", [sys.executable, "-m", "scripts.inventory", "--check"]),
+        # 任务级能力的**残留检测**（M3/Task 21）：task scope 装了但未结算 → warn。
+        # 这是"临时装 → 永久装"退化的唯一防线。
+        (
+            "task_caps_residue",
+            [sys.executable, "-m", "scripts.task_capability", "residue", "--root", str(root)],
+        ),
     )
     for name, argv in checks:
         rc, out, err = _run_cmd(argv, cwd=engine_dir, timeout=120)
