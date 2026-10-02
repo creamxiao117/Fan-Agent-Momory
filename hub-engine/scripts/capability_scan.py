@@ -50,6 +50,13 @@ OUT_DIR_REL = Path("system")
 
 # 技能目录的常见布局：<skills_dir>/<name>/SKILL.md 或 <skills_dir>/*.md / *。（一层子目录）
 SKILL_ENTRY = "SKILL.md"
+SKILL_MD = "SKILL.md"
+
+# 常驻「发现成本」口径（M2/Task 18）：每个能力**每次会话都要付**的描述 token，无论是否用到。
+# `methodology/agent-tool-inventory`（2026-08-18 快照）早已指出这是能力通胀的真成本，
+# 但当时**没有任何计量**——这里把它变成产物里的一列数字。
+# 口径：token ≈ 字符数 / 4（与 pi 扩展的预算估算同口径）；MCP server 无法在不连接的情况下
+# 枚举工具，故只计「server 条目」本身固定开销（实测 pi-mcp-adapter 的代理工具 ~200 token）。
 
 
 def _skills_dir(info: dict) -> Path | None:
@@ -143,6 +150,44 @@ def scan_skills(root: Path) -> dict[str, dict]:
     return out
 
 
+CHARS_PER_TOKEN = 4
+MCP_SERVER_DISCOVERY_TOKENS = 200
+
+
+def skill_discovery_tokens(skills_dir: Path | None, names: list[str]) -> int:
+    """技能常驻成本：只读 `SKILL.md` 的 `description:`（那是唯一被常驻注入的部分）。"""
+    if not skills_dir or not names:
+        return 0
+    total = 0
+    for name in names:
+        f = skills_dir / name / SKILL_MD
+        if not f.is_file():
+            total += 20  # 无 SKILL.md 的目录按「名字 + 一行」粗算
+            continue
+        text = f.read_text(encoding="utf-8", errors="ignore")[:4000]
+        m = re.search(r"^description:\s*(.+)$", text, re.M)
+        total += len(m.group(1) if m else name) // CHARS_PER_TOKEN
+    return total
+
+
+def discovery_cost(root: Path) -> dict[str, dict]:
+    """各平台**常驻发现成本**（每会话必付的 token）——M2/Task 18 的计量入口。"""
+    meta = platform_meta(root)["platforms"]
+    mcp = scan_mcp(root)
+    skills = scan_skills(root)
+    out: dict[str, dict] = {}
+    for name, info in meta.items():
+        d = _skills_dir(info or {})
+        s_tokens = skill_discovery_tokens(d, skills.get(name, {}).get("skills", []))
+        m_tokens = len(mcp.get(name, [])) * MCP_SERVER_DISCOVERY_TOKENS
+        out[name] = {
+            "skills_tokens": s_tokens,
+            "mcp_tokens": m_tokens,
+            "total_tokens": s_tokens + m_tokens,
+        }
+    return out
+
+
 def scan_cli() -> dict:
     """本仓可被 agent 调用的 CLI 面（engine 子命令 + 带 __main__ 的脚本）。"""
     engine = _HUB_ENGINE / "engine.py"
@@ -165,6 +210,7 @@ def scan(root: Path) -> dict:
         "mcp": scan_mcp(root),
         "skills": scan_skills(root),
         "cli": scan_cli(),
+        "discovery_cost": discovery_cost(root),
         "totals": {},
     }
 
@@ -211,6 +257,18 @@ def render_markdown(data: dict) -> str:
     lines += ["", "## 技能（按平台）", "", "| 平台 | 目录 | 数量 |", "| --- | --- | --- |"]
     for plat, v in data["skills"].items():
         lines.append(f"| {plat} | `{v['skills_dir'] or '（未登记）'}` | {v['count']} |")
+    lines += [
+        "",
+        "## 常驻发现成本（每会话必付的 token；M2/Task 18）",
+        "",
+        "| 平台 | 技能描述 | MCP server | 合计 |",
+        "| --- | --- | --- | --- |",
+    ]
+    for plat, c in (data.get("discovery_cost") or {}).items():
+        lines.append(f"| {plat} | {c['skills_tokens']} | {c['mcp_tokens']} | **{c['total_tokens']}** |")
+    total_tokens = sum(c["total_tokens"] for c in (data.get("discovery_cost") or {}).values())
+    lines.append("")
+    lines.append(f"> 全平台常驻合计 **~{total_tokens} token / 会话**——这就是「能力通胀」的价格。")
     lines += [
         "",
         "## 本仓 CLI 面",

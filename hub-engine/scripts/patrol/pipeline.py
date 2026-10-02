@@ -145,14 +145,16 @@ def _step_reconcile(root: Path, engine_dir: Path) -> StepResult:
     """
     results = [_step_router_sync(root, engine_dir)]
     checks = (
-        ("platform_healthcheck", [sys.executable, "-m", "scripts.platform_healthcheck"]),
+        ("platform_healthcheck", [sys.executable, "-m", "scripts.platform_healthcheck", "--root", str(root)]),
+        (
+            "capability_reconcile",
+            [sys.executable, "-m", "scripts.capability_reconcile", "--root", str(root)],
+        ),
         ("capability_scan", [sys.executable, "-m", "scripts.capability_scan", "--check"]),
         ("inventory", [sys.executable, "-m", "scripts.inventory", "--check"]),
     )
     for name, argv in checks:
-        rc, out, err = _run_cmd(
-            [*argv, "--root", str(root)] if name == "platform_healthcheck" else argv, cwd=engine_dir, timeout=120
-        )
+        rc, out, err = _run_cmd(argv, cwd=engine_dir, timeout=120)
         if rc == 127:
             results.append(StepResult(name=name, stage="平台对账", status="skip", output="命令不可用，跳过"))
         elif rc == 0:
