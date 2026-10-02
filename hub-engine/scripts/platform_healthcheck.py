@@ -28,15 +28,20 @@ LAUNCHER = Path("hub-engine/scripts/hub_mcp_launcher.py")
 
 
 def _load_platforms(hub_root):
-    p = hub_root / PLATFORMS_YAML
-    if not p.is_file():
-        return {}
+    """平台元数据（唯一源 = hub.config.yaml；2026-10-02 单源化）。"""
+    # 平台元数据唯一源 = hub.config.yaml（2026-10-02 单源化；system/platforms.yaml 已退役）
+    import sys as _sys
+    from pathlib import Path as _Path
+
+    _eng = _Path(__file__).resolve().parent.parent
+    if str(_eng) not in _sys.path:
+        _sys.path.insert(0, str(_eng))
+    from common.config import platform_meta
+
     try:
-        with open(p, encoding="utf-8") as fh:
-            d = yaml.safe_load(fh)
-        return d.get("platforms", {})
-    except (OSError, yaml.YAMLError) as exc:
-        print("platforms.yaml 读取失败: " + str(exc), file=sys.stderr)
+        return platform_meta(hub_root).get("platforms", {})
+    except Exception as exc:  # noqa: BLE001 - 配置读不到按"无平台"降级，不阻断巡检
+        print("hub.config.yaml 平台段读取失败: " + str(exc), file=sys.stderr)
         return {}
 
 
@@ -95,7 +100,13 @@ def check_mcp_platform(name, info, hub_root):
         result["status"] = "RED"
         return result
     result["checks"]["args"] = "OK (" + str(len(args)) + " 项)"
-    if "launcher" not in str(args[0]).lower():
+    # launcher 检查按**登记声明**决定是否适用（2026-10-02 单源化附带修正）：
+    # `healthcheck` 列表里没有 `launcher` 的平台（如 pi 用直连 mcp_server.py + `[smoke]`）
+    # 不应被判 YELLOW —— 否则每日仪表盘上会挂一条**永远无法消除的噪声**，
+    # 而噪声会让真告警一并被忽略。
+    if "launcher" not in (info.get("healthcheck") or []):
+        result["checks"]["launcher"] = "N/A（该平台登记为 " + "/".join(map(str, info.get("healthcheck") or [])) + "）"
+    elif "launcher" not in str(args[0]).lower():
         result["checks"]["launcher"] = "OLD"
         result["issues"].append("args[0] 未用 launcher: " + str(args[0]))
         result["status"] = "YELLOW"

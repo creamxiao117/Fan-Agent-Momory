@@ -61,12 +61,24 @@ def _p(value) -> str:
 
 
 def load_platforms(hub_root: Path) -> dict:
-    p = hub_root / PLATFORMS_REL
-    if not p.is_file():
-        print(f"platforms.yaml 不存在：{p}", file=sys.stderr)
+    """平台元数据（**唯一源 = hub.config.yaml**；2026-10-02 单源化）。
+
+    返回 `{"platforms": {...}, "global": {...}}`——与已退役的
+    `system/platforms.yaml` 同形，故本脚本后续逻辑零改动。
+    """
+    # 平台元数据唯一源 = hub.config.yaml（2026-10-02 单源化；system/platforms.yaml 已退役）
+    import sys as _sys
+    from pathlib import Path as _Path
+
+    _eng = _Path(__file__).resolve().parent.parent
+    if str(_eng) not in _sys.path:
+        _sys.path.insert(0, str(_eng))
+    from common.config import platform_meta
+
+    data = platform_meta(hub_root)
+    if not data.get("platforms"):
+        print(f"hub.config.yaml 未登记任何平台：{hub_root}", file=sys.stderr)
         sys.exit(2)
-    with open(p, encoding="utf-8") as fh:
-        data = yaml.safe_load(fh) or {}
     return data
 
 

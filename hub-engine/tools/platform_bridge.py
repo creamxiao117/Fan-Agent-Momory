@@ -129,6 +129,7 @@ ADAPTER_REGISTRY: dict[str, type[Adapter]] = {
     "workbuddy": MdSectionAdapter,
     "mavis": MdSectionAdapter,  # MiniMax Code（2026-09-19 显式登记）
     "deepseek": MdSectionAdapter,  # DeepSeek Harness / DSH（2026-09-19 显式登记）
+    "pi": MdSectionAdapter,  # pi coding agent（2026-10-02 接入；用户级 agent dir/AGENTS.md）
 }
 
 # 已显式登记适配器的平台集合（供 router_sync 等消费方读取）

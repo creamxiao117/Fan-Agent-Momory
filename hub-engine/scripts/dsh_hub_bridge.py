@@ -108,8 +108,17 @@ def cmd_check(hub_root: Path) -> int:
     print(f"[{'PASS' if key.exists() else 'FAIL'}] 平台签名 key")
     ledger = hub_root / ".sync" / "state" / "commit_ledger.jsonl"
     print(f"[{'PASS' if ledger.exists() else 'FAIL'}] commit_ledger 可访问")
-    platforms = hub_root / "system" / "platforms.yaml"
-    print(f"[{'PASS' if platforms.exists() else 'FAIL'}] platforms.yaml 注册")
+    # 平台元数据唯一源 = hub.config.yaml（2026-10-02 单源化；system/platforms.yaml 已退役）
+    import sys as _sys
+    from pathlib import Path as _Path
+
+    _eng = _Path(__file__).resolve().parent.parent
+    if str(_eng) not in _sys.path:
+        _sys.path.insert(0, str(_eng))
+    from common.config import platform_names
+
+    registered = "dsh" in platform_names(hub_root) or "deepseek" in platform_names(hub_root)
+    print(f"[{'PASS' if registered else 'FAIL'}] 平台元数据注册（hub.config.yaml，含别名 dsh）")
     print("[INFO] DSH 走文件 Junction 接入，不走 MCP（无 hub_search 直接调用）")
     return 0
 

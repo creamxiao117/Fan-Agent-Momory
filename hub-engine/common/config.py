@@ -38,6 +38,36 @@ class HubConfig:
         return self.root / self.data.get("sync", {}).get("draft_dir", ".sync/drafts")
 
 
+def platform_meta(root: str | Path) -> dict:
+    """平台接入元数据 —— **唯一事实源 = `hub.config.yaml`**（2026-10-02 单源化）。
+
+    返回 `{"platforms": {...}, "global": {...}}`，形状与已退役的
+    `AgentMemoryHub/system/platforms.yaml`（schema 1.1）**兼容**，使消费方零改动。
+
+    为何要单源：此前平台元数据有**三处**——
+      1) 本文件 `platforms:`（记忆路径 / role / 写回白名单）
+      2) `system/platforms.yaml`（MCP 客户端路径 / 格式 / server_key / 健康检查）
+      3) `scripts/mcp_healthcheck.py` 里的硬编码 `PLATFORMS` 字典（3 个平台）
+    三者字段与平台集合各不相同 ⇒ 加一个平台要改三处，且必然漂移。
+    现仅在 (1) 维护；`aliases` 字段承载旧平台名（如 `dsh` → `deepseek`）。
+    """
+    data = HubConfig.load(root).data
+    return {
+        "platforms": data.get("platforms", {}),
+        "global": data.get("platforms_global", {}),
+    }
+
+
+def platform_names(root: str | Path) -> set[str]:
+    """登记的平台名集合（**含 aliases**：旧名也算已登记，避免重复告警）。"""
+    names: set[str] = set()
+    for name, info in platform_meta(root)["platforms"].items():
+        names.add(name)
+        for alias in (info or {}).get("aliases") or []:
+            names.add(str(alias))
+    return names
+
+
 def _normalize_gateway(cfg: dict) -> dict:
     """嵌套 → 扁平补齐（2026-09-11）。
 

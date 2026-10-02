@@ -32,11 +32,14 @@ from scripts.bootstrap_hub import bootstrap
 
 
 def _platform_hub(tmp_path: Path, platforms: dict) -> Path:
+    """造一个带平台元数据的中枢根。
+
+    2026-10-02 单源化：平台元数据的唯一事实源是 `hub.config.yaml`
+    （`system/platforms.yaml` 已退役，其字段被合并进来）。
+    """
     hub = tmp_path / "AgentMemoryHub"
-    (hub / "system").mkdir(parents=True, exist_ok=True)
-    (hub / "system" / "platforms.yaml").write_text(
-        yaml.safe_dump({"platforms": platforms}, allow_unicode=True), encoding="utf-8"
-    )
+    hub.mkdir(parents=True, exist_ok=True)
+    (hub / "hub.config.yaml").write_text(yaml.safe_dump({"platforms": platforms}, allow_unicode=True), encoding="utf-8")
     return hub
 
 
@@ -55,7 +58,7 @@ def test_load_platforms_reads_yaml(tmp_path):
 
 
 def test_load_platforms_exits_when_missing(tmp_path):
-    """platforms.yaml 缺失属配置错误 → exit(2)，不静默继续。"""
+    """平台元数据缺失属配置错误 → exit(2)，不静默继续。"""
     with pytest.raises(SystemExit) as exc:
         psync.load_platforms(tmp_path)
     assert exc.value.code == 2
@@ -201,7 +204,7 @@ def test_check_mcp_platform_reports_status(tmp_path):
     未用 launcher → YELLOW；全对 → GREEN。"""
     hub = bootstrap(tmp_path)
     cfg = tmp_path / "mcp.json"
-    info = {"type": "mcp", "mcp_config_path": str(cfg)}
+    info = {"type": "mcp", "mcp_config_path": str(cfg), "healthcheck": ["launcher", "args", "python"]}
 
     missing = phc.check_mcp_platform("trae", info, hub)
     assert missing["status"] == "RED" and missing["checks"]["config"] == "MISSING"
@@ -231,8 +234,7 @@ def test_check_mcp_platform_reports_status(tmp_path):
 
 def test_run_healthcheck_and_dashboard(tmp_path):
     hub = bootstrap(tmp_path)
-    (hub / "system").mkdir(parents=True, exist_ok=True)
-    (hub / "system" / "platforms.yaml").write_text(
+    (hub / "hub.config.yaml").write_text(
         yaml.safe_dump(
             {
                 "platforms": {
@@ -347,3 +349,26 @@ def test_process_proposal_dry_run_and_apply(tmp_path):
 
     applied = aps._process_proposal(proposal, hub)
     assert isinstance(applied, dict)
+
+
+def test_healthcheck_launcher_check_is_declaration_driven(tmp_path):
+    """launcher 检查按登记声明决定是否适用（2026-10-02）。
+
+    回归背景：pi 用直连 mcp_server.py + `healthcheck: [smoke]`，若仍按"args[0] 必须是
+    launcher"判 YELLOW，仪表盘上会挂一条**永远无法消除的噪声**——而噪声会让真告警
+    一并被忽略。
+    """
+    hub = bootstrap(tmp_path)
+    cfg = tmp_path / "mcp.json"
+    cfg.write_text(
+        json.dumps({"mcpServers": {"agent-memory-hub": {"command": sys.executable, "args": ["mcp_server.py"]}}}),
+        encoding="utf-8",
+    )
+    # 声明含 launcher → 未用 launcher 仍判 YELLOW
+    declared = {"type": "mcp", "mcp_config_path": str(cfg), "healthcheck": ["launcher", "args", "python"]}
+    assert phc.check_mcp_platform("trae", declared, hub)["status"] == "YELLOW"
+    # 声明不含 launcher（pi 的 [smoke]）→ 该项 N/A，不因此降级
+    undeclared = {"type": "mcp", "mcp_config_path": str(cfg), "healthcheck": ["smoke"]}
+    out = phc.check_mcp_platform("pi", undeclared, hub)
+    assert out["status"] == "GREEN", out
+    assert "N/A" in out["checks"]["launcher"]

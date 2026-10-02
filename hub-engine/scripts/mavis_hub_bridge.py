@@ -75,17 +75,24 @@ def cmd_check(args) -> int:
     hub_root = Path(args.hub_root)
     _mavis_data = Path(args.mavis_data)
     sign_script = Path(args.sign_script)
-    platforms_yaml = hub_root / "system" / "platforms.yaml"
 
     print("=== Mavis 接入验证（3 层） ===")
     checks = []
 
-    # 平台元数据
-    platforms = _read_yaml(platforms_yaml)
-    if MAVIS_PLATFORM in platforms:
-        checks.append(("平台元数据", "PASS", "platforms.yaml 已注册"))
+    # 平台元数据（唯一源 = hub.config.yaml）
+    # 平台元数据唯一源 = hub.config.yaml（2026-10-02 单源化；system/platforms.yaml 已退役）
+    import sys as _sys
+    from pathlib import Path as _Path
+
+    _eng = _Path(__file__).resolve().parent.parent
+    if str(_eng) not in _sys.path:
+        _sys.path.insert(0, str(_eng))
+    from common.config import platform_names
+
+    if MAVIS_PLATFORM in platform_names(hub_root):
+        checks.append(("平台元数据", "PASS", "hub.config.yaml 已注册"))
     else:
-        checks.append(("平台元数据", "FAIL", "platforms.yaml 未注册 mavis"))
+        checks.append(("平台元数据", "FAIL", "hub.config.yaml 未注册 mavis"))
 
     # 平台签名 key
     key_path = hub_root / "system" / "keys" / f"{MAVIS_PLATFORM}.key"

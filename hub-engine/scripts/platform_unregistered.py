@@ -73,19 +73,25 @@ def main(argv: list[str] | None = None) -> int:
         hub = Path(argv[argv.index("--root") + 1])
 
     declared: set[str] = set()
-    p = hub / "system" / "platforms.yaml"
-    if p.is_file():
-        try:
-            data = yaml.safe_load(p.read_text(encoding="utf-8")) or {}
-            declared = set((data.get("platforms") or {}).keys())
-            # 已登记平台的配置路径也算"已接入"，避免同名文件被重复提示
-            declared |= {
-                Path(str(info.get("mcp_config_path", ""))).name
-                for info in (data.get("platforms") or {}).values()
-                if isinstance(info, dict) and info.get("mcp_config_path")
-            }
-        except Exception as exc:
-            print(f"[unregistered] platforms.yaml 读取失败: {exc}", file=sys.stderr)
+    try:
+        # 平台元数据唯一源 = hub.config.yaml（2026-10-02 单源化）
+        import sys as _sys
+        from pathlib import Path as _Path
+
+        _eng = _Path(__file__).resolve().parent.parent
+        if str(_eng) not in _sys.path:
+            _sys.path.insert(0, str(_eng))
+        from common.config import platform_meta, platform_names
+
+        declared = platform_names(hub)
+        # 已登记平台的配置文件名也算"已接入"，避免同名文件被重复提示
+        declared |= {
+            Path(str(info.get("mcp_config_path"))).name
+            for info in platform_meta(hub)["platforms"].values()
+            if isinstance(info, dict) and info.get("mcp_config_path")
+        }
+    except Exception as exc:
+        print(f"[unregistered] hub.config.yaml 平台段读取失败: {exc}", file=sys.stderr)
 
     home = Path.home()
     found = []
