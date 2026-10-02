@@ -36,7 +36,7 @@
 - **每日 06:00** `AgentHub-SecretSentry` → `scripts/secret_sentry.cmd`（误报 **26 → 0**）
 - **每日 09:00** `PluginHub-PytestTempClean`（临时目录清理）
 - **Hermes 链（5 个，07:30 起每 10 min；模型统一 `mimo-v2.6-flash@xiaomi`，全部 `deliver=local`）**：07:30 晨间日报 → 07:40 草稿提升 → 07:50 star-distill+T1（唯一 agent）→ 周六 08:00 召回评测 → 周六 08:10 SkillHub；**微信通道已整体停用**（`platforms.weixin.enabled: false` + gateway 重启，入/出站均停；详卡 `projects/hermes-cron-jobs`）
-- **手动**：`python -m scripts.recall_regression`（**58 条金标准**，退出码 2 = 未达 90% 或夹具失效）；`python -m scripts.index_locatability_bench --rev <rev>`；`python -m scripts.audit_dead_modules`（零引用审计，**有假阳性须复查**）；**覆盖率** `pytest --cov=.`（基线 40.0%，实测 54.0%）
+- **手动**：`python -m scripts.recall_regression`（**58 条金标准**，退出码 2 = 未达 90% 或夹具失效）；`python -m scripts.index_locatability_bench --rev <rev>`；`python -m scripts.inventory --candidates`（模块台账 + **职责重复**检测；取代 audit_dead_modules）；**覆盖率** `pytest --cov=.`（基线 40.0%，实测 54.0%）
 - 验收：`.venv\Scripts\python.exe -m pytest` → **683 通过 / 4 跳过 / 0 失败**；`startup_budget` 退出码 0
 
 ## 已闭环（本迭代；明细见各留档、审计报告与 `RUNLOG.md` 本轮小结）
@@ -64,5 +64,5 @@
 - **夹具里的期望卡名会随卡片生命周期漂移**：归档卡片时必须同步检查引用它的夹具（否则门禁数学上无法达标）
 - **LM Studio 缺 `%LMSTUDIO_HOME%\.internal\temp` 会让所有模型 JIT 加载 400**；`local_summary.py` 已自愈
 - **文档里写的命令必须来自被跟踪文件**：`work/` 是 gitignore 草稿区，写进去就制造悬空引用（审计 I-4 / M-3 同一病）
-- **零引用 ≠ 死代码**：`audit_dead_modules` 存在假阳性，删除前逐个人工看入口/注册表
+- **零引用 ≠ 死代码**：`audit_dead_modules` 已退役 → 改看 `INVENTORY.json` 的 `duplicate_of` 列
 - 勿提交 `nul`（已清除的幽灵条目）

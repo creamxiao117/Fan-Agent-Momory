@@ -126,7 +126,11 @@ def test_kept_files_declare_status():
 
 
 def test_audit_tool_skips_archives():
-    """死代码审计必须跳过归档区（否则名单会被“已知已退役”的文件淹没）"""
-    from scripts.audit_dead_modules import SKIP_DIRS
+    """模块台账必须跳过归档区（否则名单会被“已知已退役”的文件淹没）。
 
-    assert "_retired" in SKIP_DIRS
+    2026-10-02：审计工具由 `audit_dead_modules`（已退役，单尺子）换成 `inventory`
+    （台账 + 职责重复，双尺子）；本断言随之改指向。
+    """
+    from scripts.inventory import module_files
+
+    assert not [f for f in module_files() if "_retired" in f.parts]
