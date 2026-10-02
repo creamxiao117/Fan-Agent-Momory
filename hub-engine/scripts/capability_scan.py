@@ -154,38 +154,59 @@ CHARS_PER_TOKEN = 4
 MCP_SERVER_DISCOVERY_TOKENS = 200
 
 
-def skill_discovery_tokens(skills_dir: Path | None, names: list[str]) -> int:
-    """技能常驻成本：只读 `SKILL.md` 的 `description:`（那是唯一被常驻注入的部分）。"""
+def skill_discovery_tokens(skills_dir: Path | None, names: list[str]) -> dict[str, int]:
+    """逐技能的常驻成本：只读 `SKILL.md` 的 `description:`（那是唯一被常驻注入的部分）。
+
+    返回 `{技能名: token}`——**逐技能**而不是只给合计，因为「成本太高」的下一步动作是
+    「砍掉谁」，只给一个总数是没法行动的（M2/Task 18 修订）。
+    """
     if not skills_dir or not names:
-        return 0
-    total = 0
+        return {}
+    out: dict[str, int] = {}
     for name in names:
         f = skills_dir / name / SKILL_MD
         if not f.is_file():
-            total += 20  # 无 SKILL.md 的目录按「名字 + 一行」粗算
+            out[name] = 20  # 无 SKILL.md 的目录按「名字 + 一行」粗算
             continue
         text = f.read_text(encoding="utf-8", errors="ignore")[:4000]
         m = re.search(r"^description:\s*(.+)$", text, re.M)
-        total += len(m.group(1) if m else name) // CHARS_PER_TOKEN
-    return total
+        out[name] = len(m.group(1) if m else name) // CHARS_PER_TOKEN
+    return out
 
 
 def discovery_cost(root: Path) -> dict[str, dict]:
-    """各平台**常驻发现成本**（每会话必付的 token）——M2/Task 18 的计量入口。"""
+    """各平台**单会话常驻发现成本**（该平台每次会话必付的 token）——M2/Task 18 的计量入口。
+
+    ⚠️ **不要把各平台加总当成本**：不同平台是不同客户端，各自会话只付各自那一份。
+    2026-10-02 实测教训：曾把 7 个平台的求和（8836）当成「每会话成本」并设帽 —— 那个数字
+    **不约束任何一次真实会话**（最贵单平台也才 3264），属于「用错误的量做治理」。
+    求和量仍然记录（`fleet_tokens`），但**只作库存参考、不设帽**。
+    """
     meta = platform_meta(root)["platforms"]
     mcp = scan_mcp(root)
     skills = scan_skills(root)
     out: dict[str, dict] = {}
     for name, info in meta.items():
         d = _skills_dir(info or {})
-        s_tokens = skill_discovery_tokens(d, skills.get(name, {}).get("skills", []))
+        per_skill = skill_discovery_tokens(d, skills.get(name, {}).get("skills", []))
         m_tokens = len(mcp.get(name, [])) * MCP_SERVER_DISCOVERY_TOKENS
         out[name] = {
-            "skills_tokens": s_tokens,
+            "skills_tokens": sum(per_skill.values()),
             "mcp_tokens": m_tokens,
-            "total_tokens": s_tokens + m_tokens,
+            "mcp_servers": len(mcp.get(name, [])),
+            "per_session_tokens": sum(per_skill.values()) + m_tokens,
+            # 降级候选：最贵的技能在前（超目标时据此裁）
+            # 排序必须是**全序**（token 相同再按名字）：否则同分项次序随目录枚举顺序漂移，
+            # 会让 `--check` 误报产物不一致（2026-10-02 实测）
+            # 输出 **list[list]** 而不是 tuple：JSON 往返会把 tuple 变 list，否则 `--check` 永真
+            "top_skills": [[n, t] for n, t in sorted(per_skill.items(), key=lambda kv: (-kv[1], kv[0]))[:5]],
         }
     return out
+
+
+def fleet_tokens(costs: dict[str, dict]) -> int:
+    """全平台求和 —— **仅库存参考，不是任何会话的成本**，不得当帽（见 `discovery_cost` docstring）。"""
+    return sum(c["per_session_tokens"] for c in costs.values())
 
 
 def scan_cli() -> dict:
@@ -211,6 +232,7 @@ def scan(root: Path) -> dict:
         "skills": scan_skills(root),
         "cli": scan_cli(),
         "discovery_cost": discovery_cost(root),
+        "fleet_tokens": fleet_tokens(discovery_cost(root)),  # 仅库存参考；**不得当帽**
         "totals": {},
     }
 
@@ -259,16 +281,31 @@ def render_markdown(data: dict) -> str:
         lines.append(f"| {plat} | `{v['skills_dir'] or '（未登记）'}` | {v['count']} |")
     lines += [
         "",
-        "## 常驻发现成本（每会话必付的 token；M2/Task 18）",
+        "## 常驻发现成本（**单会话**必付的 token；M2/Task 18）",
         "",
-        "| 平台 | 技能描述 | MCP server | 合计 |",
+        "每个平台是一个独立客户端：**它自己的会话只付它自己那一份**。下表按单平台升序列出。",
+        "",
+        "| 平台 | 技能描述 | MCP server | **单会话合计** |",
         "| --- | --- | --- | --- |",
     ]
-    for plat, c in (data.get("discovery_cost") or {}).items():
-        lines.append(f"| {plat} | {c['skills_tokens']} | {c['mcp_tokens']} | **{c['total_tokens']}** |")
-    total_tokens = sum(c["total_tokens"] for c in (data.get("discovery_cost") or {}).values())
+    costs = data.get("discovery_cost") or {}
+    for plat, c in sorted(costs.items(), key=lambda kv: -kv[1]["per_session_tokens"]):
+        lines.append(
+            f"| {plat} | {c['skills_tokens']} | {c['mcp_tokens']}（{c['mcp_servers']} 个） | **{c['per_session_tokens']}** |"
+        )
+    fleet = sum(c["per_session_tokens"] for c in costs.values())
     lines.append("")
-    lines.append(f"> 全平台常驻合计 **~{total_tokens} token / 会话**——这就是「能力通胀」的价格。")
+    lines.append(
+        f"> 全平台求和 **{fleet}**（库存参考，**不是任何会话的成本**，**不设帽**）——"
+        "2026-10-02 教训：这个求和曾被当成「每会话成本」设帽，它对真实会话毫无约束。"
+    )
+    worst = max(costs.items(), key=lambda kv: kv[1]["per_session_tokens"], default=("（无）", {}))
+    if worst[1]:
+        top = "、".join(f"{n}({t})" for n, t in worst[1].get("top_skills") or [])
+        lines.append(
+            f"> 最贵单平台：**{worst[0]} {worst[1]['per_session_tokens']} token/会话**"
+            + (f"；最贵的技能：{top}" if top else "")
+        )
     lines += [
         "",
         "## 本仓 CLI 面",

@@ -47,7 +47,9 @@ from scripts.capability_scan import (  # noqa: E402
     discovery_cost,
 )
 
-DEFAULT_BUDGET_TOKENS = 0  # 0 = 未设帽（不检查）
+# 软目标：单平台**单会话**常驻发现成本的 aspiration。仅报告，**从不拦提交**。
+DEFAULT_TARGET_TOKENS = 1500
+DEFAULT_MCP_MAX = 5
 
 
 def actual(root: Path) -> dict:
@@ -61,14 +63,98 @@ def actual(root: Path) -> dict:
         return {}
 
 
-def budget(root: Path) -> int:
+def ratchet(root: Path) -> dict[str, int]:
+    """每平台单会话常驻成本的**硬棘轮**：只许降不许升（基线登记在 hub.config.yaml）。
+
+    为什么是「逐平台棘轮」而不是「一个总数帽」：常驻成本是**每个客户端各自付**的。
+    跨平台求和（2026-10-02 曾为 8836）**不约束任何一次真实会话**——最贵的单平台也才 3264。
+    那把求和当帽，等于用错误的量做治理（数字吓人、行为毫无约束）。
+
+    棘轮挡的是真实退化：「加了新能力却没换掉旧的」。它天然不会阻断例行工作，
+    因为基线就是当前实测值（门禁别自我放大的反面）。
+    """
     cfg = HubConfig.load(root).data
-    glob = cfg.get("platforms_global") or {}
-    cap = glob.get("capability_budget") or {}
-    try:
-        return int(cap.get("max_discovery_tokens") or DEFAULT_BUDGET_TOKENS)
-    except (TypeError, ValueError):
-        return DEFAULT_BUDGET_TOKENS
+    cap = (cfg.get("platforms_global") or {}).get("capability_budget") or {}
+    raw = cap.get("per_platform_ratchet") or {}
+    out: dict[str, int] = {}
+    for k, v in raw.items():
+        try:
+            out[str(k)] = int(v)
+        except (TypeError, ValueError):
+            continue
+    return out
+
+
+def budgets(root: Path) -> dict[str, int]:
+    """软目标配置：`{"per_session_target": 1500, "mcp_servers_max": 5}`。"""
+    cfg = HubConfig.load(root).data
+    cap = (cfg.get("platforms_global") or {}).get("capability_budget") or {}
+
+    def _int(key: str, default: int) -> int:
+        try:
+            return int(cap.get(key) or default)
+        except (TypeError, ValueError):
+            return default
+
+    return {
+        "per_session_target": _int("per_session_target", DEFAULT_TARGET_TOKENS),
+        "mcp_servers_max": _int("mcp_servers_max", DEFAULT_MCP_MAX),
+    }
+
+
+def _worst(costs: dict[str, dict]) -> dict:
+    """最贵单平台（要在渲染里当一句话讲，所以在这里算清）。"""
+    if not costs:
+        return {"platform": None, "tokens": 0}
+    plat = max(costs.items(), key=lambda kv: kv[1]["per_session_tokens"])[0]
+    return {"platform": plat, "tokens": costs[plat]["per_session_tokens"]}
+
+
+def cost_report(root: Path) -> dict:
+    """成本判定：**逐平台**硬棘轮 + 软目标 + 降级候选（从 `reconcile` 抽出以降低复杂度）。"""
+    costs = discovery_cost(root)
+    fleet = sum(c["per_session_tokens"] for c in costs.values())
+    caps = ratchet(root)
+    soft = budgets(root)
+
+    # 硬：超棘轮（加了能力却没换掉旧的）
+    over_ratchet: list[dict] = []
+    for plat, c in sorted(costs.items(), key=lambda kv: -kv[1]["per_session_tokens"]):
+        cap = caps.get(plat)
+        if cap is not None and c["per_session_tokens"] > cap:
+            over_ratchet.append(
+                {
+                    "platform": plat,
+                    "tokens": c["per_session_tokens"],
+                    "cap": cap,
+                    "over": c["per_session_tokens"] - cap,
+                }
+            )
+
+    # 软：超目标（带具体降级候选，交用户批准；**只报不拦**）
+    target = soft["per_session_target"]
+    over_target: list[dict] = []
+    for plat, c in sorted(costs.items(), key=lambda kv: -kv[1]["per_session_tokens"]):
+        if target > 0 and c["per_session_tokens"] > target:
+            over_target.append(
+                {
+                    "platform": plat,
+                    "tokens": c["per_session_tokens"],
+                    "target": target,
+                    "over": c["per_session_tokens"] - target,
+                    "top_skills": c.get("top_skills") or [],
+                    "mcp_servers": c.get("mcp_servers", 0),
+                }
+            )
+    return {
+        "costs": costs,
+        "fleet": fleet,
+        "caps": caps,
+        "soft": soft,
+        "over_ratchet": over_ratchet,
+        "over_target": over_target,
+        "worst": _worst(costs),
+    }
 
 
 def reconcile(root: Path) -> dict:
@@ -110,19 +196,17 @@ def reconcile(root: Path) -> dict:
         if name not in declared_names and v.get("count"):
             actual_only.append({"platform": name, "what": f"有 {v['count']} 个技能目录但未登记"})
 
-    costs = discovery_cost(root)
-    total = sum(c["total_tokens"] for c in costs.values())
-    cap = budget(root)
-    over = cap > 0 and total > cap
-
+    rep = cost_report(root)
     return {
         "matched": sorted(matched),
         "declared_only": declared_only,
         "actual_only": actual_only,
-        "discovery_cost_total": total,
-        "budget_tokens": cap,
-        "budget_over": over,
-        "cost_by_platform": costs,
+        "cost_by_platform": rep["costs"],
+        "fleet_tokens": rep["fleet"],  # 仅库存参考；**不设帽**
+        "worst_platform": rep["worst"],
+        "budgets": {**rep["soft"], "per_platform_ratchet": rep["caps"]},
+        "over_ratchet": rep["over_ratchet"],
+        "over_target": rep["over_target"],
     }
 
 
@@ -136,15 +220,46 @@ def render(r: dict) -> str:
     for d in r["actual_only"]:
         lines.append(f"  - {d['platform']}：{d['what']}")
     lines.append("")
-    cap = r["budget_tokens"]
+    lines.append("## 单会话常驻发现成本（每个客户端各付各的）")
+    lines.append("")
+    lines.append("| 平台 | 单会话 token | 该平台棘轮 | 状态 |")
+    lines.append("| --- | --- | --- | --- |")
+    caps = r["budgets"]["per_platform_ratchet"]
+    target = r["budgets"]["per_session_target"]
+    for plat, c in sorted(r["cost_by_platform"].items(), key=lambda kv: -kv[1]["per_session_tokens"]):
+        n = c["per_session_tokens"]
+        cap = caps.get(plat)
+        if cap is None:
+            st = "（未登记棘轮）"
+        elif n > cap:
+            st = f"❌ **超棘轮 {n - cap}**"
+        elif target and n > target:
+            st = f"⚠️ 超目标 {n - target}（待降级，需批准）"
+        else:
+            st = "✅"
+        lines.append(f"| {plat} | {n} | {cap if cap is not None else '—'} | {st} |")
+    lines.append("")
     lines.append(
-        f"- 常驻发现成本：**{r['discovery_cost_total']} token/会话**" + (f"（帽 {cap}）" if cap else "（未设帽）")
+        f"- 最贵单平台：**{r['worst_platform']['platform']} {r['worst_platform']['tokens']} token/会话**；软目标 {target}"
     )
-    if r["budget_over"]:
+    lines.append(
+        f"- 全平台求和 **{r['fleet_tokens']}** —— 库存参考，**不是任何会话的成本、不设帽**"
+        "（2026-10-02 教训：曾把此求和当帽，它对真实会话毫无约束）"
+    )
+    for d in r["over_ratchet"]:
         lines.append(
-            f"  - ⚠️ **超帽 {r['discovery_cost_total'] - cap} token**：必须把某项能力降级为"
-            " `conditional`/`not-installed`，**不得抬帽**（抬帽 = 把结构病记成资源配置问题）"
+            f"  - ❌ {d['platform']} 超棘轮 {d['over']} token（{d['tokens']} > {d['cap']}）："
+            "要么换掉旧能力，要么把新能力降级为 `conditional`/`not-installed`；**不得改基线**"
         )
+    if r["over_target"]:
+        lines.append("")
+        lines.append("### 降级候选（软目标，需用户批准后执行；**不拦提交**）")
+        for d in r["over_target"]:
+            top = "、".join(f"`{n}`({t})" for n, t in d["top_skills"])
+            lines.append(
+                f"- {d['platform']}：超目标 {d['over']} token；最贵的技能 {top or '（无）'}；"
+                f"MCP server {d['mcp_servers']} 个"
+            )
     return "\n".join(lines)
 
 
@@ -161,7 +276,9 @@ def main(argv: list[str] | None = None) -> int:
         print(render(r))
     if r["declared_only"]:
         return 1
-    return 2 if (r["actual_only"] or r["budget_over"]) else 0
+    if r["actual_only"] or r["over_ratchet"]:
+        return 2
+    return 0  # over_target 是**软目标**（积压项），只报不拦 —— 否则会训练出 --no-verify
 
 
 if __name__ == "__main__":
