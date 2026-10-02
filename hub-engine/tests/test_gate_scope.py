@@ -9,7 +9,7 @@
 
 from pathlib import Path
 
-from common.gate_scope import GATES, classify, gates_to_run, is_archived
+from common.gate_scope import GATES, classify, gates_to_run
 from scripts.gate_runner import main as runner_main
 
 # ── classify：作用域判定 ───────────────────────────────────────
@@ -51,12 +51,6 @@ def test_authority_cards_trigger_l0_gate_both_repo_shapes():
 
 def test_pre_commit_hook_itself_is_text():
     assert classify(["hub-engine/scripts/pre-commit"])["text"]
-
-
-def test_archived_paths_are_out_of_scope():
-    """归档区一律移出门禁视野（历史留档不该用今天的规范要求它）。"""
-    assert is_archived("hub-engine/scripts/_retired/gone-module.py")
-    assert classify(["hub-engine/scripts/_retired/gone-module.py"]) == {"code": False, "text": False, "l0": False}
 
 
 def test_empty_staged_runs_no_gate():

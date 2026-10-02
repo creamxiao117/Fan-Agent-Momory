@@ -193,7 +193,7 @@ _ORDER: tuple[Tier, ...] = ("hub", "sync", "code", "project")
 #   铁律要读全文、随手记的坑只要一行摘要。`grade` 同时承载这两件事，
 #   于是 "L1 集合" 与 "检索注入分层" 有了**同一个事实源**，不会各说各话。
 #
-# 零漂移保证：`grade` 的初值即由 `l1_tier` 卡回填为 iron（见 scripts/migrate_grade），
+# 零漂移保证：`grade` 的初值即由 `l1_tier` 卡回填为 iron（一次性脚本已按 D8 退役），
 #   故派生集合与迁移前**逐型相等**（tests/test_task_tier.py 的 LEGACY_L1_CARDS 锁定）。
 L1_GRADE_FIELD = "grade"
 L1_IRON = "iron"

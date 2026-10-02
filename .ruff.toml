@@ -1,6 +1,6 @@
 # 归档设计文档/运行产物/虚拟环境/第三方依赖不在 ruff 检查与格式化范围内
-# `_retired/`：已退役代码的归档区（2026-10-01 新增）——归档件不再当门禁对象，
-# 否则它们会以“被取代的旧规范”把 lint 门禁搞红（保真归档优于强行改造）。
+# 注：`_retired/` 归档区已于 2026-10-02 按 D8 协议取消（退役 = `git rm` + 结构化 commit message），
+# 见 docs/compose/cleanup/retire-protocol.md。
 extend-exclude = [
     "docs/**",
     "work/**",
@@ -11,7 +11,6 @@ extend-exclude = [
     # 退役归档区（2026-10-01）：保真留档，不再当门禁对象。
     # 用**无路径分隔符**的写法——ruff/gitignore 语义下它匹配任意层级的同名目录
     # （带 `/` 的写法在与不同 cwd 组合时会漏匹配，实测踩到）。
-    "_retired",
 ]
 
 # 行宽放宽到 120：覆盖内嵌 HTML/CSS 模板字符串和 docstring

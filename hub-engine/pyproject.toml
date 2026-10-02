@@ -44,7 +44,6 @@ extend-exclude = [
     "templates/**",
     # 退役归档区（2026-10-01）：保真留档，不再当门禁对象
     # （⚠️ 根目录 .ruff.toml 不覆盖本目录，所以这里必须再写一份）
-    "_retired",
 ]
 
 [tool.ruff.lint]

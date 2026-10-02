@@ -162,7 +162,7 @@ def module_files() -> list[Path]:
     """参与台账的模块（排除 `__init__.py`——它们是包标记/导出定义，不是候选模块）。"""
     out = []
     for p in sorted(_HUB_ENGINE.rglob("*.py")):
-        if "__pycache__" in p.parts or "tests" in p.parts or "_retired" in p.parts:
+        if "__pycache__" in p.parts or "tests" in p.parts:
             continue
         if p.name == "__init__.py":
             continue
@@ -236,7 +236,7 @@ SCAN_EXTS = {".sh", ".cmd", ".bat", ".ps1", ".md", ".yaml", ".yml", ".json", ".t
 
 def _scan_one(p, keys, stem_to_keys, code, test, doc) -> None:
     """把「单个引用来源文件」记入对应桶（抽出以压 refs_of 的圈复杂度）。"""
-    if not p.is_file() or "__pycache__" in p.parts or "_retired" in p.parts:
+    if not p.is_file() or "__pycache__" in p.parts:
         return
     suffix = p.suffix.lower()
     is_py = suffix == ".py"

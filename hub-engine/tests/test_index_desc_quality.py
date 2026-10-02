@@ -6,7 +6,7 @@
 读不懂的半截词（`GitHub 仓库选…`）——省了字符却丢了信息。现改为用卡自身摘要
 （`extract_summary`）+ 子句边界断句，本文件锁住这些行为。
 
-2026-10-01：`slim_index` / `regen_index_desc` 退役（见 scripts/_retired/RETIRED.json），
+2026-10-01：`slim_index` / `regen_index_desc` 退役（见 docs/compose/cleanup/retire-protocol.md），
 本文件随之删去 regen 段的用例；描述上限改由 common/index_limits 单一来源 +
 `tests/test_index_limits.py` 看守。
 """

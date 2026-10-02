@@ -19,7 +19,7 @@ TOTAL_LIMIT = 30_000
 # `slim_index --max-desc 10` 机械截断描述，INDEX 里 239/251 条变成读不懂的
 # 半截词如「GitHub 仓库选…」——**省了字符但丢了信息**）。
 # 现由 render_index 用卡自身描述（上限单一来源 common/index_limits，子句边界断句）；
-# `slim_index` / `regen_index_desc` 已于 2026-10-01 退役（见 scripts/_retired/RETIRED.json）。
+# `slim_index` / `regen_index_desc` 已于 2026-10-01 退役（见 docs/compose/cleanup/retire-protocol.md）。
 # INDEX 自然涨到 ~18K。为保证不变量，其余三项帽相应收紧。
 #
 # 2026-09-27 把 INDEX 帽 20k→22k 时**未同步收紧**其余三项 ⇒ 合计 31_000 > 30_000，

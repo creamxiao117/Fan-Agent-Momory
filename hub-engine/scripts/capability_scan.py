@@ -197,7 +197,7 @@ def scan_cli() -> dict:
     scripts = sorted(
         p.stem
         for p in (_HUB_ENGINE / "scripts").rglob("*.py")
-        if "__pycache__" not in p.parts and "_retired" not in p.parts and "__main__" in p.read_text(encoding="utf-8")
+        if "__pycache__" not in p.parts and "__main__" in p.read_text(encoding="utf-8")
     )
     return {"engine_subcommands": subs, "scripts_with_main": scripts}
 

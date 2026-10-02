@@ -96,19 +96,13 @@ def _norm(path: str) -> str:
     return p
 
 
-def is_archived(path: str) -> bool:
-    """归档区一律移出门禁视野（`_retired/` 是历史留档，不该用今天的规范要求它）。"""
-    parts = PurePosixPath(_norm(path)).parts
-    return "_retired" in parts
-
-
 def classify(staged: list[str]) -> dict[str, bool]:
     """staged 路径列表 → `{门禁名: 是否触发}`。
 
     这是**唯一事实源**：两个（外层/中枢）pre-commit 钩子都调它，故不存在"钩子自述与实现不一致"。
     """
     paths = [_norm(p) for p in staged if p]
-    live = [p for p in paths if not is_archived(p)]
+    live = paths  # 归档区已按 D8 协议取消（退役 = git rm，见 docs/compose/cleanup/retire-protocol.md）
 
     code = any(p.endswith(".py") for p in live)
     text = any(PurePosixPath(p).suffix.lower() in TEXT_EXTS or PurePosixPath(p).name == "pre-commit" for p in live)
