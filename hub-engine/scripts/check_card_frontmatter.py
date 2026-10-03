@@ -86,6 +86,18 @@ def check_file(root: Path, raw: str) -> tuple[list[str], list[str]]:
         f"{rel}: frontmatter 缺必填字段 '{k}'（须显式写：不能靠默认值兜底，" + "status 缺省=active / type 缺省=note）"
         for k in missing_required_keys(raw)
     ]
+    # grade 覆盖率（2026-10-03）：灰度期结束，回填已 100%（499/499）。
+    # 放在**提交门禁**而不是 `validate_card`：那是"单卡合法性"，
+    # 把覆盖率塞进去会让所有测试夹具（最简卡）被迫带 grade（实测 36 个测试变红）。
+    if not str(raw.get("grade") or "").strip():
+        from common.frontmatter import GRADES_BY_DIR
+
+        d = rel.split("/")[0]
+        if d in GRADES_BY_DIR:
+            errors.append(
+                f"{rel}: 权威区卡缺 'grade'（可选 {sorted(GRADES_BY_DIR[d])}）—— "
+                "分级注入按 grade 分层，缺了就落不进任何一层"
+            )
     warnings = []
     if not raw.get("tags"):
         warnings.append(f"{rel}: tags 为空 → tag 检索与可定位性度量看不到该卡，建议补 3–6 个主题标签")

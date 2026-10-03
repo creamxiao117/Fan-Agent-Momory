@@ -150,7 +150,9 @@ def validate_card(card: Card) -> list[str]:
 
     `grade`（2026-10-02 M1/Task 12 新增，**灰度口径**）：
       - 只校验**取值合法性**（枚举 + 分目录约束），**不要求存在**；
-      - 缺失由 `scripts.migrate_grade` 批量回填，回填完成后再由形状门禁看守覆盖率；
+      - 缺失由 `scripts.migrate_grade` 批量回填（已完成 499/499）；
+      - **覆盖率由提交门禁 `scripts/check_card_frontmatter` 看守**，不放这里 ——
+        本函数只管"单卡合法性"，放进来的话所有测试夹具（最简卡）都会被迫带 grade；
       - 这样新卡从前就是“可选字段”，不会因新增字段而让存量 506 张卡集体变 invalid。
     """
     errs = []

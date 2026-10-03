@@ -13,7 +13,7 @@ def _write(p: Path, text: str) -> None:
 def test_valid_card_passes(tmp_path):
     _write(
         tmp_path / "experience" / "ok.md",
-        "---\ntype: exp\ntags: [x]\nupdated: '2026-09-11'\nstatus: active\nreuse_count: 0\n---\n\n正文\n",
+        "---\ntype: exp\ngrade: task\ntags: [x]\nupdated: '2026-09-11'\nstatus: active\nreuse_count: 0\n---\n\n正文\n",
     )
     errors, _warnings = check_file(tmp_path, "experience/ok.md")
     assert errors == []
@@ -44,7 +44,7 @@ def test_dir_type_mismatch_is_warning_not_error(tmp_path):
     """目录与 type 不一致只警告不阻断（experience/ 历史混装多类型）"""
     _write(
         tmp_path / "experience" / "mix.md",
-        "---\ntype: rule\ntags: [x]\nupdated: '2026-09-11'\nstatus: active\nreuse_count: 0\n---\n\n正文\n",
+        "---\ntype: rule\ngrade: task\ntags: [x]\nupdated: '2026-09-11'\nstatus: active\nreuse_count: 0\n---\n\n正文\n",
     )
     errors, warnings = check_file(tmp_path, "experience/mix.md")
     assert errors == []
@@ -80,8 +80,31 @@ def test_empty_tags_is_warning_not_error(tmp_path):
     """tags 为空不阻断（不丽造标签），但必须提醒：tag 检索/可定位度量看不到该卡"""
     _write(
         tmp_path / "experience" / "notag.md",
-        "---\ntype: exp\ntags:\nupdated: '2026-09-11'\nstatus: active\n---\n\n正文\n",
+        "---\ntype: exp\ngrade: task\ntags:\nupdated: '2026-09-11'\nstatus: active\n---\n\n正文\n",
     )
     errors, warnings = check_file(tmp_path, "experience/notag.md")
     assert errors == []
     assert any("tags 为空" in w for w in warnings)
+
+
+def test_missing_grade_in_authority_dir_is_error(tmp_path):
+    """2026-10-03 起：权威区卡缺 `grade` = error（回填已 100%，由提交门禁看守覆盖率）。
+
+    历史：`grade` 曾是可选（灰度期），导致新 ingest 进来的卡静默漏掉 → 分级注入落不进任何层。
+    """
+    (tmp_path / "experience").mkdir()
+    (tmp_path / "experience" / "nog.md").write_text(
+        "---\ntype: exp\ntags: [x]\nupdated: '2026-10-03'\nstatus: active\n---\n\n正文\n",
+        encoding="utf-8",
+    )
+    errors, _ = check_file(tmp_path, "experience/nog.md")
+    assert any("grade" in e for e in errors), errors
+
+    # 非权威区不要求（notes/ 不参与分级注入）
+    (tmp_path / "notes").mkdir()
+    (tmp_path / "notes" / "ok.md").write_text(
+        "---\ntype: note\ntags: [x]\nupdated: '2026-10-03'\nstatus: active\n---\n\n正文\n",
+        encoding="utf-8",
+    )
+    errors2, _ = check_file(tmp_path, "notes/ok.md")
+    assert not any("grade" in e for e in errors2), errors2
