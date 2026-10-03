@@ -110,6 +110,15 @@ def suggest(root: Path, context: str, platform: str = "pi", limit: int = MAX_SUG
     except (OSError, ValueError):
         installed = []
 
+    # (a) 使用登记：把"曾按任务建议过它"记下来 —— 这是"有没有被用过"的**唯一可查口径**。
+    # 旁路调用，失败不影响建议本身（capability_events.record 内部兜住异常）。
+    try:
+        from common.capability_events import record_many
+
+        record_many(root, "suggested", [s["name"] for s in suggested], platform=platform, source="capability_router")
+    except Exception:  # noqa: BLE001
+        pass
+
     missing = [s for s in suggested if s["name"] not in installed]
     return {
         "platform": platform,

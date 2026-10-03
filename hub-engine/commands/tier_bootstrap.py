@@ -31,6 +31,28 @@ from tools.mcp_handlers import hub_bootstrap  # noqa: E402
 from tools.task_tier import classify, resolve_kind, scope_for  # noqa: E402
 
 
+def _record_injected(root: Path, platform: str) -> int:
+    """把该平台**当前常驻技能**登记为 `injected`（本会话已把它们放进上下文）。
+
+    数据源 = 实测态 `system/capabilities.json`（事实源即客户端技能目录本身）。
+    只登记**有 SKILL.md 的技能**：无 SKILL.md 的目录是客户端自带的类别占位，
+    不是技能（2026-10-03 实测：hermes 一层目录 34 个 vs 真 SKILL.md 179 个）。
+    """
+    try:
+        import json
+
+        from common.capability_events import record_many
+
+        cap = root / "system" / "capabilities.json"
+        if not cap.is_file():
+            return 0
+        data = json.loads(cap.read_text(encoding="utf-8"))
+        names = ((data.get("skills") or {}).get(platform) or {}).get("skills") or []
+        return record_many(root, "injected", names, platform=platform, source="tier_bootstrap")
+    except Exception:  # noqa: BLE001 - 旁路
+        return 0
+
+
 def cmd_tier_bootstrap(args) -> int:
     root = Path(args.root)
     if not root.is_dir():
@@ -56,9 +78,14 @@ def cmd_tier_bootstrap(args) -> int:
     except Exception as exc:  # noqa: BLE001 - 能力建议失败不得拖垮记忆预取
         caps = {"error": str(exc)[:200], "suggested": [], "missing": []}
 
+    # (a) 使用登记：**会话引导这一刻**就是"常驻技能已被注入上下文"的事实时刻 ——
+    # 平台此刻常驻着哪些技能，就记哪些。累积起来即可回答
+    # 「这个技能有没有在某平台的某次会话里被注入过」。旁路，失败绝不影响预取。
+    injected = _record_injected(root, platform)
     payload = {
         **res,
         "tier": resolve_kind(tier),
+        "capability_events_recorded": injected,  # (a) 使用登记：本会话登记了多少条
         "scope": list(scope_for(tier)),
         "hit_count": res.get("hit_count", 0),
         "capabilities": caps,

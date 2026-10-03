@@ -58,6 +58,13 @@ def build_corpus() -> tuple[str, str]:
 
 def main() -> int:
     caps = json.loads((HUB / "system" / "capabilities.json").read_text(encoding="utf-8"))
+    # **强证据**：能力使用登记台账（2026-10-03 起）。有它就不必再靠自由文本猜 ——
+    # 后者会把 `web`/`email` 这类通用短名在 150 万字符里误命中（实测假阳性来源）。
+    sys.path.insert(0, str(REPO / "hub-engine"))
+    from common.capability_events import summarize as _summarize
+
+    ledger = _summarize(HUB, days=0)
+    print(f"使用登记台账：{len(ledger)} 个能力（窗口=全时段）")
     usage_text, know_text = build_corpus()
     print(f"使用台账语料 {len(usage_text):,} 字符；知识库语料 {len(know_text):,} 字符\n")
 
@@ -86,7 +93,8 @@ def main() -> int:
             files = [f for f in p.rglob("*") if f.is_file()] if p.is_dir() else []
             mt = max((f.stat().st_mtime for f in files), default=0)
             size = sum(f.stat().st_size for f in files)
-            in_usage = name in usage_text
+            # 台账有记录 = 强证据；否则才看自由文本（弱证据，仅作补充）
+            in_usage = name in ledger or (len(name) >= 8 and name in usage_text)
             in_know = name in know_text
             rows.append(
                 {
