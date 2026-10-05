@@ -87,7 +87,12 @@ def _append_log(root: Path, op: str, title: str) -> None:
     """retro/log.md append-only 时间线：## [YYYY-MM-DD] <op> | <title>"""
     log = root / "retro" / "log.md"
     log.parent.mkdir(parents=True, exist_ok=True)
-    with open(log, "a", encoding="utf-8") as f:
+    # ⚠️ `newline="\n"` 必须写（2026-10-05 修）：log.md 是 **append-only**，基础是 LF。
+    # 缺它的后果：Windows 文本模式下 `\n` 被翻译成 `\r\n` ⇒ 每次 ingest 都向 LF 文件
+    # 追加 CRLF 行 → **混合行尾**（实测 retro/log.md：LF×2239 + CRLF×8，巡检 encoding 步 FAIL）。
+    # 为何其它写方没爆：都走**整文件重写**（全 CRLF 也算“一致”），只有追加写会把两种行尾混在一起。
+    # 同类纪律：`rules/chinese-text-encoding-discipline`（7 环之“文件读写：显式 encoding”）。
+    with open(log, "a", encoding="utf-8", newline="\n") as f:
         f.write(f"## [{today_iso()}] {op} | {title}\n")
 
 
