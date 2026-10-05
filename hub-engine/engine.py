@@ -615,7 +615,9 @@ def main(argv: list[str] | None = None) -> int:
 
     p = sub.add_parser("distill", help="复盘→候选规则")
     p.add_argument("--root", required=True)
-    p.add_argument("--platform", default="trae")
+    # 2026-10-05 修：原默认 `trae`（trae 退役后即“以已退役平台名义写草稿”）⇒ 改为维护者 hermes。
+    # 注意：`auto_flywheel` 会扫所有 `*_draft` 目录，改默认即改草稿落位。
+    p.add_argument("--platform", default="hermes")
     p.set_defaults(func=cmd_distill)
 
     p = sub.add_parser("tidy", help="归档")

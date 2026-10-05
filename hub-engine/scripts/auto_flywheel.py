@@ -1,7 +1,7 @@
 """自动飞轮触发：扫描中枢草稿 → ingest → build-vectors 一条龙。
 
 用法：
-  python auto_flywheel.py --root <中枢根> [--dry-run] [--platform trae]
+  python auto_flywheel.py --root <中枢根> [--dry-run] [--platform hermes]
 
 逻辑：
   1. 扫描 <root>/.sync/drafts/ 下所有 .md 草稿（递归，含平台子目录）

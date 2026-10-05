@@ -19,7 +19,7 @@ def run_demo(root: str | Path) -> dict:
     bootstrap(root)
 
     # 1) 平台复盘沉淀到暂存区
-    draft = root / ".sync" / "drafts" / "trae_draft"
+    draft = root / ".sync" / "drafts" / "code_draft"
     draft.mkdir(parents=True, exist_ok=True)
     retro = draft / "retro"
     retro.mkdir(parents=True, exist_ok=True)
@@ -34,8 +34,8 @@ def run_demo(root: str | Path) -> dict:
     # 2) 提炼 → 候选
     from tools.distill import distill
 
-    distill(root, "trae")
-    cand_dir = root / ".sync" / "drafts" / "trae_draft" / "candidates"
+    distill(root, "code")
+    cand_dir = root / ".sync" / "drafts" / "code_draft" / "candidates"
     cands = sorted(cand_dir.glob("*.md"))
 
     # 3) 把候选改为规则暂存，走 ingest（规则 → 待确认）
@@ -46,7 +46,7 @@ def run_demo(root: str | Path) -> dict:
     card.status = "candidate"
     rule_draft.write_text(write_card(card), encoding="utf-8")
 
-    stat = ingest(root, "trae")
+    stat = ingest(root, "code")
     assert stat["pending"] == 1, stat
 
     # 4) 人工确认 → 提升到 rules/
@@ -70,9 +70,9 @@ reuse_count: 0
 查询"DLL 被锁"命中规则后确认：预防优于补救——开发期即采用递增版本命名，避免发布后被 AutoCAD 锁文件。
 """)
     insight.type = "project"
-    qwb = root / ".sync" / "drafts" / "trae_draft" / "query-writeback.md"
+    qwb = root / ".sync" / "drafts" / "code_draft" / "query-writeback.md"
     qwb.write_text(write_card(insight), encoding="utf-8")
-    ingest(root, "trae")  # project 属权威区低风险 → 自动入区仅记日志（2026-09-02 口径：exp 已退出权威区）
+    ingest(root, "code")  # project 属权威区低风险 → 自动入区仅记日志（2026-09-02 口径：exp 已退出权威区）
 
     return {"confirmed": dst.name, "hits": [h.path.name for h in hits]}
 

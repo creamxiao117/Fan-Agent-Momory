@@ -161,7 +161,12 @@ def heal(platform: str, config_path: Path, hub_root: str) -> bool:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description="hub_mcp_launcher")
-    ap.add_argument("--platform", required=True, choices=["hermes", "trae", "workbuddy", "code"])
+    # 平台清单**单一来源**：platform_bridge.ADAPTER_REGISTRY（2026-10-05 修）——
+    # 原为硬编码 ["hermes","trae","workbuddy","code"]，trae 退役 + mavis/deepseek/pi
+    # 接入后即漂移（新平台启动器直接不可用，属隐藏能力缺口）。
+    from tools.platform_bridge import SUPPORTED_PLATFORMS
+
+    ap.add_argument("--platform", required=True, choices=sorted(SUPPORTED_PLATFORMS))
     ap.add_argument("--config", required=True, help="mcp.json 路径")
     ap.add_argument("--hub-root", required=True)
     ap.add_argument("--server-path", help="显式 mcp_server.py 路径")

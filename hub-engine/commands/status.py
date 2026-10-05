@@ -270,7 +270,12 @@ def estimate_hub_tool_capacity(root: Path) -> float:
 
         cfg = HubConfig.load(root)
         platforms = (cfg.platforms or {}).keys()
-        supported = {"hermes", "trae", "code", "workbuddy"}
+        # 平台清单**单一来源**：platform_bridge.ADAPTER_REGISTRY（2026-10-05 修）
+        # 原为硬编码 {hermes, trae, code, workbuddy} ⇒ trae 退役 + mavis/deepseek/pi 接入后
+        # 必然漂移，使“平台适配器覆盖”分虚低（同类前例：tests/test_router_sync.py 回归背景）
+        from tools.platform_bridge import SUPPORTED_PLATFORMS
+
+        supported = set(SUPPORTED_PLATFORMS)
         covered = sum(1 for p in platforms if p in supported)
         score += covered * 1.5  # 上限 6
     except Exception:
