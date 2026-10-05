@@ -2,7 +2,7 @@
 
 ## 总目标
 
-跨 Agent 平台统一记忆中枢：Hermes / trae / code / workbuddy 共享权威知识、行为一致。定位：中枢给 Agent 用、人监管。
+跨 Agent 平台统一记忆中枢：Hermes / code / workbuddy / pi / mavis / deepseek 共享权威知识、行为一致。定位：中枢给 Agent 用、人监管。
 
 ## 架构（三层）
 
