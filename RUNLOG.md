@@ -12,6 +12,7 @@
 - **F4（本次裁定：口径 A）**：`WORK.md` 的「下一步候选」段自 commit `db3d52e`（2026-09-23 R1 重构）整迁至 `docs/superpowers/retro/work-history.md:126`，且 WORK.md 现 **4998/5000 字符**（仅余 2）。**新增口径：每周评测结论一律记本 RUNLOG.md（只追加、无字符帽），不再写 WORK.md「下一步候选」**；待改指向的权威区卡（交维护者 ingest）：`methodology/post-task-recommendations.md:75`、`experience/pluginhub-agents-md-hub-quote.md:34` —— 草稿已落 `.sync/drafts/pi_draft/weekly-recall-conclusion-goes-to-runlog.md`。
 - **附带纠正（10-05 复查，修正原报告的判断）**：09-26 / 10-03 两次周评测 **并非未执行**——`%LOCALAPPDATA%/hermes/cron/executions.db` 显示分别 `RuntimeError: Connection error.` 与脚本退出码 2（recall@5 84% < 90%）；且该 job 现为 `no_agent: true` + `script: recall_review_cron.py`（脚本在**仓外** `%LOCALAPPDATA%\hermes\scripts\`，既不写 WORK.md 也不写 weekly json），**其 prompt（含步骤 5「记录到 WORK.md 下一步候选」）实际不执行** ⇒ F4 受害方①是文档漂移，不是运行故障，不应按“会报错”处置。
 - **验证**：`ruff check` / `format --check` 改动文件全通过 · `bench_recall --metrics` 不再 NameError 且 n 扫描自洽（n=3 → 19/21） · `bench_recall --json` 新旧键并存 · `vector_bench` 假对比退出码 2、`--real --fail-below 0.8` 融合 100% 通过 · `check_encoding` 0 FAIL。
+- **F4 已落地（同日）**：用户授予 pi 维护者档权限后**直写权威区**（不再走「草稿→ingest」）：`methodology/post-task-recommendations.md`（双通道落盘目标 `WORK.md「下一步候选」` → **`WORK.md「活跃待办」`**（现存段，`WORK.md:17`；⚠️ **未改指 RUNLOG**——待办台账 ≠ 迭代日志；另加「实证踩坑③」）、`experience/pluginhub-agents-md-hub-quote.md`（实施步骤 2 同步）、`retro/weekly-recall-2026-10-05.json` 回填 `fixes_applied_2026-10-05`。中枢仓提交 `9b3ea12`（其后 `088dfb7` 合并 SkillHub 远端 8 条），已推 `origin/master`。
 
 ## [2026-09-25] R17 | 审计整改收口 + COV/SPLIT2 + 两轮重评（**8.7/10**）
 
