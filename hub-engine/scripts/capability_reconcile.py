@@ -136,6 +136,21 @@ def registry_coverage(root: Path) -> dict:
     recorded = {str(r["name"]) for r in rows if isinstance(r, dict) and r.get("name")}
     mcp_records = {str(r["name"]) for r in rows if isinstance(r, dict) and str(r.get("kind") or "skill") == "mcp"}
     impl = {p.parent.name for p in (sh / "skills").rglob("SKILL.md")}
+    # 2026-10-05 修（**假阳性根因**）：实现可能装在**客户端技能目录**而非 SkillHub 仓内
+    # ——实测 22 条 "recorded_but_unimplemented" 里 15 条其实有客户端实现
+    # （1password / obsidian / sherlock / skill-creator …）。原实现只看 SkillHub 侧，
+    # 于是这个指标长期误报，逼维护者反复手工取证（本会话就干过一次）。
+    # 现把各平台 skills_dir 的来源并入 impl。
+    try:
+        from common.config import load_yaml
+
+        _cfg = load_yaml(root / "hub.config.yaml") or {}
+        for _meta in (_cfg.get("platforms") or {}).values():
+            _dir = (_meta or {}).get("skills_dir")
+            if _dir and Path(_dir).is_dir():
+                impl |= {q.parent.name for q in Path(_dir).rglob("SKILL.md")}
+    except Exception:  # 配置缺失/权限问题不该让对账整体失败（软指标）
+        pass
     installed = set()
     for info in (actual(root).get("skills") or {}).values():
         installed.update(info.get("skills") or [])
