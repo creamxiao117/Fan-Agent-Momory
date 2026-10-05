@@ -17,18 +17,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+from common.authority import CARD_DIRS
 from common.frontmatter import Card, try_read_card, validate_card
 from common.index_limits import desc_limit_for_dir
 
-# 参与派生的目录（与 tools/retrieve.py 的 _ACTIVE_DIRS 同口径：五权威区 + experience）
-CARD_DIRS: tuple[str, ...] = (
-    "rules",
-    "methodology",
-    "longterm",
-    "projects",
-    "blueprints",
-    "experience",
-)
+# 参与派生的目录来自 common/authority.py（单一事实源，2026-10-05 修：原为副本）
 
 # 非卡片文件名（时间线/报告/索引渲染产物），不参与派生
 NON_CARD_NAMES: frozenset[str] = frozenset({"log.md"})

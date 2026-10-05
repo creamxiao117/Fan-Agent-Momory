@@ -25,10 +25,10 @@ from pathlib import Path
 # 为何上移：本模块的错位检查要用 index_consistency.expected_index_file()，
 # 而契约模块又需这两个正则 -> 循环导入。契约模块应为**叶子**，故由其持有正则。
 from common import index_limits as _limits
+from common.authority import AUTHORITY_DIRS, NON_AUTHORITY_DIRS
 from common.index_files import KNOWN_INDEX_FILES, index_files
 from common.index_limits import desc_limit_for_section as _desc_limit
 from scripts.index_consistency import (
-    AUTHORITY_DIRS,
     INDEX_ENTRY_RE,
     NESTED_ENTRY_RE,
     SLUG_RE,
@@ -51,8 +51,10 @@ def _desc_limit_of(section: str) -> int:
     return _desc_limit(section)
 
 
-# _ghost_index 检查时额外纳入非权威区（experience/notes/retro）避免误报
-_ALL_SCAN_DIRS = AUTHORITY_DIRS + ("experience", "notes", "retro")
+# _ghost_index 检查时额外纳入非权威区（notes/retro）避免误报
+# （2026-10-05 修：experience 已进 AUTHORITY_DIRS，此处若再补一次就是重复；
+#   原写法 AUTHORITY_DIRS + ("experience",…) 在修复后会自相矛盾）
+_ALL_SCAN_DIRS = AUTHORITY_DIRS + NON_AUTHORITY_DIRS
 
 # slug 格式：允许小写/大写字母、数字、连字符、下划线、点号；2~80 字符
 

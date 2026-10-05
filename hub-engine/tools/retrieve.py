@@ -15,19 +15,12 @@ import contextlib
 from collections import Counter
 from pathlib import Path
 
+from common.authority import CARD_DIRS as _ACTIVE_DIRS
 from common.frontmatter import Card, try_read_card
 from common.vector import build_idf, cosine, tokenize, vector
 
-# 参与检索的卡片目录（五大类型与 INDEX.md 一致；经验卡 experience 必须参与，
-# 2026-09-02 bf8f49b 误将其移出导致真实回归 67%→恢复；libs/retro 非五类不纳入主检索）
-_ACTIVE_DIRS = (
-    "rules",
-    "blueprints",
-    "methodology",
-    "longterm",
-    "projects",
-    "experience",
-)
+# 参与检索的卡片目录 = common/authority.py 的 CARD_DIRS（单一事实源，2026-10-05 修）。
+# 历史：2026-09-02 bf8f49b 误将 experience 移出导致真实回归 67%→恢复；libs/retro 不纳入。
 
 # 不参与检索的卡片状态（单一事实源）
 #   archived   —— 已归档

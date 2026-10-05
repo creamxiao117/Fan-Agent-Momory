@@ -60,17 +60,31 @@ def test_lint_ignores_log_and_report_files(tmp_path):
 
 
 def _seed_non_authority_drift(root: Path) -> None:
-    """非权威区漂移卡：type 非法 + 无 frontmatter（2026-09-11 真实漂移形态）"""
+    """非权威区（notes/）漂移卡：type 非法 + 无 frontmatter（2026-09-11 真实漂移形态）。
+
+    2026-10-05 改：fixture 从 experience/ 改为 notes/——experience 已进权威区，
+    其漂移由 `lint()["invalid"]` 路径捕获（见下方第二个测试）。
+    """
+    (root / "notes").mkdir(parents=True, exist_ok=True)
+    (root / "notes" / "drift-type.md").write_text(
+        "---\ntype: experience\ntags: [x]\nstatus: active\n---\n漂移卡\n",
+        encoding="utf-8",
+    )
+    (root / "notes" / "drift-nofm.md").write_text("# 无 frontmatter\n正文\n", encoding="utf-8")
+
+
+def _seed_experience_drift(root: Path) -> None:
+    """权威区（experience/）漂移卡：自 2026-09-10 experience 升级进权威区后，
+    它必须被 `invalid` 计数捕获（原经验卡：11 张漂移卡静默存活）。"""
     (root / "experience").mkdir(parents=True, exist_ok=True)
     (root / "experience" / "drift-type.md").write_text(
         "---\ntype: experience\ntags: [x]\nstatus: active\n---\n漂移卡\n",
         encoding="utf-8",
     )
-    (root / "experience" / "drift-nofm.md").write_text("# 无 frontmatter\n正文\n", encoding="utf-8")
 
 
 def test_find_schema_drift_flags_non_authority(tmp_path):
-    """非权威区 schema 漂移必须被独立维度检出——权威区 invalid 计数不覆盖它"""
+    """非权威区（notes/）schema 漂移必须被独立维度检出——权威区 invalid 计数不覆盖它"""
     root = bootstrap(tmp_path)
     _seed_non_authority_drift(root)
     report = lint(root)
@@ -80,6 +94,18 @@ def test_find_schema_drift_flags_non_authority(tmp_path):
     errs = {d["name"]: d["errors"] for d in report["schema_drift"]}
     assert any("experience" in e for e in errs["drift-type.md"])
     assert errs["drift-nofm.md"] == ["frontmatter 无法解析"]
+
+
+def test_experience_drift_now_counted_as_invalid(tmp_path):
+    """护栏换路径：experience 进权威区后，其漂移卡由 `invalid` 捕获（不再靠 schema_drift）。
+
+    这条是 2026-09-11 教训（11 张 type: experience 漂移卡静默存活）的**双向断言**：
+    既有 schema_drift 面的 notes 检出，也有权威区面的 experience 检出。
+    """
+    root = bootstrap(tmp_path)
+    _seed_experience_drift(root)
+    report = lint(root)
+    assert report["invalid"] == 1, "experience 漂移卡必须计入权威区 invalid（否则护栏丢了）"
 
 
 def test_schema_drift_clean_hub_is_empty(tmp_path):

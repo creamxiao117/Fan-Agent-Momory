@@ -4,25 +4,23 @@ import re
 from datetime import date
 from pathlib import Path
 
+from common.authority import AUTHORITY_DIRS, NON_AUTHORITY_DIRS
 from common.frontmatter import today_date, try_read_card, validate_card
 from common.index_files import all_index_text, index_files
 
-# 仅 5 个权威区目录
-AUTHORITY_DIRS = (
-    "rules",
-    "blueprints",
-    "methodology",
-    "longterm",
-    "projects",
-)
+# 权威区 / 非权威区目录：**单一事实源** common/authority.py（2026-10-05 修）。
+# 此前本文件自持一份「仅 5 个权威区」的副本，与 hub.config.yaml 的 authority_dirs
+# （experience 于 2026-09-10 升级进权威区）漂移 ⇒ 236 张 experience 卡不参与
+# 孤儿/幽灵/type↔目录判定，且 engine.py status/audit 的计数一并漏掉该区。
+
 STALE_DAYS = 180
 
-# 非权威区目录（experience/notes/retro）：不参与孤儿/陈旧判定（它们不是权威区、
-# 也没有 INDEX 入链语义），但**必须单独做 schema 校验**——2026-09-11 实测：11 张
-# `type: experience` 漂移卡在 experience/ 静默存活，lint 报的 7 处问题里完全不出现
-# （同类漂移 2026-08-29 已修过 23 张后复发）。本维度只跑 validate_card，
-# 不与孤儿/陈旧逻辑混算，保持各维度语义独立。
-NON_AUTHORITY_DIRS = ("experience", "notes", "retro")
+# 需要**独立做 frontmatter schema 校验**的目录（仅非权威区）。
+# experience 以前在这里（2026-09-11：11 张 `type: experience` 漂移卡静默存活），
+# 但自 2026-09-10 experience 升级进权威区后，它已由 `lint()` 的 `_all_cards` 循环
+# 直接 validate_card 并计入 `invalid` ⇒ 本集合收缩为 notes/retro，**护栏未丢只是换了路径**
+# （tests/test_lint.py 有双向断言钉住）。
+_SCHEMA_CHECK_DIRS = NON_AUTHORITY_DIRS
 
 # 目录 → 该目录期望的 type（2026-09-18 加）。
 # 依据：type 的唯一功能用途是 **sync/confirm 路由**（sync.py 的 TYPE_DIR、
@@ -167,7 +165,7 @@ def _is_non_card(p: Path) -> bool:
 def _non_authority_cards(root: Path) -> list[tuple[str, Path, object]]:
     """非权威区卡片；**跳过生成物/时间线**（它们不是卡，不该做 frontmatter 校验）"""
     out = []
-    for sub in NON_AUTHORITY_DIRS:
+    for sub in _SCHEMA_CHECK_DIRS:
         d = root / sub
         if not d.exists():
             continue

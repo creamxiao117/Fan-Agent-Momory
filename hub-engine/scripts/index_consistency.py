@@ -51,6 +51,8 @@ sys.path.insert(0, str(_THIS.parent))  # hub-engine/
 
 import re
 
+from common.authority import AUTHORITY_DIRS  # 单一事实源（2026-10-05 修，见下）
+
 # ── INDEX 登记行正则（**权威定义**，2026-09-23 从 audit_index 上移至此）──
 # 为何上移：`audit_index` 需要本模块的 `expected_index_file()` 做错位检查，
 # 而本模块又需它的正则 → 循环导入。契约模块应当是**叶子**（不依赖任何 script），
@@ -66,15 +68,10 @@ NESTED_ENTRY_RE = re.compile(rf"^\|- ([a-zA-Z0-9{_CJK}][a-zA-Z0-9_\-." rf"{_CJK}
 # slug 格式校验（原在 audit_index，2026-09-23 一并上移：同样依赖 _CJK）
 SLUG_RE = re.compile(rf"^[a-zA-Z0-9{_CJK}][a-zA-Z0-9_\-." rf"{_CJK}]{{1,79}}$")
 
-# 权威区（与 hub.config.yaml 的 authority_dirs 对齐）
-# 注意：experience/notes/retro 是非权威区，仅参与 INDEX 登记，不参与权威文件扫描
-AUTHORITY_DIRS = (
-    "rules",
-    "methodology",
-    "longterm",
-    "projects",
-    "blueprints",
-)
+# 权威区清单：**单一事实源** common/authority.py（2026-10-05 修）。
+# 原副本缺 experience（而注释自称"与 hub.config.yaml 的 authority_dirs 对齐"，
+# 实际不对齐 —— hub 侧 experience 于 2026-09-10 升级进权威区）。
+# notes/retro 属非权威区，仅参与 INDEX 登记，不参与权威文件扫描。
 
 # 目录名 → INDEX 分区标题（**唯一定义**；必须与目标 INDEX 文件内实际标题一致）
 SECTION_TITLES: dict[str, str] = {

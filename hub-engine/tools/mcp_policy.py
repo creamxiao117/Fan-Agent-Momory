@@ -2,18 +2,12 @@
 
 from pathlib import Path
 
+# slug → 卡片路径的搜索范围：**单一事实源** common/authority.py 的 CARD_DIRS
+# （2026-10-05 修：原副本多含 \libs\/etro\ ⇒ slug 解析可落到 retro/log.md 等
+#  **非卡片文件**，属越权面；且删掉 libs 后与 hub.config.yaml 才真正一致）
+from common.authority import CARD_DIRS as AUTHORITY_DIRS
 from common.config import HubConfig
 
-AUTHORITY_DIRS = (
-    "rules",
-    "methodology",
-    "longterm",
-    "projects",
-    "experience",
-    "libs",
-    "retro",
-    "blueprints",
-)
 CANDIDATE_TYPES = {"exp", "note", "project"}
 
 

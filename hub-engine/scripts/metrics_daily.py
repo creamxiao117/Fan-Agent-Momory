@@ -25,23 +25,24 @@ E2：`--series` 把 query.log 按日聚全量 hit_rate/miss_rate 时间序列（
 import argparse
 import json
 import sqlite3
+import sys
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
+
+_THIS = Path(__file__).resolve().parent
+sys.path.insert(0, str(_THIS.parent))  # hub-engine/（import 项目包前必须引导）
+
+from common.authority import CARD_DIRS as _CARD_DIRS  # noqa: E402
 
 LOG = Path(".sync") / "state" / "query.log.jsonl"
 METRICS = Path(".sync") / "state" / "metrics.jsonl"
 LOG_DIR = Path(".sync") / "state"
 LOCAL_TZ = timezone(timedelta(hours=+8))  # Asia/Shanghai
-_AUTHORITY_DIRS = (
-    "rules",
-    "methodology",
-    "longterm",
-    "projects",
-    "experience",
-    "libs",
-    "retro",
-    "blueprints",
-)
+# 卡片计数范围 = common/authority.py 的 CARD_DIRS（**单一事实源**，2026-10-05 修）。
+# 原为自持副本（"脚本自包含"）但多含 libs/retro ⇒ _total_cards() 把 libs 的 6 个
+# 与 retro 的 ~18 个 md 计成卡片，指标虚高；且该副本与注释声称的
+# "与 tools.lint.AUTHORITY_DIRS 保持一致" 实际不一致（那个缺 experience）。
+_AUTHORITY_DIRS = _CARD_DIRS
 
 
 def _today_local() -> date:

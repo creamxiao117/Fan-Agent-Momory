@@ -45,6 +45,11 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+_THIS = Path(__file__).resolve().parent
+sys.path.insert(0, str(_THIS.parent))  # hub-engine/（import 项目包前必须引导）
+
+from common.authority import CARD_DIRS  # noqa: E402
+
 # 计划任务/无终端环境 stdout 常为 GBK，无法编码 ✓ 等字符；强制 UTF-8 防中断。
 if hasattr(sys.stdout, "reconfigure"):  # Python 3.7+
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -55,18 +60,10 @@ if hasattr(sys.stdout, "reconfigure"):  # Python 3.7+
 # hub-engine/scripts/secret_sentry.py → parents[2] = 仓库根
 _DEFAULT_ROOT = Path(__file__).resolve().parents[2] / "AgentMemoryHub"
 
-# 权威区：会被检索、会被注入上下文 ⇒ 命中即高危
-AUTHORITY_DIRS = frozenset(
-    {
-        "rules",
-        "methodology",
-        "experience",
-        "blueprints",
-        "longterm",
-        "projects",
-        "notes",
-    }
-)
+# 「会被检索 / 会被注入上下文」的目录 ⇒ 命中即高危。
+# **单一事实源** common/authority.py 的 CARD_DIRS（2026-10-05 修：原副本多含 notes，
+# 而 notes 既不参与检索（retrieve 的白名单不含它）也不被注入 ⇒ 纯误报面）
+AUTHORITY_DIRS = frozenset(CARD_DIRS)
 
 # ── 通用凭证模式 ────────────────────────────────────────────────────────────
 # 每个模式都**必须**捕获候选值到 group(1)，交由 _looks_like_secret() 做形态校验。
