@@ -77,7 +77,15 @@ def list_skills(skills_dir: Path) -> list[str]:
     out: list[str] = []
     for child in sorted(skills_dir.iterdir()):
         if child.is_dir():
-            if (child / SKILL_ENTRY).is_file() or any(child.glob("*.md")):
+            # 2026-10-05 修：退回分支 `any(child.glob("*.md"))` 会把**分类目录**
+            # （creative/ productivity/ web/ 内含任意 .md）当成技能 ⇒ 实测产出 12 个
+            # "待定位实现"假阳性（apple/creative/email/media/…）。
+            # 现：分类目录（含 */SKILL.md 子目录者）不计入；skill.yaml 也认可。
+            if (
+                (child / SKILL_ENTRY).is_file()
+                or (child / "skill.yaml").is_file()
+                or (any(child.glob("*.md")) and not any(child.glob("*/SKILL.md")))
+            ):
                 out.append(child.name)
         elif child.suffix == ".md" and child.stem.lower() not in {"readme", "index"}:
             out.append(child.stem)

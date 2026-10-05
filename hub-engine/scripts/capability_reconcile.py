@@ -135,7 +135,11 @@ def registry_coverage(root: Path) -> dict:
 
     recorded = {str(r["name"]) for r in rows if isinstance(r, dict) and r.get("name")}
     mcp_records = {str(r["name"]) for r in rows if isinstance(r, dict) and str(r.get("kind") or "skill") == "mcp"}
-    impl = {p.parent.name for p in (sh / "skills").rglob("SKILL.md")}
+    # schema（router/schema.yaml 顶层）要求登记记录**逐一对应 skills/<name>/skill.yaml**
+    # ⇒ 实现的判据是 skill.yaml（SKILL.md 只是 instructions）——2026-10-05 修：
+    # 原判据只认 SKILL.md，导致"有 skill.yaml 但无 SKILL.md"的技能被误判无实现。
+    impl = {q.parent.name for q in (sh / "skills").rglob("skill.yaml")}
+    impl |= {q.parent.name for q in (sh / "skills").rglob("SKILL.md")}
     # 2026-10-05 修（**假阳性根因**）：实现可能装在**客户端技能目录**而非 SkillHub 仓内
     # ——实测 22 条 "recorded_but_unimplemented" 里 15 条其实有客户端实现
     # （1password / obsidian / sherlock / skill-creator …）。原实现只看 SkillHub 侧，
