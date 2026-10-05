@@ -361,7 +361,9 @@ def _semantic_scored(
     """语义通道带分数召回：返回 [(card, sim)]，按相似度降序。
 
     默认 char（2026-08-31 改）：
-    - char：字符 n-gram（实测 n=2 最优；混合 top3 recall 100% vs word 73%；纯 n-gram 无 IDF 开销）
+    - char：字符 n-gram（2026-10-05 复测 21 条金标准：混合 top3 n=2 86% / n=3 90% / word 81%；
+      n=3 ⊇ n=2 且与 n=4 逐条全同 ⇒ 旧「实测 n=2 最优；100% vs word 73%」已过时；默认仍取 n=2，
+      切换收益仅 +1/21 证据不足，待复测；纯 n-gram 无 IDF 开销）
     - word：jieba 分词 + IDF 加权（语料内稀有词权重更高，缓解领域共词抢占；IDF 结果会缓存到 _IDF_CACHE）
     """
     idx = _index(root)

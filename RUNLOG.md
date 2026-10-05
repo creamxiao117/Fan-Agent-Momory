@@ -2,6 +2,17 @@
 
 按轮次（R1…）追加；每条含巡检/门禁结果、决策与进行中的事项。当前状态见 `WORK.md`。
 
+## [2026-10-05] R18 | 周评测 4 项 info 发现深挖归因 + 代码修复（F1–F4）
+
+- **背景**：每周召回评测复核（10-05）产出 4 个 info 发现；本轮逐条深挖到根因并修可修项（动手前按 L0 铁律检索中枢并补读 L1 code 卡 `agent-code-discipline-iron-rule` / `chinese-text-encoding-discipline` / `multi-language-style-config`）。
+- **F3b（最严重，已修）**：`vector_bench --model` 在本机**自 HTTP embed 后端启用（`82b7f2f`，2026-08-29）起就是假对比** —— `AGENT_MD_EMBED_MODEL` 只作用于本地 transformers 后端，HTTP 后端恒用 `system/config.yaml` 的 `text-embedding-bge-m3`；铁证 = 合成库 `work/bench_vectors/.sync/vector.db` 的 `db_meta = http:text-embedding-bge-m3 / 1024 维`（与 stdout 标签矛盾）。修法：stdout 改打 `_active_model_id()`（诚实探测），与 `--model` 不一致即 ⚠️ + **退出码 2 拒绝**；脚本 docstring 同步改写（`--real` 只如实报出实际后端、不拒绝，因为它读现库、不做模型对比）。
+- **F3a（已修）**：`scan_n` 只存 `round(hits/total, 2)`，打印侧再用 `int(rec * total)` 反推命中数 ⇒ 0.90×21=18.9 被截断为 18，实测「90% 召回（18/21）」与真值 19/21 永不自洽。改为返回 `(hits, rec)` 元组、百分比由 hits 直接算；`--json` 保持 `n_scan_char_top3` 旧形状并新增 `n_scan_char_top3_hits`（旧形状无其他消费方，双轨最保守）。
+- **F2（已修）**：`work/bench_recall.py` 三处 lint（UP009 / RUF100 / F821），其中 `F821` 使 `--metrics` 路径 `NameError`（`retrieve` 未导入）。补 import、删无用 `# noqa: E402` 与 coding 声明。**门禁不受影响**：`work/**` 在根 `.ruff.toml extend-exclude` 内、且整目录被 `.gitignore` 忽略 ⇒ `ruff check`/`format --force-exclude` 实跑为「No Python files found」，这是它长期没被发现的机制原因。
+- **F1（只改 docstring，不切默认 n）**：21 条金标准复测 n=2 混合 top3 **18/21（86%）**、n=3/n=4 **19/21（90%）**；n=3 是 n=2 的**严格超集**（唯一翻转查询「中文向量 用哪个模型 最小」，反向丢失 0 条），n=3 ≡ n=4 逐条全同，top5 口径三者全同（19/21）⇒ 差异只在 top3 截断。`retrieve.py::_semantic_scored` 的「n=2 最优；100% vs word 73%」已过时 → 改写为 10-05 实测值（char 86% / n=3 90% / word 81%）；**裁定暂不切默认 n**（+1/21 证据不足，下周复测）。
+- **F4（本次裁定：口径 A）**：`WORK.md` 的「下一步候选」段自 commit `db3d52e`（2026-09-23 R1 重构）整迁至 `docs/superpowers/retro/work-history.md:126`，且 WORK.md 现 **4998/5000 字符**（仅余 2）。**新增口径：每周评测结论一律记本 RUNLOG.md（只追加、无字符帽），不再写 WORK.md「下一步候选」**；待改指向的权威区卡（交维护者 ingest）：`methodology/post-task-recommendations.md:75`、`experience/pluginhub-agents-md-hub-quote.md:34` —— 草稿已落 `.sync/drafts/pi_draft/weekly-recall-conclusion-goes-to-runlog.md`。
+- **附带纠正（10-05 复查，修正原报告的判断）**：09-26 / 10-03 两次周评测 **并非未执行**——`%LOCALAPPDATA%/hermes/cron/executions.db` 显示分别 `RuntimeError: Connection error.` 与脚本退出码 2（recall@5 84% < 90%）；且该 job 现为 `no_agent: true` + `script: recall_review_cron.py`（脚本在**仓外** `%LOCALAPPDATA%\hermes\scripts\`，既不写 WORK.md 也不写 weekly json），**其 prompt（含步骤 5「记录到 WORK.md 下一步候选」）实际不执行** ⇒ F4 受害方①是文档漂移，不是运行故障，不应按“会报错”处置。
+- **验证**：`ruff check` / `format --check` 改动文件全通过 · `bench_recall --metrics` 不再 NameError 且 n 扫描自洽（n=3 → 19/21） · `bench_recall --json` 新旧键并存 · `vector_bench` 假对比退出码 2、`--real --fail-below 0.8` 融合 100% 通过 · `check_encoding` 0 FAIL。
+
 ## [2026-09-25] R17 | 审计整改收口 + COV/SPLIT2 + 两轮重评（**8.7/10**）
 
 - **审计报告**（`docs/compose/reports/2026-09-25-project-audit.md`）：首评 **5.9** → 整改前 **7.7**（§2）→ 第一轮重评 **8.5**（§10）→ **第二轮正式重评 8.7（§11）**；本会话 **31 笔提交**

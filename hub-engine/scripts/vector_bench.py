@@ -6,12 +6,20 @@
 - 每周复核 Schedule（44e1e8ef）复用本脚本做回归。
 
 伺服构造独立语料（work/bench_vectors），不污染真实中枢，保证可复现；
-向量库在评测语料内，按 --model 删库强制重建（模型间向量维度/语义不一致，必须隔离）。
+向量库在评测语料内按**实际生效后端**删库强制重建（模型间向量维度/语义不一致，必须隔离）。
+
+⚠️ 模型诚实性门禁（2026-10-05 加）——`--model` 并非总能改变实际后端：
+  `AGENT_MD_EMBED_MODEL` 只作用于**本地 transformers 后端**；HTTP 后端（单源配置
+  `system/config.yaml` 的 `embed.model`，本机 = `text-embedding-bge-m3`）优先级更高。
+  两者不一致时，模型对比是假对比（标准输出标签与库内 db_meta 互相矛盾），本脚本
+  会直接打印 ⚠️ 并**退出码 2 拒绝执行**，而不是产出一组无效数字。
 
 用法：
-  python scripts/vector_bench.py                       # 基线 bge-small-zh-v1.5
+  python scripts/vector_bench.py                       # 基线 bge-small-zh-v1.5（HTTP 后端下会被拒）
   python scripts/vector_bench.py --model BAAI/bge-base-zh-v1.5   # 对比 base
+  python scripts/vector_bench.py --real ../AgentMemoryHub --fail-below 0.8   # 真实语料回归门禁（不比模型）
 前置：需联网下载对应 HF 权重；无网/无后端时向量通道自动退化（hit=0，融合=词袋）。
+退出码：0 正常 / 2 假对比被拒（标签≠实际后端） / 3 --real 回归门禁未过。
 """
 
 import argparse
@@ -206,7 +214,11 @@ def _print_group(label: str, n: int, hits: dict, detail: list) -> None:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description="检索三通道命中率基准")
-    ap.add_argument("--model", default=DEFAULT_MODEL, help="HF 模型 id，默认 bge-small-zh-v1.5")
+    ap.add_argument(
+        "--model",
+        default=DEFAULT_MODEL,
+        help="HF 模型 id（仅本地 transformers 后端生效；HTTP 后端优先，标签与实际不符即退出码 2）",
+    )
     ap.add_argument(
         "--no-rebuild",
         action="store_true",
@@ -229,6 +241,11 @@ def main() -> int:
     # ---------- 真实中枢回归门禁：不建语料、不重建向量库，直接对现库回归 ----------
     if args.real:
         os.environ["AGENT_MD_EMBED_MODEL"] = args.model  # 向量检索读现库，仍需模型参数一致
+        from tools.semsearch import _active_model_id
+
+        # --real 只读现库、**不做模型对比**（对比走下面的合成语料路径）⇒ 这里只如实报出
+        # 实际生效后端（现库向量由实际后端产生，查询侧同后端才能对齐维度），不拒绝。
+        print(f"实际生效 embed 模型: {_active_model_id()}（--model 请求 {args.model}）")
         # 真语料基准须用真实 LLM：前置运行时自愈，离线先拉起再测（WORK.md 第20条）
         from tools.llm_health import ensure_llm_service
 
@@ -238,18 +255,33 @@ def main() -> int:
 
     os.environ["AGENT_MD_EMBED_MODEL"] = args.model  # 须在 import semsearch 前设好
     from tools.semsearch import (  # 模块级 EMBED_MODEL 在 .import 时快照，故设 env 之后再导
+        _active_model_id,
         build,
         db_path,
     )
+
+    # 模型诚实性门禁（2026-10-05 修）：AGENT_MD_EMBED_MODEL 只作用于本地 transformers 后端，
+    # HTTP 后端（system/config.yaml 的 embed.model）优先 ⇒ 只认 `--model` 标签会产出
+    # 「标签 bge-small、实际 bge-m3」的假对比（合成库 db_meta 会自证为 m3）。故先探测
+    # 实际生效模型，不一致即拒绝执行——宁可不出数字，也不出假数字。
+    active = _active_model_id()
+    if active != args.model:
+        print(
+            f"⚠️ 模型不一致：--model 请求 `{args.model}`，实际生效 `{active}`\n"
+            "   HTTP embed 后端优先于 AGENT_MD_EMBED_MODEL ⇒ 模型切换在本机是 no-op，\n"
+            "   继续跑只会得到「标签与实际不符」的假模型对比。已拒绝（退出码 2）。\n"
+            "   要真对比：改 system/config.yaml 的 embed.model 后重跑，或改用本地 transformers 后端。"
+        )
+        return 2
 
     _ensure_hub(BENCH)
 
     db = db_path(BENCH)
     if not args.no_rebuild and db.exists():
-        db.unlink()  # 模型隔离：删库强制全量重建为该模型的向量
+        db.unlink()  # 隔离：删库后按**实际生效后端**全量重建（非按 --model 标签）
     stats = build(BENCH)
 
-    print(f"模型: {args.model}\n语料 {len(CARDS)} 卡 / 查询 {len(QUERIES)}+{len(HARD)} 条")
+    print(f"模型: {active}\n语料 {len(CARDS)} 卡 / 查询 {len(QUERIES)}+{len(HARD)} 条")
     print(f"vector build: {stats}")
     if stats["embedded"] + stats["reused"] == 0:
         print("警告：无卡片生成向量（模型不可用/无网/退化），以下向量与融合命中受空库影响。")
