@@ -65,6 +65,8 @@ TEXT_EXTS: frozenset[str] = frozenset(
 #   - `task_tier`：L1 分型源，直接决定 L1 预算的分子
 # 注：`tools/inject.py` 会改各平台注入的 L0 文本，但**不在这两项检查的输入面内**，
 #     放进来只会白跑门禁 → 刻意不收。
+from common.authority import AUTHORITY_DIRS as _AUTHORITY_DIRS  # noqa: E402
+
 L0_FILES: frozenset[str] = frozenset(
     {
         "AGENTS.md",
@@ -78,14 +80,12 @@ L0_FILES: frozenset[str] = frozenset(
         "hub-engine/common/index_limits.py",
     }
 )
-L0_PREFIXES: tuple[str, ...] = (
-    "rules/",
-    "methodology/",
-    "longterm/",
-    "projects/",
-    "blueprints/",
-    "experience/",
-)
+L0_PREFIXES: tuple[str, ...] = tuple(f"{d}/" for d in _AUTHORITY_DIRS)
+# 2026-10-05（体检 A1 残留）：「权威区卡变更 ⇒ 跑 L0 门禁」这个耦合关系直接由
+# common/authority.py 派生，避免再手措一份清单。**语义提醒**：此处的
+# “权威区” = l0 门禁的输入面，与“参与检索的卡目录”（同为 AUTHORITY_DIRS）恰好同集，
+# 但**不是同一概念**——将来若某个卡目录不需要跑 L0 门禁，就在这里显式排除，
+# 不要去改 common/authority.py。
 
 
 def _norm(path: str) -> str:

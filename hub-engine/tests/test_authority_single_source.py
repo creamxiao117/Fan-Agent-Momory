@@ -69,3 +69,25 @@ def test_audit_scan_dirs_do_not_duplicate_experience():
 
     assert len(audit_index._ALL_SCAN_DIRS) == len(set(audit_index._ALL_SCAN_DIRS))
     assert set(audit_index._ALL_SCAN_DIRS) >= set(A.AUTHORITY_DIRS)
+
+
+def test_gate_scope_l0_prefixes_derived_from_authority():
+    """L0 门禁面（权威区目录）由 common/authority.py 派生，不得再手措清单。"""
+    from common import gate_scope
+
+    assert tuple(f"{d}/" for d in A.AUTHORITY_DIRS) == gate_scope.L0_PREFIXES
+
+
+def test_tier_scope_values_reference_real_card_dirs():
+    """task_tier 的检索子区是**有意收窄的语义子集**（不是权威区副本），不应派生；
+    但它的每个取值必须指向真实存在的卡目录——否则是拼写错/已退役目录（如 libs）。"""
+    from tools import task_tier
+
+    valid = set(A.AUTHORITY_DIRS) | set(A.NON_AUTHORITY_DIRS)
+    for table_name in ("TIER_SCOPE", "LEGACY_KIND_SCOPE"):
+        table = getattr(task_tier, table_name)
+        for tier, dirs in table.items():
+            if not dirs:
+                assert tier == "light", f"{table_name}[{tier}] 为空——只有 light 允许空范围（不检索）"
+                continue
+            assert set(dirs) <= valid, f"{table_name}[{tier}] 含非卡目录 {sorted(set(dirs) - valid)}（退役/拼写错？）"
