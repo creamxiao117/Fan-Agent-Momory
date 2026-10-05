@@ -1,0 +1,12 @@
+# 行尾/编码策略（2026-10-05 立）——**可移植的口径，优先于 core.autocrlf**
+#
+# 为何需要：本仓长期只有 core.autocrlf=true、无 .gitattributes ⇒ 检出把工作树写成 CRLF，
+# 而 append-only 写脚本追加 LF，于是产生「混合行尾」（实测 retro/log.md、methodology/gh-star-repo-filter-rule.md），
+# 巡检 encoding 步因此 FAIL。而门禁 check_encoding 查的是 **index 物化内容**（纯 LF）⇒ 门禁永远绿、
+# 巡检永远红 —— 两侧口径不一致。本文件把口径写进仓库（任何 clone 都生效）。
+#
+# 纪律参考：rules/chinese-text-encoding-discipline（.bat/.cmd 必须 ANSI+CRLF、.ps1 需 BOM）。
+# 故此处**只对 .cmd/.bat 保留 CRLF**，其余文本统一 LF。
+* text=auto eol=lf
+*.cmd text eol=crlf
+*.bat text eol=crlf

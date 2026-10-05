@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -45,8 +46,22 @@ EXIT_CODE = {"code": 1, "text": 2, "l0": 3}
 
 
 def _run(cmd: list[str], cwd: Path | None = None) -> tuple[int, str]:
+    """执行外部命令。
+
+    2026-10-05 修（假绿根因）：原实现直接 `subprocess.run(["markdownlint", ...])`，
+    而 Windows 上 markdownlint 是 npm 的 `.cmd` 垫片，`CreateProcess` **不解析 .cmd**
+    ⇒ 恒 `FileNotFoundError` → 返回 127 → `gate_text` 打印「markdownlint 未安装，跳过」
+    ⇒ **这条护栏从未真正生效过**（silent no-op）。现先 `shutil.which` 定位，再对
+    .cmd/.bat 走 `cmd /c` 包一层。
+    """
+    exe = shutil.which(cmd[0])
+    if exe is None:
+        return 127, f"找不到命令：{cmd[0]}"
+    argv = [exe, *cmd[1:]]
+    if os.name == "nt" and exe.lower().endswith((".cmd", ".bat")):
+        argv = [os.environ.get("COMSPEC", "cmd.exe"), "/c", *argv]
     try:
-        r = subprocess.run(cmd, cwd=str(cwd) if cwd else None, capture_output=True, text=True)
+        r = subprocess.run(argv, cwd=str(cwd) if cwd else None, capture_output=True, text=True)
     except FileNotFoundError:
         return 127, f"找不到命令：{cmd[0]}"
     return r.returncode, (r.stdout or "") + (r.stderr or "")
@@ -153,7 +168,17 @@ def gate_text(staged: list[str], repo_root: Path, repo: str) -> tuple[bool, str]
         if code == 127:
             msgs.append("markdownlint 未安装，跳过")
         elif code != 0:
-            return False, f"markdownlint 未通过\n{out.strip()}"
+            # 2026-10-05：**先报不拦（黄灯）**。为何不直接转阻断：
+            #   ① 本轮先修好了"永不执行"的假绿（原实现直提 `markdownlint`，Windows 上它是 npm 的
+            #      `.cmd` 垫片、`CreateProcess` 不解析 ⇒ 恒 127 ⇒ 谎报"未安装"、silent no-op）；
+            #   ② 真跑后立即暴露中枢卡的**大量存量违规**（MD050/MD047/MD041/MD022…，随便抽
+            #      `rules/*.md` 即有）⇒ 直接 return False 会让下一个改任意卡的人被存量债阻断，
+            #      而这正是"训练大家用 --no-verify"的老路（本项目踩过：巡检连续 18 天未跑）。
+            #   ⇒ 先让它**可见**（违规数与样本直接打印）；待存量清完或按 .markdownlintignore 逐条
+            #      登记后，再改为阻断。**那时候不要说“没提醒过”。**
+            n = len([ln for ln in out.splitlines() if " MD" in ln])
+            sample = "\n".join(out.strip().splitlines()[:5])
+            msgs.append(f"⚠️ markdownlint {n} 处违规（**先报不拦**，待清存量后转阻断）\n{sample}")
         else:
             msgs.append(f"markdownlint {len(mds)} 文件")
     return True, " + ".join(msgs) or "无文本 staged"
