@@ -40,8 +40,9 @@ def test_supported_platforms_covers_mavis_and_deepseek():
     """mavis / deepseek 必须在适配器注册表内（本次修复的核心断言）"""
     assert "mavis" in SUPPORTED_PLATFORMS
     assert "deepseek" in SUPPORTED_PLATFORMS
-    # 原有 4 平台不得因重构被误删
-    assert {"hermes", "trae", "code", "workbuddy"} <= SUPPORTED_PLATFORMS
+    # 原有平台不得因重构被误删（trae 于 2026-10-05 用户裁定退役，已从注册表与 hub.config.yaml 同时移除）
+    assert {"hermes", "code", "workbuddy"} <= SUPPORTED_PLATFORMS
+    assert "trae" not in SUPPORTED_PLATFORMS, "trae 已退役：不得回潮到适配器注册表"
 
 
 def test_check_platforms_no_warning_for_registered_platforms(tmp_path):

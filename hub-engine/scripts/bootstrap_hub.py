@@ -21,7 +21,7 @@ STRUCTURE = [
     "retro",
     "blueprints",
     "archive",
-    ".sync/drafts/trae_draft",
+    # trae 已于 2026-10-05 退役（用户裁定降为普通工作区）：不再预建 trae_draft
     ".sync/drafts/code_draft",
     ".sync/conflicts",
     ".sync/locks",
@@ -69,9 +69,6 @@ sync:
   pending_dir: .sync/pending
   log_file: retro/log.md
 platforms:
-  trae:
-    memory_dir: "{home}/.trae-cn/memory"
-    target_file: "user_profile.md"
   code:
     memory_dir: "{home}/.codex"
     target_file: "AGENTS.md"

@@ -60,7 +60,7 @@ def test_resolve_slug_ambiguous(tmp_path):
 
 def test_allowed_platforms_from_config(tmp_path):
     root = bootstrap(tmp_path)
-    # bootstrap 模板含 trae/code/hermes/workbuddy；extra 应并入
+    # bootstrap 模板含 code/hermes/workbuddy（trae 已退役，2026-10-05 移出模板）；extra 应并入
     s = allowed_platforms(root, extra=("traework",))
     assert "traework" in s
     assert "hermes" in s or isinstance(s, set)

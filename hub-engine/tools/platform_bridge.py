@@ -124,13 +124,15 @@ class SectSeparatedAdapter(Adapter):
 #           但 router_sync 会给出 warn 提示，提醒补登记。
 ADAPTER_REGISTRY: dict[str, type[Adapter]] = {
     "hermes": SectSeparatedAdapter,  # § 分隔无标题条目
-    "trae": MdSectionAdapter,  # ## 分段
     "code": MdSectionAdapter,
     "workbuddy": MdSectionAdapter,
     "mavis": MdSectionAdapter,  # MiniMax Code（2026-09-19 显式登记）
     "deepseek": MdSectionAdapter,  # DeepSeek Harness / DSH（2026-09-19 显式登记）
     "pi": MdSectionAdapter,  # pi coding agent（2026-10-02 接入；用户级 agent dir/AGENTS.md）
 }
+# 历史：`trae` 曾在此显式登记（## 分段）。2026-10-05 用户裁定 trae 退役、降为普通工作区，
+# 已从 hub.config.yaml 的 platforms 与本注册表同时移除——**两处必须同改**，否则
+# router_sync 会报「未登记适配器」假告警（2026-09-19 mavis/deepseek 同类前例）。
 
 # 已显式登记适配器的平台集合（供 router_sync 等消费方读取）
 SUPPORTED_PLATFORMS: frozenset[str] = frozenset(ADAPTER_REGISTRY)

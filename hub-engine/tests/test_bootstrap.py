@@ -13,7 +13,7 @@ def test_bootstrap_creates_skeleton(tmp_path):
         "retro",
         "blueprints",
         "archive",
-        ".sync/drafts/trae_draft",
+        # trae 已于 2026-10-05 退役：骨架不再预建 trae_draft
         ".sync/drafts/code_draft",
         ".sync/conflicts",
         ".sync/locks",
