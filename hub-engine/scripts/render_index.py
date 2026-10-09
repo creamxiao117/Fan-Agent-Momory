@@ -186,16 +186,24 @@ def check(hub: Path | None = None) -> list[str]:
     return errs
 
 
-def write(hub: Path | None = None) -> list[str]:
-    """`--write`：渲染 L0 + 全量两个产物并落盘（单写者锁内）。"""
+def write(hub: Path | None = None, *, lock: bool = True) -> list[str]:
+    """`--write`：渲染 L0 + 全量两个产物并落盘（单写者锁内）。
+
+    `lock=False`：**调用方已持写锁**时使用（如 `sync.ingest` 在 `_WriteLock` 内先渲染
+    再提交）。`_WriteLock` 是文件锁、**不可重入**，嵌套获取会以「写锁被持续占用」告败
+    （2026-10-09 实测），所以这里必须让调用方能声明“锁已有主”。
+    """
     root = Path(hub) if hub is not None else hub_root()
     try:
         cards = scan(root)
     except RegistryError as e:
         return [f"派生失败：{e}"]
-    try:
-        from sync import _WriteLock
-    except ImportError:  # pragma: no cover - 无 sync 环境降级为无锁
+    if lock:
+        try:
+            from sync import _WriteLock
+        except ImportError:  # pragma: no cover - 无 sync 环境降级为无锁
+            from contextlib import nullcontext as _WriteLock  # type: ignore[assignment]
+    else:
         from contextlib import nullcontext as _WriteLock  # type: ignore[assignment]
 
     with _WriteLock(root):

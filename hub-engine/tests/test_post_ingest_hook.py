@@ -92,3 +92,88 @@ def test_main_dry_run_plans_blueprint_card(tmp_path, capsys):
     assert main(["--root", str(tmp_path), "--names", "bp.md", "--dry-run"]) == 0
     out = capsys.readouterr().out
     assert "dry-run" in out and "bp" in out, f"blueprint 卡未被规划: {out}"
+
+
+# ── 2026-10-09 体检回归：源与派生必须同批提交（写入流水线自锁）─────────────────
+# 背景：`sync.ingest` 先提交卡、后由 post_ingest_hook 渲染 INDEX，而 pre-commit 的 l0
+# 渲染一致性门禁会阻断“卡已暂存、INDEX 未更新”的提交 ⇒ ingest 报 `git 命令失败`、
+# hook 又因 status != ok 被跳过 ⇒ 卡与 INDEX 双双滞留未提交。另有两处叠加：
+#   ① `_apply_plan` 的 written_files 漏 EXPERIENCE_NAME（第三个渲染产物永不被暂存）；
+#   ② main() 的 `if not added: return 0` 让渲染型变更永不提交（added 只统计追加式分册）；
+#   ③ render_index.write 自取写锁，而 _WriteLock 不可重入 ⇒ 锁内渲染报“写锁被持续占用”。
+
+
+def _hub(tmp_path: Path) -> Path:
+    from scripts.bootstrap_hub import bootstrap
+
+    return bootstrap(tmp_path / "AgentMemoryHub")
+
+
+def _exp_card(root: Path, name: str, body: str = "这是一张用于回归测试的经验卡正文。") -> Path:
+    p = root / "experience" / name
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(
+        f"---\ntype: exp\ngrade: task\ntags:\n- a\nupdated: 2026-10-09\nstatus: candidate\nreuse_count: 0\n---\n\n# 标题\n\n{body}\n",
+        encoding="utf-8",
+    )
+    return p
+
+
+def _head_names(root: Path) -> str:
+    import subprocess
+
+    return subprocess.run(
+        ["git", "-C", str(root), "show", "--name-only", "--pretty=format:", "HEAD"],
+        check=True,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+    ).stdout
+
+
+def test_sync_indices_works_under_already_held_lock(tmp_path):
+    """回归③：调用方**已持写锁**时必须能渲染（`lock=False`），否则“写锁被持续占用”。
+
+    同时钉住“三个渲染产物一个都不能漏”（回归①：旧代码只暂存 L0 + FULL）。"""
+    from scripts.post_ingest_hook import sync_indices
+    from sync import _WriteLock
+
+    root = _hub(tmp_path)
+    _exp_card(root, "lock-demo.md")
+    with _WriteLock(root):
+        written = sync_indices(root, ["lock-demo.md"], lock=False)
+    assert written == {"INDEX.md", "INDEX-full.md", "INDEX-experience.md"}, written
+    # INDEX 行是 **slug（去 .md）**，不要把扩展名写进断言
+    assert "lock-demo" in (root / "INDEX-experience.md").read_text(encoding="utf-8")
+
+
+def test_main_commits_render_only_changes(tmp_path):
+    """回归②：渲染型变更（当日不再走追加式分册）也必须被提交。"""
+    root = _hub(tmp_path)
+    _exp_card(root, "hook-demo.md")
+    assert main(["--root", str(root), "--names", "hook-demo.md"]) == 0
+    assert "hook-demo" in (root / "INDEX-experience.md").read_text(encoding="utf-8")
+    names = _head_names(root)
+    assert "INDEX-experience.md" in names, names
+
+
+def test_ingest_commits_card_and_rendered_index_together(tmp_path):
+    """回归（主用例）：`ingest` 一笔提交里必须**同时**含卡与 INDEX 渲染产物。
+
+    修复前：提交只含卡 ⇒ 被 l0 渲染门禁阻断 ⇒ `stat["status"] != "ok"` 且卡滞留暂存区。"""
+    root = _hub(tmp_path)
+    d = root / ".sync" / "drafts" / "pi_draft"
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "ing-demo.md").write_text(
+        "---\ntype: exp\ngrade: task\ntags:\n- a\nupdated: 2026-10-09\n"
+        "status: candidate\nreuse_count: 0\n---\n\n# 标题\n\n入库回归测试卡正文。\n",
+        encoding="utf-8",
+    )
+    from sync import ingest
+
+    stat = ingest(root, "pi")
+    assert stat["status"] == "ok", stat
+    assert (root / "experience" / "ing-demo.md").exists()
+    names = _head_names(root)
+    assert "experience/ing-demo.md" in names, names
+    assert "INDEX-experience.md" in names, names

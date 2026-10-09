@@ -302,7 +302,9 @@ def _plan_entries(root: Path, diffs: list[dict]) -> list[tuple[str, str, str, st
 RENDERED_INDEX_FILES: frozenset[str] = frozenset({"INDEX.md", "INDEX-full.md", "INDEX-experience.md"})
 
 
-def _apply_plan(root: Path, planned: list[tuple[str, str, str, str]]) -> tuple[list[str], set[str]]:
+def _apply_plan(
+    root: Path, planned: list[tuple[str, str, str, str]], *, lock: bool = True
+) -> tuple[list[str], set[str]]:
     """逐个登记 → (已登记的 slug, 实际写入过的索引文件集合)。
 
     2026-10-01（单源改造）：**渲染产物**（INDEX.md / INDEX-full.md）一律**不再手写**——
@@ -321,15 +323,47 @@ def _apply_plan(root: Path, planned: list[tuple[str, str, str, str]]) -> tuple[l
             added.append(slug)
             written_files.add(target_name)
     if needs_render:
-        from scripts.render_index import FULL_NAME, L0_NAME
+        # 2026-10-09 体检修：`written_files` 漏了 `EXPERIENCE_NAME`（经验分册）⇒ 渲染出的
+        # INDEX-experience.md 改了工作树却从不被暂存 ⇒ 提交被 l0 渲染门禁阻断
+        # （与「提交先于渲染」叠加，卡+索引双双滞留）。三个渲染产物必须同批入库。
+        from scripts.render_index import EXPERIENCE_NAME, FULL_NAME, L0_NAME
         from scripts.render_index import write as render_write
 
-        errs = render_write(root)
+        errs = render_write(root, lock=lock)
         if errs:
             print(f"渲染失败: {errs}", file=sys.stderr)
         else:
-            written_files |= {L0_NAME, FULL_NAME}
+            written_files |= {L0_NAME, FULL_NAME, EXPERIENCE_NAME}
     return added, written_files
+
+
+def sync_indices(root: Path, names: list[str], *, lock: bool = True) -> set[str]:
+    """按卡名把 INDEX 渲染产物同步到位（**不提交**，写入方自己提交）。返回写入过的文件集。
+
+    `lock=False`：调用方**已持写锁**（`sync.ingest` 就是这样调的）——`render_index.write`
+    自己会取锁且该锁**不可重入**，嵌套会以「写锁被持续占用」告败。
+
+    2026-10-09 新增（中枢体检）：`sync.ingest` 的提交**先于**本 hook 运行，而 pre-commit 的
+    l0 渲染一致性门禁（作用域含卡文件）会因「卡已暂存、INDEX 未更新」而**阻断 ingest 自己的
+    提交** ⇒ ingest 返回 `git 命令失败`、hook 又因 `status != ok` 被跳过 ⇒ 卡与 INDEX 双双滞留
+    未提交（当日实测复现 2 次；历史靠人工补提交）。现在 ingest 在 `_commit` 之前调本函数，
+    让卡与渲染产物同批进提交。
+    """
+    planned = _plan_entries(root, _diffs_from_names(root, list(names)))
+    if not planned:
+        return set()
+    _added, written = _apply_plan(root, planned, lock=lock)
+    return written
+
+
+def _has_staged_changes(root: Path, paths: list[str]) -> bool:
+    """指定路径是否有已暂存的差异（幂等重跑时避免 `git commit` 报 nothing to commit）。"""
+    r = subprocess.run(
+        ["git", "-C", str(root), "diff", "--cached", "--quiet", "--", *paths],
+        check=False,
+        capture_output=True,
+    )
+    return r.returncode != 0
 
 
 def _commit_indices(root: Path, written_files: set[str], added: list[str]) -> bool:
@@ -344,11 +378,14 @@ def _commit_indices(root: Path, written_files: set[str], added: list[str]) -> bo
     env["GIT_AUTHOR_EMAIL"] = "hub@local"
     env["GIT_COMMITTER_NAME"] = "AgentMemoryHub"
     env["GIT_COMMITTER_EMAIL"] = "hub@local"
+    staged_paths = sorted(written_files)
     try:
-        git(root, "add", *sorted(written_files), env=env)
-        msg = f"docs(INDEX): post_ingest_hook 自动登记 {len(added)} 张新卡"
+        git(root, "add", *staged_paths, env=env)
+        if not _has_staged_changes(root, staged_paths):
+            return True  # 幂等重跑：渲染内容未变，无东西可提交
+        msg = f"docs(INDEX): post_ingest_hook 同步渲染产物（登记 {len(added)} 张新卡）"
         git(root, "commit", "-m", msg, env=env)
-    except RuntimeError as e:
+    except (RuntimeError, subprocess.CalledProcessError) as e:
         print(f"commit 失败: {e}", file=sys.stderr)
         return False
     return True
@@ -385,7 +422,11 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     added, written_files = _apply_plan(root, planned)
-    if not added:
+    # 2026-10-09：`added` 只对**非渲染**分册计数；渲染产物（INDEX.md / INDEX-full.md /
+    # INDEX-experience.md）走 `needs_render` 分支、`added` 恒为空 ⇒ 旧代码在此直接 return 0，
+    # 渲染出的 INDEX **永远不提交**（与 ingest 提交被门禁阻断叠加，造成卡与索引双双滞留）。
+    # 现在只要写盘过任何索引文件就提交。
+    if not added and not written_files:
         print(
             "post_ingest_hook: 无 INDEX 变更（可能已存在或无匹配 section）",
             file=sys.stderr,
@@ -393,7 +434,10 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if not _commit_indices(root, written_files, added):
         return 3
-    print(f"post_ingest_hook: 已登记 {len(added)} 张 → {added}（已提交 {sorted(written_files)}）")
+    if added:
+        print(f"post_ingest_hook: 已登记 {len(added)} 张 → {added}（同步 {sorted(written_files)}）")
+    else:
+        print(f"post_ingest_hook: 渲染产物已同步 {sorted(written_files)}（有变更则已提交）")
     return 0
 
 

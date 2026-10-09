@@ -4,6 +4,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 import time as _t
 from pathlib import Path
 
@@ -143,6 +144,28 @@ def _find_duplicate(root: Path, card: Card, threshold: float = 0.7) -> Card | No
         if cosine(cv, vector(c.body)) >= threshold:
             return c
     return None
+
+
+def _sync_index_before_commit(root: Path, names: list[str]) -> None:
+    """把 INDEX 渲染产物同步到本次入库的卡——**必须在 `_commit` 之前**（卡与索引同批提交）。
+
+    2026-10-09 体检（当日实测复现 2 次）：旧顺序是「先提交卡 → 再跑 post_ingest_hook 渲染
+    INDEX」，而 pre-commit 的 l0 渲染一致性门禁（作用域含卡文件）会因「卡已暂存、INDEX 未更新」
+    **阻断 ingest 自己的提交** ⇒ ingest 返回 `git 命令失败`、hook 又因 `status != ok` 被跳过
+    ⇒ 卡与 INDEX 双双滞留未提交（历史靠人工补提交）。
+
+    失败不阻断：仅告警；后续 hook/人工仍可补救（hook 现在也会提交渲染产物）。
+    """
+    try:
+        from scripts.post_ingest_hook import sync_indices  # 局部 import：避开启动期循环依赖
+
+        # lock=False：本调用点已在 `with _WriteLock(root)` 内；该锁是文件锁、**不可重入**，
+        # 而 render_index.write 自己会取锁 ⇒ 不声明“已有主”会以「写锁被持续占用」告败（实测）。
+        written = sync_indices(root, names, lock=False)
+        if written:
+            print(f"[sync] INDEX 已同步（随本次提交入库）：{sorted(written)}")
+    except Exception as e:  # noqa: BLE001 - 渲染失败不得阻断入库本身
+        print(f"[sync] INDEX 同步失败（不阻断提交）：{type(e).__name__}: {e}", file=sys.stderr)
 
 
 def _commit(root: Path, message: str, protect: set[str] | None = None) -> None:
@@ -618,6 +641,10 @@ def ingest(root: Path, platform: str, chat_fn=None, strict_lint: bool = False) -
                 else:
                     _promote_or_conflict_draft(root, platform, p, card, stat)
                 p.unlink()
+            # 2026-10-09：INDEX 必须先同步再提交（否则提交被 l0 渲染门禁阻断，见本函数 docstring）
+            changed = stat["moved_names"] + stat["promoted_names"]
+            if changed:
+                _sync_index_before_commit(root, changed)
             _commit(root, f"sync: ingest {platform} draft → hub", protect=protect)
     except RuntimeError as e:
         stat["status"] = str(e)
