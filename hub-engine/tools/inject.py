@@ -31,7 +31,7 @@ L0 铁律：①单写者锁 + 工作区守护 + ledger 审计 ②执行前先查
 
 - 涉及规则/规范/约定/经验/历史踩坑的任务，动手前**必须**先检索中枢：
   MCP `hub_bootstrap` / `hub_search`，或 `python hub-engine/engine.py retrieve --root <hub> "<问题>"`；
-  无 MCP 时读 `INDEX.md`（L0 能力图）与五权威区目录。
+  无 MCP 时读 `INDEX.md`（L0 能力图）与 6 个权威区目录。
 - 任务分型后按 `AGENTS.md` 路由补读 L1 规则卡（light/code/hub/sync/project，口径 `tools.task_tier`）。
 - 命中以「引用+摘要」进任务上下文；规则类命中须读卡全文；正文按用途分级取用（`compress_level`）。
 - **搜不到必须交回用户询问**，不得自作主张写新卡；冲突以中枢为准。

@@ -2,6 +2,18 @@
 
 按轮次（R1…）追加；每条含巡检/门禁结果、决策与进行中的事项。当前状态见 `WORK.md`。
 
+## [2026-10-09] R19 | 中枢体检（9 项发现全闭环）+ star-distill 定时任务口径变更（6→2 仓 / 近 2 周涨星前 3 内选取）
+
+- **任务侧（Hermes cron `21ff20ab3607`「每日 GitHub star-distill + T1 迭代」）**：用户指定「找 6 个候选仓库」改为**2 个**，并改为从**「近 2 周 star 增长最快」榜单前 3 名中挑 2 个**（二者领域尽量不同；每仓须报「近 2 周涨星数 + 数据来源」，拿不到可靠榜单时退化并标注证据等级为估算）。同步把该 job 的**权威区口径由 5 目录更正为 6 目录**（experience 自 2026-09-10 已进权威区，job prompt 仍写「非权威区 {experience,…}」且「不碰 experience/」——与 `common/authority.py` 相反），并把 **`grade` 写进 frontmatter 必填项**（见下 P0 的根因）。改动经 `hermes cron edit` 落盘并回读校验。
+- **背景（体检入口）**：AgentHub-DailyPatrol 2026-10-09 07:30 退出码 1，报告 `❌ audit P0=2（缺 grade 11 张 / 缺 type 1 张）`、`⚠️ encoding retro/log.md 混合行尾`、`⚠️ capability_scan 未重渲`。本轮按巡检口径逐项复现、定位根因、修复并回归。
+- **P0-a `hub gate` 三步全部失真（真 bug，已修 + 3 例回归）**：`commands/gate.py` 的 `engine_dir` 误取 `Path(__file__).parent`（= `hub-engine/commands`）⇒ ① pytest 在 `commands/` 下**收集 0 个用例（exit=5）**——门禁“全绿”其实从未跑过 777 个测试；② ruff 只扫 `commands/`（漏 tools/common/scripts）；③ `scripts/vector_bench.py` 解析成不存在的 `commands/scripts/…`（exit=2）。修为 `parent.parent`（hub-engine 根）。
+- **P0-b `--root` 相对路径传给子进程 ⇒ vector 回归静默 0%（真 bug，已修 + 1 例回归）**：子进程 cwd = hub-engine，而 `--root AgentMemoryHub` 是调用者 cwd 下相对路径 ⇒ 子进程找不到中枢，**打印 `fusion hit ratio: 0%` 且 exit 0**（假绿；修好 P0-a 后才暴露）。gate 改为 `Path(args.root).resolve()`；`vector_bench._run_real` 增加中枢根形状校验，缺根/非中枢根一律 **127**，不再产出“0% 但通过”。修复后 `hub gate` 四步真绿：**777 passed · ruff 0 · fusion 83% · lint 0**。
+- **P0-c 缺 `grade` 11 张（已回填 9 domain / 3 proven / 1 task 口径）**：9 张 blueprints 正是本 job 于 10-07/10-08 的产物 —— 根因是 **job 的 frontmatter 规格漏了 `grade`**（同类还会再积）。生产侧修：job prompt 与 `.trae/skills/github-star-distill/SKILL.md` 卡模板都补 `grade` 及取值口径（静态提炼=domain / T1 亲跑=proven）。
+- **P0-d `type: note` 卡落进 `experience/`（已修类型 + 根因修复 + 2 例回归）**：根因在 `sync.py::_move_non_authority_draft` —— 归档型草稿（exp/note/retro）**一律**改挪 `experience/`，于是 note 卡与目录不符，直接进 P0 `type_dir`。改为按 `MOVE_DIR` 选自有目录（exp→experience / note→notes / retro→retro，未知类型回落 experience，`TYPE_DIR` 语义不动）。
+- **其余四项**：⑤ `retro/log.md` 2298×CRLF + 14×裸 LF → `check_encoding --fix` 归一为 LF（该仓 `.gitattributes` 已是 `eol=lf`）；⑥ `system/capabilities.json|md` 与实测态不一致（westockdata 描述 10-06 改过）→ `capability_scan --write` 重渲，`--check` 转 PASS；⑦ 注入文本与 L0 仍写「五权威区」→ `tools/inject.py` + 根 `AGENTS.md` 改为 6 个权威区，并按 `--top` 重注入 pi 的 `AGENTS.md`（幂等复跑字节不变，注入长度仍 < 800 上限）；⑧ `scripts/patrol_runner.py` 缺 `sys.path` 引导 ⇒ `python scripts/patrol_runner.py …` 报 `ModuleNotFoundError: scripts.patrol`（.cmd 走 `-m` 才正常）→ 按本仓 62 个脚本的入口约定补引导。
+- **回归证据**：`hub gate --root AgentMemoryHub --keep-going` 全绿；完整巡检 `scripts\run_patrol.cmd` → **audit ✅ P0=0 / encoding ✅ / recall ✅ 100% / capability_scan ✅ 一致 / tests 786 passed**，总退出码 **2（仅剩告警，无 fail）**；`hub_audit.py` 0 项发现；`render_index --check` PASS；`hub_mcp_smoke` PASS（7 工具）。
+- **遗留（需用户裁定，未擅自改）**：① **workbuddy 超硬棘轮 7 token**（实测 3271 > 基线 3264，因 `westockdata` 描述 10-06 增长 28 字符）—— 按棘轮口径「只许降」，须换掉旧能力或裁剪该描述，**不得改基线**；② **SkillHub 共享技能 `skills/shared/github-star-distill/SKILL.md`（Hermes 实际挂载源）仍无 `grade` 要求**（本轮只改了本仓 `.trae/skills/` 副本，未越界改 SkillHub 仓）；③ hermes 技能常驻成本 1667 超软目标 1500（仅报告）。
+
 ## [2026-10-05] R18 | 周评测 4 项 info 发现深挖归因 + 代码修复（F1–F4）
 
 - **背景**：每周召回评测复核（10-05）产出 4 个 info 发现；本轮逐条深挖到根因并修可修项（动手前按 L0 铁律检索中枢并补读 L1 code 卡 `agent-code-discipline-iron-rule` / `chinese-text-encoding-discipline` / `multi-language-style-config`）。

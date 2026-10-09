@@ -51,7 +51,10 @@ def _repo_root() -> Path:
 L1_LIMIT = 15_000
 
 # 卡可能所在的权威区目录（顺序即查找优先级）
-_CARD_DIRS = ("rules", "methodology", "blueprints", "longterm", "projects")
+# ⚠️ 2026-10-09 体检补齐：加 `experience`——它是权威区第 6 个目录（2026-09-10 升级，
+# 事实源 `common/authority.py::AUTHORITY_DIRS`）。漏掉它会把落在 `experience/` 的 L1 卡
+# 误报成「卡不存在 ⇒ 路由悬空」（比超预算更危险的假红）。
+_CARD_DIRS = ("rules", "methodology", "blueprints", "longterm", "projects", "experience")
 
 
 def _find_card(hub: Path, slug: str) -> Path | None:

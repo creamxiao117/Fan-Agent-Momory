@@ -11,7 +11,7 @@
    **与卡数解耦**，形状由 `startup_budget.check_l0_shape` 看守）
 5. 简报 `briefs/*.md` 若有
 
-> 全量卡登记属 **L2**：五权威区见 `AgentMemoryHub/INDEX-full.md`，经验见
+> 全量卡登记属 **L2**：**6 个权威区**见 `AgentMemoryHub/INDEX-full.md`，经验见
 > `AgentMemoryHub/INDEX-experience.md`。两个 L2 分册都是 `render_index` 的渲染产物（禁止手改）；
 > 找卡优先走检索（`engine.py retrieve` / MCP `hub_search`），分册用于确定性翻阅。
 

@@ -21,8 +21,15 @@ from tools.dedup import candidates as dedup_candidates
 from tools.dedup import decide as dedup_decide
 from tools.memory_diff import record as record_diff
 
-# 权威区 type→目录映射（仅 5 个权威区）
-# exp/note/retro 类型卡不再自动提升进权威区
+# 权威区 type→目录映射
+#
+# ⚠️ 2026-10-09 体检修正：注释曾写「仅 5 个权威区 / exp 不再自动提升」。该口径已过期——
+# **experience 于 2026-09-10 由用户拍板升级进权威区**（`hub.config.yaml` 的
+# `authority_dirs` 与 `common/authority.py::AUTHORITY_DIRS` 均为 6 目录，
+# 由 `tests/test_authority_single_source.py` 看守）。本映射仍**不含 `exp`**：
+# exp 草稿走 `_move_non_authority_draft` 的**归档改挪**路径（落 `experience/`，不改 status、
+# 不做去重），这是 2026-09-02 用户指令「改挪而非删除」的保留语义；
+# {"要不要让 exp 草稿也走去重/提升主路径"} 属待用户裁定，未擅自改。
 TYPE_DIR = {
     "rule": "rules",
     "blueprint": "blueprints",
@@ -30,6 +37,12 @@ TYPE_DIR = {
     "longterm": "longterm",
     "project": "projects",
 }
+
+# 归档型草稿（不在 TYPE_DIR）的改挪目标：**按 type 选自有目录**，避免改挪顺手制造
+# type↔目录 不一致（lint 的 P0 `type_dir` 维度会报红）。
+# 依据：`common/authority.py::DIR2TYPE`（目录为准）。未知 type 仍回落 experience/（历史行为）。
+MOVE_DIR = {"exp": "experience", "note": "notes", "retro": "retro"}
+MOVE_FALLBACK_DIR = "experience"
 
 # create 自动入区的相似度第二判据（2026-09-26）：LLM 判 create 且 target=null、
 # 但 confidence 漏写（parse_decision 填 0.0）时，用**确定性相似度**兜底——
@@ -342,19 +355,23 @@ def _read_valid_draft(p: Path, stat: dict):
 
 
 def _move_non_authority_draft(root: Path, p: Path, card, stat: dict) -> None:
-    """非权威区类型（exp/note/retro）→ 不参与去重/向量/检索，**改挪 experience/ 保留**。
+    """非权威区类型（note/retro）与归档型 exp 草稿 → **改挪到自有目录**保留，绝不删除。
 
     用户指令（2026-09-02）：改挪而非删除。同名时加日期后缀，绝不覆盖既有卡。
+
+    2026-10-09 落位修正：此前**一律**挪进 `experience/`，于是 `type: note/retro` 的草稿
+    会制造 type↔目录 不一致（lint 的 P0 `type_dir` 实测报红：`pi_draft` 的一张
+    `type: note` 卡落到 `experience/`，正是本条路径所致）。现按 `MOVE_DIR` 选自有目录。
     """
-    exp_dir = root / "experience"
-    exp_dir.mkdir(parents=True, exist_ok=True)
-    dst = exp_dir / p.name
+    target_dir = root / MOVE_DIR.get(card.type, MOVE_FALLBACK_DIR)
+    target_dir.mkdir(parents=True, exist_ok=True)
+    dst = target_dir / p.name
     if dst.exists():
-        dst = exp_dir / f"{p.stem}-{today_iso()}{p.suffix}"
+        dst = target_dir / f"{p.stem}-{today_iso()}{p.suffix}"
     shutil.move(str(p), str(dst))
     stat["moved"] = stat.get("moved", 0) + 1
     stat["moved_names"].append(p.name)
-    _append_log(root, "ingest", f"非权威区 type={card.type}，改挪 experience/ 保留：{dst.name}")
+    _append_log(root, "ingest", f"非权威区 type={card.type}，改挪 {dst.parent.name}/ 保留：{dst.name}")
     record_diff(
         root,
         {
@@ -588,7 +605,7 @@ def ingest(root: Path, platform: str, chat_fn=None, strict_lint: bool = False) -
                 card = _read_valid_draft(p, stat)
                 if card is None:
                     continue
-                # (2026-09-02) 非权威区类型（exp/note/retro）→ 直接改挪 experience/ 保留
+                # (2026-09-02) 归档型 type（exp/note/retro）→ 直接改挪自有目录保留（见 MOVE_DIR）
                 if card.type not in TYPE_DIR:
                     _move_non_authority_draft(root, p, card, stat)
                     continue

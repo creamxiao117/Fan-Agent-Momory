@@ -15,8 +15,16 @@ def cmd_gate(args) -> int:
     """质量门禁编排：lint -> pytest -> ruff -> 向量召回回归。"""
     import subprocess
 
-    root = Path(args.root)
-    engine_dir = Path(__file__).resolve().parent
+    root = Path(args.root).resolve()
+    # ⚠️ 2026-10-09 体检修复（第二条路径缺陷）：子进程 cwd = hub-engine，而 `--root` 是**调用者
+    # cwd 下的相对路径**（如巡检/CI 写 `--root AgentMemoryHub`）⇒ 子进程按 hub-engine/AgentMemoryHub
+    # 找中枢，找不到就静默 0% 且 exit 0（假绿）。resolve() 先钉成绝对路径，与 cwd 无关。
+    # ⚠️ 2026-10-09 修复（体检发现）：原为 `Path(__file__).resolve().parent`（= hub-engine/commands），
+    # 三处连带失真：① pytest 在 commands/ 下**收集到 0 个用例**（exit=5）却只被记为 fail_code 11，
+    # 门禁"全绿"其实从未跑过 769 个测试；② ruff 只扫 commands/（漏掉 tools/ common/ scripts/）；
+    # ③ `engine_dir/scripts/vector_bench.py` 解析成 commands/scripts/vector_bench.py（不存在 → exit=2）。
+    # 正确根是 hub-engine（tests/ scripts/ pyproject.toml 都在这一层）。
+    engine_dir = Path(__file__).resolve().parent.parent
     steps: dict[str, tuple[list[str], int]] = {}
     results: dict[str, int] = {}
 

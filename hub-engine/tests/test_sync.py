@@ -143,8 +143,11 @@ def test_ingest_writes_memory_diff(tmp_path):
 
 
 def test_ingest_exp_draft_moves_to_experience_not_deleted(tmp_path):
-    """2026-09-02 用户指令：非权威区 type(exp/note/retro) 草稿 ingest 时
-    改挪 experience/ 而非删除——经验层内容留档备查，不参与权威区检索。"""
+    """2026-09-02 用户指令：归档型 type(exp/note/retro) 草稿 ingest 时
+    改挪自有目录而非删除——经验层内容留档备查。
+
+    （原文写"不参与权威区检索"，2026-10-09 修正：experience 已于 2026-09-10
+    升级进权威区，见 common/authority.py。）"""
     from tools.memory_diff import read_records
 
     root = bootstrap(tmp_path)
@@ -173,3 +176,27 @@ def test_ingest_exp_draft_same_name_keeps_both(tmp_path):
     preserved = [p for p in (root / "experience").glob("exp-b-*.md")]
     assert len(preserved) == 1
     assert "新经验内容" in preserved[0].read_text(encoding="utf-8")
+
+
+def test_ingest_note_draft_lands_in_notes_not_experience(tmp_path):
+    """回归（2026-10-09 体检）：note 草稿必须落 `notes/`。
+
+    旧实现把 exp/note/retro **一律**改挪 `experience/`，于是 `type: note` 的卡与
+    所在目录不符 ⇒ lint 的 P0 `type_dir` 维度报红（实测：pi_draft 的
+    `weekly-recall-conclusion-goes-to-runlog.md`）。"""
+    root = bootstrap(tmp_path)
+    _make_draft(root, "trae", "note-a.md", "这是一条待留档的笔记", ctype="note")
+    stat = ingest(root, "trae")
+    assert stat["moved"] == 1
+    assert (root / "notes" / "note-a.md").exists()
+    assert not (root / "experience" / "note-a.md").exists()
+
+
+def test_ingest_retro_draft_lands_in_retro_not_experience(tmp_path):
+    """回归（2026-10-09 体检）：retro 草稿必须落 `retro/`（口径同 DIR2TYPE）。"""
+    root = bootstrap(tmp_path)
+    _make_draft(root, "trae", "retro-a.md", "这是一条复盘归档", ctype="retro")
+    stat = ingest(root, "trae")
+    assert stat["moved"] == 1
+    assert (root / "retro" / "retro-a.md").exists()
+    assert not (root / "experience" / "retro-a.md").exists()

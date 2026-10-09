@@ -54,6 +54,9 @@ description: "内化 GitHub 项目：隔离克隆->评审判级->参考/首次�
 ```markdown
 ---
 type: blueprint      # 或 exp / methodology / rule
+grade: domain        # P0 必填：静态提炼=domain；本 hub T1 亲跑通过后=proven
+                     # （口径见 hub-engine/common/frontmatter.py 的 GRADES_BY_DIR；
+                     #   缺 grade 会直接进 hub_audit 的 P0「缺 grade」）
 tags: [从仓库抽象出的主题标签]
 updated: YYYY-MM-DD
 status: reference    # 试用通过后再改 active
@@ -83,7 +86,9 @@ gh-<owner>-<repo>（一句话来源，不搬运机密/私数据）
 - **T0→T1 验证规则**：T0 和 T1 是串联关系，T0 验证通过后才能进行 T1 验证。T0 不通则直接判定为 blocker，不再尝试 T1。
 - **T0（最小验证）**：编译仓库/安装包/运行示例 Demo，确认工具链在当前环境可用。
 - **T1（真实任务验证）**：在真实项目中集成使用，完成一个实际开发任务，验证其在业务场景中的可行性。
-- **T0 通过 + T1 通过** → 卡转 `active`（rule/methodology），登记 `INDEX.md` 并挂语义引用；同步 `build-vectors` 补向量。
+- **T0 通过 + T1 通过** → 卡转 `active`（rule/methodology），跑 `build-vectors` 补向量；
+  INDEX 由**渲染产物**维护（`cd hub-engine && python -m scripts.render_index --write`，或 ingest 的
+  `post_ingest_hook` 自动同步）——**禁止手改 INDEX**（手改会被渲染一致性门禁打红，见根 `AGENTS.md` §1.4）。
 - **T0 失败** → 保持 `reference`，记录 blocker（如缺 SDK、缺依赖），不尝试 T1。
 - **T0 通过 + T1 失败/结论不清** → 保持 `reference`，建议放弃，不转 active。
 
@@ -97,7 +102,8 @@ gh-<owner>-<repo>（一句话来源，不搬运机密/私数据）
 
 ### 5. 登记与留痕
 
-- 卡写入权威区后，`INDEX.md` 对应目录补一行登记。
+- 卡写入权威区后，**不要手改 `INDEX.md`**：跑 `cd hub-engine && python -m scripts.render_index --write`
+  （或由 `engine.py ingest` 的 `post_ingest_hook` 自动同步）让渲染产物归位。
 - `retro/log.md` 追加记录来源仓库、判级结果、试用结论。
 - 同步到需求平台：用 `engine.py sync --push --name <卡名>`（单卡，禁全量 push）。
 - 语义引用挂接后，检索即可命中该卡（检索命中后按 `适用/不适用` 决定是否引用）。

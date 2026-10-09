@@ -93,6 +93,15 @@ def test_find_card_searches_authority_dirs(tmp_path: Path):
     assert _find_card(hub, "nope") is None
 
 
+def test_find_card_includes_experience_dir(tmp_path: Path):
+    """回归（2026-10-09 体检）：experience 是权威区第 6 个目录，
+    落在里面的 L1 卡不得被误报成「卡不存在」（假红比超预算更危险）。"""
+    hub = tmp_path / "AgentMemoryHub"
+    (hub / "experience").mkdir(parents=True)
+    (hub / "experience" / "e-card.md").write_text("x", encoding="utf-8")
+    assert _find_card(hub, "e-card") is not None
+
+
 def test_main_reports_l1_lines(capsys):
     """main() 的输出应包含 L1 行（可观测），且退出码 0"""
     code = main([])

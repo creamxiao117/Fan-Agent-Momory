@@ -175,7 +175,18 @@ REAL_QUERIES = [
 
 
 def _run_real(root: Path, top_k: int, fail_below: float | None) -> int:
-    """真实中枢回归：对 ROOT 跑各通道命中率；fail_below 设置则低于即返回非零(门禁)。"""
+    """真实中枢回归：对 ROOT 跑各通道命中率；fail_below 设置则低于即返回非零(门禁)。
+
+    ⚠️ 2026-10-09 体检补齐：此前 ROOT **不存在**也照跑，所有通道命中 0
+    ⇒ 打印 `fusion hit ratio: 0%` 却 **exit 0**（假绿；`hub gate` 把相对 root
+    传给不同 cwd 的子进程时正是这种情形）。现在缺根/非中枢根一律 127（环境缺失）
+    并显式说明，绝不产出"0% 但通过"的结论。
+    """
+    from common.authority import AUTHORITY_DIRS
+
+    if not root.is_dir() or not any((root / d).is_dir() for d in AUTHORITY_DIRS):
+        print(f"【环境错误】--real 指向的路径不是中枢根（缺权威区目录）：{root}（退出码 127）")
+        return 127
     eh, ed = _score(root, [(q, w) for q, w in REAL_QUERIES], top_k)
     _print_group(f"real top_k={top_k}", len(REAL_QUERIES), eh, ed)
     hit_ratio = eh["fus"] / max(len(REAL_QUERIES), 1)

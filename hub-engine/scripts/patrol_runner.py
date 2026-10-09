@@ -29,6 +29,14 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+# 入口约定（同仓库 62 个脚本）：先把自己所在的 hub-engine 加进 sys.path，
+# 否则 `python scripts/patrol_runner.py`（路径调用而非 `-m scripts.patrol_runner`）
+# 会在 `from scripts.patrol.core import ...` 处报 ModuleNotFoundError
+# （2026-10-09 体检实测：.cmd 用 `-m` 正常，人工直接跑路径即炸）。
+_HUB_ENGINE = Path(__file__).resolve().parents[1]
+if str(_HUB_ENGINE) not in sys.path:
+    sys.path.insert(0, str(_HUB_ENGINE))
+
 from scripts.patrol.core import (
     _LOCAL_TZ,
     PatrolReport,
