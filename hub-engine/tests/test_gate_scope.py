@@ -10,7 +10,31 @@
 from pathlib import Path
 
 from common.gate_scope import GATES, classify, gates_to_run
+from scripts.gate_runner import _demangle_repo_root
 from scripts.gate_runner import main as runner_main
+
+# ── MSYS/git-bash 路径（2026-10-10 体检回归）─────────────────────
+# 症状：`MSYS_NO_PATHCONV=1` 时 git-bash 不再把 `/c/Users/...` 转成 `C:/Users/...`，
+# 原生 python 收到后解析成 `C:\c\Users\...`（多一层 c）⇒ 中枢钩子报
+# “can't open file …” ⇒ **一切提交被迫 `git commit --no-verify`**。
+# 实测复现：`MSYS_NO_PATHCONV=1 bash AgentMemoryHub/.git/hooks/pre-commit`。
+
+
+def test_hub_hook_converts_paths_via_cygpath():
+    """中枢钩子必须自己转换路径（不依赖 MSYS 的自动转换）。"""
+    src = (Path(__file__).resolve().parents[1] / "scripts" / "pre-commit-hub-cards").read_text(encoding="utf-8")
+    assert "cygpath -w" in src, "钩子丢了 cygpath 转换 ⇒ MSYS_NO_PATHCONV=1 下又会断"
+    assert "ENGINE_ARG" in src and "ROOT_ARG" in src
+    assert 'exec "$PY" "$ENGINE/scripts/gate_runner.py"' not in src, "又直接把 POSIX 形态的绝对路径交给原生 python 了"
+
+
+def test_demangle_repo_root_is_conservative(tmp_path: Path):
+    """Python 侧兼容层只做“显然的 MSYS 误加层”：能解析到就解析，否则原样返回。"""
+    # ① 真实存在的路径一律不动
+    assert _demangle_repo_root(tmp_path) == tmp_path
+    # ② 非 MSYS 形态不动
+    assert _demangle_repo_root(Path("Z:/no/such/dir")) == Path("Z:/no/such/dir")
+
 
 # ── classify：作用域判定 ───────────────────────────────────────
 

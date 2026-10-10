@@ -29,9 +29,26 @@ if [ ! -d "$ENGINE" ]; then
     exit 0
 fi
 
+# ⚠️ 2026-10-10 修：把 POSIX 路径显式转成 Windows 形式再交给原生 python.exe。
+# 为何必须：`cd ... && pwd` 得到 `/c/Users/...`；MSYS 默认会把参数自动转成 `C:/Users/...`，
+# 但调用方若设了 `MSYS_NO_PATHCONV=1`（Hermes/agent shell 常见做法，避免误改参数），
+# 转换就被关掉 ⇒ python 收到 `/c/Users/...`，在 Windows 上解析成 `C:\c\Users\...`
+# （多一层 c）⇒ “can't open file …” ⇒ **一切提交被迫 `git commit --no-verify`**
+# （实测复现：`MSYS_NO_PATHCONV=1 bash .git/hooks/pre-commit`）。
+# 这里不依赖 MSYS 的自动转换：自己用 cygpath 转（Git for Windows 自带）。
+to_win() {
+    if command -v cygpath >/dev/null 2>&1; then
+        cygpath -w "$1"
+    else
+        printf '%s' "$1"
+    fi
+}
+ENGINE_ARG="$(to_win "$ENGINE")"
+ROOT_ARG="$(to_win "$HUB_REPO_ROOT")"
+
 PY="python"
 for cand in "$ENGINE/../.venv/Scripts/python.exe" "$ENGINE/../.venv/bin/python" python3 python; do
     if [ -x "$cand" ] || command -v "$cand" >/dev/null 2>&1; then PY="$cand"; break; fi
 done
 
-exec "$PY" "$ENGINE/scripts/gate_runner.py" --repo hub --repo-root "$HUB_REPO_ROOT"
+exec "$PY" "$ENGINE_ARG/scripts/gate_runner.py" --repo hub --repo-root "$ROOT_ARG"

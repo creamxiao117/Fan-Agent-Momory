@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -239,6 +240,25 @@ def gate_l0(staged: list[str], repo_root: Path, repo: str) -> tuple[bool, str]:
 GATES_FN = {"code": gate_code, "text": gate_text, "l0": gate_l0}
 
 
+def _demangle_repo_root(path: Path) -> Path:
+    """把 MSYS 误加的盘符层去掉：`C:\\c\\Users\\…` → `C:/Users/…`。
+
+    2026-10-10 体检（实测复现）：git-bash 里 `cd … && pwd` 得 `/c/Users/…`；
+    调用方若设了 `MSYS_NO_PATHCONV=1`，MSYS 不再把参数转成 `C:/Users/…`，
+    原生 python 就把 `/c/Users/…` 解析成 `C:\\c\\Users\\…`（多一层 c）
+    ⇒ 门禁找不到仓库根而失败（中枢钩子因此“一切提交被迫 --no-verify”）。
+    钩子侧已用 `cygpath -w` 转正（首选）；本函数是**直接调用 gate_runner 时的兼容层**。
+    只当① 原路径不存在 ② 去层后的候选存在 才改，避免误改真实存在同名目录。
+    """
+    if os.name != "nt" or path.exists():
+        return path
+    m = re.fullmatch(r"([A-Za-z]):[\\/]([A-Za-z])[\\/](.*)", str(path))
+    if not m or m.group(2).lower() != "c":
+        return path
+    cand = Path(f"{m.group(2).upper()}:/{m.group(3)}")
+    return cand if cand.exists() else path
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="提交门禁执行器（3 道 scope-gated）")
     ap.add_argument("--repo", choices=("outer", "hub"), default="outer")
@@ -250,6 +270,7 @@ def main(argv: list[str] | None = None) -> int:
     repo_root = args.repo_root or (
         _HUB_ENGINE.parent if args.repo == "outer" else _HUB_ENGINE.parent / "AgentMemoryHub"
     )
+    repo_root = _demangle_repo_root(repo_root)
     paths = args.staged if args.staged is not None else staged_paths(repo_root)
     flags = classify(paths)
     todo = [g for g in ("code", "text", "l0") if flags[g]]

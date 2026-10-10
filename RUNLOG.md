@@ -2,6 +2,18 @@
 
 按轮次（R1…）追加；每条含巡检/门禁结果、决策与进行中的事项。当前状态见 `WORK.md`。
 
+## [2026-10-10] R20 | star-distill 定时任务重试成功（2 仓口径落地）+ 提交门禁在 MSYS 下必挂的修复 + 巡检首次 exit 0
+
+- **任务侧重试（用户指令“不换模型，重试”）**：`hermes cron run 21ff20ab3607` → **succeeded**（48 分 20 秒，`last_status=ok`，failure_streak 0；输出 `cron/output/21ff20ab3607/2026-10-10_08-58-54.md` 192 KB）。新口径执行情况（自报）：按 `GitHub Trending weekly` 实抓 + `gh api` 取总量/许可/推送时间，**2 候选 → 2 张 B+ 蓝图入区**（`gh-mvschwarz-openrig` / `gh-heygen-com-hyperframes`，commit `53d8263`）；两张新卡**均带 `grade: domain`**（10-07/08 那个 P0 缺 grade 的复发口子已封）。榜单 #1/#3 分别因“同类并发实例已克隆”与“查重命中（08-19 已判 A）”跳过，从 #2/#4 顺延——即“从前 3 名中取 2 个”的退化路径按 prompt 要求被明确记录。T1：2 ✅ + 1 ⚠️（commit `43c5068`），权威区 540 张 / 向量 520 条。
+- **背景事故（已查明）**：今日 07:50 的定时发射被 Hermes 自更新/重启窗口（`.hermes-update-in-progress.lock` 07:54、`.update_exit_code=1`）掐断——它其实开了头（08:00 克隆 2 仓），但 60+ 分钟无产出；随后每次 `hermes` CLI 调用都卡在 “source-update completion” 的依赖解析循环里（首次 `cron run` 因此被吞）。08:10 后恢复正常。**遗留提示**：标记文件仍在，建议择机跑一次 `hermes update` / 重启 Hermes 桌面端收尾。另：直接改 `jobs.json` 的 `next_run_at` **不会**触发运行（调度器对 recurring job 是“重错但不发射”）→ 正规触发只有 `hermes cron run` / UI “立即运行”。
+- **巡检首次全绿**：`scripts\run_patrol.cmd` → **总体退出码 0**（8/8 ✅：lint / render_check / audit P0=0 / recall 100% / reconcile ✅ / secret_sentry / encoding / tests 789 passed /（+snapshot））。reconcile 转绿是因为 workbuddy 硬棘轮已修（见下）。
+- **workbuddy 硬棘轮（已修）**：用户授权后裁 `westockdata` 的 `description` 268→230 字符（67→57 token），只压连接词与路由措辞，**9 类数据域关键词 + 3 个路由/负路由指针未丢** ⇒ 3271→**3261 ≤ 棘轮 3264**，`capability_reconcile` 由 exit 2 转 **0**；capabilities.json/md 重渲（`--check` PASS），commit `44cf765`。⚠️ 该技能来自 marketplace，日后升级覆盖 description 会再次超限。
+- **SkillHub（已按授权改）**：`skills/shared/github-star-distill/SKILL.md`（Hermes 实际挂载源）补 `grade` 为必填（含目录↔允许值表）+ INDEX 口径改为“渲染产物、禁止手改” + `trae_draft`→`<平台>_draft`；仓内 pytest 98 passed，commit `e6d4a64`。该目录被 `.trae-cn/skills`、`.workbuddy/skills` junction 挂载 ⇒ 立即生效；未改 description ⇒ 不增加平台常驻成本。
+- **提交门禁在 MSYS 下必挂（真 bug，已修 + 2 例回归）**：job 报告“一切提交被迫 `--no-verify`”。实测复现：`MSYS_NO_PATHCONV=1 bash AgentMemoryHub/.git/hooks/pre-commit` → `can't open file 'C:\c\Users\…\hub-engine\scripts\gate_runner.py'`（POSIX 形 `/c/Users/…` 被原生 python 解析成 `C:\c\…`，多一层 c）。修法：钩子（`hub-engine/scripts/pre-commit-hub-cards`）自己用 **`cygpath -w`** 转 Windows 路径（不再依赖 MSYS 自动转换），旧版“把 POSIX 绝对路径直接交给 python”的写法被回归测试禁止；另给 `gate_runner.py` 加保守兼容层 `_demangle_repo_root()`（仅当原路径不存在且去层后存在才改）。验证：同一条 `MSYS_NO_PATHCONV=1` 复现命令现在 ✅，“全部门禁通过”。
+- **行尾复发（已闭环）**：job 用 Hermes 写文件工具往 `retro/log.md` 追加条目时按 Windows 文本模式写成 CRLF（本次 CRLF×33 / 裸 LF×2317）⇒ 巡检 encoding FAIL（10-09、10-10 各一次）。已 `check_encoding --fix` 归一，并把“**收尾必跑 `check_encoding --fix`**”与“清理 `work/star/` 下**全部**残留克隆”写进 job prompt（`sync._append_log` 早已显式 `newline="\n"`，问题只在 agent 写文件工具这一侧）。
+- **顺带**：中枢仓 `40218c2` 把 10-05 起沉积的例行产物（巡检快照/日报/.sync 日志/reuse_count 自增）入库；`retro/log.md` 的 5 行新条目与 4 个 daily/snapshot 一并带上，工作区不再“半脏半净”。
+- **遗留待裁定（未擅自动）**：① job 报的 **LLM 去重链全降级**（LM Studio 400 + 无远程兜底 ⇒ ingest 每次落 conflicts、靠 `git mv` 兜底）——建议改 `system/config.yaml` 的 `local_chat.model/timeout` 或恢复 `gateway_url`，**属配置变更，待批准**；② `C:\c\Users\…`（**2026-07-17** 留下的路径错位残影，含 workbuddy 的 python env，2022 个条目）——同一路径错位病根的历史现场，建议删除（未动）；③ markdownlint 存量 2800+ 处（先报不拦）；④ OSS Insight 趋势接口自 2026-03-01 不可用 ⇒ 涨星只剩 Trending 单源，建议接 star-history/自建每日快照做第二源。
+
 ## [2026-10-09] R19 | 中枢体检（9 项发现全闭环）+ star-distill 定时任务口径变更（6→2 仓 / 近 2 周涨星前 3 内选取）
 
 - **任务侧（Hermes cron `21ff20ab3607`「每日 GitHub star-distill + T1 迭代」）**：用户指定「找 6 个候选仓库」改为**2 个**，并改为从**「近 2 周 star 增长最快」榜单前 3 名中挑 2 个**（二者领域尽量不同；每仓须报「近 2 周涨星数 + 数据来源」，拿不到可靠榜单时退化并标注证据等级为估算）。同步把该 job 的**权威区口径由 5 目录更正为 6 目录**（experience 自 2026-09-10 已进权威区，job prompt 仍写「非权威区 {experience,…}」且「不碰 experience/」——与 `common/authority.py` 相反），并把 **`grade` 写进 frontmatter 必填项**（见下 P0 的根因）。改动经 `hermes cron edit` 落盘并回读校验。
