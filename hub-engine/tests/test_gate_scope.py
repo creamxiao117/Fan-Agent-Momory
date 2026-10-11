@@ -14,8 +14,8 @@ from scripts.gate_runner import _demangle_repo_root
 from scripts.gate_runner import main as runner_main
 
 # ── MSYS/git-bash 路径（2026-10-10 体检回归）─────────────────────
-# 症状：`MSYS_NO_PATHCONV=1` 时 git-bash 不再把 `/c/Users/...` 转成 `C:/Users/...`，
-# 原生 python 收到后解析成 `C:\c\Users\...`（多一层 c）⇒ 中枢钩子报
+# 症状：`MSYS_NO_PATHCONV=1` 时 git-bash 不再把 `/c/<home>/...` 转成 `C:/<home>/...`，
+# 原生 python 收到后解析成 `C:\c\<home>\...`（多一层 c）⇒ 中枢钩子报
 # “can't open file …” ⇒ **一切提交被迫 `git commit --no-verify`**。
 # 实测复现：`MSYS_NO_PATHCONV=1 bash AgentMemoryHub/.git/hooks/pre-commit`。
 

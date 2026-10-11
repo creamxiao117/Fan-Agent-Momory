@@ -241,11 +241,11 @@ GATES_FN = {"code": gate_code, "text": gate_text, "l0": gate_l0}
 
 
 def _demangle_repo_root(path: Path) -> Path:
-    """把 MSYS 误加的盘符层去掉：`C:\\c\\Users\\…` → `C:/Users/…`。
+    r"""把 MSYS 误加的盘符层去掉：`C:\c\<home>\…` → `C:/<home>/…`。
 
-    2026-10-10 体检（实测复现）：git-bash 里 `cd … && pwd` 得 `/c/Users/…`；
-    调用方若设了 `MSYS_NO_PATHCONV=1`，MSYS 不再把参数转成 `C:/Users/…`，
-    原生 python 就把 `/c/Users/…` 解析成 `C:\\c\\Users\\…`（多一层 c）
+    2026-10-10 体检（实测复现）：git-bash 里 `cd … && pwd` 得 `/c/<home>/…`；
+    调用方若设了 `MSYS_NO_PATHCONV=1`，MSYS 不再把参数转成 `C:/<home>/…`，
+    原生 python 就把 `/c/<home>/…` 解析成 `C:\c\<home>\…`（多一层 c）
     ⇒ 门禁找不到仓库根而失败（中枢钩子因此“一切提交被迫 --no-verify”）。
     钩子侧已用 `cygpath -w` 转正（首选）；本函数是**直接调用 gate_runner 时的兼容层**。
     只当① 原路径不存在 ② 去层后的候选存在 才改，避免误改真实存在同名目录。

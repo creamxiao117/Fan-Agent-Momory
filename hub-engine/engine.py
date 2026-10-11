@@ -248,7 +248,7 @@ def _local_endpoint_chain(cfg: dict) -> list[tuple[str, str, int]]:
     chain = [
         (
             str(primary.get("url", "http://127.0.0.1:1234/v1/chat/completions")),
-            str(primary.get("model", cfg.get("default_model", "qwen2.5-coder-1.5b-instruct"))),
+            str(primary.get("model", cfg.get("default_model", ""))),
             int(primary.get("max_tokens", 2048)),
         )
     ]
@@ -266,121 +266,64 @@ def _local_endpoint_chain(cfg: dict) -> list[tuple[str, str, int]]:
 
 
 def _resolve_served_model(url: str, timeout: int) -> str:
-    """OpenAI 兼容端点的模型名：GET {base}/v1/models 取首个 id。
+    """OpenAI 兼容端点的模型名：GET {base}/v1/models 取首个 **非 embedding** 的 id。
 
     端点内已加载的模型会随看板切换而变（LM Studio 可随时换载），
     qwen/qwen3.5-9b 亦已退役，故一律不硬编码，调用前动态解析。
+
+    ⚠️ 2026-10-10 体检修正：原为“取首个 id”——而 LM Studio 的模型列表是**混排**的
+    （本机实测：gemma-4-26b-a4b-it-qat / text-embedding-bge-m3 / qwen3.8-27b-fast /
+    text-embedding-nomic-…），一旦看板把 embedding 排到首位，chat 端点就会拿到
+    embedding 模型名 ⇒ 400 ⇒ 整链静默降级（与 system/config.yaml 注释里的历史事故同型）。
+    现优先在非 embedding 的 id 里取首个；全为 embedding 时才退回原行为。
     """
+    import re
+
     import requests
 
     try:
         resp = requests.get(f"{_endpoint_base(url)}/v1/models", timeout=min(timeout, 10))
         resp.raise_for_status()
         data = resp.json().get("data") or []
-        if data and data[0].get("id"):
-            return str(data[0]["id"])
+        ids = [str(d["id"]) for d in data if isinstance(d, dict) and d.get("id")]
+        if not ids:
+            return ""
+        chat_like = [i for i in ids if not re.search(r"embed", i, re.I)]
+        return (chat_like or ids)[0]
     except Exception as e:
         print(f"[llm_chain] 解析模型名失败: {e}")
     return ""
 
 
-def _local_chain_fallback(prompt: str, hub_root: Path) -> str:
-    """本地模型降级链：LM Studio → 本地次选端点（可空）；**无远程兜底**（OmniRoute 已移除）。
-
-    逐环尝试「健康 + 调用成功」；全链失败才落到 chat()（无远程配置时即本地检索兜底）。
-    """
+def _post_chat(url: str, model: str, prompt: str, max_tokens: int, timeout: int) -> str:
+    """单次 OpenAI 兼容 chat 调用（失败向上抛，由调用方决定降级/自愈）。"""
     import requests
 
-    cfg = load_engine_config()
-    timeout = int(cfg.get("timeout", 30))
-    for url, model_name, max_tokens in _local_endpoint_chain(cfg):
-        base = _endpoint_base(url)
-        if not LLMHealthChecker.get_instance(base).is_available():
-            print(f"[llm_chain] 跳过未就绪本地端点: {base}")
-            continue
-        use_model = model_name or _resolve_served_model(url, timeout)
-        if not use_model:
-            print(f"[llm_chain] 端点模型名解析失败，跳过: {url}")
-            continue
-        try:
-            resp = requests.post(
-                url,
-                json={
-                    "model": use_model,
-                    "messages": [{"role": "user", "content": prompt}],
-                    "temperature": 0,
-                    "stream": False,
-                    "max_tokens": max_tokens,
-                },
-                timeout=timeout,
-            )
-            resp.raise_for_status()
-            text = resp.json()["choices"][0]["message"]["content"].strip()
-            print(f"[llm_chain] 命中本地端点: {base} (model={use_model})")
-            return text
-        except Exception as e:
-            print(f"[llm_chain] 本地端点失败，继续降级: {base}: {e}")
-    print("[llm_chain] 本地链全部不可用 → 无远程兜底（OmniRoute 已移除）")
-    return chat(prompt, hub_root, fallback=True)
-
-
-def _endpoint_base(url: str) -> str:
-    """从 chat/completions URL 取健康检查基址（http://h:p/v1/chat/completions → http://h:p）"""
-    return url.rsplit("/v1/", 1)[0] if "/v1/" in url else url.rsplit("/", 1)[0]
-
-
-def _local_endpoint_chain(cfg: dict) -> list[tuple[str, str, int]]:
-    """本地 LLM 端点链：① LM Studio（local_chat）② local_chat_fallbacks（可选，当前为空）。
-
-    返回 [(url, model, max_tokens)]；model 为空串 = 调用前动态解析 served model。
-    """
-    primary = cfg.get("local_chat") or {}
-    chain = [
-        (
-            str(primary.get("url", "http://127.0.0.1:1234/v1/chat/completions")),
-            str(primary.get("model", cfg.get("default_model", "qwen2.5-coder-1.5b-instruct"))),
-            int(primary.get("max_tokens", 2048)),
-        )
-    ]
-    for extra in cfg.get("local_chat_fallbacks") or []:
-        if not isinstance(extra, dict) or not extra.get("url"):
-            continue
-        chain.append(
-            (
-                str(extra["url"]),
-                str(extra.get("model") or ""),
-                int(extra.get("max_tokens", 2048)),
-            )
-        )
-    return chain
-
-
-def _resolve_served_model(url: str, timeout: int) -> str:
-    """OpenAI 兼容端点的模型名：GET {base}/v1/models 取首个 id。
-
-    端点内已加载的模型会随看板切换而变（LM Studio 可随时换载），
-    qwen/qwen3.5-9b 亦已退役，故一律不硬编码，调用前动态解析。
-    """
-    import requests
-
-    try:
-        resp = requests.get(f"{_endpoint_base(url)}/v1/models", timeout=min(timeout, 10))
-        resp.raise_for_status()
-        data = resp.json().get("data") or []
-        if data and data[0].get("id"):
-            return str(data[0]["id"])
-    except Exception as e:
-        print(f"[llm_chain] 解析模型名失败: {e}")
-    return ""
+    resp = requests.post(
+        url,
+        json={
+            "model": model,
+            "messages": [{"role": "user", "content": prompt}],
+            "temperature": 0,
+            "stream": False,
+            "max_tokens": max_tokens,
+        },
+        timeout=timeout,
+    )
+    resp.raise_for_status()
+    return resp.json()["choices"][0]["message"]["content"].strip()
 
 
 def _local_chain_fallback(prompt: str, hub_root: Path) -> str:
     """本地模型降级链：LM Studio(1234) → local_chat_fallbacks（当前为空）；**无远程兜底**（OmniRoute 已移除）。
 
     逐环尝试「健康 + 调用成功」；全链失败才落到 chat()（无远程配置时即本地检索兜底）。
-    """
-    import requests
 
+    ⚠️ 2026-10-10 体检新增「**模型名钉子腐化自愈**」：`local_chat.model` 是**硬钉**，
+    而 LM Studio 换载后该名字会 400（本机实测：`qwen3-4b-instruct-2507` 已不在服务列表
+    ⇒ 去重链整段降级、每次 ingest 只能靠人工 `git mv` 兜底）。现在首次调用失败后，
+    用动态解析到的 chat 模型**再试一次**，把「静默降级」变成「自愈一次」；仍失败才继续降级。
+    """
     cfg = load_engine_config()
     timeout = int(cfg.get("timeout", 30))
     for url, model_name, max_tokens in _local_endpoint_chain(cfg):
@@ -393,22 +336,19 @@ def _local_chain_fallback(prompt: str, hub_root: Path) -> str:
             print(f"[llm_chain] 端点模型名解析失败，跳过: {url}")
             continue
         try:
-            resp = requests.post(
-                url,
-                json={
-                    "model": use_model,
-                    "messages": [{"role": "user", "content": prompt}],
-                    "temperature": 0,
-                    "stream": False,
-                    "max_tokens": max_tokens,
-                },
-                timeout=timeout,
-            )
-            resp.raise_for_status()
-            text = resp.json()["choices"][0]["message"]["content"].strip()
+            text = _post_chat(url, use_model, prompt, max_tokens, timeout)
             print(f"[llm_chain] 命中本地端点: {base} (model={use_model})")
             return text
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - 单环失败继续降级
+            resolved = _resolve_served_model(url, timeout)
+            if resolved and resolved != use_model:
+                print(f"[llm_chain] 模型 {use_model} 调用失败（{e}）→ 自愈重试动态模型 {resolved}")
+                try:
+                    text = _post_chat(url, resolved, prompt, max_tokens, timeout)
+                    print(f"[llm_chain] 自愈命中本地端点: {base} (model={resolved})")
+                    return text
+                except Exception as e2:  # noqa: BLE001
+                    print(f"[llm_chain] 自愈仍失败: {type(e2).__name__}: {e2}")
             print(f"[llm_chain] 本地端点失败，继续降级: {base}: {e}")
     print("[llm_chain] 本地链全部不可用 → 无远程兜底（OmniRoute 已移除）")
     return chat(prompt, hub_root, fallback=True)
@@ -494,7 +434,10 @@ def smart_chat(prompt: str, hub_root: str | Path) -> str:
     root = Path(hub_root)
     cfg = load_engine_config()
     local_cfg = cfg.get("local_chat") or {}
-    local_model = str(local_cfg.get("model", "qwen2.5-coder:1.5b"))
+    # 2026-10-10：默认值由两个早已下线的模型名（qwen2.5-coder:1.5b / qwen3-4b-instruct-2507）
+    # 改为**空串 = 调用前动态解析**（`_resolve_served_model` 已过滤 embedding）——
+    # 硬编码名必然随 LM Studio 换载而腐化（本机已两次）。
+    local_model = str(local_cfg.get("model", ""))
     escalation = cfg.get("escalation") or {}
     is_dedup = "记忆库去重决策器" in prompt
     min_score = float(escalation.get("min_score", 0.80))

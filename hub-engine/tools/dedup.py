@@ -74,6 +74,10 @@ def _build_prompt(new_card, cands: list[tuple]) -> str:
         "- merge：新卡与候选高度同主题但互补，应并入候选（target 必填候选文件名）；",
         "- delete：候选已被新卡完全替代、无独立价值（target 必填候选文件名，**仅在确定性极高时**用）；",
         "不确定时优先 create/skip，绝不轻易 delete（误删代价高）。",
+        # 2026-10-10 体检加：真实本地模型（gemma-4-26b-a4b-it-qat 实测）会**漏写 confidence**，
+        # 而 parse_decision 对缺失字段填 0.0 ⇒ 正确结论被当低置信丢弃 / 落冲突区（历史同型事故）。
+        "**字段必须齐全**：action / target / reason / confidence 四个一个不能少；"
+        "confidence 必须写 0.0-1.0 的**数字**（缺字段视为无效输出）。",
         "注意：正文超长部分已截断（标有省略号），截断不影响重复性判断——请基于主题与要点判断。",
         "",
         "【新卡】",

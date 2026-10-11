@@ -2,6 +2,20 @@
 
 按轮次（R1…）追加；每条含巡检/门禁结果、决策与进行中的事项。当前状态见 `WORK.md`。
 
+## [2026-10-12] R21 | 去重链复活（本地模型重定 + 自愈）+ 涨星第二源落地 + 清 `C:\c` 残影 + 一次 prompt 截断事故
+
+- **① 去重链复活（用户批准改配置）**：根因确认——`system/config.yaml` 的 `local_chat.model` 旧值 `qwen3-4b-instruct-2507` **已不在 LM Studio 服务列表**（实测 `GET /v1/models`：gemma-4-26b-a4b-it-qat / text-embedding-bge-m3 / qwen3.8-27b-fast / text-embedding-nomic-…）⇒ chat 400 ⇒ 整链降级、ingest 每天靠人工 `git mv`。
+  · **配置**：`local_chat.model` / `fallback_chat.model` → `gemma-4-26b-a4b-it-qat`（实测 10.8s + 合法 JSON + conf 1.0；`qwen3.8-27b-fast` 13.3s 备选）。
+  · **代码（`hub-engine/engine.py`）两道防线**：`_resolve_served_model()` 现在只选**非 embedding** 的 id（列表是混排的，旧实现取首个 id 可能拿到 embedding ⇒ 400）；`_local_chain_fallback()` 调用失败即用动态模型**自愈重试一次**。另删了本地链辅助块的**整段重复定义**（同一函数两份，前者死代码）。
+  · **提示词**：`tools/dedup._build_prompt` 增加「四字段必须齐全、confidence 必填」（真实模型漏写 conf ⇒ 被当低置信丢弃）。
+  · **验证**：`smart_chat(dedup_prompt)` 27s 返回 `{action:create, confidence:1.0}`（修前该路径拿不到可解析 JSON）；新增 `tests/test_dedup.py::test_build_prompt_demands_complete_fields`。
+- **④ 涨星第二源（用户批准）**：新增 `hub-engine/scripts/star_trend_snapshot.py`（4 子命令：`record` / `record-trending` / `query` / `show`）+ `tests/test_star_trend_snapshot.py`（10 例，不触网）。账本 `AgentMemoryHub/system/run/star-trend.jsonl`（append-only JSONL，同 (day,slug) 以后写为准）；`query --days 14` 返回 `evidence=measured`（账本最早一条已 ≥14 天）/ `measured-partial`（跨度不足）/ exit 2 = 历史不足（**预期信号**，调用方退化为 Trending 周值×2 并标 claim）。已实抓 Trending 前 5 + 两张入选仓写入账本（6 条）。job prompt 已改为「①自建快照（实测）→ ②Trending 周值×2（claim）→ ③gh 搜索 → ④估算」，并加 `1b.` **每日必做快照记录**（这是 14 天后能把 claim 升为 measured 的唯一途径）。
+- **② 清 `C:\c` 残影**：`C:\c\Users\Fan-SJSS\{.workbuddy,AppData,WorkBuddy}` = **1546 文件 / 63.1 MB**，2026-07-17 由同一类「POSIX 路径被原生 exe 误解析」留下；已删（删前确认无进程在用、`C:\Users` 与 `C:\Program Files` 完好）。删后 `gate_runner._demangle_repo_root()` 的保守判据也恢复有效（实测 `C:/c/Users/...` → `C:\Users\...`）。
+- **⚠️ 事故与教训（prompt 被截断）**：10-10 那次 `hermes cron edit --prompt <多行文本>` 把 5.2K 的 prompt **截断成 72 字符**（只剩第一句）——后果是 **10-11 那天整日跑的是“一句话 prompt”**（job 仍 status=ok、仍入区 2 张卡，但丢掉了 2 仓口径/grade 必填/收尾行尾卫生）。已用**直写 jobs.json** 恢复为 5668 字符完整版（含第二源），并复现了最小用例：用 `hermes cron create` 传多行串 → 建出的 job 名与 prompt 都只剩第一行（临时探针 job 已删）。对策：改 prompt 一律走直写 + 回读校验 + 备份（本次已留 4 份 bak）；`hermes cron edit --prompt` 仅用于短单行。
+- **顺带修的两个门禁红灯**：① `hub_audit` P1 悬空指针——10-11 新卡引用了 R6e 已退役的 `context-engineering-v1`，已改为现行 `rules/context-engineering-discipline` 并注明旧卡已退役（渲染产物/能力产物同步重渲）；② `tests/test_no_hardcoded_paths` 报新代码里写了 `C:/Users/` 字面量——已改为 `<home>` 占位。
+- **验证**：`hub gate` 全绿（**793 passed** · ruff 0 · fusion 83% · lint 0）· `hub_audit` 0 项发现 · `capability_reconcile` exit 0 · `capability_scan --check` PASS（重渲后）· `star_trend_snapshot` 实跑（record-trending 5 仓 + 2 仓入账、query 正确 exit 2）· dedup 链端到端实跑通过。
+- **下一轮观察点**：①② 的效果会在 10-13 起的每日 ingest/选仓里体现（ingest 应出现真实 promoted/duplicate 判定而非全 conflicts；`star-trend.jsonl` 应每天 +N 条，至 10-24 后 `query` 应返回 measured）。
+
 ## [2026-10-10] R20 | star-distill 定时任务重试成功（2 仓口径落地）+ 提交门禁在 MSYS 下必挂的修复 + 巡检首次 exit 0
 
 - **任务侧重试（用户指令“不换模型，重试”）**：`hermes cron run 21ff20ab3607` → **succeeded**（48 分 20 秒，`last_status=ok`，failure_streak 0；输出 `cron/output/21ff20ab3607/2026-10-10_08-58-54.md` 192 KB）。新口径执行情况（自报）：按 `GitHub Trending weekly` 实抓 + `gh api` 取总量/许可/推送时间，**2 候选 → 2 张 B+ 蓝图入区**（`gh-mvschwarz-openrig` / `gh-heygen-com-hyperframes`，commit `53d8263`）；两张新卡**均带 `grade: domain`**（10-07/08 那个 P0 缺 grade 的复发口子已封）。榜单 #1/#3 分别因“同类并发实例已克隆”与“查重命中（08-19 已判 A）”跳过，从 #2/#4 顺延——即“从前 3 名中取 2 个”的退化路径按 prompt 要求被明确记录。T1：2 ✅ + 1 ⚠️（commit `43c5068`），权威区 540 张 / 向量 520 条。

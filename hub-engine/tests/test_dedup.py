@@ -30,6 +30,30 @@ def _make_draft(root: Path, platform: str, name: str, body: str, ctype: str = "l
 # ---------- tools/dedup 单元 ----------
 
 
+def test_build_prompt_demands_complete_fields(tmp_path):
+    """回归（2026-10-10）：提示词必须显式要求四个字段齐全含 **confidence 必填**。
+
+    背景：真实本地模型（gemma-4-26b-a4b-it-qat 实测）会漏写 confidence；
+    `parse_decision` 对缺失字段填 0.0 ⇒ 正确结论被当低置信丢弃 / 落冲突区。"""
+    from common.frontmatter import read_card
+    from tools.dedup import _build_prompt
+
+    root = bootstrap(tmp_path)
+    (root / "experience" / "new.md").write_text(
+        "---\ntype: exp\ngrade: task\ntags: [a]\nupdated: 2026-10-10\nstatus: candidate\n---\n\n新卡正文。\n",
+        encoding="utf-8",
+    )
+    (root / "experience" / "cand.md").write_text(
+        "---\ntype: exp\ngrade: task\ntags: [a]\nupdated: 2026-10-10\nstatus: candidate\n---\n\n候选正文。\n",
+        encoding="utf-8",
+    )
+    prompt = _build_prompt(
+        read_card(root / "experience" / "new.md"), [(read_card(root / "experience" / "cand.md"), 0.9)]
+    )
+    assert "confidence" in prompt and "必须" in prompt
+    assert "字段必须齐全" in prompt
+
+
 def test_parse_decision_valid():
     d = parse_decision('{"action":"merge","target":"a.md","reason":"同主题互补","confidence":0.9}')
     assert d["action"] == "merge"
