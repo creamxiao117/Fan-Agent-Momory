@@ -165,7 +165,26 @@ def gate_text(staged: list[str], repo_root: Path, repo: str) -> tuple[bool, str]
     mds = [p for p in staged if p.endswith(".md")]
     if mds:
         # markdownlint 走 PATH（node 工具）；缺工具不阻断（与既有口径一致）
-        code, out = _run(["markdownlint", *mds], cwd=repo_root)
+        #
+        # 2026-10-21 体检修复（假红根因）：原实现 `cwd=repo_root` 且**不带配置**。
+        #   ⇒ ① 中枢仓的 cwd = AgentMemoryHub/，而 `.markdownlint.json` / `.markdownlintignore`
+        #      在**外层仓根** ⇒ 项目**显式禁用**的规则（MD013/MD060/MD041…）仍被判违规
+        #      ⇒ 实测报出 2987 处「存量违规」噪音（其中大量是项目主动禁用的规则）。
+        #   ② 忽略清单里的路径是**相对外层仓根**写的（如 `AgentMemoryHub/INDEX.md`），
+        #      而传进去的是中枢仓相对路径 ⇒ 忽略规则根本匹配不上。
+        # 现统一：lint 根 = 外层仓根；路径按外层根拼；显式传 `-c` 配置与 `-p` 忽略清单。
+        #   （这正是该门禁想从「先报不拦」转「阻断」的前提——没有真信号就别转。）
+        lint_root = repo_root if repo == "outer" else repo_root.parent
+        prefix = "" if repo == "outer" else f"{repo_root.name}/"
+        cfg = lint_root / ".markdownlint.json"
+        ign = lint_root / ".markdownlintignore"
+        cmd = ["markdownlint"]
+        if cfg.is_file():
+            cmd += ["-c", str(cfg)]
+        if ign.is_file():
+            cmd += ["-p", str(ign)]
+        cmd += [f"{prefix}{p}" for p in mds]
+        code, out = _run(cmd, cwd=lint_root)
         if code == 127:
             msgs.append("markdownlint 未安装，跳过")
         elif code != 0:
