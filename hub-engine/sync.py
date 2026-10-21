@@ -353,6 +353,13 @@ def _ingest_stat_template() -> dict:
         "promoted": 0,
         "pending": 0,
         "duplicate": 0,
+        # 2026-10-21 体检新增：**真重复**（LLM 明确 skip 且 conf≥0.8）与
+        # 「进冲突区待人工」的区分。原先两者都记在 duplicate 里 ⇒ 日报把
+        # 「本地 LLM 不可用 ⇒ 决策降级 review ⇒ 4 张不重复的新卡被交人工」
+        # 报成「重复进冲突区 4」⇒ 运维误读为真重复（实为环境故障 + 待办）。
+        # 键名是 post_ingest_hook 的接口 ⇒ 只**新增**，不改旧键语义。
+        "duplicate_confirmed": 0,
+        "llm_undecided": 0,
         "invalid": 0,
         "status": "ok",
         "moved_names": [],  # T1 (2026-09-07): 给 post_ingest_hook 精确清单
@@ -453,8 +460,16 @@ def _handle_duplicate_draft(root: Path, platform: str, p: Path, card, cands: lis
     """
     stat["duplicate"] += 1
     decision = dedup_decide(root, card, cands, chat_fn=chat_fn) if chat_fn else None
+    # 2026-10-21 体检：区分「真重复」与「决策不可用⇒交人工」，避免日报误报。
+    if decision is None:
+        stat["llm_undecided"] += 1
+    elif decision.get("action") == "review" and decision.get("confidence", 0) == 0.0:
+        # 决策降级为 review 且置信 0（本地 LLM 不可用 / 输出无法解析）⇒ **环境故障信号**，
+        # 不是「这张卡重复」。单独计数，让巡检/日报能看见「LLM 挂了就卡住一批」。
+        stat["llm_undecided"] += 1
     # 高置信重复（LLM 明确 skip 且 ≥0.8）→ 丢弃草稿，不落冲突区
     if decision and decision["action"] == "skip" and decision["confidence"] >= 0.8:
+        stat["duplicate_confirmed"] += 1
         _append_log(root, "ingest", f"LLM 判定重复，丢弃草稿：{p.name}")
         record_diff(
             root,
@@ -651,26 +666,70 @@ def ingest(root: Path, platform: str, chat_fn=None, strict_lint: bool = False) -
     return stat
 
 
-def confirm_rule(root: Path, name: str) -> Path:
-    """人工确认后，把待确认卡片提升为 active 并按 card.type 路由入对应权威区"""
+def _find_conflict_source(root: Path, name: str) -> Path:
+    """在 `.sync/conflicts/` 里定位一张待人工终审的卡（**唯一命中**才返回）。
+
+    冲突区文件名带平台前缀（`<platform>_<name>`，如 `hermes_foo.md`），而 CLI 传的是
+    裸卡名（`foo.md`）⇒ 需按后缀匹配。多个命中 ⇒ 抛错列出候选（不猜，避免提错卡）。
+    """
+    cdir = root / ".sync" / "conflicts"
+    if not cdir.is_dir():
+        raise FileNotFoundError(f"冲突区不存在: {cdir}")
+    hits = sorted(p for p in cdir.glob(f"*_{name}") if p.is_file())
+    if not hits:
+        hits = sorted(p for p in cdir.glob(name) if p.is_file())
+    if not hits:
+        raise FileNotFoundError(f"冲突区没有待终审的卡：{name}")
+    if len(hits) > 1:
+        raise ValueError(
+            "冲突区有多张同名候选，请指定完整文件名（带平台前缀）：\n  " + "\n  ".join(p.name for p in hits)
+        )
+    return hits[0]
+
+
+def confirm_rule(root: Path, name: str, from_conflicts: bool = False) -> Path:
+    """人工确认后，把待确认卡片提升为 active 并按 card.type 路由入对应权威区。
+
+    from_conflicts=False（默认）：源 = `.sync/pending/<name>`（高风险卡的待确认区）。
+    from_conflicts=True：源 = `.sync/conflicts/<platform>_<name>`（去重分流后待人工终审的卡）。
+
+    2026-10-21 体检（实测缺口）：去重分流把**不重复**的新卡送进 `.sync/conflicts/`
+    （本地 LLM 不可用 ⇒ 决策降级 review ⇒ 交人工，语义正确），但**此前没有任何提升路径**
+    —— `confirm` 只认 `.sync/pending/`，于是冲突区的卡只能靠人手搬文件，
+    权威卡 `methodology/memory-hub-card-promotion` 写的「同名不同内容会进 conflicts/，
+    不覆盖权威区，**人工处理**」缺了可执行的「人工处理」动作。本参数补上这一步。
+
+    status 语义：草稿态 `candidate` → 转 `active`；**其余保留卡面声明**
+    （蓝图卡的 `reference` = T1 前仅参考，权威区 129 张同类卡均如此，不能一律改 active）。
+    """
     root = Path(root)
     # 兼容裸卡名：CLI 传 "post-task-recommendations" 时自动补 .md（此前必报 FileNotFoundError）
     if not name.endswith(".md"):
         name = f"{name}.md"
-    src = root / ".sync" / "pending" / name
+    src = _find_conflict_source(root, name) if from_conflicts else root / ".sync" / "pending" / name
     if not src.exists():
         raise FileNotFoundError(f"待确认文件不存在: {src}")
     protect = _snapshot_dirty(root)  # §4 工作区守护：只提交本次确认产生的改动
     with _WriteLock(root):
         card = read_card(src)
-        card.status = "active"
+        if card.status == "candidate":
+            card.status = "active"
         card.reuse_count = 0
         # 目标目录跟随卡片类型（复用 ingest 的 TYPE_DIR 映射；此前硬编码 rules/，
         # methodology/exp 等待确认卡无法经 CLI 提升）
         dst = root / TYPE_DIR.get(card.type) / name
+        if dst.exists():
+            raise FileExistsError(f"权威区已存在同名卡，未覆盖：{dst}")
         dst.parent.mkdir(parents=True, exist_ok=True)
         dst.write_text(write_card(card), encoding="utf-8")
         src.unlink()
+        # 决策留痕文件：伴生名是 `{platform}_{stem}.pred.json`（**无 .md**，见
+        # `_write_dedup_prediction`）⇒ 用 with_suffix 换后缀，勿拼 `.md.pred.json`。
+        pred = src.with_suffix(".pred.json")
+        if pred.exists():
+            pred.unlink()
         _append_log(root, "confirm", f"确认卡片：{name} → {dst.parent.name}/")
+        # 卡与 INDEX 必须**同批提交**（否则 l0 渲染门禁会因「卡已暂存、INDEX 未更新」阻断）
+        _sync_index_before_commit(root, [name])
         _commit(root, f"sync: confirm {card.type} {name}", protect=protect)
     return dst

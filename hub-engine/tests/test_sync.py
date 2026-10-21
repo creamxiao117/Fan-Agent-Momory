@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 from common.frontmatter import parse_card, write_card
 from scripts.bootstrap_hub import bootstrap
 from sync import append_log, confirm_rule, ingest
@@ -120,6 +122,76 @@ def test_confirm_bare_name_without_md_suffix(tmp_path):
     dst = confirm_rule(root, "rule-z")  # 裸名，不带 .md
     assert dst.exists()
     assert dst.name == "rule-z.md"
+
+
+def test_confirm_from_conflicts_promotes_and_keeps_blueprint_reference(tmp_path):
+    """冲突区（去重分流后待人工终审）的卡 → confirm --from-conflicts 可提升入权威区。
+
+    2026-10-21 体检补的缺口：去重分流把**不重复**的新卡送进 `.sync/conflicts/`
+    （LLM 不可用 ⇒ 决策降级 review ⇒ 交人工，语义正确），但此前**没有任何提升路径**
+    ⇒ 权威卡写的「人工处理」缺了可执行动作。此测锁定该路径。
+    """
+    root = bootstrap(tmp_path)
+    cdir = root / ".sync" / "conflicts"
+    cdir.mkdir(parents=True, exist_ok=True)
+    card = (
+        "---\n"
+        "type: blueprint\n"
+        "tags:\n"
+        "- demo\n"
+        "updated: '2026-10-21'\n"
+        "status: reference\n"
+        "grade: domain\n"
+        "reuse_count: 0\n"
+        "---\n\n"
+        "# 蓝图正文：单卡 API 与双 API 的能力边界\n"
+    )
+    (cdir / "hermes_bp-x.md").write_text(card, encoding="utf-8")
+    (cdir / "hermes_bp-x.pred.json").write_text('{"action":"review"}', encoding="utf-8")  # 伴生名无 .md
+
+    dst = confirm_rule(root, "bp-x.md", from_conflicts=True)
+    assert dst.exists()
+    assert dst.parent.name == "blueprints"  # 按 type 路由
+    assert not (cdir / "hermes_bp-x.md").exists()  # 源已消费
+    assert not (cdir / "hermes_bp-x.pred.json").exists()  # 决策留痕一并清掉
+    got = parse_card(dst.read_text(encoding="utf-8"))
+    assert got.status == "reference"  # 蓝图保留卡面声明（reference = T1 前仅参考）
+    assert got.reuse_count == 0
+
+
+def test_confirm_from_conflicts_rejects_missing_and_ambiguous(tmp_path):
+    """冲突区找不到 / 多个同名命中 → 必须报错，不猜（避免提错卡）"""
+    root = bootstrap(tmp_path)
+    cdir = root / ".sync" / "conflicts"
+    cdir.mkdir(parents=True, exist_ok=True)
+    with pytest.raises(FileNotFoundError):
+        confirm_rule(root, "not-there.md", from_conflicts=True)
+    for plat in ("hermes", "code"):
+        (cdir / f"{plat}_dup-x.md").write_text(
+            "---\ntype: exp\ntags:\n- t\nupdated: '2026-10-21'\nstatus: active\n---\n\n正文\n",
+            encoding="utf-8",
+        )
+    with pytest.raises(ValueError):
+        confirm_rule(root, "dup-x.md", from_conflicts=True)
+
+
+def test_confirm_from_conflicts_refuses_to_overwrite_authority(tmp_path):
+    """权威区已有同名卡 → 拒绝覆盖（人工确认也不许静默覆盖）"""
+    root = bootstrap(tmp_path)
+    (root / "blueprints").mkdir(parents=True, exist_ok=True)
+    (root / "blueprints" / "bp-y.md").write_text(
+        "---\ntype: blueprint\ntags:\n- t\nupdated: '2026-10-21'\nstatus: active\ngrade: domain\n---\n\n已有正文\n",
+        encoding="utf-8",
+    )
+    cdir = root / ".sync" / "conflicts"
+    cdir.mkdir(parents=True, exist_ok=True)
+    (cdir / "hermes_bp-y.md").write_text(
+        "---\ntype: blueprint\ntags:\n- t\nupdated: '2026-10-21'\nstatus: reference\ngrade: domain\n---\n\n新正文\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(FileExistsError):
+        confirm_rule(root, "bp-y.md", from_conflicts=True)
+    assert "已有正文" in (root / "blueprints" / "bp-y.md").read_text(encoding="utf-8")
 
 
 def test_append_log_uses_unified_prefix(tmp_path):

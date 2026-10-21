@@ -37,6 +37,18 @@ def cmd_ingest(args) -> int:
             print(f"    - {e['name']}: {e['errors'][:2]}")
         if len(lint_errs) > 5:
             print(f"    ... 还有 {len(lint_errs) - 5} 张（省略）")
+    # 2026-10-21 体检：把「真重复」与「决策不可用（LLM 挂/输出坏）⇒ 交人工」分开报。
+    # 原先只报 duplicate=N（=进冲突区数），会把「LLM 不可用卡住一批」误读成「一堆重复卡」。
+    llm_undecided = stat.get("llm_undecided") or 0
+    dup_confirmed = stat.get("duplicate_confirmed") or 0
+    if llm_undecided:
+        print(
+            f"  ⚠️ [去重降级] {llm_undecided} 张卡的 LLM 去重决策不可用（本地 LLM 不可用/输出无法解析）"
+            f" ⇒ 已降级为 review 并进冲突区**待人工终审**（**不是重复卡**）"
+            f"；提升命令：engine.py confirm --root <hub> <卡名> --from-conflicts"
+        )
+    if dup_confirmed:
+        print(f"  [去重] {dup_confirmed} 张卡经 LLM 高置信判定为真重复（已丢弃草稿）")
     print(stat)
 
     # T1 (2026-09-07): ingest 成功后自动跑 post_ingest_hook 同步 INDEX.md

@@ -14,6 +14,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 def cmd_confirm(args) -> int:
     from sync import confirm_rule
 
-    dst = confirm_rule(Path(args.root), args.name)
+    dst = confirm_rule(Path(args.root), args.name, from_conflicts=getattr(args, "from_conflicts", False))
     print(f"已确认并提升: {dst}")
     return 0

@@ -252,6 +252,9 @@ def run(args: argparse.Namespace) -> int:
     total_pending = 0
     total_duplicate = 0
     total_invalid = 0
+    # 2026-10-21 体检新增：真重复 vs 去重决策不可用（本地 LLM 挂）导致的待人工终审
+    total_dup_confirmed = 0
+    total_llm_undecided = 0
 
     for platform in sorted(platform_drafts.keys()):
         count = len(platform_drafts[platform])
@@ -262,12 +265,19 @@ def run(args: argparse.Namespace) -> int:
         total_pending += stat.get("pending", 0)
         total_duplicate += stat.get("duplicate", 0)
         total_invalid += stat.get("invalid", 0)
+        total_dup_confirmed += stat.get("duplicate_confirmed", 0)
+        total_llm_undecided += stat.get("llm_undecided", 0)
         status = stat.get("status", "ok")
         print(
             f"  → promoted={stat.get('promoted', 0)}  pending={stat.get('pending', 0)}"
             f"  duplicate={stat.get('duplicate', 0)}  invalid={stat.get('invalid', 0)}"
             f"  status={status}"
         )
+        if stat.get("llm_undecided"):
+            print(
+                f"  ⚠️ 去重决策不可用 {stat.get('llm_undecided')} 张（本地 LLM 不可用/输出无法解析）"
+                f" ⇒ 降级 review 进冲突区待人工终审（**不是重复卡**）"
+            )
 
     # 3. 执行 build-vectors（不阻断于 ingest 失败）
     print("\n[build-vectors] 构建向量库...")
@@ -280,6 +290,8 @@ def run(args: argparse.Namespace) -> int:
     print(f"成功提升：{total_promoted}")
     print(f"待确认：{total_pending}")
     print(f"重复进冲突区：{total_duplicate}")
+    print(f"  ├─ 其中真重复（LLM 高置信 skip）：{total_dup_confirmed}")
+    print(f"  └─ 其中去重决策不可用待人工终审：{total_llm_undecided}")
     print(f"无效卡片：{total_invalid}")
 
     # 5. 写入日志
@@ -294,6 +306,8 @@ def run(args: argparse.Namespace) -> int:
             "promoted": total_promoted,
             "pending": total_pending,
             "duplicate": total_duplicate,
+            "duplicate_confirmed": total_dup_confirmed,
+            "llm_undecided": total_llm_undecided,
             "invalid": total_invalid,
         },
     }

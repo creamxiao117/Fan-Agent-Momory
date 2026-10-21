@@ -138,8 +138,9 @@ def registry_coverage(root: Path) -> dict:
     # schema（router/schema.yaml 顶层）要求登记记录**逐一对应 skills/<name>/skill.yaml**
     # ⇒ 实现的判据是 skill.yaml（SKILL.md 只是 instructions）——2026-10-05 修：
     # 原判据只认 SKILL.md，导致"有 skill.yaml 但无 SKILL.md"的技能被误判无实现。
-    impl = {q.parent.name for q in (sh / "skills").rglob("skill.yaml")}
-    impl |= {q.parent.name for q in (sh / "skills").rglob("SKILL.md")}
+    hub_impl = {q.parent.name for q in (sh / "skills").rglob("skill.yaml")}
+    hub_impl |= {q.parent.name for q in (sh / "skills").rglob("SKILL.md")}
+    impl = set(hub_impl)
     # 2026-10-05 修（**假阳性根因**）：实现可能装在**客户端技能目录**而非 SkillHub 仓内
     # ——实测 22 条 "recorded_but_unimplemented" 里 15 条其实有客户端实现
     # （1password / obsidian / sherlock / skill-creator …）。原实现只看 SkillHub 侧，
@@ -159,6 +160,18 @@ def registry_coverage(root: Path) -> dict:
     for info in (actual(root).get("skills") or {}).values():
         installed.update(info.get("skills") or [])
 
+    # 2026-10-21 体检修复（口径过宽 ⇒ 指标永不收敛）：
+    #   原判据 `installed - recorded` 把**客户端自带/marketplace 技能**也算成
+    #   「装了却没登记」—— 实测 48 个里绝大多数是 workbuddy 官方 marketplace 装的
+    #   （darwin-skill / bailian-* / 腾讯文档 / ima-skills …）与平台本地技能，
+    #   它们**本就不该进 SkillHub 共享登记**（登记了反而污染共享路由，
+    #   且中枢自己的口径是「误命中比没有更糟」）。
+    #   ⇒ 拆成两类：
+    #     · hub_owned_unregistered：**SkillHub 仓有实现**、装到了客户端、却没进登记
+    #       —— 这才是真缺口（换机必丢、需要人写 trigger/forgot 才能登记）。
+    #     · platform_provided：客户端自带/marketplace 技能，**不要求登记**（仅可见）。
+    hub_owned_unregistered = sorted((installed & hub_impl) - recorded)
+    platform_provided = sorted(installed - hub_impl)
     unregistered = sorted(installed - recorded)
     unimplemented = sorted(recorded - impl - mcp_records)
     return {
@@ -167,6 +180,9 @@ def registry_coverage(root: Path) -> dict:
         "implemented": len(impl),
         "measured_installed": len(installed),
         "unregistered_installed": unregistered,
+        # 2026-10-21 新增：真缺口 vs 平台自带（口径拆分，见上）
+        "hub_owned_unregistered": hub_owned_unregistered,
+        "platform_provided": platform_provided,
         "recorded_but_unimplemented": unimplemented,
     }
 
@@ -331,9 +347,16 @@ def render(r: dict) -> str:
             f" / 实测装过的技能名 **{reg['measured_installed']}**"
         )
         lines.append(
-            f"- ⚠️ **实测装了但从未登记**：{len(reg['unregistered_installed'])} 个"
-            "（这些才是常驻成本的大头，且没人审过它们该不该常驻；补登记需人写 trigger/forgot，"
-            "机器从名字编路由会误命中）"
+            f"- ⚠️ **真缺口：SkillHub 有实现、装到了客户端、却从未登记**："
+            f"{len(reg.get('hub_owned_unregistered') or [])} 个"
+            "（换机必丢；补登记需人写 trigger/forgot，机器从名字编路由会误命中）"
+        )
+        if reg.get("hub_owned_unregistered"):
+            lines.append(f"  - {', '.join(reg['hub_owned_unregistered'][:30])}")
+        lines.append(
+            f"- ℹ️ **客户端自带 / marketplace 技能（不要求登记）**："
+            f"{len(reg.get('platform_provided') or [])} 个"
+            "（2026-10-21 口径拆分：原口径把它们也算成「装了没登记」，指标永不收敛）"
         )
         lines.append(
             f"- ⚠️ **登记了却查无实现**（无 SKILL.md 且非 mcp）："

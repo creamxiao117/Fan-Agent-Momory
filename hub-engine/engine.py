@@ -569,6 +569,13 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("confirm", help="确认待人工审核的卡片（按 card.type 路由入权威区）")
     p.add_argument("--root", required=True)
     p.add_argument("name")
+    # 2026-10-21 体检新增：冲突区（.sync/conflicts/）的卡此前**无提升路径**
+    # （去重分流把不重复的新卡送进去后，只能靠人手搬文件）⇒ 本开关补上人工终审动作。
+    p.add_argument(
+        "--from-conflicts",
+        action="store_true",
+        help="源改为 .sync/conflicts/<platform>_<name>（去重分流后待人工终审的卡）",
+    )
     p.set_defaults(func=cmd_confirm)
 
     p = sub.add_parser(
