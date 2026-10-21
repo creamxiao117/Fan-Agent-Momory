@@ -17,3 +17,9 @@ docs/compose/plans/2026-09-23-slim-rules-gates.md
 AgentMemoryHub/INDEX.md
 AgentMemoryHub/INDEX-full.md
 AgentMemoryHub/INDEX-experience.md
+
+# 中枢的 append-only 留痕日志（retro/log.md）：每次脚本运行都追加，**append-only 不排版**
+# 2026-10-21 体检实测：该文件存量 1603 处违规（MD024 重复标题 / MD022 空行 / MD041 首行非 H1），
+# 且每次提交只要带上它就会刷出 1603 条 ⇒ 与 INDEX-full.md 同性质（生成式内容，不手工排版）。
+# 修历史 = 篡改留痕，故按「生成物」口径排除。
+AgentMemoryHub/retro/log.md
