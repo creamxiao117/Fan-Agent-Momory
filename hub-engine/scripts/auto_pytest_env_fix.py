@@ -28,6 +28,8 @@ _HUB_ENGINE = Path(__file__).resolve().parent.parent
 if str(_HUB_ENGINE) not in sys.path:
     sys.path.insert(0, str(_HUB_ENGINE))
 
+from common.proc import run_utf8  # noqa: E402  (需先 sys.path.insert)
+
 _LOCAL_TZ = timezone(timedelta(hours=+8))
 
 # Python 标准库白名单（出现在 ModuleNotFoundError 里就不是 pip 能解决的）
@@ -72,7 +74,7 @@ _STDLIB = {
 def run_pytest(engine_dir: Path) -> tuple[int, str]:
     """运行 pytest，返回 (exit_code, combined_output)。"""
     try:
-        r = subprocess.run(
+        r = run_utf8(
             [sys.executable, "-m", "pytest", "-q", "--tb=line"],
             cwd=str(engine_dir),
             capture_output=True,

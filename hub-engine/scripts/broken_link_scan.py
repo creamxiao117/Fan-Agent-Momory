@@ -106,7 +106,15 @@ def main(argv: list[str] | None = None) -> int:
         if not link.exists() and not os.path.lexists(link):
             continue
         # **必须用 rmdir**：Remove-Item 可能穿透删目标内容
-        r = subprocess.run(["cmd", "/c", "rmdir", str(link)], capture_output=True, text=True, errors="ignore")
+        # `cmd` 的输出是控制台 OEM 码页（中文 Windows = 936），**不是 UTF-8**
+        # ⇒ 显式按 GBK 解码（同本文件上方 `dir /al` 的既有先例）；errors=ignore 防崩。
+        r = subprocess.run(
+            ["cmd", "/c", "rmdir", str(link)],
+            capture_output=True,
+            text=True,
+            encoding="gbk",
+            errors="ignore",
+        )
         gone = not os.path.lexists(link)
         removed.append({**b, "rc": r.returncode, "removed": gone})
         flag = "✅" if gone else "❌"

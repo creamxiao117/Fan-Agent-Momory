@@ -12,15 +12,18 @@ import subprocess
 import sys
 from pathlib import Path
 
-from scripts.patrol.core import (
+# ⚠️ 引导必须在 import 项目包**之前**（护栏 tests/test_script_bootstrap.py）：
+# 本模块可能被外部调度器用**绝对路径**在任意 cwd 下直接跑 ⇒ 缺引导会 ModuleNotFoundError。
+_HUB_ENGINE_DIR = Path(__file__).resolve().parents[2]
+if str(_HUB_ENGINE_DIR) not in sys.path:
+    sys.path.insert(0, str(_HUB_ENGINE_DIR))
+
+from common.proc import run_utf8  # noqa: E402  (需先 sys.path.insert)
+from scripts.patrol.core import (  # noqa: E402  (需先 sys.path.insert)
     PatrolReport,
     StepResult,
     _run_cmd,
 )
-
-_HUB_ENGINE_DIR = Path(__file__).resolve().parents[2]
-if str(_HUB_ENGINE_DIR) not in sys.path:
-    sys.path.insert(0, str(_HUB_ENGINE_DIR))
 
 
 def _check_config_integrity(root: Path) -> StepResult:
@@ -431,7 +434,7 @@ def _step_freshness_check(root: Path, engine_dir: Path) -> StepResult:
             exit_code=0,
         )
     try:
-        r = subprocess.run(
+        r = run_utf8(
             [
                 sys.executable,
                 str(script),
@@ -481,7 +484,7 @@ def _step_verify_after_fix(engine_dir: Path, fix_results: dict) -> StepResult:
     outputs: list[str] = []
     for name, cmd in cmds:
         try:
-            r = subprocess.run(cmd, capture_output=True, text=True, timeout=120, cwd=str(engine_dir))
+            r = run_utf8(cmd, capture_output=True, text=True, timeout=120, cwd=str(engine_dir))
             outputs.append(f"[{name}] exit={r.returncode}")
             if r.returncode != 0:
                 failed.append(f"{name}(exit={r.returncode})")

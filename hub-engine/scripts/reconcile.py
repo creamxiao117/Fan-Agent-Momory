@@ -26,6 +26,10 @@ import subprocess
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from common.proc import run_utf8  # noqa: E402  (需先 sys.path.insert)
+
 
 def _git(root: Path, *args: str) -> str:
     r = subprocess.run(
@@ -41,7 +45,7 @@ def _is_ancestor(root: Path, ancestor: str, descendant: str = "HEAD") -> bool:
     """ancestor 是不是 descendant 的祖先？"""
     if ancestor.startswith("TESTSHA") or len(ancestor) != 40:
         return False
-    r = subprocess.run(
+    r = run_utf8(
         ["git", "-C", str(root), "merge-base", "--is-ancestor", ancestor, descendant],
         capture_output=True,
         text=True,
@@ -52,7 +56,7 @@ def _is_ancestor(root: Path, ancestor: str, descendant: str = "HEAD") -> bool:
 def _is_valid_sha(root: Path, sha: str) -> bool:
     if len(sha) != 40 or not all(c in "0123456789abcdef" for c in sha):
         return False
-    r = subprocess.run(
+    r = run_utf8(
         ["git", "-C", str(root), "cat-file", "-t", sha],
         capture_output=True,
         text=True,
@@ -117,7 +121,7 @@ def reconcile(root: Path, dry_run: bool = False) -> dict:
             if not sha or not _is_valid_sha(root, sha):
                 continue
             # 用 replace --graft 重建：把 sha 的 parent 指向当前 HEAD
-            r = subprocess.run(
+            r = run_utf8(
                 ["git", "-C", str(root), "replace", "--graft", sha, "HEAD"],
                 capture_output=True,
                 text=True,

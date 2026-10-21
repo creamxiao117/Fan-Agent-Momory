@@ -9,6 +9,7 @@ import asyncio
 import json
 import os
 import sys
+from contextlib import suppress
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # 保证可 import tools.*
@@ -236,6 +237,18 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="hub-mcp-server")
     ap.add_argument("--root", help="中枢根目录；缺省读环境变量 AGENT_MEMORY_HUB")
     args = ap.parse_args(argv)
+
+    # 2026-10-21：stdio 通道的 stdout 也要显式钉死 UTF-8。
+    # MCP SDK 的 stdio_server 虽用 UTF-8 包装了**协议帧**，但本进程其它 print
+    # （含 traceback）走的是裸 stdout；Windows 中文环境下裸 stdout 默认 GBK，
+    # 一旦有中文异常信息就会写出非 UTF-8 字节污染协议流。
+    # 同口径见 rules/chinese-text-encoding-discipline（iron）：全链路钉死 UTF-8。
+    for _stream in (sys.stdout, sys.stderr):
+        _reconfigure = getattr(_stream, "reconfigure", None)
+        if _reconfigure is not None:
+            with suppress(ValueError, OSError):
+                _reconfigure(encoding="utf-8", errors="replace")
+
     root = args.root or os.environ.get("AGENT_MEMORY_HUB", "")
     if not root:
         print("需要 --root 或环境变量 AGENT_MEMORY_HUB", file=sys.stderr)

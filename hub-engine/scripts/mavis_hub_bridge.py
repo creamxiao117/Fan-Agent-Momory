@@ -18,10 +18,13 @@ CLI:
 import argparse
 import json
 import os
-import subprocess
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from common.proc import run_utf8  # noqa: E402  (需先 sys.path.insert)
 
 MAVIS_PLATFORM = "mavis"
 # 本检出路径：由脚本位置推导（原为写死 worktree 绝对路径，换检出即静默失效）
@@ -201,7 +204,7 @@ def cmd_sign(args) -> int:
         sort_keys=True,
     ).encode("utf-8")
 
-    sig_proc = subprocess.run(
+    sig_proc = run_utf8(
         [
             sys.executable,
             str(sign_script),

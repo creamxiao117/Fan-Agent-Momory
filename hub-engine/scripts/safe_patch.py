@@ -22,9 +22,12 @@ V1.0 (2026-09-08): T13.4 用户授权下实施 —— 规避 Hermes patch 工具
 import argparse
 import re
 import shutil
-import subprocess
 import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from common.proc import run_utf8  # noqa: E402  (需先 sys.path.insert)
 
 MAX_PATCH_LINES = 3
 MAX_PATCH_CHARS = 200  # 单行 max 字符数
@@ -120,13 +123,13 @@ def do_write(file_path: Path, old: str, new: str, replace_all: bool = False) -> 
 def lint_file(file_path: Path) -> tuple[int, str]:
     """跑 ruff check --fix + ruff format。返回 (exit_code, output)"""
     try:
-        r1 = subprocess.run(
+        r1 = run_utf8(
             ["ruff", "check", "--fix", str(file_path)],
             capture_output=True,
             text=True,
             timeout=30,
         )
-        subprocess.run(
+        run_utf8(
             ["ruff", "format", str(file_path)],
             capture_output=True,
             text=True,

@@ -18,6 +18,8 @@ REPO = Path(__file__).resolve().parents[2]
 HUB = REPO / "AgentMemoryHub"
 sys.path.insert(0, str(REPO / "hub-engine"))
 
+from common.proc import run_utf8  # noqa: E402  (需先 sys.path.insert)
+
 FIND: dict[str, list[str]] = defaultdict(list)
 
 # 目录 → 应有的 type（frontmatter.py 的搬运口径）
@@ -251,7 +253,7 @@ def audit_gates() -> None:
             bad("P1", "pre-commit 缺卡片 frontmatter 门禁（[hub-cards] 分派）")
         print("[门禁] pre-commit 走 gate_runner + 含卡片门禁 ✅")
     # index 物化检查
-    r = subprocess.run(
+    r = run_utf8(
         [sys.executable, "-m", "scripts.render_index", "--check"],
         cwd=REPO / "hub-engine",
         capture_output=True,
@@ -304,7 +306,7 @@ def audit_engine() -> None:
     for rel in ("scripts/gate_runner.py", "scripts/capability_scan.py", "scripts/task_capability.py", "engine.py"):
         f = REPO / "hub-engine" / rel
         if f.is_file():
-            r = subprocess.run(
+            r = run_utf8(
                 [
                     sys.executable,
                     "-c",

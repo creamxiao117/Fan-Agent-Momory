@@ -14,8 +14,12 @@ Hermes Agent 可直接调用 hub_safe_patch 而非原生 patch。
 
 from __future__ import annotations
 
-import subprocess
+import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from common.proc import run_utf8  # noqa: E402  (需先 sys.path.insert)
 
 # safe_patch.py 核心逻辑（内联，避免 subprocess 依赖）
 MAX_PATCH_LINES = 3
@@ -72,13 +76,13 @@ def _assess_risk(old: str, new: str) -> tuple[int, str]:
 def _lint(path: Path) -> tuple[int, str]:
     """跑 ruff check --fix && ruff format。返回 (exit_code, output)。"""
     try:
-        r1 = subprocess.run(
+        r1 = run_utf8(
             ["ruff", "check", "--fix", str(path)],
             capture_output=True,
             text=True,
             timeout=30,
         )
-        subprocess.run(
+        run_utf8(
             ["ruff", "format", str(path)],
             capture_output=True,
             text=True,

@@ -10,6 +10,8 @@ from pathlib import Path
 # 让 commands/ 子包能 import tools/ scripts/ common/
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from common.proc import run_utf8  # noqa: E402  (需先 sys.path.insert)
+
 
 def cmd_gate(args) -> int:
     """质量门禁编排：lint -> pytest -> ruff -> 向量召回回归。"""
@@ -58,7 +60,7 @@ def cmd_gate(args) -> int:
     fail = 0
     for name, (argv, fail_code) in steps.items():
         try:
-            r = subprocess.run(
+            r = run_utf8(
                 argv,
                 cwd=engine_dir,
                 capture_output=True,

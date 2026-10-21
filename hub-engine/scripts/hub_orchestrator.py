@@ -20,6 +20,7 @@ if str(_HUB_ENGINE) not in sys.path:
     sys.path.insert(0, str(_HUB_ENGINE))
 
 from common.config import external_path  # noqa: E402
+from common.proc import run_utf8  # noqa: E402
 
 # SkillHub 检出根：env SKILLHUB_ROOT → hub.config.yaml:external_paths.skillhub → 内置默认
 # （原为在 3 条命令里各写死一次盘符路径；收敛为**单点**，换机只改一处）
@@ -122,7 +123,7 @@ def run_task(task_name, args, timeout, hub_root, skillhub_root):
     use_skillhub = "tools." in args_str or "tools/" in args_str or "router/" in args_str
     cwd = skillhub_root if use_skillhub else hub_root
     try:
-        r = subprocess.run(args, capture_output=True, text=True, timeout=timeout, cwd=cwd)
+        r = run_utf8(args, capture_output=True, text=True, timeout=timeout, cwd=cwd)
         out = r.stdout.strip()[:200]
         err = r.stderr.strip()[:200]
         if r.returncode == 0:

@@ -22,6 +22,8 @@ _HUB_ENGINE_DIR = Path(__file__).resolve().parents[2]
 if str(_HUB_ENGINE_DIR) not in sys.path:
     sys.path.insert(0, str(_HUB_ENGINE_DIR))
 
+from common.proc import run_utf8  # noqa: E402  (需先 sys.path.insert)
+
 _LOCAL_TZ = timezone(timedelta(hours=+8))
 
 
@@ -143,7 +145,7 @@ def _run_cmd(
 ) -> tuple[int, str, str]:
     """运行外部命令，返回 (exit_code, stdout, stderr)。"""
     try:
-        r = subprocess.run(
+        r = run_utf8(
             argv,
             cwd=str(cwd) if cwd else None,
             capture_output=True,

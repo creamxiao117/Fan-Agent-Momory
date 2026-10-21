@@ -33,7 +33,6 @@ import argparse
 import os
 import re
 import shutil
-import subprocess
 import sys
 from pathlib import Path
 
@@ -42,6 +41,7 @@ if str(_HUB_ENGINE) not in sys.path:
     sys.path.insert(0, str(_HUB_ENGINE))
 
 from common.gate_scope import classify  # noqa: E402
+from common.proc import run_utf8  # noqa: E402  (需先 sys.path.insert)
 
 EXIT_CODE = {"code": 1, "text": 2, "l0": 3}
 
@@ -62,7 +62,7 @@ def _run(cmd: list[str], cwd: Path | None = None) -> tuple[int, str]:
     if os.name == "nt" and exe.lower().endswith((".cmd", ".bat")):
         argv = [os.environ.get("COMSPEC", "cmd.exe"), "/c", *argv]
     try:
-        r = subprocess.run(argv, cwd=str(cwd) if cwd else None, capture_output=True, text=True)
+        r = run_utf8(argv, cwd=str(cwd) if cwd else None, capture_output=True, text=True)
     except FileNotFoundError:
         return 127, f"找不到命令：{cmd[0]}"
     return r.returncode, (r.stdout or "") + (r.stderr or "")

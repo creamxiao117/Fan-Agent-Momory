@@ -6,6 +6,7 @@ V1.1 (2026-09-07): P1 拆分 — 10 个 _cmd_* 子命令搬到 commands/ 子包�
 
 import json  # noqa: F401  (chat helpers 复用)
 import sys
+from contextlib import suppress
 from datetime import datetime, timedelta, timezone  # noqa: F401  (chat helpers 复用)
 from pathlib import Path
 
@@ -505,8 +506,35 @@ def _cmd_chat(args) -> int:
     return 0
 
 
+def _force_utf8_stdio() -> None:
+    """把 stdout/stderr 钉死 UTF-8（**中枢侧根修**，不依赖客户端环境）。
+
+    2026-10-21 实测根因：Windows 中文环境（ACP=936）下，**子进程被拉起时若不带
+    `PYTHONUTF8=1`/`PYTHONIOENCODING=utf-8`**，Python 的 `sys.stdout.encoding`
+    会退回 `gbk`（实测 `child stdout encoding = gbk`）⇒ 写出的 JSON 是 **GBK 字节**；
+    而消费端（pi 扩展 `memory-hub.ts` → `pi.exec` → `data.toString()`）按 **UTF-8** 解码
+    ⇒ 每次会话的 `hub-context` 注入块**整段乱码**（实测 U+FFFD≈27/70 字符，混装
+    U+0636 等替换字符），模型读到的是不可读字节。
+
+    与 `rules/chinese-text-encoding-discipline`（iron）「全链路钉死 UTF-8，两端都显式声明
+    编码，禁依赖默认值」同口径：**不能只靠客户端设环境变量**，中枢自己的 CLI 出口
+    必须自带保证——否则任何不带 UTF-8 环境的调用方都会踩同一个坑。
+
+    `errors="replace"` 而非默认 "strict"：万一真遇到不可编码字符，宁可降级成 U+FFFD
+    也不能让整个 CLI 因 UnicodeEncodeError 崩掉（stdout 崩 ⇒ 通道静默失效）。
+    """
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is None:
+            continue
+        with suppress(ValueError, OSError):
+            reconfigure(encoding="utf-8", errors="replace")
+
+
 def main(argv: list[str] | None = None) -> int:
     import argparse
+
+    _force_utf8_stdio()
 
     parser = argparse.ArgumentParser(prog="hub", description="跨 Agent 平台统一记忆中枢")
     sub = parser.add_subparsers(dest="cmd", required=True)

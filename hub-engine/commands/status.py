@@ -17,6 +17,7 @@ from pathlib import Path
 # 让 commands/ 能 import tools/ scripts/ common/
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from common.proc import run_utf8  # noqa: E402  (需先 sys.path.insert)
 from tools.lint import _all_cards, lint
 
 
@@ -36,7 +37,7 @@ def cmd_status(args) -> int:
     pending = sorted(pending_dir.glob("*.md")) if pending_dir.is_dir() else []
     try:
         last = (
-            subprocess.run(
+            run_utf8(
                 ["git", "log", "-1", "--format=%h %ad %s", "--date=short"],
                 cwd=root,
                 capture_output=True,
