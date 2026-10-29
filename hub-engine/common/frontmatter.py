@@ -55,6 +55,19 @@ GRADES_BY_DIR: dict[str, frozenset[str]] = {
     "experience": frozenset({"task", "pitfall", "proven"}),
 }
 
+# 各目录的**默认 grade**（2026-10-29 补）：草稿经 ingest 落权威区时若未声明 grade，
+# 按目标目录补一个保守默认值，避免每天新增卡都触发 audit 的 P0「缺 grade」。
+# 取值口径：必须在该目录合法集内，取**最弱**的一档（宁可低估可信度，
+# 也不把随手记标成铁律）。逐目录合法集见 GRADES_BY_DIR。
+DEFAULT_GRADE_BY_DIR: dict[str, str] = {
+    "rules": "task",  # 合法集含 task；新规则未经确认前不当铁律
+    "blueprints": "domain",  # 合法集 {proven, domain} → 取最弱的 domain
+    "methodology": "pitfall",  # 合法集不含 task → 取最弱的 pitfall
+    "longterm": "domain",  # 合法集 {domain, task} → 取最弱的 domain
+    "projects": "domain",  # 合法集 {domain, proven} → 取最弱的 domain
+    "experience": "task",  # 合法集 {task, pitfall, proven} → 取最弱的 task
+}
+
 
 def raw_frontmatter(path: Path) -> dict:
     """读**原始** frontmatter（不经 Card 默认值兜底）；不可解析时返回 {}。

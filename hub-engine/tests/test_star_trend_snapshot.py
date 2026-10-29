@@ -6,9 +6,11 @@
 
 from __future__ import annotations
 
+from datetime import date, timedelta
 from pathlib import Path
 
 from scripts.star_trend_snapshot import (
+    DEFAULT_DAYS,
     delta,
     main,
     parse_trending,
@@ -107,8 +109,22 @@ def test_cli_query_without_history_exits_2(tmp_path: Path, capsys):
 
 
 def test_cli_query_json_measured(tmp_path: Path):
+    """跨度 ≥ days 天应给 measured（exit 0）。
+
+    ⚠️ 2026-10-29 修（时敏测试）：本测试原先写死 `2026-09-28` / `2026-10-10`
+    两个绝对日期，而 `delta()` 的窗口是相对 `date.today()` 推的
+    （floor = today - days）。于是当 today 推到 2026-10-24 之后，
+    两条记录都落在 floor 之后 → `older` 为空 → `then == now` → 返回 None → exit 2，
+    **测试必红**（实测：巡检 tests 步自 2026-10-24 起连续 6 天 1 failed）。
+
+    修法：日期改为**相对今天**计算（today-days-1 与 today-1），使
+    「跨度 ≥ days」在任何运行日都恒成立，不再随日历推移失效。
+    """
+    today = date.today()
+    day_then = (today - timedelta(days=DEFAULT_DAYS + 1)).isoformat()
+    day_now = (today - timedelta(days=1)).isoformat()
     ledger = tmp_path / "system" / "run" / "star-trend.jsonl"
-    record(ledger, "a/b", 100, day="2026-09-28")
-    record(ledger, "a/b", 300, day="2026-10-10")
+    record(ledger, "a/b", 100, day=day_then)
+    record(ledger, "a/b", 300, day=day_now)
     rc = main(["--hub", str(tmp_path), "query", "--slug", "a/b", "--days", "14", "--json"])
     assert rc == 0, "跨度 ≥ 14 天应给 measured（exit 0）"

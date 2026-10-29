@@ -24,6 +24,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
 import sys
 from datetime import datetime
@@ -155,6 +156,53 @@ def _exit_code(steps: list[StepResult]) -> int:
     return 0
 
 
+def _apply_gate_health(snapshot: dict, steps: list[StepResult]) -> None:
+    """把**本次巡检的门禁结果**计入 health_scores（原地修改 snapshot）。
+
+    背景（2026-10-29 实测）：`engine.py status --json` 产出的 health_scores 只有
+    4 个静态维度（card/skill/flywheel/llm），**完全看不见巡检自己的门禁结果**。
+    于是「audit P0=1（缺 grade 28 张）+ pytest 1 failed + recall 83%」同时存在时，
+    总分依然显示 92.0（healthy）——这正是 `acceptance-net-self-audit-criteria-redlines`
+    说的「假绿制造机」。
+
+    口径：
+      - `gate_health` = 参与门禁的关键步骤的通过率（fail 记 0 分，warn 记半分，skip 不计）。
+      - 重算 overall：把 gate_health 作为**第 5 维度**接入，权重从其余 4 维等比缩放
+        （保持 0.25/0.35/0.20/0.20 的相对比例不变，总权重仍为 1.0）。
+      - snapshot 步自身不参与（它就是产出快照的那一步）。
+
+    ⚠️ 早退条件：没有 health_scores（如 status 失败）时不动 snapshot。
+    """
+    if not snapshot:
+        return
+    scores = snapshot.get("health_scores")
+    if not isinstance(scores, dict):
+        return
+
+    # 只统计**真正的门禁步**；skip 不计（环境缺失不是质量问题）。
+    gate_steps = [s for s in steps if s.name != "snapshot" and s.status in ("pass", "fail", "warn")]
+    if not gate_steps:
+        return
+    credit = sum(1.0 if s.status == "pass" else (0.5 if s.status == "warn" else 0.0) for s in gate_steps)
+    gate_health = round((credit / len(gate_steps)) * 100, 1)
+
+    base = {
+        "card_health": float(scores.get("card_health") or 0.0),
+        "skill_health": float(scores.get("skill_health") or 0.0),
+        "flywheel_activity": float(scores.get("flywheel_activity") or 0.0),
+        "llm_health": float(scores.get("llm_health") or 0.0),
+    }
+    weights = {"card_health": 0.25, "skill_health": 0.35, "flywheel_activity": 0.20, "llm_health": 0.20}
+    # 原有 4 维权重之和 = 1.0；插入 gate_health 后按比例缩放到 (1 - GATE_WEIGHT)
+    gate_weight = 0.25
+    scale = (1.0 - gate_weight) / sum(weights.values())
+    overall = sum(base[k] * weights[k] * scale for k in base) + gate_health * gate_weight
+
+    scores["gate_health"] = gate_health
+    scores["overall"] = round(overall, 1)
+    snapshot["gate_detail"] = {s.name: s.status for s in gate_steps}
+
+
 def run_patrol(root: Path, *, dry_run: bool = False, skip_if_exists: bool = False, **_deprecated) -> PatrolReport:
     """执行 8 步巡检（顺序与实现见 `patrol/pipeline.py::STEPS`）。"""
     if skip_if_exists:
@@ -193,6 +241,15 @@ def run_patrol(root: Path, *, dry_run: bool = False, skip_if_exists: bool = Fals
                 report.snapshot = json.loads(snap_path.read_text(encoding="utf-8"))
             except (json.JSONDecodeError, OSError):
                 report.snapshot = {}
+        # 2026-10-29（P2-2）：`engine.py status --json` 的 health_scores **只看库自身的
+        # 静态指标**（卡片孤儿/技能/飞轮/LLM 延迟），看不见巡检的门禁结果——
+        # 于是 audit P0 + pytest failed 同时存在时，总分仍是 92（假绿）。
+        # 这里用**本次巡检的步骤结果**补一个 gate_health 维度并重算 overall，
+        # 同时回写快照 JSON（落盘产物必须自洽，否则明天读到的还是旧分）。
+        _apply_gate_health(report.snapshot, all_steps)
+        if report.snapshot:
+            with contextlib.suppress(OSError):
+                snap_path.write_text(json.dumps(report.snapshot, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     report.alerts = (report.snapshot or {}).get("alerts", []) or []
     report.suggestions = _generate_suggestions(report)
     return report

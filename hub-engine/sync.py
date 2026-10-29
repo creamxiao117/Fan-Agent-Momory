@@ -10,6 +10,7 @@ from pathlib import Path
 
 from common.constants import HIGH_RISK  # 高风险类型：rule + methodology
 from common.frontmatter import (
+    DEFAULT_GRADE_BY_DIR,
     Card,
     read_card,
     today_iso,
@@ -398,7 +399,15 @@ def _move_non_authority_draft(root: Path, p: Path, card, stat: dict) -> None:
     dst = target_dir / p.name
     if dst.exists():
         dst = target_dir / f"{p.stem}-{today_iso()}{p.suffix}"
-    shutil.move(str(p), str(dst))
+    # 2026-10-29 补：exp 草稿会被挪进 experience/（权威区），若草稿未声明 grade，
+    # 挪过去后就是一张「缺 grade」的卡 → audit P0 判红。此处按目标目录补保守默认值。
+    target_dir_name = target_dir.name
+    if target_dir_name in DEFAULT_GRADE_BY_DIR and not str(card.extra.get("grade") or "").strip():
+        card.extra["grade"] = DEFAULT_GRADE_BY_DIR[target_dir_name]
+        dst.write_text(write_card(card), encoding="utf-8")
+        p.unlink()
+    else:
+        shutil.move(str(p), str(dst))
     stat["moved"] = stat.get("moved", 0) + 1
     stat["moved_names"].append(p.name)
     _append_log(root, "ingest", f"非权威区 type={card.type}，改挪 {dst.parent.name}/ 保留：{dst.name}")
@@ -589,6 +598,13 @@ def _promote_or_conflict_draft(root: Path, platform: str, p: Path, card, stat: d
     # 蓝图卡保留草稿声明的 status（reference→T1 前 / active→试用后），其余低风险卡默认为 active
     if card.type != "blueprint":
         card.status = "active"
+    # 2026-10-29 补：草稿通常不声明 grade（MCP 建草稿时只有 source），落权威区后
+    # 会被 audit 的 P0「缺 grade」判红，且每天新增卡都让巡检 exit 1。
+    # 这里按**最终落盘目录**补保守默认值（DEFAULT_GRADE_BY_DIR）——不覆盖草稿已声明的值。
+    if not str(card.extra.get("grade") or "").strip():
+        default_grade = DEFAULT_GRADE_BY_DIR.get(dst_dir)
+        if default_grade:
+            card.extra["grade"] = default_grade
     dst.parent.mkdir(parents=True, exist_ok=True)
     dst.write_text(write_card(card), encoding="utf-8")
     stat["promoted"] += 1
