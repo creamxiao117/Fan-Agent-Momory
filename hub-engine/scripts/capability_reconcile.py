@@ -340,7 +340,7 @@ def _scan_query_log(
     return active, recently_used, seen, last
 
 
-def platform_activity(root: Path, days: int = 7, active_window_days: int = 30) -> dict:
+def platform_activity(root: Path, days: int = 7, active_window_days: int = 14) -> dict:
     """平台**检索活跃度**（近 N 天）——「通道死掉的早期信号」。
 
     数据源 = `.sync/state/query.log-*.jsonl`（MCP 的 hub_search/hub_bootstrap 与
@@ -349,8 +349,10 @@ def platform_activity(root: Path, days: int = 7, active_window_days: int = 30) -
     口径纪律（三条，缺一个就变成噪音）：
     1. **只对注册平台告警**（平台清单 = `hub.config.yaml` 的唯一源）——
        账本里混着 `unknown` / `e2e-test` / `tracet` 等**非平台**噪声，不是平台就不该报。
-    2. **只对「近 30 天确实在用」的平台告警**——很久没用的平台（走自己的通道）不算「死了」。
-    3. 「近 7 天零检索」且它近 30 天用过 ⇒ 通道可能已死（真信号）。
+    2. **只对「近 14 天确实在用」的平台告警**——很久没用的平台（走自己的通道）不算「死了」。
+       ⚠️ 2026-11-02 用户确认「**workbuddy 最近没使用**」⇒ 窗口由 30 天收紧为 **14 天**
+       （30 天时它会卡在边界上被误报；收紧后不再报——**「没在用」≠「通道死了」**）。
+    3. 「近 7 天零检索」且它近 14 天用过 ⇒ 通道可能已死（真信号）。
 
     返回：{window_days, active{平台: 次数}, silent[{平台, 最后一次时间}], seen{平台: 累计}}
     """
