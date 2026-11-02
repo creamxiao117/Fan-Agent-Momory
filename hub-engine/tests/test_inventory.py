@@ -174,3 +174,24 @@ def test_inventory_path_points_into_hub():
     """台账落在中枢 system 侧（与 capabilities 同区），而非引擎目录里。"""
     assert INVENTORY_PATH.parent.name == "scripts"
     assert INVENTORY_PATH.parent.parent == HUB
+
+
+def test_c8_violations_flags_dead_modules_count_growth_and_low_coverage():
+    """C8 新判据（取代「模块数 ≤75」）：四类违规各自报错（负样本）。"""
+    from scripts.inventory import MODULE_COUNT_RATCHET, c8_violations
+
+    base = [{"module": f"scripts/m{i}", "verdict": "keep", "gate_role": "pre-commit"} for i in range(3)]
+    ok = {"modules": base, "in_service_covered": 3}
+    assert c8_violations(ok) == []
+
+    dead = {"modules": base + [{"module": "scripts/dead", "verdict": "unused"}], "in_service_covered": 3}
+    assert any("unused" in e for e in c8_violations(dead))
+
+    dup = {"modules": base + [{"module": "scripts/dup", "verdict": "duplicate"}], "in_service_covered": 3}
+    assert any("职责重复" in e for e in c8_violations(dup))
+
+    low = {"modules": base + [{"module": "scripts/x", "verdict": "manual-cli"}], "in_service_covered": 1}
+    assert any("在役证据覆盖" in e for e in c8_violations(low))
+
+    many = [{"module": f"scripts/m{i}", "verdict": "keep", "gate_role": "x"} for i in range(MODULE_COUNT_RATCHET + 1)]
+    assert any("棘轮" in e for e in c8_violations({"modules": many, "in_service_covered": len(many)}))

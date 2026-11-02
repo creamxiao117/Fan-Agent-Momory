@@ -116,19 +116,39 @@ def load_ingest_outcomes() -> list[dict]:
     但叙事标题是逐卡一致的流水账（各 118 条）；只看标题可避免双通道重复计数。
 
     conflict_rate = 重复 / (入区 + 重复)：越高说明**同一知识被反复提交**，即返工/漂移越多。
+
+    ⚠️ 2026-11-02 修正（**口径 bug，量级很大**）：原实现只认「自动入区：」**一种字样**，
+    而叙事标题实际有 **6 种入区形态**（自动入区 / LLM 判 create 高置信自动入区 /
+    非权威区改挪保留 / 三仓升阶 / 人工终审放行 / …）⇒ **漏计 227 条真实入区**
+    ⇒ 周产出率被算成 0~3% ⇒ T1 判据③被误命中（曾误判「未触及根因」）。
+    现在按**全口径**统计，并把「丢弃 / 待确认」单列（它们既不是入区也不是重复）。
     """
     log_path = RETRO / "log.md"
     if not log_path.exists():
         return []
     per_day: dict[str, dict[str, int]] = {}
-    pat = re.compile(r"^## \[(\d{4}-\d{2}-\d{2})\] ingest \| (自动入区|重复内容进冲突区)")
+    # 入区：多种叙事字样（**必须全口径**，否则产出率失真）
+    promoted_markers = (
+        "自动入区",
+        "改挪 experience/ 保留",
+        "升阶",
+        "人工终审放行",
+    )
+    pat = re.compile(r"^## \[(\d{4}-\d{2}-\d{2})\] ingest \| (.+)$")
     for line in log_path.read_text(encoding="utf-8-sig", errors="ignore").splitlines():
         m = pat.match(line)
         if not m:
             continue
-        date, kind = m.group(1), m.group(2)
-        rec = per_day.setdefault(date, {"promoted": 0, "conflict": 0})
-        rec["promoted" if kind == "自动入区" else "conflict"] += 1
+        date, msg = m.group(1), m.group(2)
+        rec = per_day.setdefault(date, {"promoted": 0, "conflict": 0, "discarded": 0, "pending": 0})
+        if "重复内容进冲突区" in msg:
+            rec["conflict"] += 1
+        elif "LLM 判定重复，丢弃草稿" in msg:
+            rec["discarded"] += 1
+        elif "待确认" in msg:
+            rec["pending"] += 1
+        elif any(k in msg for k in promoted_markers):
+            rec["promoted"] += 1
     out = []
     for date in sorted(per_day):
         rec = per_day[date]
@@ -138,6 +158,8 @@ def load_ingest_outcomes() -> list[dict]:
                 "date": date,
                 "promoted": rec["promoted"],
                 "conflict": rec["conflict"],
+                "discarded": rec["discarded"],
+                "pending": rec["pending"],
                 "total": tot,
                 "conflict_rate": (rec["conflict"] / tot) if tot else 0.0,
             }
@@ -341,28 +363,39 @@ def _print_section_d(ing: list[dict]) -> None:
     weeks: dict[str, dict[str, int]] = {}
     for r in ing:
         key = _iso_week(r["date"])
-        w = weeks.setdefault(key, {"promoted": 0, "conflict": 0})
+        w = weeks.setdefault(key, {"promoted": 0, "conflict": 0, "discarded": 0, "pending": 0})
         w["promoted"] += r["promoted"]
         w["conflict"] += r["conflict"]
-    print(f"{'周':12s} {'入区':>5s} {'重复':>5s} {'合计':>5s} {'重复率':>7s}  柱状")
-    print("-" * 66)
+        w["discarded"] += r.get("discarded", 0)
+        w["pending"] += r.get("pending", 0)
+    print(
+        f"{'周':12s} {'入区':>5s} {'重复':>5s} {'丢弃':>5s} {'待确认':>6s} {'合计':>5s} {'重复率':>7s} {'产出率':>7s}  柱状"
+    )
+    print("-" * 84)
     for k in sorted(weeks):
         w = weeks[k]
         tot = w["promoted"] + w["conflict"]
         rate = (w["conflict"] / tot) if tot else 0.0
+        out_rate = (w["promoted"] / tot) if tot else 0.0
         bar = "█" * round(rate * 30)
-        print(f"{k:12s} {w['promoted']:>5d} {w['conflict']:>5d} {tot:>5d} {rate:>6.0%}  {bar}")
+        print(
+            f"{k:12s} {w['promoted']:>5d} {w['conflict']:>5d} {w['discarded']:>5d} {w['pending']:>6d} "
+            f"{tot:>5d} {rate:>6.0%} {out_rate:>6.0%}  {bar}"
+        )
 
     tot_p = sum(r["promoted"] for r in ing)
     tot_c = sum(r["conflict"] for r in ing)
     tot = tot_p + tot_c
     if tot:
         print()
-        print(f"  总计：入区 {tot_p} / 重复 {tot_c} / 合计 {tot} → 总体重复率 {tot_c / tot:.0%}")
+        print(
+            f"  总计：入区 {tot_p} / 重复 {tot_c} / 合计 {tot} → 总体重复率 {tot_c / tot:.0%}"
+            f" · **产出率 {tot_p / tot:.0%}**"
+        )
     n_post = sum(1 for r in ing if r["date"] >= RULE_REFORM_DATE)
     print()
-    print("  读法：重复率高 = 同一知识被反复提交（返工/漂移）；稳定下降说明去重生效。")
-    print(f"  注：改造日（{RULE_REFORM_DATE}）之后仅 {n_post} 天——仍不足以断言趋势。")
+    print("  读法：**产出率** = 入区/(入区+重复)（≥40% 为流入恢复）；**重复率**高 = 同一知识被反复提交。")
+    print(f"  注：改造日（{RULE_REFORM_DATE}）之后 {n_post} 天。")
 
 
 def _iso_week(date_str: str) -> str:

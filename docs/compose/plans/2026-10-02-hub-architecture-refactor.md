@@ -18,6 +18,7 @@
 > · ✅ **C6 现已通过**：grade 覆盖 **616/616 = 100%**；每型 iron ≤3（code 3 / hub 3 / sync 2）；L1 由 `grade=iron` 派生、`tiers` 归型。
 > · ✅ **C7 现已通过**：`discovery_cost` 帽已定（硬帽 = 逐平台棘轮；方向 = 现状 × 0.6）+ `capability_reconcile` 出**降级路线图**。
 > · ⚠️ **C8 裁定为不可达**：`unused` = **0**（无死模块可删）；唯一被声明为重复的 2 个模块经取证**在役**（`audit_index` 是 `hub audit` CLI 实现体、`index_consistency` 是 INDEX 正则单一源）⇒ 声明已撤销。裁定表：`docs/compose/reports/2026-11-02-module-adjudication.md`。
+> · ✅ **C8 已重新定义（2026-11-02 晚，可自动判定）**：原「模块数 ≤75」按证据不可达 ⇒ 换成四条**机器可判**的判据（`hub-engine/scripts/inventory.py::c8_violations`）：① `unused` = 0（无死模块）② `duplicate` = 0（无「声明了却没退役」的重复）③ **在役证据覆盖 ≥ 90%**（实测 93.9%；为此尺子补了「`-m scripts.X` 子进程调用」形态 ⇒ 覆盖从 71% 升到 93.9%）④ **模块数棘轮不增长**（基线 114，新增须等量退役）。⑤ `rules/` ≤ 13（已达成）。
 > · ✅ **Task 8/11 达成**：`rules/` **23 → 13**（10 张非铁律卡**迁入** `methodology/`，**slug 保留** ⇒ 召回零损伤；**不合并** —— 中枢证据卡 `experience/pi-card-merge-hurts-recall.md` 记载 2026-10-02 同族合并曾致 golden 唯一性失败 + recall 98%→86%）；`methodology/agent-tool-inventory.md` 已清空手写清单数字。
 > · ⚠️ **Task 13 仍部分**（grade 覆盖虽已 100%，但**抽样复核**未做，标注依据为规则映射）。
 

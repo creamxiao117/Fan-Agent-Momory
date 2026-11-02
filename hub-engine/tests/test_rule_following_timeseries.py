@@ -188,3 +188,32 @@ def test_post_window_is_all_days_after_reform_not_hardcoded_two_days():
     assert len(post) == 20, f"后窗口应含改造日之后的全部有数据天，实际 {len(post)}"
     assert all(r["date"] > ts.RULE_REFORM_DATE for r in post)
     assert len(post) >= ts.POST_WINDOW_MIN_DAYS, "后窗口必须能跨过判据下限（≥10 天）"
+
+
+def test_ingest_outcomes_counts_all_promotion_phrasings(monkeypatch, tmp_path):
+    """入区必须**全口径**统计（回归：2026-11-02 实测只认「自动入区」一种字样，
+    漏计 227 条真实入区 ⇒ 周产出率被算成 0~3% ⇒ T1 判据被误命中）。
+
+    现实里叙事标题有 4 类入区形态 + 1 类丢弃 + 1 类待确认。
+    """
+    _retro_log(
+        monkeypatch,
+        tmp_path,
+        "## [2026-10-06] ingest | 自动入区：a.md\n"
+        "## [2026-10-06] ingest | LLM 判 create 高置信，自动入区：b.md\n"
+        "## [2026-10-06] ingest | 非权威区 type=exp，改挪 experience/ 保留：c.md\n"
+        "## [2026-10-06] ingest | 三仓 blueprint 升阶：d.md\n"
+        "## [2026-10-06] ingest | 人工终审放行，冲突区手动提升：e.md\n"
+        "## [2026-10-06] ingest | LLM 判定重复，丢弃草稿：f.md\n"
+        "## [2026-10-06] ingest | 新规则待确认：g.md\n"
+        "## [2026-10-06] ingest | 重复内容进冲突区：h.md\n",
+    )
+    rows = ts.load_ingest_outcomes()
+    assert len(rows) == 1
+    r = rows[0]
+    assert r["promoted"] == 5, f"4 类入区字样 + 自动入区 = 5，实际 {r['promoted']}"
+    assert r["conflict"] == 1
+    assert r["discarded"] == 1
+    assert r["pending"] == 1
+    # 产出率只按「入区 /（入区+重复）」算（丢弃/待确认既不是入区也不是重复）
+    assert abs(r["conflict_rate"] - 1 / 6) < 1e-9

@@ -172,12 +172,40 @@ SCHED_GLOBS = (
     "scripts/*.ps1",
     "hub-engine/scripts/*.cmd",
     "hub-engine/scripts/*.bat",
+    # ⚠️ 2026-11-02 补：`.py` 里的**子进程调用形态**也是调用证据。
+    #   巡检/定时链的绝大多数 CLI 都不是被 import，而是被
+    #   `[sys.executable, "-m", "scripts.recall_regression", ...]` 拉起
+    #   ⇒ 只扫 .cmd 会把 30+ 个在役 CLI 误判成「无在役证据」（实测覆盖 71%）。
+    "hub-engine/scripts/*.py",
+    "hub-engine/commands/*.py",
+    "hub-engine/tools/*.py",
 )
 ARTIFACT_DIRS = (
     HUB / "retro",
     HUB / ".sync",
     HUB / "system" / "run",
 )
+
+# ── C8 新判据（2026-11-02 重新定义，取代原「模块数 ≤75」）──────────────────
+#
+# 原判据「105 → ≤75」是重构前的**估算**：实测 `unused`（三无模块）= **0**，
+# 且唯一被声明为重复的 2 个模块经取证**在役**（`audit_index` 是 `hub audit` CLI 实现体、
+# `index_consistency` 是 INDEX 正则单一源）⇒ **按证据删不出 38 个模块**；
+# 硬删在役模块 = 删门禁 / 删定时任务 ⇒ 与「计数是结果，不是目标」相违。
+#
+# 新判据（**全部可自动判定**）：
+#   ① `unused` = 0          —— 没有死模块
+#   ② `duplicate` = 0       —— 没有「声明了却没退役」的职责重复
+#   ③ 在役证据覆盖 ≥ 90%    —— 每个模块都有「谁在用它」的证据
+#   ④ 模块数**棘轮不增长**   —— 基线 114；新增须等量退役（只许不增）
+#   ⑤ `rules/` ≤ 13（已达成）· 门禁/测试/渲染全绿
+MODULE_COUNT_RATCHET = 114  # 基线 = 2026-11-02 实测
+IN_SERVICE_COVERAGE_MIN = 0.90
+
+
+def in_service_evidence(m: dict) -> bool:
+    """该模块是否有**在役证据**（谁在用它）。"""
+    return bool(m.get("gate_role") or m.get("refs_code") or m.get("refs_scheduled") or m.get("last_run"))
 
 
 def _norm(stem: str) -> str:
@@ -186,10 +214,12 @@ def _norm(stem: str) -> str:
 
 
 def scheduled_refs(stem: str) -> list[str]:
-    """编排入口（.cmd/.bat/.ps1）里提到本模块的文件名 ⇒ **在役证据**。
+    """**调用证据**：谁在拉起本模块 ⇒ 在役依据。
 
-    只认两种形态：`foo.py`（直接调脚本）与 `scripts.foo`（`-m` 形态）——
-    避免把散文里出现的词误判成调用。
+    认三种形态（避免把散文里出现的词误判成调用）：
+      ① `x.py`（路径形态）
+      ② `scripts.x`（`-m` 模块形态，**巡检/定时链的主形态**）
+      ③ 上述形态出现在 .cmd/.bat/.ps1 里（定时链脚本）
     """
     out: list[str] = []
     for g in SCHED_GLOBS:
@@ -477,6 +507,8 @@ def build() -> dict:
         "declarations": DECLARED_DUPLICATES,
         "declaration_errors": verify_declarations(keys),
         "totals": {"modules": len(rows), **dict(sorted(counts.items()))},
+        "in_service_covered": sum(1 for r in rows if in_service_evidence(r)),
+        "count_ratchet": MODULE_COUNT_RATCHET,
         "modules": sorted(rows, key=lambda r: r["module"]),
     }
 
@@ -490,6 +522,9 @@ def render(data: dict) -> str:
         f"> 模块 **{t['modules']}** 个：keep {t.get('keep', 0)} · duplicate {t.get('duplicate', 0)} · "
         f"review {t.get('review', 0)} · manual-cli {t.get('manual-cli', 0)} · unused {t.get('unused', 0)}",
         "> 判据：**保留需举证**（旧标准「证明它没用才删」会让系统只增不减）。",
+        f"> **C8 新判据**：unused=0 · duplicate=0 · 在役证据覆盖 "
+        f"{(data.get('in_service_covered', 0) / t['modules'] if t.get('modules') else 0):.0%}"
+        f"（下限 {IN_SERVICE_COVERAGE_MIN:.0%}）· 模块数 {t['modules']}（棘轮 {data.get('count_ratchet', MODULE_COUNT_RATCHET)}，只许不增）",
         "> 「职责重复」是**人裁定 + 声明**（`DECLARED_DUPLICATES`），工具只验证不发明——",
         "> V1 曾用产物名聚类，把 40+ 个活模块误判 duplicate，比没有尺子更糟。",
         "",
@@ -558,6 +593,30 @@ def check() -> list[str]:
                 m.pop(volatile, None)
     if old != new:
         errs.append(f"{out.name} 与磁盘不一致（模块增删/职责变化未重渲）→ 跑 --write 修复")
+    errs += c8_violations(new)
+    return errs
+
+
+def c8_violations(data: dict) -> list[str]:
+    """**C8 新判据**（可自动判定）：无死模块 / 无未退役重复 / 在役证据覆盖 / 数量棘轮。
+
+    取代原「模块数 ≤75」——原目标按证据不可达（见 `MODULE_COUNT_RATCHET` 处注释）。
+    """
+    mods = data.get("modules", [])
+    n = len(mods)
+    errs: list[str] = []
+    if n > MODULE_COUNT_RATCHET:
+        errs.append(f"模块数 {n} > 棘轮 {MODULE_COUNT_RATCHET}（C8 ④：新增须等量退役）")
+    unused = [m["module"] for m in mods if m.get("verdict") == "unused"]
+    if unused:
+        errs.append(f"C8 ① 存在 {len(unused)} 个三无模块（unused）：{unused[:5]}")
+    dup = [m["module"] for m in mods if m.get("verdict") == "duplicate"]
+    if dup:
+        errs.append(f"C8 ② 存在 {len(dup)} 个「已声明却未退役」的职责重复：{dup[:5]}")
+    covered = data.get("in_service_covered", 0)
+    cov = (covered / n) if n else 0.0
+    if cov < IN_SERVICE_COVERAGE_MIN:
+        errs.append(f"C8 ③ 在役证据覆盖 {cov:.0%} < {IN_SERVICE_COVERAGE_MIN:.0%}")
     return errs
 
 
