@@ -195,7 +195,14 @@ _ORDER: tuple[Tier, ...] = ("hub", "sync", "code", "project")
 #
 # 零漂移保证：`grade` 的初值即由 `l1_tier` 卡回填为 iron（一次性脚本已按 D8 退役），
 #   故派生集合与迁移前**逐型相等**（tests/test_task_tier.py 的 LEGACY_L1_CARDS 锁定）。
+#
+# 2026-11-02：`l1_tier` **正式退役**（Task 12/14 Step 4）→ 改用 `tiers`（列表形态）。
+#   为何要退役：`l1_tier` 与 `grade` 并存会让「读不读」和「多可信」两个语义各占一个字段，
+#   而 `tiers` 只是**归属哪个型**的路由信息（与可信度正交），改名后语义边界清晰。
+#   兼容期：仍读旧 `l1_tier`（只读兜底），旧字段一旦清零即可删兜底。
 L1_GRADE_FIELD = "grade"
+L1_TIERS_FIELD = "tiers"
+L1_LEGACY_TIERS_FIELD = "l1_tier"
 L1_IRON = "iron"
 
 # 单型卡数上限（形状断言，防「顺手再加一张」复发成 L1 ratchet）
@@ -224,8 +231,11 @@ def l1_cards(root: Path | None = None) -> dict[Tier, list[str]]:
         # 卡是否属于"铁律"（= 该型每任务必读）
         if str(card.extra.get(L1_GRADE_FIELD) or "").strip() != L1_IRON:
             continue
-        # 归属哪个型：由 `l1_tier` 声明（可多值）；缺失则按目录兜底（rules/ ⇒ 全型必读）
-        declared = card.extra.get("l1_tier")
+        # 归属哪个型：由 `tiers` 声明（可多值）；缺失则读退役字段 `l1_tier`（兼容兜底）；
+        # 两者都缺则按目录兜底（rules/ ⇒ 全型必读）
+        declared = card.extra.get(L1_TIERS_FIELD)
+        if declared is None:
+            declared = card.extra.get(L1_LEGACY_TIERS_FIELD)
         tiers = declared if isinstance(declared, list) else [declared] if declared else []
         if not tiers:
             tiers = ["code", "hub", "sync"]  # 兜底：rules/ 下的 iron 卡视为全型相关
@@ -246,7 +256,7 @@ def check_l1_shape(tier_cards: dict[Tier, list[str]]) -> list[str]:
     for tier, slugs in tier_cards.items():
         if len(slugs) > L1_MAX_CARDS_PER_TIER:
             errs.append(
-                f"L1[{tier}] 卡数 {len(slugs)} > {L1_MAX_CARDS_PER_TIER}（新增须挤掉一张：删旧卡的 l1_tier 字段）"
+                f"L1[{tier}] 卡数 {len(slugs)} > {L1_MAX_CARDS_PER_TIER}（新增须挤掉一张：删旧卡的 {L1_TIERS_FIELD} 字段）"
             )
     return errs
 

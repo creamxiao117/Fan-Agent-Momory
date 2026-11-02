@@ -48,10 +48,10 @@ def test_derived_l1_equals_legacy_map():
     """迁移正确性证明：由卡 frontmatter 派生的集合 == 手写清单（集合相等，顺序无关）
 
     回归背景：L1 卡集合曾是手写枚举（与 L0 INDEX 同病：枚举 + 固定帽 ⇒ 必然顶帽）。
-    改为卡自己声明 `l1_tier` 后，必须证「一张不多、一张不少」。
+    改为卡自己声明 `tiers` 后，必须证「一张不多、一张不少」。
     """
     derived = l1_cards()
-    assert derived, "应至少能派生出 L1 卡（检查卡 frontmatter 的 l1_tier 字段）"
+    assert derived, "应至少能派生出 L1 卡（检查卡 frontmatter 的 tiers 字段）"
     for tier, slugs in LEGACY_L1_CARDS.items():
         assert sorted(derived.get(tier, [])) == sorted(slugs), f"L1[{tier}] 派生集合与迁移基准不一致"
 
@@ -81,9 +81,9 @@ def test_l1_cards_multi_tier_card(tmp_path):
     rules.mkdir(parents=True)
     (rules / "multi.md").write_text(
         # 2026-10-02（M1/Task 14）：L1 集合改由 `grade: iron` 派生，
-        # `l1_tier` 降为"归属哪个型"的声明（可多值）。
+        # `tiers` 承担「归属哪个型」的声明（可多值；2026-11-02 取代退役字段 `l1_tier`）。
         "---\ntype: rule\ntags: [x]\nupdated: '2026-10-01'\nstatus: active\n"
-        "grade: iron\nl1_tier: [hub, sync]\n---\n\n# x\n",
+        "grade: iron\ntiers: [hub, sync]\n---\n\n# x\n",
         encoding="utf-8",
     )
     derived = l1_cards(tmp_path / "AgentMemoryHub")
@@ -218,18 +218,18 @@ def test_l1_requires_grade_iron(tmp_path):
     rules = tmp_path / "AgentMemoryHub" / "rules"
     rules.mkdir(parents=True)
     (rules / "a.md").write_text(
-        "---\ntype: rule\ntags: [x]\nupdated: '2026-10-01'\nstatus: active\ngrade: proven\nl1_tier: hub\n---\n\n# a\n",
+        "---\ntype: rule\ntags: [x]\nupdated: '2026-10-01'\nstatus: active\ngrade: proven\ntiers: hub\n---\n\n# a\n",
         encoding="utf-8",
     )
     (rules / "b.md").write_text(
-        "---\ntype: rule\ntags: [x]\nupdated: '2026-10-01'\nstatus: active\ngrade: iron\nl1_tier: hub\n---\n\n# b\n",
+        "---\ntype: rule\ntags: [x]\nupdated: '2026-10-01'\nstatus: active\ngrade: iron\ntiers: hub\n---\n\n# b\n",
         encoding="utf-8",
     )
     derived = l1_cards(tmp_path / "AgentMemoryHub")
-    assert derived["hub"] == ["b"], "proven 卡即便声明 l1_tier 也不得进 L1"
+    assert derived["hub"] == ["b"], "proven 卡即便声明 tiers 也不得进 L1"
 
 
-def test_l1_iron_without_l1_tier_falls_back_to_all_tiers(tmp_path):
+def test_l1_iron_without_tiers_falls_back_to_all_tiers(tmp_path):
     """`rules/` 下的 iron 卡若未声明归属型 → 视为全型相关（兜底，不静默丢卡）。"""
     rules = tmp_path / "AgentMemoryHub" / "rules"
     rules.mkdir(parents=True)
@@ -240,3 +240,33 @@ def test_l1_iron_without_l1_tier_falls_back_to_all_tiers(tmp_path):
     derived = l1_cards(tmp_path / "AgentMemoryHub")
     for tier in ("code", "hub", "sync"):
         assert derived[tier] == ["iron"], f"{tier} 应兜底包含未声明归属的 iron 卡"
+
+
+def test_legacy_l1_tier_field_still_derived(tmp_path):
+    """退役字段 `l1_tier` 兼容期：**只读兜底**仍能派生出 L1（不静默丢卡）。
+
+    背景：2026-11-02 `l1_tier` → `tiers` 退役改名。存量第三方/手写卡若还写旧字段，
+    派生不得突然丢卡（丢卡 = 该型少读一张铁律 ⇒ 行为回退且无声）。
+    """
+    rules = tmp_path / "AgentMemoryHub" / "rules"
+    rules.mkdir(parents=True)
+    (rules / "old.md").write_text(
+        "---\ntype: rule\ntags: [x]\nupdated: '2026-10-01'\nstatus: active\ngrade: iron\nl1_tier: [hub]\n---\n\n# x\n",
+        encoding="utf-8",
+    )
+    derived = l1_cards(tmp_path / "AgentMemoryHub")
+    assert derived["hub"] == ["old"], "退役字段 l1_tier 在兼容期仍须能派生"
+
+
+def test_tiers_wins_over_legacy_field(tmp_path):
+    """`tiers` 与 `l1_tier` 同时存在时以 `tiers` 为准（新字段优先，避免双源漂移）。"""
+    rules = tmp_path / "AgentMemoryHub" / "rules"
+    rules.mkdir(parents=True)
+    (rules / "both.md").write_text(
+        "---\ntype: rule\ntags: [x]\nupdated: '2026-10-01'\nstatus: active\n"
+        "grade: iron\ntiers: [sync]\nl1_tier: [hub]\n---\n\n# x\n",
+        encoding="utf-8",
+    )
+    derived = l1_cards(tmp_path / "AgentMemoryHub")
+    assert derived["sync"] == ["both"]
+    assert derived["hub"] == [], "旧字段不得与新字段叠加出双源归属"

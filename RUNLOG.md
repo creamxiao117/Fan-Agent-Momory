@@ -2,6 +2,18 @@
 
 按轮次（R1…）追加；每条含巡检/门禁结果、决策与进行中的事项。当前状态见 `WORK.md`。
 
+## [2026-11-02] R23 | A1 grade 覆盖率核验（**发现我方测量假象**）+ 字段退役（`tier` 全量 / `l1_tier` → `tiers`）
+
+- **① 重大更正（自我纠错）**：上一轮（11-02 上午）盘点时我用「只扫 frontmatter 前 15 行」统计 grade，得 **63.1%（389/616）** ⇒ 误判「A1 是最大缺口」。**用 YAML 全量解析复核后：616/616 = 100%，覆盖本就达成**。227 张「缺 grade」的卡，实际是 `grade:` 行落在**长 tags 列表之后**（第 16–22 行）⇒ **测量假象，不是真缺口**。已同步修正 `WORK.md`。
+  - 教训（可复用）：统计 frontmatter 字段覆盖率**必须用 YAML 解析**，禁用「前 N 行」文本窗口 —— tags 是多行 YAML 列表，字段行号随 tags 长度漂移。
+  - 因此临时写的 `scripts/migrate_grade.py`（一次性回填脚本）**已删除**：无缺口 ⇒ 不留无用模块（与 C8 瘦身同向）。
+- **② 字段退役（Task 12 Step 4 + Task 14 Step 3，本轮实际完成）**：
+  - 旧 `tier:` 字段（**29 张卡**）**全量退役** —— 语义已由 `grade` 轴取代；退役前取证：该字段**无任何代码消费**（`rg` 命中仅注释/文档），`REQUIRED_KEYS` 也不含它。
+  - `l1_tier:` → **`tiers:`**（7 张 iron 规则卡）—— `l1_tier` 与 `grade` 并存会让「读不读」与「多可信」两个语义各占一个字段；`tiers` 只承担**归属哪个型**（与可信度正交）。
+  - **零漂移证明**：`l1_cards()` 迁移前后逐型相等（code 3 / hub 3 / sync 2 / light 0 / project 0），`check_l1_shape` 仍空；新增 2 例回归（`test_legacy_l1_tier_field_still_derived` 兼容期只读兜底 · `test_tiers_wins_over_legacy_field` 新字段优先、不与旧字段叠加）。
+  - 同步修正两处**陈旧指针**：`rules/rules-routing-table.md`（其「本次增量（发现，未修）」第 3 条即指此处，现已修并留痕）+ 根 `AGENTS.md` 路由说明（现为「`grade: iron` 闸门 → `tiers` 归型」）。
+- **③ 验证**：`pytest` **825 passed / 4 skipped**（+2 新例）· `startup_budget` PASS（L0 8235/30000；L1 code 9596 / hub 9329 / sync 7598，均 ≤15000）· `render_index --check` PASS · 门禁 l0 面通过。
+
 ## [2026-11-02] R22 | 推送积压收口 + **状态源漂移修复**（WORK.md 重写）+ 架构重构 21 任务现场盘点
 
 - **① 推送积压收口（本次第一诉求）**：中枢仓 **ahead 37**、主仓 **ahead 1** 长期未推 origin。按 AGENTS.md §2.4 口径走 **`-c http.version=HTTP/1.1`**（本机 HTTP/2 协商被中间设备打断，2026-10-22 已实测）；**未使用 `--no-verify`**（两仓钩子实测触发 `text`+`l0` 门禁并通过）。

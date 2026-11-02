@@ -85,7 +85,7 @@ def measure_tiers(root: Path | None = None) -> list[dict]:
     if not hub.is_dir() or not any((hub / d).is_dir() for d in _CARD_DIRS):
         return []
     rows: list[dict] = []
-    # 卡集合由卡自身 frontmatter `l1_tier` 派生（2026-10-01；不再手写清单）
+    # 卡集合由卡自身 frontmatter `tiers` 派生（2026-11-02 起取代退役字段 `l1_tier`）
     for tier, slugs in l1_cards(hub).items():
         total = 0
         missing: list[str] = []
@@ -114,7 +114,7 @@ def check_tiers(rows: list[dict]) -> list[str]:
             errs.append(f"L1[{r['tier']}] {r['chars']} > {L1_LIMIT}")
         if r["count"] > L1_MAX_CARDS_PER_TIER:
             errs.append(
-                f"L1[{r['tier']}] 卡数 {r['count']} > {L1_MAX_CARDS_PER_TIER}（新增须挤掉一张：删旧卡的 l1_tier 字段）"
+                f"L1[{r['tier']}] 卡数 {r['count']} > {L1_MAX_CARDS_PER_TIER}（新增须挤掉一张：删旧卡的 tiers 字段）"
             )
         if r["missing"]:
             errs.append(f"L1[{r['tier']}] 卡不存在: {r['missing']}")

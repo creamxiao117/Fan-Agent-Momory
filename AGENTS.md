@@ -34,7 +34,7 @@
 | sync | sync/push/注入/跨平台 | cross-platform-sync-rule · dual-platform-coherence-discipline |
 | project | 立项/蓝图/选型/新项目/技术路径 | （待声明） |
 
-> 卡集合由**卡自身 frontmatter `l1_tier`** 派生（`tools.task_tier.l1_cards()`），非手写清单；
+> L1 集合 = **`grade: iron` 闸门筛选**、再按卡自身 `tiers` 归型（`tools.task_tier.l1_cards()`），非手写清单；
 > 单型 ≤3 张（`L1_MAX_CARDS_PER_TIER`，形状断言）；新增一张须挤出旧的一张。
 > 型↔检索区同表（`TIER_SCOPE`）；旧 `task_kind` 降为别名入参，唯一入口 `scope_for()`。
 
