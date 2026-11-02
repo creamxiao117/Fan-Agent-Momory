@@ -9,10 +9,17 @@
 > **进度快照（2026-11-02 核对）**
 > 本计划的 `- [ ]` 复选框**未维护**（2026-11-02 核对时仍有 14 个任务实际已完成）⇒ **复选框已失去进度语义**。
 > **唯一状态源 = `WORK.md`**（见其「架构重构判据现状 C1–C8」与「活跃待办 A1–A7」）；本文件只作设计与判据的存档。
-> 现场盘点：✅ Task 3 / 4 / 6 / 7 / 10 / 12 / 15 / 16 / 17 / 19 / 20 / 21 + Task 14 的**派生改造**（`l1_tier` → `grade=iron`）
+> 现场盘点：✅ Task 3 / 4 / 6 / 7 / 10 / 12 / 15 / 16 / 17 / 19 / 20 / 21 + Task 14 的**派生改造**（`l1_tier` → `tiers`，零漂移）
 > · 🔶 Task 5（裁定表未落盘）/ 8（`rules/` 23，≤20 未达）/ 9（模块 113，≤85 未达）/ 13（grade 63.1%，100% 未达）/ 18（`discovery_cost` 预算帽未定）
 > · ⬜ Task 11（`agent-tool-inventory.md` 仍为手写快照）
 > · 判据：**C1–C5、C7 通过；C6（grade 覆盖 + `rules/` ≤13）、C8（模块 ≤75）未达标**。
+
+> **2026-11-02 复盘（本轮 A1–A7 收口后的真实状态）**
+> · ✅ **C6 现已通过**：grade 覆盖 **616/616 = 100%**；每型 iron ≤3（code 3 / hub 3 / sync 2）；L1 由 `grade=iron` 派生、`tiers` 归型。
+> · ✅ **C7 现已通过**：`discovery_cost` 帽已定（硬帽 = 逐平台棘轮；方向 = 现状 × 0.6）+ `capability_reconcile` 出**降级路线图**。
+> · ⚠️ **C8 裁定为不可达**：`unused` = **0**（无死模块可删）；唯一被声明为重复的 2 个模块经取证**在役**（`audit_index` 是 `hub audit` CLI 实现体、`index_consistency` 是 INDEX 正则单一源）⇒ 声明已撤销。裁定表：`docs/compose/reports/2026-11-02-module-adjudication.md`。
+> · ✅ **Task 8/11 达成**：`rules/` **23 → 13**（10 张非铁律卡**迁入** `methodology/`，**slug 保留** ⇒ 召回零损伤；**不合并** —— 中枢证据卡 `experience/pi-card-merge-hurts-recall.md` 记载 2026-10-02 同族合并曾致 golden 唯一性失败 + recall 98%→86%）；`methodology/agent-tool-inventory.md` 已清空手写清单数字。
+> · ⚠️ **Task 13 仍部分**（grade 覆盖虽已 100%，但**抽样复核**未做，标注依据为规则映射）。
 
 ---
 

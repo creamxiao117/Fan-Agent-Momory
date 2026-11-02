@@ -34,7 +34,11 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from collections import Counter
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
+
+CST = timezone(timedelta(hours=8))
 
 _HUB_ENGINE = Path(__file__).resolve().parent.parent
 if str(_HUB_ENGINE) not in sys.path:
@@ -85,8 +89,13 @@ def ratchet(root: Path) -> dict[str, int]:
     return out
 
 
-def budgets(root: Path) -> dict[str, int]:
-    """软目标配置：`{"per_session_target": 1500, "mcp_servers_max": 5}`。"""
+def budgets(root: Path) -> dict:
+    """预算配置：`{"per_session_target": 1500, "mcp_servers_max": 5, "reduction_target_ratio": 0.6}`。
+
+    `reduction_target_ratio` = **季度降级目标**（非门禁）：常驻成本降到现状的该比例。
+    为何是「目标」而不是「帽」：硬帽 = 逐平台棘轮（只许降不许升，见 `ratchet()`）；
+    目标 = 方向（现状 60%），拿它当门禁会在第一天就红 ⇒ 训练出 --no-verify。
+    """
     cfg = HubConfig.load(root).data
     cap = (cfg.get("platforms_global") or {}).get("capability_budget") or {}
 
@@ -96,10 +105,59 @@ def budgets(root: Path) -> dict[str, int]:
         except (TypeError, ValueError):
             return default
 
+    def _float(key: str, default: float) -> float:
+        try:
+            return float(cap.get(key) or default)
+        except (TypeError, ValueError):
+            return default
+
     return {
         "per_session_target": _int("per_session_target", DEFAULT_TARGET_TOKENS),
         "mcp_servers_max": _int("mcp_servers_max", DEFAULT_MCP_MAX),
+        "reduction_target_ratio": _float("reduction_target_ratio", 0.6),
     }
+
+
+def reduction_plan(root: Path, r: dict) -> list[dict]:
+    """**降级路线图**：每个平台距「现状 × 比例」目标还差多少 token，降哪几项。
+
+    与「软目标只报不拦」的区分：软目标报「超了多少」；本函数报「**降哪几项能达标**」——
+    可执行清单（每项 = 降为 `conditional`/`explicit-only` 后能省的常驻 token）。
+
+    口径：**逐平台**（每个客户端各自付各自那份），**不做全平台求和**
+    （2026-10-02 教训：求和不约束任何一次真实会话）。
+    """
+    ratio = (r.get("budgets") or {}).get("reduction_target_ratio", 0.6)
+    caps = (r.get("budgets") or {}).get("per_platform_ratchet", {})
+    out: list[dict] = []
+    for plat, c in sorted(r.get("cost_by_platform", {}).items()):
+        cur = int(c.get("per_session_tokens") or 0)
+        target = int(cur * ratio)
+        need = max(0, cur - target)
+        cap = caps.get(plat)
+        picks: list[dict] = []
+        saved = 0
+        for item in c.get("top_skills") or []:
+            if saved >= need:
+                break
+            name, tok = item[0], int(item[1] or 0)
+            picks.append({"name": name, "tokens": tok, "kind": "skill"})
+            saved += tok
+        mcp_need = max(0, need - saved)
+        out.append(
+            {
+                "platform": plat,
+                "current_tokens": cur,
+                "target_tokens": target,
+                "ratio": ratio,
+                "need_tokens": need,
+                "ratchet": cap,
+                "over_ratchet": bool(cap is not None and cur > int(cap)),
+                "picks": picks,
+                "mcp_servers_to_drop": (mcp_need + 199) // 200 if mcp_need > 0 else 0,
+            }
+        )
+    return out
 
 
 def registry_coverage(root: Path) -> dict:
@@ -242,6 +300,83 @@ def cost_report(root: Path) -> dict:
     }
 
 
+def _scan_query_log(
+    state_dir: Path, cutoff: datetime, recent_cutoff: datetime
+) -> tuple[Counter, Counter, Counter, dict[str, str]]:
+    """扫查询账本 → (近窗活跃, 近月用过, 累计见过, 最后一次时间)。"""
+    active: Counter = Counter()
+    recently_used: Counter = Counter()
+    seen: Counter = Counter()
+    last: dict[str, str] = {}
+    if not state_dir.is_dir():
+        return active, recently_used, seen, last
+    for f in sorted(state_dir.glob("query.log*.jsonl")):
+        for line in f.read_text(encoding="utf-8", errors="ignore").splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                d = json.loads(line)
+            except ValueError:
+                continue
+            plat = str(d.get("platform") or "").strip()
+            if not plat:
+                continue
+            seen[plat] += 1
+            ts = str(d.get("ts") or "")
+            if ts > last.get(plat, ""):
+                last[plat] = ts
+            try:
+                when = datetime.fromisoformat(ts)
+            except ValueError:
+                continue
+            if when.tzinfo is None:
+                # naive 时间戳按本地时区解释（账本里两种形态都有：带时区/不带）
+                when = when.replace(tzinfo=CST)
+            if when >= cutoff:
+                active[plat] += 1
+            if when >= recent_cutoff:
+                recently_used[plat] += 1
+    return active, recently_used, seen, last
+
+
+def platform_activity(root: Path, days: int = 7, active_window_days: int = 30) -> dict:
+    """平台**检索活跃度**（近 N 天）——「通道死掉的早期信号」。
+
+    数据源 = `.sync/state/query.log-*.jsonl`（MCP 的 hub_search/hub_bootstrap 与
+    `tier-bootstrap` 都写；后者是 2026-11-02 才补上的，见 `commands/tier_bootstrap.py`）。
+
+    口径纪律（三条，缺一个就变成噪音）：
+    1. **只对注册平台告警**（平台清单 = `hub.config.yaml` 的唯一源）——
+       账本里混着 `unknown` / `e2e-test` / `tracet` 等**非平台**噪声，不是平台就不该报。
+    2. **只对「近 30 天确实在用」的平台告警**——很久没用的平台（走自己的通道）不算「死了」。
+    3. 「近 7 天零检索」且它近 30 天用过 ⇒ 通道可能已死（真信号）。
+
+    返回：{window_days, active{平台: 次数}, silent[{平台, 最后一次时间}], seen{平台: 累计}}
+    """
+    now = datetime.now(CST)
+    cutoff = now - timedelta(days=days)
+    recent_cutoff = now - timedelta(days=active_window_days)
+    active, recently_used, seen, last = _scan_query_log(Path(root) / ".sync" / "state", cutoff, recent_cutoff)
+    registered = set(platform_meta(root)["platforms"])
+    active = Counter({k: v for k, v in active.items() if k in registered})
+    silent = []
+    for p in sorted(seen):
+        if p not in registered:
+            continue  # 非注册平台（unknown/e2e-test/…）⇒ 不是平台，不报
+        if recently_used.get(p, 0) == 0:
+            continue  # 近 30 天根本没用过 ⇒ 不是「死了」，是「没在用」
+        if active.get(p, 0) == 0:
+            silent.append({"platform": p, "last_seen": last.get(p, "")})
+    return {
+        "window_days": days,
+        "active_window_days": active_window_days,
+        "active": dict(sorted(active.items())),
+        "seen": dict(sorted(seen.items())),
+        "silent": silent,
+    }
+
+
 def reconcile(root: Path) -> dict:
     meta = platform_meta(root)["platforms"]
     act = actual(root)
@@ -282,7 +417,7 @@ def reconcile(root: Path) -> dict:
             actual_only.append({"platform": name, "what": f"有 {v['count']} 个技能目录但未登记"})
 
     rep = cost_report(root)
-    return {
+    result = {
         "matched": sorted(matched),
         "declared_only": declared_only,
         "actual_only": actual_only,
@@ -293,7 +428,11 @@ def reconcile(root: Path) -> dict:
         "over_ratchet": rep["over_ratchet"],
         "over_target": rep["over_target"],
         "registry": registry_coverage(root),
+        "activity": platform_activity(root),
     }
+    # 降级路线图要读**已组装好的**结果（成本/棘轮/预算），故放最后算
+    result["reduction_plan"] = reduction_plan(root, result)
+    return result
 
 
 def render(r: dict) -> str:
@@ -338,32 +477,7 @@ def render(r: dict) -> str:
             "要么换掉旧能力，要么把新能力降级为 `conditional`/`not-installed`；**不得改基线**"
         )
     reg = r.get("registry") or {}
-    if reg.get("available"):
-        lines.append("")
-        lines.append("### SkillHub 登记覆盖率（软指标：缺口要可见，不自动补登记）")
-        lines.append("")
-        lines.append(
-            f"- 登记记录 **{reg['recorded']}** / 有 SKILL.md 的实现 **{reg['implemented']}**"
-            f" / 实测装过的技能名 **{reg['measured_installed']}**"
-        )
-        lines.append(
-            f"- ⚠️ **真缺口：SkillHub 有实现、装到了客户端、却从未登记**："
-            f"{len(reg.get('hub_owned_unregistered') or [])} 个"
-            "（换机必丢；补登记需人写 trigger/forgot，机器从名字编路由会误命中）"
-        )
-        if reg.get("hub_owned_unregistered"):
-            lines.append(f"  - {', '.join(reg['hub_owned_unregistered'][:30])}")
-        lines.append(
-            f"- ℹ️ **客户端自带 / marketplace 技能（不要求登记）**："
-            f"{len(reg.get('platform_provided') or [])} 个"
-            "（2026-10-21 口径拆分：原口径把它们也算成「装了没登记」，指标永不收敛）"
-        )
-        lines.append(
-            f"- ⚠️ **登记了却查无实现**（无 SKILL.md 且非 mcp）："
-            f"{len(reg['recorded_but_unimplemented'])} 个 —— 要么补实现，要么删记录"
-        )
-        if reg["recorded_but_unimplemented"]:
-            lines.append(f"  - {', '.join(reg['recorded_but_unimplemented'])}")
+    _render_registry(reg, lines)
     if r["over_target"]:
         lines.append("")
         lines.append("### 降级候选（软目标，需用户批准后执行；**不拦提交**）")
@@ -373,7 +487,76 @@ def render(r: dict) -> str:
                 f"- {d['platform']}：超目标 {d['over']} token；最贵的技能 {top or '（无）'}；"
                 f"MCP server {d['mcp_servers']} 个"
             )
+    act = r.get("activity") or {}
+    lines.append("")
+    lines.append(f"## 平台检索活跃度（近 {act.get('window_days', 7)} 天 · 通道死掉的早期信号）")
+    lines.append("")
+    if act.get("active"):
+        lines.append("- 有检索记录：" + "、".join(f"{k}={v}" for k, v in act["active"].items()))
+    else:
+        lines.append("- 有检索记录：**无**")
+    if act.get("silent"):
+        lines.append(f"- ⚠️ **近 30 天用过、近 {act.get('window_days')} 天零检索**（通道可能已死；**只报不拦**）：")
+        for s in act["silent"]:
+            lines.append(f"  - {s['platform']}：最后一次 {s['last_seen'] or '未知'}")
+    else:
+        lines.append("- ✅ 近 30 天用过的平台近窗均有检索记录")
+
+    _render_reduction_plan(r, lines)
     return "\n".join(lines)
+
+
+def _render_registry(reg: dict, lines: list[str]) -> None:
+    """SkillHub 登记覆盖率段（软指标：缺口要可见，不自动补登记）。"""
+    if not reg.get("available"):
+        return
+    lines.append("")
+    lines.append("### SkillHub 登记覆盖率（软指标：缺口要可见，不自动补登记）")
+    lines.append("")
+    lines.append(
+        f"- 登记记录 **{reg['recorded']}** / 有 SKILL.md 的实现 **{reg['implemented']}**"
+        f" / 实测装过的技能名 **{reg['measured_installed']}**"
+    )
+    lines.append(
+        f"- ⚠️ **真缺口：SkillHub 有实现、装到了客户端、却从未登记**："
+        f"{len(reg.get('hub_owned_unregistered') or [])} 个"
+        "（换机必丢；补登记需人写 trigger/forgot，机器从名字编路由会误命中）"
+    )
+    if reg.get("hub_owned_unregistered"):
+        lines.append(f"  - {', '.join(reg['hub_owned_unregistered'][:30])}")
+    lines.append(
+        f"- ℹ️ **客户端自带 / marketplace 技能（不要求登记）**："
+        f"{len(reg.get('platform_provided') or [])} 个"
+        "（2026-10-21 口径拆分：原口径把它们也算成「装了没登记」，指标永不收敛）"
+    )
+    lines.append(
+        f"- ⚠️ **登记了却查无实现**（无 SKILL.md 且非 mcp）："
+        f"{len(reg['recorded_but_unimplemented'])} 个 —— 要么补实现，要么删记录"
+    )
+    if reg["recorded_but_unimplemented"]:
+        lines.append(f"  - {', '.join(reg['recorded_but_unimplemented'])}")
+
+
+def _render_reduction_plan(r: dict, lines: list[str]) -> None:
+    """降级路线图（目标 = 现状 × 比例；**目标非门禁**，硬帽 = 逐平台棘轮）。"""
+    plan = r.get("reduction_plan") or []
+    if not plan:
+        return
+    ratio = plan[0].get("ratio", 0.6)
+    lines.append("")
+    lines.append(f"## 降级路线图（目标 = 现状 ×{ratio}，**目标非门禁；硬帽 = 逐平台棘轮**）")
+    lines.append("")
+    lines.append("| 平台 | 现状 | 目标 | 还差 | 棘轮 | 降级候选（降为 conditional 可省） |")
+    lines.append("| --- | --- | --- | --- | --- | --- |")
+    for p in plan:
+        picks = "、".join(f"`{x['name']}`({x['tokens']})" for x in p["picks"]) or "—"
+        if p.get("mcp_servers_to_drop"):
+            picks += f"；另需减 MCP server ×{p['mcp_servers_to_drop']}"
+        ratchet = p.get("ratchet")
+        lines.append(
+            f"| {p['platform']} | {p['current_tokens']} | {p['target_tokens']} | {p['need_tokens']} | "
+            f"{ratchet if ratchet is not None else '—'} | {picks} |"
+        )
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -391,6 +574,9 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     if r["actual_only"] or r["over_ratchet"]:
         return 2
+    # `activity.silent`（近 30 天用过、近 7 天零检索）**只报不拦**：
+    # 中枢的查询账本只覆盖「走 MCP / tier-bootstrap」的通道 ⇒ 某个平台静默可能是
+    # 「换了通道」而非「通道死了」。把它计入退出码 = 巡检天天带 warn ⇒ 训练出 --no-verify。
     return 0  # over_target 是**软目标**（积压项），只报不拦 —— 否则会训练出 --no-verify
 
 

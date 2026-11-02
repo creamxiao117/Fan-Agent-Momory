@@ -11,6 +11,7 @@ from commands.audit import cmd_audit
 from commands.build_vectors import cmd_build_vectors
 from commands.confirm import cmd_confirm
 from commands.distill import cmd_distill
+from commands.draft_write import cmd_draft_write
 from commands.gate import cmd_gate
 from commands.ingest import cmd_ingest
 from commands.lint import cmd_lint
@@ -25,6 +26,7 @@ __all__ = [
     "cmd_build_vectors",
     "cmd_confirm",
     "cmd_distill",
+    "cmd_draft_write",
     "cmd_gate",
     "cmd_ingest",
     "cmd_lint",

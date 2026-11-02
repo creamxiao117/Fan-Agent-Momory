@@ -19,6 +19,7 @@ from commands import (  # noqa: I001  (must precede common.config — needs sys.
     cmd_build_vectors,
     cmd_confirm,
     cmd_distill,
+    cmd_draft_write,
     cmd_gate,
     cmd_ingest,
     cmd_lint,
@@ -643,6 +644,17 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--root", required=True)
     p.add_argument("prompt")
     p.set_defaults(func=_cmd_chat)
+
+    p = sub.add_parser("draft-write", help="写中枢草案卡（人工确认制的回写入口）")
+    p.add_argument("--root", required=True)
+    p.add_argument("--platform", default="pi")
+    p.add_argument("--title", required=True)
+    p.add_argument("--body", default="")
+    p.add_argument("--body-file", default="")
+    p.add_argument("--type", default="exp")
+    p.add_argument("--tags", default="")
+    p.add_argument("--slug", default="")
+    p.set_defaults(func=cmd_draft_write)
 
     args = parser.parse_args(argv)
     return args.func(args)

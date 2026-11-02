@@ -544,7 +544,17 @@ def check() -> list[str]:
     for d in (old, new):
         d.pop("generated_at", None)
         for m in d.get("modules", []):
-            for volatile in ("refs_code", "refs_test", "refs_doc"):
+            # `volatile` = **不参与一致性比对**的字段：
+            #  - refs_code/test/doc：引用面会随别处改动漂移（只作存活参考，不作保留理由）
+            #  - last_run/last_run_kind：**时效字段**（产物 mtime）⇒ 每次巡检都会因新产物而变，
+            #    若纳入比对则 `--check` 天天因「新产物」变红 ⇒ 训练出 --no-verify（本轮实测踩到）
+            for volatile in (
+                "refs_code",
+                "refs_test",
+                "refs_doc",
+                "last_run",
+                "last_run_kind",
+            ):
                 m.pop(volatile, None)
     if old != new:
         errs.append(f"{out.name} 与磁盘不一致（模块增删/职责变化未重渲）→ 跑 --write 修复")

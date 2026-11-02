@@ -2,6 +2,21 @@
 
 按轮次（R1…）追加；每条含巡检/门禁结果、决策与进行中的事项。当前状态见 `WORK.md`。
 
+## [2026-11-02] R26 | A5 pi 计划 P2/P3 收口（`/hub-write` + 检索可见 + 失败可见）+ A6 预算帽与降级路线图 + A7 腐烂文档处置
+
+- **① A5 回写闭环（Task 9）**：新增 CLI 子命令 **`hub draft-write`**（`commands/draft_write.py`）—— 薄封装，核心全委托 `tools.mcp_handlers.hub_ingest_candidate`（**策略校验/平台授权/slug 化/去重/审计日志同一实现**，杜绝 CLI 与 MCP 两套口径）。
+  · 扩展侧新增 **`/hub-write <标题> [--body <正文>]`**：默认取本会话最后一条 assistant 输出 → **先预览、`ctx.ui.confirm` 确认** → 才落盘（**人工确认制，不自动写任何卡**）。
+  · 两个实测踩坑已修：① 传入**完整卡**（含 frontmatter）会产出**双 frontmatter** ⇒ CLI 现在会拆卡自带 frontmatter（`type`/`tags` 一并采纳）；② 中文标题经 `_slugify` 只剩 ASCII ⇒ 全挤成 `candidate` ⇒ 自动 slug 补**可读兜底**（`平台-类型-日期-短哈希`）。
+  · 落点验证：`.sync/drafts/pi_draft/` **根目录**（ingest 才扫得到）+ `auto_flywheel --dry-run` 扫到 ✓ + frontmatter 校验通过。
+- **② A5 检索/失败可见（Task 10）**：
+  · **缺口**：`tier-bootstrap`（pi 扩展唯一走的路）**从不写查询账本** ⇒ pi 的检索在中枢侧**完全不可见** ⇒ 「近 7 天零检索」这个早期信号根本无从判断。⇒ 现在预取也写 `.sync/state/query.log-*.jsonl`（带 platform/action=tier_bootstrap）⇒ `query_report` 平台维度可见。
+  · 新增 `capability_reconcile.platform_activity()`：**近 30 天用过、近 7 天零检索** ⇒ 列为「通道可能已死」。口径三条（少一条即噪音）：**只对注册平台**（账本里混着 `unknown`/`e2e-test` 等非平台）、**只对近 30 天用过的**、**只报不拦**（查询账本只覆盖部分通道，计入退出码会让巡检天天带 warn ⇒ 训练 --no-verify）。
+  · 扩展侧新增**本地降级账本** `<agent-dir>/hub-bridge.log`（degrade/search/write 事件）⇒ 扩展自己超时/解析失败不再无声。
+- **③ A6 预算帽（Task 18）**：硬帽 = 逐平台**棘轮**（6 平台全覆盖，只许降不许升，已在 `hub.config.yaml`）；方向 = 现状 × **`reduction_target_ratio=0.6`**（**目标非门禁**：拿它当门禁第一天就红）。新增**降级路线图**（`reduction_plan`）：逐平台给出「现状 / 目标 / 还差 / 棘轮 / **降哪几项能达标**（每项省多少 token）/ 需减几个 MCP server」。
+- **④ A7 腐烂文档（Task 11 Step 1）**：`methodology/agent-tool-inventory.md` **清空 2026-08-18 的手写清单数字**（4 平台技能数/MCP 数/高频项）⇒ 只留**口径与方法**，事实源指向 `system/capabilities.md`（渲染产物）+ `capability_scan` / `capability_reconcile`。理由：**数字没有门禁看着 ⇒ 必然腐烂**；清单归机器、方法留人。
+- **⑤ 自身缺陷（pytest 揪出）**：`inventory` 的 `last_run` 是**时效字段**（产物 mtime）⇒ 纳入 `--check` 比对会让台账**每次巡检都因新产物变红** ⇒ 训练 --no-verify。修法：把 `last_run`/`last_run_kind` 列入**不参与一致性比对**的 volatile 字段（与 `refs_*` 同列），并在注释里写明原因。
+- **⑥ 沉淀**：两张草案卡已落 `.sync/drafts/pi_draft/`（等 07:40 ingest 提升）：`pi-auto-hub-retrieval-bridge`（分层架构 + 裁定理由 + 6 条踩坑）、`pi-as-sixth-platform-three-layer-template`（平台接入三层机制模板 + 9 条接入清单）。
+
 ## [2026-11-02] R25 | A3 模块台账裁定（**C8 ≤75 目标裁定不可达**）+ A4 T1 重跑（**判据①正面 / 判据③反面**）
 
 - **① A3：尺子补齐「在役证据」**（C3 的真正缺口）：`inventory.py` 的 `last_run` 一直**写死 None**（注释「无证据就是 null，不猜」但其实**从未取证**）⇒ 尺子只有一半：能说「没人引用你」，说不出「你上个月还在跑」。

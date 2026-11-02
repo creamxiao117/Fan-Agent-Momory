@@ -91,6 +91,30 @@ def cmd_tier_bootstrap(args) -> int:
         "capabilities": caps,
         "elapsed_ms": int((time.perf_counter() - t0) * 1000),
     }
+    # (c) **检索可见**（2026-11-02 补，pi 接入 P2/Task 10）：把这次预取写进查询账本。
+    # 为何必须补：MCP 的 hub_search/hub_bootstrap 会写 `.sync/state/query.log-*.jsonl`（带 platform），
+    # 但 **tier-bootstrap 这条路径（pi 扩展唯一走的路）从不写** ⇒ pi 的检索行为**完全不可见** ⇒
+    # 「pi 近 7 天零检索」这个早期信号根本无从判断（通道死了也看不出）。
+    # ⇒ 这里补写一条（action=bootstrap），让 query_report 的平台维度能看见 pi。
+    try:
+        from tools.mcp_audit import append_query_log
+
+        append_query_log(
+            root,
+            {
+                "action": "bootstrap",
+                "platform": platform,
+                "tier": payload["tier"],
+                "query": (args.context or "")[:200],
+                "hits": payload["hit_count"],
+                "top_k": getattr(args, "top_k", 3),
+                "elapsed_ms": payload["elapsed_ms"],
+                "skipped": bool(payload.get("skipped")),
+                "source": "tier_bootstrap",
+            },
+        )
+    except Exception:  # noqa: BLE001 - 审计旁路，绝不影响预取
+        pass
 
     if getattr(args, "json", False):
         print(json.dumps(payload, ensure_ascii=False))

@@ -10,8 +10,8 @@
 > 本计划的 `- [ ]` 复选框**未维护** ⇒ **唯一状态源 = `WORK.md`**（「活跃待办 A5」为本计划 P2/P3 的落点）；本文件只作设计与判据的存档。
 > 现场盘点：✅ **P0（Task 1–4）** —— MCP 已通（`agent/mcp.json` → `.venv`）、`agent/AGENTS.md` 顶部托管块已注入、分型单源 `task_tier.py`、pi 已登记进 `hub.config.yaml`、回写通道 `.sync/drafts/pi_draft/`
 > · ✅ **P1（Task 5–8）** —— `engine.py tier-bootstrap` + 扩展 `agent/extensions/memory-hub.ts`（`/hub` `/hub-cap list|install|verify|remove|residue` `/hub-on` `/hub-off`；注入走 `systemPromptOptions.sections["hub-context"]`）
-> · 🔶 **P2（Task 9–10）** —— 回写通道可用（pi_draft 已被 ingest），但**缺 `/hub-write`（人工确认制）与审计可见**
-> · ⬜ **P3（Task 11–12）** —— 回归总检与沉淀无痕
+> · ✅ **P2（Task 9–10）** —— `/hub-write`（**预览 + `ctx.ui.confirm` 确认制** → 新 CLI `engine.py draft-write` → 与 MCP 同源的 `hub_ingest_candidate`）；检索可见（`tier-bootstrap` 现在也写查询账本，带 platform）；`capability_reconcile.platform_activity()` 探测「近 30 天用过、近 7 天零检索」（**只报不拦**）；扩展本地降级账本 `<agent-dir>/hub-bridge.log`
+> · ✅ **P3（Task 11–12）** —— 门禁总检全绿（pytest 841 / ruff / startup_budget / render_check / recall 98%）；沉淀：两张草案卡落 `.sync/drafts/pi_draft/`（`pi-auto-hub-retrieval-bridge` · `pi-as-sixth-platform-three-layer-template`）
 
 ---
 
