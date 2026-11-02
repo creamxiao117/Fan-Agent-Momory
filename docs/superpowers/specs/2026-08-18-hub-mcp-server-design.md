@@ -144,7 +144,7 @@ type CardType =
 
 type CardHit = {
   slug: string;           // 文件名去 .md，如 dll-version-lock
-  rel_path: string;       // 相对中枢根，如 rules/dll-version-lock.md
+  rel_path: string;       // 相对中枢根，如 methodology/dll-version-lock.md
   type: CardType;
   status: string;         // active | candidate | archived（检索默认不含 archived）
   tags: string[];
@@ -205,7 +205,7 @@ type ErrorBody = {
   "hits": [
     {
       "slug": "dll-version-lock",
-      "rel_path": "rules/dll-version-lock.md",
+      "rel_path": "methodology/dll-version-lock.md",
       "type": "rule",
       "status": "active",
       "tags": ["autocad", "dll-lock"],
@@ -231,7 +231,7 @@ type ErrorBody = {
 
 | 参数 | 类型 | 必填 | 默认 | 说明 |
 | --- | --- | --- | --- | --- |
-| `id` | string | 是* | — | `rules/dll-version-lock` 或 `dll-version-lock` 或带 `.md` |
+| `id` | string | 是* | — | `methodology/dll-version-lock` 或 `dll-version-lock` 或带 `.md` |
 | `rel_path` | string | 是* | — | 与 id 二选一；同时给以 `rel_path` 为准 |
 | `platform` | string | 否 | `"unknown"` | 审计 |
 
@@ -264,7 +264,7 @@ type ErrorBody = {
 {
   "ok": true,
   "categories": {
-    "rules": [{"slug": "dll-version-lock", "rel_path": "rules/dll-version-lock.md", "tags": ["…"]}],
+    "rules": [{"slug": "dll-version-lock", "rel_path": "methodology/dll-version-lock.md", "tags": ["…"]}],
     "methodology": [],
     "longterm": [],
     "projects": [],
@@ -377,7 +377,7 @@ source: mcp/<platform>
 ```markdown
 ## 中枢命中（本任务快照 @2026-08-18T15:30Z）
 ### 规则（必读全文）
-- rules/dll-version-lock — 改 DLL 必须递增版本号（涉及文件操作前 hub_get 读全文）
+- methodology/dll-version-lock — 改 DLL 必须递增版本号（涉及文件操作前 hub_get 读全文）
 ### 方法论
 - methodology/occam-razor — 最少文件/字段/步骤
 ### 项目记忆
@@ -430,7 +430,7 @@ source: mcp/<platform>
   "channel": "deterministic",
   "top_k": 5,
   "mode": "word",
-  "hit_paths": ["rules/dll-version-lock.md"],
+  "hit_paths": ["methodology/dll-version-lock.md"],
   "hit_count": 1,
   "latency_ms": 12,
   "error": null

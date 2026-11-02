@@ -1992,7 +1992,7 @@ python -m scripts.demo_e2e D:\AIwork\AgentMemoryHub
 git -C D:\AIwork\AgentMemoryHub log --oneline -5
 ```
 
-Expected: `rules/dll-version-lock.md` 已生成；log 含 confirm/reuse 记录；Git 可回滚。
+Expected: `methodology/dll-version-lock.md` 已生成；log 含 confirm/reuse 记录；Git 可回滚。
 
 - [x] **Step 6: 提交**
 

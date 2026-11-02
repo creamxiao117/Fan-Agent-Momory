@@ -2,6 +2,18 @@
 
 按轮次（R1…）追加；每条含巡检/门禁结果、决策与进行中的事项。当前状态见 `WORK.md`。
 
+## [2026-11-02] R24 | A2 `rules/` 23 → 13（**改走「迁区」而非「合并」**，零召回损伤）+ 向量重建坑落卡
+
+- **① 方案被证据卡推翻（重要过程）**：A2 原计划按重构计划把 9 张同族卡**合并**成 3 张族卡。动手前按 L0 铁律检索中枢，命中 **`experience/pi-card-merge-hurts-recall.md`（pitfall）**：2026-10-02 **同样的合并已做过并回退** —— ① `test_gold_slugs_unique_and_nonempty` 失败（多条 golden 映射到同一张卡）② `recall@5` **98% → 86%**。该卡确立口径：**「合并的判据不是主题相同，而是两张卡是否真是同一件事的两个面」**、**「计数是结果，不是目标」**。
+  ⇒ **推翻合并方案**，改走该卡同时验证过的另一条路径：**迁区**（`rules/` → `methodology/`，**slug 保留**）⇒ 每张卡仍是独立可检索单元，golden 唯一性与召回均不受损。
+- **② 迁区实操**：10 张**非铁律**卡迁 `methodology/`（agent-modify-must-view-page / agent-show-todo-rule / auto-promote-empty-today-rule / gateway-no-credential-rule / pre-uninstall-data-safety-check / lint-runtime-data-exclude / dll-version-lock / skillhub-registration-policy / context-engineering-discipline / text-extraction-priority）；`type` 随目录改（rule → methodology）；**正文一字未改**（仅追加一行迁区说明）；**slug 保留** ⇒ 40+ 处入链零改动，只改 `rules/<slug>` **路径形态** 26 行（15 个文件）。`rules/` **23 → 13** ✅（目标 ≤13）。
+- **③ 撞上新坑：迁卡后召回静默掉 7 个点（已修）**：迁区后 `recall_regression` word **98% → 91%**（4 条 golden 掉出 top-5，且**零报错**：巡检 exit 0 / lint 0 / INDEX 一致）。
+  · **根因**：向量库按**路径**索引（`docs` 表）⇒ 路径变更 ⇒ 旧行失效、该卡向量证据消失。
+  · **修法**：`engine.py build-vectors`（输出 `removed: 10` → `inserted: 10`）⇒ **recall 精确回到基线 98% / @1 75%**（逐值相等）。
+  · **A/B 对照方法**：`git stash` 前后各跑一次 `recall_regression`（JSON 逐条 diff）⇒ 定位到 4 条掉分全部是「刚动过的那几张卡」，**先排除内容因素再谈内容**。
+- **④ 验证**：`pytest` **825 passed / 4 skipped** · `recall_regression` word **98%**（基线 98%）/ char **98%**（基线 98%）· `engine.py lint` 616 卡 **0 问题** · `hub_audit` P0=0 / P1=0 / P2=1（WORK.md 提及已退役文件名，已改）· `index_locatability_bench` 改造前后 **15/20 → 15/20（无变化）** · `render_index --write` 已重渲。
+- **⑤ 新坑卡已落草案区**：`.sync/drafts/pi_draft/card-move-requires-rebuild-vectors.md`（`type: exp` / `grade: pitfall`）—— 「迁卡/改名后必须 rebuild-vectors；召回退化先怀疑索引失配，再怀疑内容」；证据卡 `pi-card-merge-hurts-recall.md` 已补「2026-11-02 处置」段（含 A/B 对照表）。
+
 ## [2026-11-02] R23 | A1 grade 覆盖率核验（**发现我方测量假象**）+ 字段退役（`tier` 全量 / `l1_tier` → `tiers`）
 
 - **① 重大更正（自我纠错）**：上一轮（11-02 上午）盘点时我用「只扫 frontmatter 前 15 行」统计 grade，得 **63.1%（389/616）** ⇒ 误判「A1 是最大缺口」。**用 YAML 全量解析复核后：616/616 = 100%，覆盖本就达成**。227 张「缺 grade」的卡，实际是 `grade:` 行落在**长 tags 列表之后**（第 16–22 行）⇒ **测量假象，不是真缺口**。已同步修正 `WORK.md`。

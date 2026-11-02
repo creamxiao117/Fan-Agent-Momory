@@ -10,7 +10,7 @@
 - 巡检 **8 步 exit 0**（lint / render_check / audit / recall / reconcile / secret_sentry / encoding / tests）；产物恰两件 `retro/snapshot-*.json` + `retro/daily-*.md`；健康 **91.9/100**（card 100 / skill 100 / gate 100 / flywheel 85.7 / **llm 60** ← LM Studio 2060 ms，唯一 info 告警）
 - 测试 **827 用例已收集**；**门禁 9→3 且 scope-gated**（`common/gate_scope.py`：`code`/`text`/`l0`，按 staged 触发）⇒「他人未提交改动阻断提交」缺陷已消除，`--no-verify` 合法用途归零
 - **grade 覆盖 616/616 = 100%**（task 242 / domain 190 / proven 135 / pitfall 42 / iron 7）；枚举校验已生效（`VALID_GRADES`）；**L1 集合已改由 `grade=iron` 派生**，归属由 `tiers` 声明（`l1_tier`/`tier` 已退役）；bootstrap 已按 grade 三段分层（铁律 / 已验证方案 / 相关经验）
-- 平台元数据**单源**（`hub.config.yaml`，`system/platforms.yaml` 已删）；能力账本 `system/capabilities.json|md` + `scripts/INVENTORY.json`（**113 条**：keep 73 / manual-cli 38 / duplicate 2）；`capability_reconcile` 已挂巡检第 4 步
+- 平台元数据**单源**（`hub.config.yaml`；旧双源文件已删）；能力账本 `system/capabilities.json|md` + `scripts/INVENTORY.json`（**113 条**：keep 73 / manual-cli 38 / duplicate 2）；`capability_reconcile` 已挂巡检第 4 步
 - **pi 接入**：MCP 已通（本会话 7 工具）· `agent/mcp.json` → `.venv` · `agent/AGENTS.md` **顶部托管块**已注入 · 扩展 `agent/extensions/memory-hub.ts`（`/hub` `/hub-cap list|install|verify|remove|residue` `/hub-on` `/hub-off`；注入走 `sections["hub-context"]` ← `engine.py tier-bootstrap`）· pi 已登记 · 回写通道 `.sync/drafts/pi_draft/` 定期 ingest
 - 定时链：07:30 巡检 / 00:35 夜间合并 / 06:00 密钥哨兵 / 09:00 临时目录清理 + Hermes 5 任务（07:30 晨报 → 07:40 提升 → 07:50 star-distill+T1 → 周六评测/SkillHub）；**微信通道已停用**
 
@@ -19,7 +19,7 @@
 | # | 任务 | 判据 / 做法 |
 | -- | --- | -- |
 | **A1** | ✅ **已达成**（实测 616/616 = 100%；此前“63.1%”是前 15 行文本窗口的测量假象）；本轮补：旧 `tier` 字段退役 + `l1_tier` → `tiers`（零漂移） | 维持 |
-| **A2** | **`rules/` 23 → ≤13** | 重构 Task 8/14：同族卡合并；每张须绑门禁，否则降级 |
+| **A2** | ✅ **已达成**：`rules/` **23 → 13**（10 张非铁律卡迁 `methodology/`，**slug 保留** ⇒ 召回零损伤；实测 word recall@5 98% 与基线逐值相等） | 维持：新增规则卡先问「是铁律还是实践」 |
 | **A3** | **模块瘦身 113 → ≤75** | Task 9 + 38 个 `manual-cli` 裁定（保留者 / 归档者 / 取证） |
 | **A4** | **T1 重跑（逾期）** | `python -m scripts.rule_following_timeseries`；判据见下。`docs/compose/metrics/` 仍只有 09-23 基线 |
 | **A5** | **pi 计划 P2/P3 收口** | Task 9 `/hub-write`（人工确认制）+ Task 10 审计可见 + Task 11/12 回归沉淀 |
@@ -58,6 +58,7 @@
 - **解释器必须 `.venv\Scripts\python.exe`**（系统 python 缺 jieba → 9 个检索测试静默跳过＝假绿）
 - 中枢卡提交须 `git -C AgentMemoryHub`（嵌套 git）；跨仓改动**两仓提交相邻、message 互引**
 - **本文件 ≤5000 字符**（`startup_budget` 看守）；超了先砍内容再加，别超帽硬塞
+- **迁卡 / 改 slug 后必须 `engine.py build-vectors` 重建**：向量库按**路径**索引，路径一变旧行即失效（实测召回静默掉 7 个点：98% → 91%）
 - `INDEX*.md` 是渲染产物，禁手改；改卡后 `python -m scripts.render_index --write`
 - **提交门禁自改期间不得 `--no-verify`**；门禁故障当场修
 - **状态源纪律**：WORK.md = 唯一当前状态；每轮改动在 RUNLOG.md 追加（最新在前）；**不要新建笔记文件**
