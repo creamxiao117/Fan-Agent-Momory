@@ -19,7 +19,7 @@
 | # | 任务 | 判据 / 做法 |
 | -- | --- | -- |
 | **A1** | ✅ **已达成**（616/616；此前「63.1%」是前 15 行窗口的测量假象）；本轮补：`tier` 退役 + `l1_tier` → `tiers`（零漂移） | 维持 |
-| **A2** | ✅ **已达成**：`rules/` **23 → 13**（10 张非铁律卡迁 `methodology/`，**slug 保留** ⇒ 召回零损伤；实测 word recall@5 98% 与基线逐值相等） | 新增规则卡先问「铁律还是实践」 |
+| **A2** | ✅ **已达成**：`rules/` **23 → 13**（10 张非铁律卡迁 `methodology/`，**slug 保留** ⇒ 召回零损伤，recall@5 98% = 基线） | 新增规则卡先问「铁律还是实践」 |
 | **A3** | ⚠️ **裁定：目标不可达，已重新定义**（台账 114：keep 81 · manual-cli 33 · **unused 0** ⇒ 无死模块可删；2 条重复声明经取证撤销）；交付：**尺子补齐在役证据**（`last_run` + `refs_scheduled`）+ 裁定表 | 维持 |
 | **A4** | ✅ **已重跑**（2026-11-02）：判据①**正面成立**（后窗口 **37 天** ≥10 且 invalid/orphans/ghosts **全 0**）；判据②③**反面**（产出率 **3.2%** ≤11%；重复率 **61%**）⇒ **根因在知识流入侧的「重复提交」**，不在门禁漂移；裁决产物见 `docs/compose/metrics/2026-11-02-t1-rerun.md` | 后续：查「反复提交」上游（12 张卡被提交 ≥2 次） |
 | **A5** | ✅ **已收口**：`/hub-write`（**预览+确认制** → 新 CLI `draft-write` → 与 MCP 同源）+ 检索可见（`tier-bootstrap` 现在写查询账本）+ 「近 30 天用过、近 7 天零检索」告警（**只报不拦**）+ 扩展降级账本 | 维持 |
@@ -56,11 +56,11 @@
 
 ## 禁止 / 注意
 
-- **勿执行** `scripts/merge-methodology.py`、`scripts/deduplicate-experience.py`（已加拒绝护栏）
+- **勿执行** `scripts/merge-methodology.py` / `deduplicate-experience.py`（有拒绝护栏）
 - **解释器必须 `.venv\Scripts\python.exe`**（系统 python 缺 jieba → 9 个检索测试静默跳过＝假绿）
 - 中枢卡提交须 `git -C AgentMemoryHub`（嵌套 git）；跨仓改动**两仓提交相邻、message 互引**
-- **本文件 ≤5000 字符**（`startup_budget` 看守）；超了先砍内容再加，别超帽硬塞
-- **迁卡 / 改 slug 后必须 `engine.py build-vectors` 重建**：向量库按**路径**索引，路径一变旧行即失效（实测召回静默掉 7 个点：98% → 91%）
+- **迁卡 / 改 slug 后必须 `engine.py build-vectors` 重建**：向量库按**路径**索引，路径一变旧行即失效（召回静默掉 7 个点）
+- **改 `hub.config.yaml` 后必须 `scripts/capability_scan --write`**：否则巡检 reconcile 步报「能力账本与实测态不一致」
 - `INDEX*.md` 是渲染产物，禁手改；改卡后 `python -m scripts.render_index --write`
 - **提交门禁自改期间不得 `--no-verify`**；门禁故障当场修
 - **状态源纪律**：WORK.md = 唯一当前状态；每轮改动在 RUNLOG.md 追加（最新在前）；**不要新建笔记文件**

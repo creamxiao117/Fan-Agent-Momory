@@ -16,6 +16,7 @@
 - **④ A7 腐烂文档（Task 11 Step 1）**：`methodology/agent-tool-inventory.md` **清空 2026-08-18 的手写清单数字**（4 平台技能数/MCP 数/高频项）⇒ 只留**口径与方法**，事实源指向 `system/capabilities.md`（渲染产物）+ `capability_scan` / `capability_reconcile`。理由：**数字没有门禁看着 ⇒ 必然腐烂**；清单归机器、方法留人。
 - **⑤ 自身缺陷（pytest 揪出）**：`inventory` 的 `last_run` 是**时效字段**（产物 mtime）⇒ 纳入 `--check` 比对会让台账**每次巡检都因新产物变红** ⇒ 训练 --no-verify。修法：把 `last_run`/`last_run_kind` 列入**不参与一致性比对**的 volatile 字段（与 `refs_*` 同列），并在注释里写明原因。
 - **⑥ 沉淀**：两张草案卡已落 `.sync/drafts/pi_draft/`（等 07:40 ingest 提升）：`pi-auto-hub-retrieval-bridge`（分层架构 + 裁定理由 + 6 条踩坑）、`pi-as-sixth-platform-three-layer-template`（平台接入三层机制模板 + 9 条接入清单）。
+- **⑦ 端到端验收（巡检）**：修完一处后全量巡检 **exit 0 · 8 步全绿**（lint/render_check/audit/recall/reconcile/secret_sentry/encoding/tests/snapshot）。中途抓到一处真实故障：改了 `hub.config.yaml`（新增 `reduction_target_ratio`）后**未重渲能力账本** ⇒ `capability_scan --check` 不一致 ⇒ 巡检 reconcile 步 exit 2。**已修并写进 WORK.md 禁止/注意**（改配置 ⇒ 必跑 `capability_scan --write`）。
 
 ## [2026-11-02] R25 | A3 模块台账裁定（**C8 ≤75 目标裁定不可达**）+ A4 T1 重跑（**判据①正面 / 判据③反面**）
 
