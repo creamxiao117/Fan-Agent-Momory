@@ -2,6 +2,21 @@
 
 按轮次（R1…）追加；每条含巡检/门禁结果、决策与进行中的事项。当前状态见 `WORK.md`。
 
+## [2026-11-02] R22 | 推送积压收口 + **状态源漂移修复**（WORK.md 重写）+ 架构重构 21 任务现场盘点
+
+- **① 推送积压收口（本次第一诉求）**：中枢仓 **ahead 37**、主仓 **ahead 1** 长期未推 origin。按 AGENTS.md §2.4 口径走 **`-c http.version=HTTP/1.1`**（本机 HTTP/2 协商被中间设备打断，2026-10-22 已实测）；两仓分别推送，**未使用 `--no-verify`**。
+- **② 状态源漂移（本次第二诉求，实为真缺陷）**：取证发现 **WORK.md 停在 2026-10-01**（自称“只剩 T1 / R2 进行中”），**RUNLOG.md 停在 2026-10-12 R21**，而两仓提交实际已到 **2026-11-02** ⇒ 「唯一状态源」与事实脱节 **3 周**。违反 `rules/context-engineering-discipline` 的「单一状态源 / 单一过程日志」铁律。
+  - **WORK.md 已按现场取证重写**（4238/5000 字符，UTF-8 无 BOM，纯 LF）：当前状态 / 活跃待办 A1–A7 / 判据 C1–C8 现状表 / 门禁清单 / 禁止事项，全部换成**实测值**（卡片 616、grade 63.1%、模块 113、rules 23、827 用例、健康 91.9、巡检 8 步 exit 0）。
+  - **RUNLOG 补本条**（只追加、最新在前），不新建笔记文件。
+- **③ 计划文档复选框全部未勾选（发现）**：两份 2026-10-02 计划的 `- [ ]` 一个没打勾，而实际有 **14 个任务已完成** ⇒ **复选框已失去进度语义**，不能当状态源。处置：**以 WORK.md 为准**（单一状态源），计划正文只作为设计与判据的存档。
+- **④ 架构重构 21 任务现场盘点（逐项取证，非文档自述）**：✅ 完成 12（Task 3/4/6/7/10/12/14-派生/15/16/17/19/20/21）· 🔶 部分 5（Task 5 裁定表未落盘 / 8 rules 23→≤13 未达 / 9 模块 113→≤75 未达 / 13 grade 63.1% 未达 100% / 18 预算帽未定）· ⬜ 未做 1（Task 11 腐烂文档）· 其余按计划归入 C6/C8 未达标项。
+  - 关键证据：`hub.config.yaml` 已是唯一平台源（`system/platforms.yaml` 已删、无硬编码 `PLATFORMS`）；`common/gate_scope.py` + 两个钩子已 3 道 scope-gated（13 个 scope 单测）；巡检恰 8 步且产物恰两件；`task_tier.L1_GRADE_FIELD = "grade"`（`l1_tier` 已退役）；`mcp_handlers` 三段分层标题已落地；`capabilities.json` 含 `discovery_cost`；pi 扩展已实现 `/hub` `/hub-cap list|install|verify|remove|residue` `/hub-on` `/hub-off`。
+- **⑤ pi 接入计划 P2/P3 未落地**：扩展缺 `/hub-write`（Task 9）与审计可见（Task 10）；回写通道本身可用（`.sync/drafts/pi_draft/` 已在 10-31 / 11-02 被 ingest）。
+- **⑥ T1 仍逾期**：`docs/compose/metrics/` 只有 09-23 基线，`rule_following_timeseries` 自基线后**无新产物** ⇒ WORK.md 保留 T1 为待办并标注逾期（注意：10-31 的“T1 迭代验证”是**卡片级亲跑验证**（evidence=t1），与此处 T1=规则遵循时序 **不是同一件事**，勿混淆）。
+- **本轮入库内容**：中枢仓 —— 例行产物（`retro/daily-2026-11-02.md`、`retro/snapshot-2026-11-02.json`、密钥哨兵日报、平台看板）+ 5 张卡 `reuse_count` 自增（**MCP 命中副作用，非人手改动**）；主仓 —— `WORK.md` 重写 + 本条 RUNLOG。
+- **验证**：hub 仓 `l0` 面门禁（startup_budget + render_index --check）pass；`pytest --collect-only` = **827 用例**；中枢 lint 全 0；巡检 8 步 exit 0（11-02 07:49 实跑）。
+- **下一轮观察点**：A1（grade → 100%）、A2（rules ≤13）、A3（模块 ≤75）、A4（T1 重跑）、A5–A7 —— **均需用户裁定后再动**，不动手写新卡。
+
 ## [2026-10-12] R21 | 去重链复活（本地模型重定 + 自愈）+ 涨星第二源落地 + 清 `C:\c` 残影 + 一次 prompt 截断事故
 
 - **① 去重链复活（用户批准改配置）**：根因确认——`system/config.yaml` 的 `local_chat.model` 旧值 `qwen3-4b-instruct-2507` **已不在 LM Studio 服务列表**（实测 `GET /v1/models`：gemma-4-26b-a4b-it-qat / text-embedding-bge-m3 / qwen3.8-27b-fast / text-embedding-nomic-…）⇒ chat 400 ⇒ 整链降级、ingest 每天靠人工 `git mv`。

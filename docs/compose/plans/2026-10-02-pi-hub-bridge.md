@@ -6,6 +6,13 @@
 - 验收判据：C1–C5，见「验收判据」节（**判据不通过即视为未完成**）
 - 范围外（另案）：pi 之外的其他平台改造；中枢侧 ingest/distill 自动化变更；向量库/embedding 改造；Web UI；`work/` 归档区任何改动
 
+> **进度快照（2026-11-02 核对）**
+> 本计划的 `- [ ]` 复选框**未维护** ⇒ **唯一状态源 = `WORK.md`**（「活跃待办 A5」为本计划 P2/P3 的落点）；本文件只作设计与判据的存档。
+> 现场盘点：✅ **P0（Task 1–4）** —— MCP 已通（`agent/mcp.json` → `.venv`）、`agent/AGENTS.md` 顶部托管块已注入、分型单源 `task_tier.py`、pi 已登记进 `hub.config.yaml`、回写通道 `.sync/drafts/pi_draft/`
+> · ✅ **P1（Task 5–8）** —— `engine.py tier-bootstrap` + 扩展 `agent/extensions/memory-hub.ts`（`/hub` `/hub-cap list|install|verify|remove|residue` `/hub-on` `/hub-off`；注入走 `systemPromptOptions.sections["hub-context"]`）
+> · 🔶 **P2（Task 9–10）** —— 回写通道可用（pi_draft 已被 ingest），但**缺 `/hub-write`（人工确认制）与审计可见**
+> · ⬜ **P3（Task 11–12）** —— 回归总检与沉淀无痕
+
 ---
 
 ## 一、现状与问题（2026-10-02 实测）
