@@ -142,15 +142,94 @@ RESP_WORDS = frozenset(
 DECLARED_DUPLICATES: list[dict] = [
     {
         "keep": "scripts/render_index",
-        "retire": ["scripts/index_consistency", "scripts/audit_index"],
-        "why": "INDEX 一致性的唯一实现 = 渲染器 --check；另两个自称同一职责（均带『一致性』）",
+        "retire": [],
+        "why": (
+            "2026-11-02 更正（原声明：retire=[index_consistency, audit_index]，依据是「职责字样都含一致性」——"
+            "实测不成立，见 docs/compose/reports/2026-11-02-module-adjudication.md）："
+            "① `audit_index` 是 **`hub audit` CLI 的实现体**（commands/audit.py 以子进程调用它），在役；"
+            "② `index_consistency` 是 **INDEX 登记行正则 / 分区表 / 目录→文件映射的单一源**，"
+            "被 render_index / post_ingest_hook / startup_budget + 4 个测试 import；"
+            "③ 二者与 `render_index --check` 的**检查维度不同**（audit_index 独有 misrouted 错位登记维度）。"
+            "⇒ 撤销退役声明，改为**保留并记理由**（D6「保留需举证」的逆向用例：名字像 ≠ 职责重复）"
+        ),
     },
-    # 2026-10-02 已物理退役（不再登记；verify_declarations 只验证"仍在磁盘"的声明）：
-    #   missing_query / knowledge_gap · check_encoding / nightly_log_encoding_check+strip_bom ·
-    #   capability_scan / platform_unregistered · audit_dead_modules（被本模块吸收）
-    # 注：`scripts/audit_dead_modules` 已于 2026-10-02 git rm（本模块吸收其引用扫描并换 AST 实现）
-    # —— 已被物理删除者不再登记（`verify_declarations` 只验证"仍在磁盘"的声明）。
 ]
+
+# ── 在役证据（2026-11-02 补齐：尺子原来只有「谁引用我」，没有「我最近还跑没跑」）──
+#
+# 为何要补：C3 的「尺子双把」原计划要求 `last_run`（从 .sync/state、retro 产物时间戳、schtasks
+# 三处取最晚证据），但实现里 `last_run` 一直写死 None ⇒ **尺子只有一半**：它能说「没人引用你」，
+# 却说不出「你上个月还在跑」——于是「可删」与「已死」被混为一谈（38 个在役 CLI 全被标 manual-cli）。
+#
+# 本次补两样：
+#   ① `scheduled_refs`：**编排入口**（仓库 .cmd/.bat 定时脚本）里提到本模块 ⇒ 在役证据
+#   ② `last_run`：本模块**产物**的最新时间戳（retro/ · .sync/ · system/run/）+ 编排脚本 mtime
+# 口径诚实说明：产物时间戳 = **真实运行时间**；编排脚本 mtime = 弱证据（仅表示「被排进计划」），
+# 两者在台账里分列（`last_run` 取最强的一个，`last_run_kind` 标出其来源类别）。
+SCHED_GLOBS = (
+    "scripts/*.cmd",
+    "scripts/*.bat",
+    "scripts/*.ps1",
+    "hub-engine/scripts/*.cmd",
+    "hub-engine/scripts/*.bat",
+)
+ARTIFACT_DIRS = (
+    HUB / "retro",
+    HUB / ".sync",
+    HUB / "system" / "run",
+)
+
+
+def _norm(stem: str) -> str:
+    """产物命名归一：模块名 `foo_bar` ↔ 产物名 `foo-bar`。"""
+    return stem.replace("_", "-").lower()
+
+
+def scheduled_refs(stem: str) -> list[str]:
+    """编排入口（.cmd/.bat/.ps1）里提到本模块的文件名 ⇒ **在役证据**。
+
+    只认两种形态：`foo.py`（直接调脚本）与 `scripts.foo`（`-m` 形态）——
+    避免把散文里出现的词误判成调用。
+    """
+    out: list[str] = []
+    for g in SCHED_GLOBS:
+        for f in sorted(REPO.glob(g)):
+            text = read_text(f)
+            if not text:
+                continue
+            if re.search(rf"(?<![\w.]){re.escape(stem)}\.py\b", text) or re.search(
+                rf"(?<![\w.])scripts\.{re.escape(stem)}\b", text
+            ):
+                out.append(f.relative_to(REPO).as_posix())
+    return out
+
+
+def last_run_evidence(stem: str, sched: list[str]) -> tuple[str | None, str]:
+    """→ (时间戳, 证据类别)。**无证据就是 None，不猜**（与台账既有口径一致）。"""
+    best: float | None = None
+    kind = "none"
+    target = _norm(stem)
+    for d in ARTIFACT_DIRS:
+        if not d.is_dir():
+            continue
+        for f in d.iterdir():
+            if not f.is_file():
+                continue
+            if not f.name.lower().startswith(target):
+                continue
+            mt = f.stat().st_mtime
+            if best is None or mt > best:
+                best, kind = mt, "artifact"
+    # 弱证据：编排脚本自身的 mtime（表示「被排进计划」，不是「跑过」）
+    for rel in sched:
+        f = REPO / rel
+        if f.is_file():
+            mt = f.stat().st_mtime
+            if best is None or mt > best:
+                best, kind = mt, "scheduled"
+    if best is None:
+        return None, kind
+    return datetime.fromtimestamp(best, CST).strftime("%Y-%m-%dT%H:%M:%S+08:00"), kind
 
 
 def module_key(p: Path) -> str:
@@ -346,6 +425,8 @@ def build() -> dict:
     for key, p in keys.items():
         src = read_text(p)
         resp = first_line(p)
+        sched = scheduled_refs(p.stem)
+        last_run, last_kind = last_run_evidence(p.stem, sched)
         rows.append(
             {
                 "module": key,
@@ -355,12 +436,14 @@ def build() -> dict:
                 "refs_code": code.get(key, []),
                 "refs_test": test.get(key, []),
                 "refs_doc": doc.get(key, []),
+                "refs_scheduled": sched,
                 "gate_role": gates.get(key),
                 "artifacts": artifacts_of(p),
                 "resp_words": sorted(_resp_words(resp)),
                 "has_main": "__main__" in src,
-                # 诚实口径：无证据就是 null，不猜日期
-                "last_run": None,
+                # 在役证据（2026-11-02 实装）：产物时间戳 = 真实运行时间；无证据就是 null，不猜
+                "last_run": last_run,
+                "last_run_kind": last_kind,
                 "duplicate_of": dup.get(key),
                 "verdict": "keep",
             }
@@ -369,7 +452,7 @@ def build() -> dict:
     for r in rows:
         if r["duplicate_of"]:
             r["verdict"] = "duplicate"
-        elif r["gate_role"] or r["refs_code"]:
+        elif r["gate_role"] or r["refs_code"] or r["refs_scheduled"] or r["last_run"]:
             r["verdict"] = "keep"
         elif r["has_main"]:
             r["verdict"] = "manual-cli"

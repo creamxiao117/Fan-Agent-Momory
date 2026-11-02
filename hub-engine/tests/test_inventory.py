@@ -22,7 +22,6 @@ from scripts.inventory import (
     jaccard,
     module_key,
     review_pairs,
-    verify_declarations,
 )
 
 
@@ -51,20 +50,60 @@ def test_jaccard_bounds():
 
 
 def test_declared_map_shape():
-    """声明表必须有 keep/retire/why 三字段（why 是给人复核的判据，不可省）。"""
-    m = declared_map()
-    assert m, "应至少有一条声明"
+    """声明表必须有 keep/why（why 是给人复核的判据，不可省）；`retire` 可为空。
+
+    2026-11-02：原声明（retire=[index_consistency, audit_index]）经取证撤销 ⇒ 允许空 retire，
+    但**必须留 why 说明为何撤销**（否则「撤销」与「忘了」不可区分）。
+    """
+    assert DECLARED_DUPLICATES, "声明表不应为空"
     for grp in DECLARED_DUPLICATES:
-        assert grp["keep"] and grp["retire"] and grp["why"], grp
+        assert grp["keep"] and grp["why"], grp
+        assert isinstance(grp["retire"], list), grp
         for r in grp["retire"]:
-            assert m[r] == grp["keep"]
+            assert declared_map()[r] == grp["keep"]
 
 
-def test_verify_declarations_detects_expired_entry():
-    """声明过期（被取代者已不在磁盘）必须报出来——否则台账会持续撒谎。"""
-    keys = {"scripts/render_index": Path("x"), "scripts/audit_index": Path("y")}
-    errs = verify_declarations(keys)
-    assert any("index_consistency" in e for e in errs), errs
+def test_verify_declarations_detects_expired_entry(monkeypatch):
+    """声明过期（被取代者已不在磁盘）必须报出来——否则台账会持续撒谎。
+
+    用 monkeypatch 注入一条**确实过期**的声明（不依赖仓库当前状态）。
+    """
+    import scripts.inventory as inv
+
+    monkeypatch.setattr(
+        inv,
+        "DECLARED_DUPLICATES",
+        [{"keep": "scripts/render_index", "retire": ["scripts/gone_module"], "why": "test"}],
+    )
+    errs = inv.verify_declarations({"scripts/render_index": Path("x")})
+    assert any("gone_module" in e for e in errs), errs
+
+
+def test_scheduled_refs_detects_cmd_orchestration(tmp_path, monkeypatch):
+    """**在役证据**：编排入口（.cmd）里提到本模块 ⇒ 算编排引用（尺子的第二只眼）。"""
+    import scripts.inventory as inv
+
+    monkeypatch.setattr(inv, "REPO", tmp_path)
+    (tmp_path / "scripts").mkdir()
+    (tmp_path / "scripts" / "run_x.cmd").write_text("python -m scripts.secret_sentry --root ..\n", encoding="utf-8")
+    (tmp_path / "scripts" / "other.cmd").write_text("echo nothing here\n", encoding="utf-8")
+    assert inv.scheduled_refs("secret_sentry") == ["scripts/run_x.cmd"]
+    assert inv.scheduled_refs("not_there") == []
+
+
+def test_last_run_evidence_prefers_real_artifact(monkeypatch, tmp_path):
+    """`last_run` 必须优先取**产物时间戳**（真实运行时间），无证据则 None（不猜）。"""
+    import scripts.inventory as inv
+
+    art = tmp_path / "retro"
+    art.mkdir()
+    (art / "lint-report-2026-11-02.md").write_text("x", encoding="utf-8")
+    monkeypatch.setattr(inv, "ARTIFACT_DIRS", (art,))
+    stamp, kind = inv.last_run_evidence("lint_report", [])
+    assert stamp is not None and kind == "artifact"
+    assert stamp.startswith("2026-11-02")
+    # 无证据 ⇒ None（诚实口径）
+    assert inv.last_run_evidence("never_ran_module", []) == (None, "none")
 
 
 def test_review_requires_same_gate_same_kind_and_high_similarity():

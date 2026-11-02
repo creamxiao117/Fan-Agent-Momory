@@ -171,3 +171,20 @@ def test_verdicts_ignore_non_conflict_headers(monkeypatch, tmp_path):
         "## [2026-08-20] ingest | 自动入区：a.md\n- ingest：`{'promoted': 1, 'duplicate': 4}`\n",
     )
     assert ts.load_ingest_verdicts() == []
+
+
+# ────────────────────── 后窗口口径（2026-11-02 修正）──────────────────────
+
+
+def test_post_window_is_all_days_after_reform_not_hardcoded_two_days():
+    """后窗口必须是**改造日之后的全部有数据天**。
+
+    回归背景：原实现把后窗口硬编码为 2 天（改造日 + 次日）⇒ T1 判据
+    「后窗口 ≥10 个有数据的天」在**结构上永远不可能满足**（n 恒 ≤ 2）⇒ 指标不可证伪。
+    """
+    rows = [{"date": "2026-09-22"}, {"date": "2026-09-23"}, {"date": "2026-09-24"}]
+    rows += [{"date": f"2026-10-{d:02d}"} for d in range(1, 20)]
+    post = ts.post_window_rows(rows)
+    assert len(post) == 20, f"后窗口应含改造日之后的全部有数据天，实际 {len(post)}"
+    assert all(r["date"] > ts.RULE_REFORM_DATE for r in post)
+    assert len(post) >= ts.POST_WINDOW_MIN_DAYS, "后窗口必须能跨过判据下限（≥10 天）"

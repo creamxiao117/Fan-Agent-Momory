@@ -37,7 +37,13 @@ GATE_KEYS = ("invalid", "schema_drift", "orphans", "ghosts", "stale")
 
 # 改造日与「后窗口」（T1 重跑对照用；改这里等于换对照口径，须同步文档）
 RULE_REFORM_DATE = "2026-09-23"
-POST_WINDOW = (RULE_REFORM_DATE, "2026-09-24")
+# 2026-11-02 修正：POST_WINDOW 原为**硬编码两天**（改造日 + 次日）——
+#   那是因为当时改造后只有 1~2 天数据；后果是 T1 判据「**后窗口 ≥10 个有数据的天**」
+#   在**结构上永远不可能满足**（窗口只有 2 天 ⇒ n 恒 ≤ 2）⇒ 指标不可证伪。
+#   现改为「改造日之后的**全部有数据天**」（由数据决定，不硬编码），
+#   并在输出里明示「是否达到 ≥10 天」的下限判定。
+#   口径变更已同步 WORK.md（T1 判据段）。
+POST_WINDOW_MIN_DAYS = 10
 USE_KEYS = ("searches", "hits", "misses", "reuse_ops")
 SCORE_KEYS = (
     "overall",
@@ -264,6 +270,14 @@ def _print_section_b(reps: list[dict]) -> None:
     print("   ⇒ **跨格式不能直接比大小**；只有 `无效卡片/invalid` 在两格式与快照中同义可比。")
 
 
+def post_window_rows(rows: list[dict]) -> list[dict]:
+    """后窗口 = **改造日之后的全部有数据天**（2026-11-02 起；原为硬编码 2 天）。
+
+    抽成独立函数是为了**可测**：口径是 T1 判据的地基（「后窗口 ≥10 天」能否满足）。
+    """
+    return [r for r in rows if r["date"] > RULE_REFORM_DATE]
+
+
 def _print_section_c(rows: list[dict], reps: list[dict]) -> None:
     """C. 改造前后对照 + 可证伪判据（T1 重跑时对照用）"""
 
@@ -279,7 +293,7 @@ def _print_section_c(rows: list[dict], reps: list[dict]) -> None:
     pre_days = len(pre_inv)
     pre_bad = sum(1 for n in pre_inv if n > 0)
 
-    post = [r for r in rows if r["date"] in POST_WINDOW]
+    post = post_window_rows(rows)
     post_clean = sum(1 for r in post if all((_num(r[f"lint_{k}"]) or 0) == 0 for k in GATE_KEYS))
 
     print(
@@ -292,13 +306,22 @@ def _print_section_c(rows: list[dict], reps: list[dict]) -> None:
         f"（可比口径）；B 格式“问题数”最大值 "
         f"{max((r['problems'] for r in reps if isinstance(r['problems'], int)), default=0)}"
     )
-    print(f"  改造后（后窗口）: {len(post)} 天 → 全维度均 0 的 **{post_clean} 天**")
+    print(f"  改造后（后窗口 = 改造日之后**全部有数据天**）: {len(post)} 天 → 全维度均 0 的 **{post_clean} 天**")
+    enough = len(post) >= POST_WINDOW_MIN_DAYS
+    print(f"  窗口是否达判据下限（≥{POST_WINDOW_MIN_DAYS} 天）: {'✅ 是' if enough else '❌ 否'}")
     print()
-    print(f"  结论（诚实）：**状态已确认干净**（后窗口 {post_clean}/{len(post)} 天全 0），")
-    print(f"                但 **趋势尚未成立**——n={len(post)} 天不足以排除偶然。")
+    if enough and post_clean == len(post):
+        print(
+            f"  结论：**判据①正面成立**（后窗口 {len(post)} 天 ≥ {POST_WINDOW_MIN_DAYS}，invalid/orphans/ghosts 全 0）"
+        )
+    elif post_clean == len(post):
+        print(f"  结论（诚实）：**状态已确认干净**（后窗口 {post_clean}/{len(post)} 天全 0），")
+        print(f"                但 **趋势尚未成立**——n={len(post)} 天不足以排除偶然。")
+    else:
+        print(f"  结论（诚实）：**后窗口出现非零维度**（{len(post) - post_clean} 天非全 0）⇒ 仍有未收敛的漂移源。")
     print()
     print("  可证伪的判据（供 ≥2026-10-07 重跑时对照）：")
-    print("    ① 正面：后窗口 ≥10 个有数据的天且 invalid/orphans/ghosts 全 0")
+    print(f"    ① 正面：后窗口 ≥{POST_WINDOW_MIN_DAYS} 个有数据的天且 invalid/orphans/ghosts 全 0")
     print("       → 则“改造正面”成立（前提：期间检查维度未变动）")
     print("    ② 反面：任一维度复现非零 → 说明仍有未收敛的漂移源，须定位根因")
     print("    ③ 无效对比：若期间 lint 检查维度变了（如新增 long_desc），须分段比较")
