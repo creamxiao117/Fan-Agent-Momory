@@ -162,8 +162,43 @@ _UI_META = {
 _UI_SURFACE = os.environ.get("AGENT_MEMORY_HUB_MCP_UI_SURFACE", "inline").strip() or "inline"
 
 
-def _ui_meta(uri: str) -> dict:
-    """工具 `_meta`：UI 资源声明 + **launchSurface=inline**（避免外部浏览器弹窗）。"""
+def _client_kind(explicit: str | None = None) -> str:
+    """识别调用方客户端（best-effort；识别不出就是 unknown）。"""
+    if explicit:
+        return explicit.strip().lower()
+    if os.environ.get("PI_CODING_AGENT_DIR"):
+        return "pi"
+    if os.environ.get("WORKBUDDY_HOME") or os.environ.get("WORKBUDDY_SESSION_ID"):
+        return "workbuddy"
+    return "unknown"
+
+
+# 默认**只给 WorkBuddy** 声明 ui:// 资源（它是唯一需要它们的 Apps 宿主）
+UI_CLIENTS_DEFAULT: tuple[str, ...] = ("workbuddy",)
+
+
+def _ui_enabled(client: str) -> bool:
+    """本次是否声明 ui 资源。覆盖：`AGENT_MEMORY_HUB_MCP_UI=on|off|auto`（默认 auto）。"""
+    mode = (os.environ.get("AGENT_MEMORY_HUB_MCP_UI") or "auto").strip().lower()
+    if mode == "on":
+        return True
+    if mode == "off":
+        return False
+    return client in UI_CLIENTS_DEFAULT
+
+
+def _ui_meta(uri: str, client: str) -> dict:
+    """工具 `_meta`：UI 资源声明 + **launchSurface=inline**（避免外部浏览器弹窗）。
+
+    **按客户端决定是否声明**（2026-11-03 实测）：
+      · WorkBuddy：需要 ui:// 才能进 liveApps 目录（缺了 ⇒ Agent 调不了 ⇒ 检索不留痕）⇒ 声明；
+      · **pi**：自己也起 MCP-App 会话服务器（`127.0.0.1:8377` 起连续端口）并用**系统浏览器**渲染
+        ⇒ 每调一次中枢工具就弹一个窗口；而 pi 官方文档明确「Pi does not render MCP App resources」
+        ⇒ 对 pi 而言这些 ui:// **零价值** ⇒ **不声明**（不弹窗、不浪费）。
+      · 其它客户端：默认不声明（保守：少声明总比多声明弹窗好）；需要时用环境变量强制打开。
+    """
+    if not _ui_enabled(client):
+        return {}
     meta: dict = {"ui": {"resourceUri": uri}}
     if _UI_SURFACE in {"inline", "panel"}:
         meta["workbuddy"] = {"ui": {"launchSurface": _UI_SURFACE}}
@@ -180,7 +215,8 @@ def _normalize(name: str, arguments: dict) -> dict:
     return args
 
 
-def build_server(root: Path) -> Server:
+def build_server(root: Path, client: str | None = None) -> Server:
+    client_kind = _client_kind(client)
     server = Server("agent-memory-hub")
 
     async def _list_tools(context, params) -> ListToolsResult:
@@ -190,31 +226,31 @@ def build_server(root: Path) -> Server:
                     name="hub_search",
                     description="混合检索中枢（确定性+语义）",
                     inputSchema=SEARCH_SCHEMA,
-                    _meta=_ui_meta(_UI_META["hub_search"]),
+                    _meta=_ui_meta(_UI_META["hub_search"], client_kind),
                 ),
                 Tool(
                     name="hub_get",
                     description="按 slug/路径读单张卡片全文",
                     inputSchema=GET_SCHEMA,
-                    _meta=_ui_meta(_UI_META["hub_get"]),
+                    _meta=_ui_meta(_UI_META["hub_get"], client_kind),
                 ),
                 Tool(
                     name="hub_index",
                     description="浏览五类目录结构",
                     inputSchema=INDEX_SCHEMA,
-                    _meta=_ui_meta(_UI_META["hub_index"]),
+                    _meta=_ui_meta(_UI_META["hub_index"], client_kind),
                 ),
                 Tool(
                     name="hub_bootstrap",
                     description="任务级引导：按任务型（task_tier：light/code/hub/sync/project）分类检索生成引导块",
                     inputSchema=BOOTSTRAP_SCHEMA,
-                    _meta=_ui_meta(_UI_META["hub_bootstrap"]),
+                    _meta=_ui_meta(_UI_META["hub_bootstrap"], client_kind),
                 ),
                 Tool(
                     name="hub_ingest_candidate",
                     description="候选回写（仅写 draft，不直写权威区）",
                     inputSchema=INGEST_SCHEMA,
-                    _meta=_ui_meta(_UI_META["hub_ingest_candidate"]),
+                    _meta=_ui_meta(_UI_META["hub_ingest_candidate"], client_kind),
                 ),
                 Tool(
                     name="hub_announce",
@@ -263,6 +299,7 @@ def build_server(root: Path) -> Server:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="hub-mcp-server")
     ap.add_argument("--root", help="中枢根目录；缺省读环境变量 AGENT_MEMORY_HUB")
+    ap.add_argument("--client", default=None, help="调用方客户端（pi/workbuddy/…）；缺省按环境变量猜")
     args = ap.parse_args(argv)
 
     # 2026-10-21：stdio 通道的 stdout 也要显式钉死 UTF-8。
@@ -280,7 +317,7 @@ def main(argv: list[str] | None = None) -> int:
     if not root:
         print("需要 --root 或环境变量 AGENT_MEMORY_HUB", file=sys.stderr)
         return 2
-    server = build_server(Path(root))
+    server = build_server(Path(root), client=args.client)
 
     async def _run() -> None:
         async with stdio_server() as (read_stream, write_stream):

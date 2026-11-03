@@ -40,16 +40,18 @@ def test_build_server_exposes_tools(tmp_path):
 
 
 def test_tools_declare_launch_surface_inline(tmp_path):
-    """**每个带 UI 资源的工具必须声明 `launchSurface=inline`**（否则 WorkBuddy 会开外部浏览器窗口）。
+    """**带 UI 资源的工具必须声明 `launchSurface=inline`**（否则 WorkBuddy 会开外部浏览器窗口）。
 
     回归背景（2026-11-02）：WorkBuddy 的 `resolveMcpAppSurface(toolMeta)` 读
     `toolMeta["workbuddy"]["ui"]["launchSurface"]`；不声明时走 hostDefault ⇒ 落到 sandbox 表面
     ⇒ **每次调用都弹一个浏览器窗口**（`http://127.0.0.1:8385/?session=…`）。
     合法值只有 `inline` / `panel`（WorkBuddy 的 `isSurface` 白名单）。
+
+    注：2026-11-03 起 ui 资源**按客户端声明**（pi 不声明 ⇒ 不弹窗）⇒ 本用例用 workbuddy 客户端。
     """
     from mcp_server import build_server
 
-    server = build_server(tmp_path)
+    server = build_server(tmp_path, client="workbuddy")
 
     async def _list():
         async with memory_session(server) as session:

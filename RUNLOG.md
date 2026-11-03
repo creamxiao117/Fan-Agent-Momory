@@ -2,6 +2,26 @@
 
 按轮次（R1…）追加；每条含巡检/门禁结果、决策与进行中的事项。当前状态见 `WORK.md`。
 
+## [2026-11-03] R32 | 弹窗真源定位：**是 pi 自己弹的**（推翻 R29 结论）+ 按客户端声明 ui 资源（pi 不再弹）
+
+- **① 推翻 R29 的结论（重要）**：R29 判定「弹窗源 = WorkBuddy」⇒ 只修了 WorkBuddy 侧的 `launchSurface=inline`。用户实测「**不启动 WorkBuddy 也弹**」⇒ 再查：
+  | 证据 | 结论 |
+  | -- | -- |
+  | 弹窗端口 **8377/8378/8379 一串连续端口** | 「每次调用起一个 MCP-App 会话服务器」的模式 |
+  | 8377 监听进程 = `node .../pi-coding-agent/dist/bundle/cli.js --tui-mode fullscreen` | **宿主就是 pi 本体**（不是 WorkBuddy 的 8385） |
+  | pi 官方文档（`docs/mcp.md`）：「MCP App resources … are omitted because **Pi does not render them**」 | 对 pi 而言 `ui://` **零价值** ⇒ 声明它只会让客户端白开一次浏览器 |
+  | 页面文案写着「WorkBuddy MCP Apps 目录展示」 | 那是**我们 server 提供的 HTML 文案** ⇒ **不能用文案判宿主**（我第一版就栽在这） |
+- **② 正解：按客户端决定是否声明 `ui://` 资源**（`mcp_server.py::_ui_meta`）
+  | 客户端 | 是否声明 | 理由 |
+  | -- | -- | -- |
+  | **workbuddy** | ✅ | 需要它进 liveApps 目录（缺了 ⇒ Agent 调不了 ⇒ 检索不留痕） |
+  | **pi** | ❌ | pi 不渲染 ⇒ 声明只会导致**每次调用弹浏览器** |
+  | 其它（hermes/dsh…） | ❌ | 保守：少声明好过弹窗；需要时 `AGENT_MEMORY_HUB_MCP_UI=on` 强制开 |
+  · 客户端识别：`--client <name>`（launcher 传 `--platform`；pi 的 `agent/mcp.json` 已加 `--client pi`），缺省按环境变量猜（`PI_CODING_AGENT_DIR` ⇒ pi）。
+  · WorkBuddy 侧仍保留 `launchSurface=inline`（它读这个字段；不声明会落到 sandbox 表面 ⇒ 外部窗口）。
+- **③ 验证**：新增 `tests/test_mcp_ui_by_client.py` 6 例（auto 模式只给 workbuddy 声明 · env 覆盖 on/off · pi 的 tools/list **不含** ui 资源（端到端）· 客户端识别）；`tests/test_mcp_server.py` 5 例仍真跑。
+- **④ 生效条件**：pi 需**重连 MCP server**（tools/list 重新拉取）才拿到新声明；launcher 起的实例由 `--client <platform>` 自动带上。
+
 ## [2026-11-02] R31 | A8 三段落地收口：② 检索侧用上 evidence ③ 存量 149 张回填（v5 判据 + 抽样全成立）
 
 - **② 检索侧（让 evidence 真正起作用）**：`tools/mcp_handlers.py`

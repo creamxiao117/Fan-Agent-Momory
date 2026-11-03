@@ -113,7 +113,9 @@ def launch(explicit_path: str | None, hub_root: str, platform: str) -> int:
         return 1
 
     # 启动 mcp_server.py 子进程
-    cmd = [sys.executable, str(server), "--root", hub_root]
+    # `--client <platform>`：**告诉 server 调用方是谁** ⇒ server 才能决定是否声明 ui:// 资源
+    # （WorkBuddy 需要；pi 不需要且会因此每次调用弹浏览器窗口 —— 2026-11-03 实测）
+    cmd = [sys.executable, str(server), "--root", hub_root, "--client", platform]
     print(f"[launcher] 启动: {' '.join(cmd)}", file=sys.stderr)
     ledger_path = Path(hub_root) / ".sync" / "state" / "mcp_connect_ledger.jsonl"
     try:
