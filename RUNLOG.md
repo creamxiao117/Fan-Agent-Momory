@@ -2,6 +2,15 @@
 
 按轮次（R1…）追加；每条含巡检/门禁结果、决策与进行中的事项。当前状态见 `WORK.md`。
 
+## [2026-11-02] R29 | 弹窗根因定位与修复（MCP `launchSurface=inline`）+ 修掉一处**静默 skip 假绿**（MCP server 零覆盖）
+
+- **① 弹窗是什么**：用户报的「没事也弹网页窗口」= WorkBuddy 每次调用中枢 MCP 工具，都会用**系统默认浏览器**开一个新窗口（`http://127.0.0.1:8385/?session=…`，标题 `MCP | AGENT-MEMORY-HUB | … | Sandboxed`），页面是**我们自己提供的占位 UI**（页面自己写着「以文本响应为主，UI 资源仅供目录展示」）⇒ 纯噪音 + 抢焦点；连续调用就连续弹。
+- **② 根因（WorkBuddy app.asar 逆向确认）**：`resolveMcpAppSurface(toolMeta)` 读 `toolMeta["workbuddy"]["ui"]["launchSurface"]`；未声明 ⇒ 走 `hostDefault` ⇒ 我们这个 app 不在 WorkBuddy 的「默认 panel」白名单 ⇒ 落到 **sandbox 表面 ⇒ 外部浏览器窗口**（`openUrlInBrowser`）。合法值只有 `inline|panel`（`isSurface` 白名单）。
+- **③ 修复（中枢侧，服务端自声明）**：`mcp_server.py` 的 5 个带 UI 资源的工具，其 `_meta` 增加 `"workbuddy": {"ui": {"launchSurface": "inline"}}`（可用 `AGENT_MEMORY_HUB_MCP_UI_SURFACE` 覆盖）⇒ MCP App **内嵌在 WorkBuddy 界面**，不再开外部窗口；**附带收益**：inline 的 app 不再被 WorkBuddy 持久化成工作区产物（少「MCP App」产物污染）。
+  · ⚠️ **不能直接删 `_meta.ui`**：WorkBuddy 目录校验会判 `missing_ui_resourceUri_or_unknown` ⇒ **Agent 调不了这些工具** ⇒ 检索不留痕。⇒ **上架门票（`ui.resourceUri`）要留，开窗位置（`launchSurface`）由我们决定**。
+- **④ 顺带修掉一处「静默 skip 假绿」**：`tests/test_mcp_server.py` 用 `mcp.shared.memory.create_connected_server_and_client_session`，但**本机 mcp 2.2.0 没有该导出**（只有 `create_client_server_memory_streams`）⇒ `try/except ImportError` 把**整个文件 5 个用例静默 skip** ⇒ **MCP server 的工具清单/调用路径长期零覆盖而 CI 全绿**。⇒ 新增兼容夹具 `tests/mcp_session.py`（新版用原生 helper / 旧版自接内存流）⇒ 5 个用例**真跑起来**（并新增 `launchSurface` 回归例）。
+- **⑤ 沉淀**：坑卡草案 `.sync/drafts/pi_draft/mcp-ui-launchsurface-inline-no-popup.md`（现象 / 逆向证据 / 修法 / 「上架 vs 开窗是两件事」/ 「静默 skip 是假绿的一种」）。
+
 ## [2026-11-02] R28 | A8 落地**方案 A**：新增正交轴 `evidence`（原「推断 grade」被实测否决）+ A9 workbuddy 告警口径收紧
 
 - **① A8 原方案被实测否决（先评估、后动手）**：离线评估「关键词推断 grade」⇒ 与人工标注**一致率仅 22%**（5/23）。**根因**：`grade` 是**混合轴**（强制性 iron × 证据强度 proven/task × 体裁 pitfall/domain）—— 三个正交维度压在一个标签里，关键词只能拟合一维 ⇒ 低一致率是**结构性的**。⇒ **不改 `grade`**（存量 616 张人工标注不推翻），改为**新增正交字段 `evidence`**。

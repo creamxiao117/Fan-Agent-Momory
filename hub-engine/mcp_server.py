@@ -142,6 +142,33 @@ _UI_META = {
     "hub_ingest_candidate": "ui://agent-memory-hub/hub_ingest_candidate.html",
 }
 
+# ── launchSurface=inline（2026-11-02，实测消掉「每次调用都弹浏览器窗口」）─────
+# 现象：WorkBuddy 每次调用上述工具，都会**用系统默认浏览器开一个新窗口**
+#      （`http://127.0.0.1:8385/?session=…`，页面内容是本 MCP 的占位 UI，
+#        页面自己写着「此工具以文本响应为主，UI 资源仅供 WorkBuddy MCP Apps 目录展示」）
+#      ⇒ 用户侧就是「没事也弹网页窗口；连续调用就连续弹」。
+# 根因（WorkBuddy 端代码，逆向确认）：
+#   resolveMcpAppSurface(toolMeta) = readWorkBuddyUiMeta(toolMeta)?.launchSurface
+#                                  ?? hostDefault ?? `inline`
+#   readWorkBuddyUiMeta(meta)     = meta["workbuddy"]["ui"]["launchSurface"]
+#   isSurface(v)                  = v === "inline" || v === "panel"
+#   ⇒ 未声明时走 hostDefault（我们这个 app 不在 WorkBuddy 的「默认 panel」白名单里）
+#     ⇒ 落到 **sandbox** 表面 ⇒ 外部浏览器窗口。
+# 修法：**在工具 _meta 里显式声明 launchSurface=inline** ⇒ MCP App 内嵌在 WorkBuddy 界面，
+#       不再开外部窗口；且 inline 的 app **不再被持久化成工作区产物**
+#       （WorkBuddy：launchSurface===`inline` ⇒ skip publishArtifact / skip persist），
+#       顺带少了「MCP App」产物污染工作区。
+# 可用值仅 `inline` / `panel`（isSurface 白名单）；可用环境变量覆盖（默认 inline）。
+_UI_SURFACE = os.environ.get("AGENT_MEMORY_HUB_MCP_UI_SURFACE", "inline").strip() or "inline"
+
+
+def _ui_meta(uri: str) -> dict:
+    """工具 `_meta`：UI 资源声明 + **launchSurface=inline**（避免外部浏览器弹窗）。"""
+    meta: dict = {"ui": {"resourceUri": uri}}
+    if _UI_SURFACE in {"inline", "panel"}:
+        meta["workbuddy"] = {"ui": {"launchSurface": _UI_SURFACE}}
+    return meta
+
 
 def _normalize(name: str, arguments: dict) -> dict:
     """MCP 参数名（id/type）→ Python 参数名（id_/type_）"""
@@ -163,31 +190,31 @@ def build_server(root: Path) -> Server:
                     name="hub_search",
                     description="混合检索中枢（确定性+语义）",
                     inputSchema=SEARCH_SCHEMA,
-                    _meta={"ui": {"resourceUri": _UI_META["hub_search"]}},
+                    _meta=_ui_meta(_UI_META["hub_search"]),
                 ),
                 Tool(
                     name="hub_get",
                     description="按 slug/路径读单张卡片全文",
                     inputSchema=GET_SCHEMA,
-                    _meta={"ui": {"resourceUri": _UI_META["hub_get"]}},
+                    _meta=_ui_meta(_UI_META["hub_get"]),
                 ),
                 Tool(
                     name="hub_index",
                     description="浏览五类目录结构",
                     inputSchema=INDEX_SCHEMA,
-                    _meta={"ui": {"resourceUri": _UI_META["hub_index"]}},
+                    _meta=_ui_meta(_UI_META["hub_index"]),
                 ),
                 Tool(
                     name="hub_bootstrap",
                     description="任务级引导：按任务型（task_tier：light/code/hub/sync/project）分类检索生成引导块",
                     inputSchema=BOOTSTRAP_SCHEMA,
-                    _meta={"ui": {"resourceUri": _UI_META["hub_bootstrap"]}},
+                    _meta=_ui_meta(_UI_META["hub_bootstrap"]),
                 ),
                 Tool(
                     name="hub_ingest_candidate",
                     description="候选回写（仅写 draft，不直写权威区）",
                     inputSchema=INGEST_SCHEMA,
-                    _meta={"ui": {"resourceUri": _UI_META["hub_ingest_candidate"]}},
+                    _meta=_ui_meta(_UI_META["hub_ingest_candidate"]),
                 ),
                 Tool(
                     name="hub_announce",
