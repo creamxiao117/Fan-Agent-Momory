@@ -160,6 +160,14 @@ def _step_reconcile(root: Path, engine_dir: Path) -> StepResult:
             "task_caps_residue",
             [sys.executable, "-m", "scripts.task_capability", "residue", "--root", str(root)],
         ),
+        # 去重链**退化检测**（2026-11-02 补）：LLM 输出坏掉 ⇒ 静默降级 review ⇒
+        # 草稿全进冲突区、产出率塌陷（2026-10-06~10-12 真实发生：51 张卡全判 review，
+        # 当时无任何面板/告警能看出来 ⇒ 只能两个月后回溯周表）。
+        # 判定源 = `.sync/state/dedup_stats.jsonl`（每次去重判决 append 一行）。
+        (
+            "dedup_stats",
+            [sys.executable, "-m", "scripts.query_report", "--dedup", "--root", str(root)],
+        ),
     )
     for name, argv in checks:
         rc, out, err = _run_cmd(argv, cwd=engine_dir, timeout=120)

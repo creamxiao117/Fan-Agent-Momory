@@ -35,6 +35,13 @@ GRADE_SECTIONS: tuple[tuple[str, tuple[str, ...]], ...] = (
 )
 # 分级摘要长度：iron 给足上下文（要照做），其余只给"值不值得点开"的判断依据
 EXCERPT_BY_GRADE = {"iron": 400, "proven": 220, "domain": 180, "pitfall": 200, "task": 140}
+# ── evidence → 摘要长度加成（2026-11-02，A8 方案 A 落到检索侧）──────────────
+# 为何要加成：`grade` 是混合轴，**「随手记的教训」与「已验证的教训」都落 task 档**
+# ⇒ 两者拿到的摘录长度相同（140）⇒ 已验证的内容被压成一行，等于白验证。
+# ⇒ 现在让**证据强度**参与摘要长度：带实测/T1 证据的卡，摘录更长（能看见验证段）。
+#   净效果：grade=task(140) + measured(100) = 240 ⇒ 接近 proven(220)；
+#            grade=iron(400) + t1(150) = 550（注入预算 ≤1000 token 估算，仍安全）。
+EXCERPT_BY_EVIDENCE = {"t1": 150, "measured": 100}
 SUBDIR_BY_TYPE = {
     "rule": "rules",
     "methodology": "methodology",
@@ -62,6 +69,9 @@ def _hit(
 ) -> dict:
     rel = card.path.relative_to(root).as_posix()
     grade = str(card.extra.get("grade") or "").strip()
+    evidence = str(card.extra.get("evidence") or "").strip()
+    # 摘要长度 = grade 基准 + evidence 加成（证据强的卡值得看更多）
+    excerpt_limit = EXCERPT_BY_GRADE.get(grade, DEFAULT_EXCERPT) + EXCERPT_BY_EVIDENCE.get(evidence, 0)
     h = {
         "slug": card.path.stem,
         "rel_path": rel,
@@ -72,7 +82,9 @@ def _hit(
         "channel": channel,
         # grade 透出给消费方（pi 扩展按可信度决定读全文还是一行）
         "grade": grade,
-        "excerpt": extract_snippet(card.body, query, EXCERPT_BY_GRADE.get(grade, DEFAULT_EXCERPT)),
+        # evidence 透出：**证据强度**（与 grade 正交的一维，消费方可据此判断可信度）
+        "evidence": evidence,
+        "excerpt": extract_snippet(card.body, query, excerpt_limit),
     }
     if score is not None:
         h["score"] = round(score, 4)
@@ -366,7 +378,10 @@ def hub_bootstrap(
         lines.append(title)
         for h in picked:
             tag = f"[{h['grade']}] " if h.get("grade") else ""
-            lines.append(f"- {tag}{h['rel_path']} — {h['excerpt']}")
+            # evidence 标记：**与 grade 正交的一维**，让「已验证的教训」在注入里一眼可辨
+            # （否则 grade=task 的卡与随手记无异，白验证了）
+            etag = f"[{h['evidence']}] " if h.get("evidence") else ""
+            lines.append(f"- {tag}{etag}{h['rel_path']} — {h['excerpt']}")
     if len(lines) == 1:  # 全部 hit 都没有 grade（存量卡未标注）→ 退回平铺，不静默丢内容
         for b in blocks:
             lines.append(f"### {b['kind']}")

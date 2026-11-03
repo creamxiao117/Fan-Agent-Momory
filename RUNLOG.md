@@ -2,6 +2,37 @@
 
 按轮次（R1…）追加；每条含巡检/门禁结果、决策与进行中的事项。当前状态见 `WORK.md`。
 
+## [2026-11-02] R31 | A8 三段落地收口：② 检索侧用上 evidence ③ 存量 149 张回填（v5 判据 + 抽样全成立）
+
+- **② 检索侧（让 evidence 真正起作用）**：`tools/mcp_handlers.py`
+  1. **摘录长度加成**：`EXCERPT_BY_GRADE[grade] + EXCERPT_BY_EVIDENCE[evidence]`（t1 +150 · measured +100）⇒
+     `grade=task`(140) + `measured`(100) = **240 ≈ proven(220)** ⇒ 「已验证的教训」不再被压成一行；最坏 iron+t1=550（注入预算 ≤1000 token 估算，仍安全）。
+  2. **命中项透出 `evidence`**（消费方可据此判断可信度）。
+  3. **注入块行首标 `[grade][evidence]`** ⇒ 「已验证的教训」在注入里一眼可辨。
+  · 配套单测 `tests/test_evidence_retrieval.py` 3 例；**recall@5 仍 98%**（未动检索排序核心）。
+- **③ 存量回填（149 张）**：判据迭代到 **v5**（v1 散文关键词 → v2 结构标记 → v3 结构+实质证据 → v4 排除「描述 exit 语义」→ v5 要求**量化结果**并排除清单式 ✅）；每版都被实测打回，过程留档。
+  · 抽样人工核验 **18/18 成立**；回填 **149 张**（t1 92 · measured 57；blueprints 82 · experience 48 · methodology 14 · rules 3 · projects 2）⇒ 其余卡**不写**（缺失即 none，避免 477 处无意义改写）。
+  · **只加 frontmatter 两字段**（`evidence` / `updated`）⇒ 正文零 diff；`grade` 全部保持人工标注。
+  · 裁定表落盘 `docs/compose/reports/2026-11-02-evidence-backfill.md`（逐卡依据 + 已知边界：非逐张人工、v5 仍有理论假阳性）。
+- **验证**：lint 628 卡 0 问题 · recall word **98%**（不变）· hub_audit 0 发现 · 索引已重渲 · 向量已重建。
+
+## [2026-11-02] R30 | ① W40–41 去重链退化**根因定位**（模型漏写 confidence）+ 「退化可见」三件套
+
+- **① W40–W41 根因（追查完毕）**：产出率塌到 21%/17%、51 条冲突判决 100% 是 `review` ⇒ **不是「真重复」也不是「误杀」**，而是**去重链退化**。逐层取证：
+  | 环节 | 证据 |
+  | -- | -- |
+  | LLM 通道是通的 | `retro/log.md` 该窗口每条冲突都写着「**LLM 建议 review**」 |
+  | 触发机制 | `tools/dedup.py::parse_decision`：输出**缺 `confidence`** ⇒ 填 0.0 ⇒ 下游按低置信处理 ⇒ **静默降级 review** |
+  | 故障期吻合 | 本地模型**普遍漏写 confidence**（`dedup.py` 注释 + R21 记录）；修复 = **10-10 提示词补四字段必填** + **10-12 换模型/自愈重试** ⇒ 与 W40–W41 **完全重合** |
+  | 当时为何无人发现 | ① 指标把 review **混进「重复」**（性质被抹平）② 退化**零留痕** |
+  ⇒ **该窗口退化当时已修**；本轮修的是「退化不可见」这个根因。
+- **② 「退化可见」三件套（本轮新增）**：
+  1. `tools/dedup.py::parse_decision` 区分 **review（模型主动判不确定）** vs **degraded（模型输出坏掉：缺字段/非法动作/解析失败/网关异常）**；
+  2. `sync.py` 每次去重判决 append 一行到 `.sync/state/dedup_stats.jsonl`（action/confidence/degraded/degraded_reason）；
+  3. `scripts/query_report.py` 增 `--dedup`（分布 + 退化占比，≥20% ⇒ 退出码 2）⇒ **接进巡检第 4 步的子检查**（**不增步数，仍 8 步**）⇒ 退化**当天可见**，不再靠月后回溯。
+  · **模块数棘轮自检生效**：初版新开 `scripts/dedup_stats.py` ⇒ 模块 114→115 ⇒ **C8 ④ 触发（超棘轮）** ⇒ 改为**并入既有 `scripts/query_report.py`**（同族：台账统计）⇒ 模块数回 114，**零新增模块**。
+- 配套：单测 `tests/test_dedup_health.py` 7 例；T1 裁决产物补「根因已定位 + 处置」段。
+
 ## [2026-11-02] R29 | 弹窗根因定位与修复（MCP `launchSurface=inline`）+ 修掉一处**静默 skip 假绿**（MCP server 零覆盖）
 
 - **① 弹窗是什么**：用户报的「没事也弹网页窗口」= WorkBuddy 每次调用中枢 MCP 工具，都会用**系统默认浏览器**开一个新窗口（`http://127.0.0.1:8385/?session=…`，标题 `MCP | AGENT-MEMORY-HUB | … | Sandboxed`），页面是**我们自己提供的占位 UI**（页面自己写着「以文本响应为主，UI 资源仅供目录展示」）⇒ 纯噪音 + 抢焦点；连续调用就连续弹。

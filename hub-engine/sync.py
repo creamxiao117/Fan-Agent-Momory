@@ -6,7 +6,10 @@ import shutil
 import subprocess
 import sys
 import time as _t
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
+
+CST = timezone(timedelta(hours=8))
 
 from common.constants import HIGH_RISK  # 高风险类型：rule + methodology
 from common.frontmatter import (
@@ -349,6 +352,38 @@ def _write_dedup_prediction(cdir: Path, platform: str, draft: Path, card, decisi
         pass  # 决策留痕失败不阻断同步主流程
 
 
+# 去重判决台账（append-only）：**「去重链退化」当天可见**（2026-11-02 补）
+#
+# 为何要落账：2026-10-06~10-12（W40–W41）本地模型普遍**漏写 confidence**
+# ⇒ 51 张草稿全被判成 review 进冲突区 ⇒ 产出率塌到 21%/17%。
+# 当时只修了提示词与模型配置，**没有留下「退化发生过」的痕迹** ⇒
+# 同样的退化若再来，只有两个月后回溯周表才看得见（而且指标把 review 混在「重复」里，更看不出）。
+#
+# ⇒ 现在每次去重判决都记一行（append-only）：判决分布 + 是否**退化**（模型输出坏掉）
+#    ⇒ `scripts/dedup_stats.py` 可查，日报/巡检可显示。
+DEDUP_STATS_REL = ".sync/state/dedup_stats.jsonl"
+
+
+def _record_dedup_stat(root: Path, platform: str, slug: str, decision: dict | None) -> None:
+    """把一次去重判决写进台账（失败不阻断同步）。"""
+    try:
+        p = root / DEDUP_STATS_REL
+        p.parent.mkdir(parents=True, exist_ok=True)
+        row = {
+            "ts": datetime.now(CST).isoformat(timespec="seconds"),
+            "platform": platform,
+            "slug": slug,
+            "action": (decision or {}).get("action", "none"),
+            "confidence": (decision or {}).get("confidence", 0.0),
+            "degraded": bool((decision or {}).get("degraded", False)),
+            "degraded_reason": (decision or {}).get("degraded_reason", ""),
+        }
+        with p.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(row, ensure_ascii=False) + "\n")
+    except OSError:
+        pass  # 台账失败不阻断同步主流程
+
+
 def _ingest_stat_template() -> dict:
     """ingest 的统计骨架（键名是 post_ingest_hook 的接口，勿随意改）。"""
     return {
@@ -471,6 +506,8 @@ def _handle_duplicate_draft(root: Path, platform: str, p: Path, card, cands: lis
     """
     stat["duplicate"] += 1
     decision = dedup_decide(root, card, cands, chat_fn=chat_fn) if chat_fn else None
+    # 2026-11-02：每次判决入台账（append-only）⇒ 「去重链退化」当天可查（见 _record_dedup_stat）
+    _record_dedup_stat(root, platform, p.stem, decision)
     # 2026-10-21 体检：区分「真重复」与「决策不可用⇒交人工」，避免日报误报。
     if decision is None:
         stat["llm_undecided"] += 1

@@ -94,7 +94,19 @@ def _build_prompt(new_card, cands: list[tuple]) -> str:
 def parse_decision(text: str) -> dict:
     """从 LLM 输出中解析 JSON 决策；非法/非白名单动作一律降级 review。
 
-    返回 dict：{action, target, reason, confidence, raw}。best-effort 不抛错。
+    返回 dict：{action, target, reason, confidence, raw, degraded}。best-effort 不抛错。
+
+    **`degraded` 标志（2026-11-02 补，治「两个月后才看见的塌陷」）**
+    ------------------------------------------------------------------
+    `review` 有**两种来源**，性质完全不同：
+      ① 模型**主动**判「不确定」（action=review）—— 正常业务判定；
+      ② 模型**输出坏掉**（解析失败 / 非法动作 / 缺 `confidence`）—— **退化**。
+    ② 曾真实发生过：2026-10-06~10-12（W40–W41）本地模型普遍**漏写 `confidence`**，
+    ⇒ 全部被判成 ② ⇒ 51 条草稿全进冲突区等人工 ⇒ **产出率塌到 21%/17%，而指标里看不出是退化**
+    （「重复」把 review 混在一起算）。当时只修了提示词（10-10）与模型配置（10-12），
+    **但没有留下「退化发生过」的痕迹** ⇒ 下次再退化，还是只能靠月后回溯。
+
+    ⇒ 现在把 ② 单独标记（`degraded=True` + `degraded_reason`），由调用方计数并落账。
     """
     out = {
         "action": "review",
@@ -102,6 +114,8 @@ def parse_decision(text: str) -> dict:
         "reason": "LLM 输出无法解析为合法决策",
         "confidence": 0.0,
         "raw": (text or "")[:200],
+        "degraded": True,
+        "degraded_reason": "输出无法解析为 JSON",
     }
     try:
         m = re.search(r"\{.*\}", text or "", re.DOTALL)
@@ -111,14 +125,26 @@ def parse_decision(text: str) -> dict:
         action = str(obj.get("action", "")).strip().lower()
         if action not in VALID:
             out["reason"] = f"非法决策动作: {action!r}"
+            out["degraded_reason"] = f"非法动作 {action!r}"
             return out
         out["action"] = action
         out["target"] = obj.get("target") or None
         out["reason"] = str(obj.get("reason", "")).strip() or "（无理由）"
+        # action=review ⇒ 模型**主动**判不确定 ⇒ 不是退化
+        out["degraded"] = False
+        out["degraded_reason"] = ""
+        if "confidence" not in obj:
+            # 10-06~10-12 真实故障形态：模型漏写 confidence（提示词已要求必填，模型仍可能漏）
+            out["confidence"] = 0.0
+            out["degraded"] = True
+            out["degraded_reason"] = "模型漏写 confidence"
+            return out
         try:
             out["confidence"] = max(0.0, min(1.0, float(obj.get("confidence", 0.0))))
         except (TypeError, ValueError):
             out["confidence"] = 0.0
+            out["degraded"] = True
+            out["degraded_reason"] = f"confidence 非法: {obj.get('confidence')!r}"
         return out
     except Exception:
         return out
@@ -142,6 +168,8 @@ def decide(
             "target": None,
             "reason": "向量预过滤无相似候选",
             "confidence": 1.0,
+            "degraded": False,
+            "degraded_reason": "",
         }
 
     try:
@@ -151,10 +179,12 @@ def decide(
             chat_fn = chat
         text = chat_fn(_build_prompt(new_card, cands), root)
         return parse_decision(text)
-    except Exception:
+    except Exception as exc:
         return {
             "action": "review",
             "target": None,
-            "reason": "LLM 网关不可用，降级交人工去重",
+            "reason": f"LLM 网关不可用，降级交人工去重（{type(exc).__name__}）",
             "confidence": 0.0,
+            "degraded": True,
+            "degraded_reason": f"LLM 调用异常: {type(exc).__name__}",
         }
