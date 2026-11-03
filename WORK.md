@@ -11,7 +11,7 @@
 - 测试 **841 用例已收集**；**门禁 9→3 且 scope-gated**（`common/gate_scope.py`：`code`/`text`/`l0`，按 staged 触发）⇒「他人未提交改动阻断提交」缺陷已消除，`--no-verify` 合法用途归零
 - **grade 覆盖 616/616 = 100%**（iron 7 / proven 135 / domain 190 / pitfall 42 / task 242）；**L1 由 `grade=iron` 派生**、`tiers` 归型；bootstrap 按 grade 三段分层；**正交轴 `evidence`**（t1 92 · measured 57，其余缺失即 none）
 - 平台元数据**单源**（`hub.config.yaml`；旧双源文件已删）；能力账本 `system/capabilities.json|md` + `scripts/INVENTORY.json`（**114 条**：keep 81 · manual-cli 33 · unused 0）；`capability_reconcile` 已挂巡检第 4 步（含**降级路线图**）
-- **pi 接入**：MCP 已通（本会话 7 工具）· `agent/mcp.json` → `.venv` · `agent/AGENTS.md` **顶部托管块**已注入 · 扩展 `memory-hub.ts`（`/hub` `/hub-write` `/hub-cap` `/hub-on` `/hub-off`；注入走 `sections["hub-context"]`）· 回写落 `.sync/drafts/pi_draft/`（**人工确认制**）· 降级账本 `<agent-dir>/hub-bridge.log` · MCP ui 资源**按客户端声明**（pi 不声明 ⇒ 不弹浏览器窗口）
+- **pi 接入**：MCP 已通（本会话 7 工具）· `agent/mcp.json` → `.venv` · `agent/AGENTS.md` **顶部托管块**已注入 · 扩展 `memory-hub.ts`（`/hub` `/hub-write` `/hub-cap` `/hub-on` `/hub-off`；注入走 `sections["hub-context"]`）· 回写落 `.sync/drafts/pi_draft/`（**人工确认制**）· 降级账本 `<agent-dir>/hub-bridge.log` · MCP ui 资源**按客户端声明**（agent 侧零弹窗）+ WorkBuddy 侧为**人类真卡片**
 - 定时链：07:30 巡检 / 00:35 夜间合并 / 06:00 密钥哨兵 / 09:00 临时目录清理 + Hermes 5 任务（晨报→提升→star-distill+T1→周六评测）；**微信通道已停用**
 ## 活跃待办（按优先级）
 

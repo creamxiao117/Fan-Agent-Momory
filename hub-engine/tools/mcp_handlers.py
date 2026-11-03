@@ -1,7 +1,9 @@
 """MCP 工具处理函数：search/get/index/bootstrap/ingest_candidate（纯函数，便于单测）"""
 
+import html
 import json
 import re
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -554,3 +556,216 @@ def hub_announce(
         },
     )
     return {"ok": True, "rel_path": rel, "ts": rec["ts"], "audit_id": aid}
+
+
+# ── MCP Apps「工具卡片」渲染（2026-11-03，A+ 方案）────────────────────────────
+# 为什么不是占位页：原实现只有一句「此工具以文本响应为主…仅供目录展示」——连我们自己都承认它没用，
+# 而它是**给人看的**（agent 不需要；agent 侧也已按客户端屏蔽）。
+# 现在这张卡回答人真正会问的四件事：做什么 / 怎么调 / 返回什么 / 中枢里现在有什么。
+# 性能：宿主**每次工具调用**都会读 resources/read ⇒ 走 TTL 缓存（60 s）+ 只读 INDEX.md。
+from pathlib import Path
+
+# 中枢现状缓存：{root: (ts, data)}
+_SNAPSHOT_CACHE: dict[str, tuple[float, dict]] = {}
+SNAPSHOT_TTL_S = 60.0
+
+TOOL_HINTS: dict[str, dict[str, str]] = {
+    "hub_search": {
+        "what": "按关键词检索中枢里的卡片（字面 + 语义融合），返回命中卡与摘要。",
+        "boundary": "只读。不会写入任何卡。检索结果会记进中枢的调用账本（可追溯）。",
+        "returns": "hits[]：slug / grade / evidence / title / excerpt；含 query、命中数、耗时。",
+    },
+    "hub_get": {
+        "what": "按 slug 或路径读**单张卡的全文**（检索结果只给摘要，要全文用这个）。",
+        "boundary": "只读。路径必须在中枢内（越界会被拒绝）。",
+        "returns": "单张卡的 frontmatter + 正文全文。",
+    },
+    "hub_index": {
+        "what": "浏览中枢的目录结构（各权威区有哪些卡、怎么组织的）。",
+        "boundary": "只读。",
+        "returns": "目录清单（按区/类型分组）。",
+    },
+    "hub_bootstrap": {
+        "what": "**任务级引导块**：按任务类型（light/code/hub/sync/project）自动检索并组织成一段可直接读入上下文的引导。",
+        "boundary": "只读。会按任务型判断取数范围（light 型不检索）。",
+        "returns": "markdown 引导块（按「铁律 / 已验证方案 / 相关经验与坑」分层）+ 能力建议。",
+    },
+    "hub_ingest_candidate": {
+        "what": "**候选回写**：把一条结论写进中枢的**草案区**（不直接改权威区）。",
+        "boundary": "只写草案区（` .sync/drafts/<平台>_draft/`）；type 只能是 exp/note/project；最终提升由维护者链处理。",
+        "returns": "ok / rel_path / slug / audit_id（可回溯）。",
+    },
+}
+
+
+def _esc(text: object, limit: int = 400) -> str:
+    s = str(text or "")
+    if len(s) > limit:
+        s = s[:limit] + "…"
+    return html.escape(s)
+
+
+def _hub_snapshot(root: Path) -> dict:
+    """中枢现状（卡数 / 目录分布 / 最近入区 / 示例卡），带 TTL 缓存。"""
+    key = str(root)
+    now = time.time()
+    hit = _SNAPSHOT_CACHE.get(key)
+    if hit and now - hit[0] < SNAPSHOT_TTL_S:
+        return hit[1]
+
+    dirs = ("rules", "methodology", "experience", "blueprints", "projects", "longterm")
+    counts: dict[str, int] = {}
+    latest = ("", 0.0)
+    for d in dirs:
+        dd = root / d
+        if not dd.is_dir():
+            counts[d] = 0
+            continue
+        files = list(dd.glob("*.md"))
+        counts[d] = len(files)
+        for f in files:
+            try:
+                mt = f.stat().st_mtime
+            except OSError:
+                continue
+            if mt > latest[1]:
+                latest = (f"{d}/{f.stem}", mt)
+
+    # 示例卡：从 **INDEX-full.md**（逐卡清单，渲染产物）取几行，避免重扫全库
+    samples: list[tuple[str, str]] = []
+    for idx_name in ("INDEX-full.md", "INDEX.md"):
+        idx = root / idx_name
+        if not idx.is_file():
+            continue
+        for line in idx.read_text(encoding="utf-8", errors="ignore").splitlines():
+            m = re.match(r"^-\s+`?([a-zA-Z0-9_\-.]+)`?\s{2,}(.+)$", line.rstrip())
+            if m:
+                samples.append((m.group(1), m.group(2).strip()[:90]))
+            if len(samples) >= 4:
+                break
+        if samples:
+            break
+
+    data = {
+        "total": sum(counts.values()),
+        "counts": counts,
+        "latest": latest[0],
+        "latest_ts": latest[1],
+        "samples": samples,
+    }
+    _SNAPSHOT_CACHE[key] = (now, data)
+    return data
+
+
+# 参数说明（MCP schema 里没有 description ⇒ 这里给人话版；按 工具名.参数名 查）
+PARAM_DOCS: dict[str, str] = {
+    "query": "检索词（字面 + 语义）",
+    "top_k": "返回条数（1–20）",
+    "mode": "检索模式：word（字面，默认）/ char（字形 n-gram）",
+    "n": "字形 n-gram 长度（char 模式用）",
+    "types": "限定卡类型（rule/methodology/exp/…）",
+    "include_body": "是否返回正文全文（默认只给摘要）",
+    "compress_level": "正文压缩级 0–5（0=原文）",
+    "platform": "调用方平台（记入账本，用于回溯）",
+    "id": "卡 slug 或相对路径",
+    "rel_path": "卡相对路径（与 id 二选一）",
+    "title": "卡标题",
+    "body": "卡正文",
+    "type": "卡类型：exp / note / project（不能是 rule / methodology）",
+    "tags": "标签列表（逗号分隔）",
+}
+
+
+def _schema_rows(schema: dict, tool_name: str = "") -> list[tuple[str, str, str, str]]:
+    """inputSchema → [(参数, 类型, 必填, 说明)]（自动生成 ⇒ 不会与实现漂移）。"""
+    props = (schema or {}).get("properties") or {}
+    required = set((schema or {}).get("required") or [])
+    rows = []
+    for name, spec in props.items():
+        typ = spec.get("type", "?")
+        if isinstance(spec.get("enum"), list):
+            typ = "|".join(str(x) for x in spec["enum"])
+        desc = str(spec.get("description") or "") or PARAM_DOCS.get(name, "")
+        rows.append((name, str(typ), "必填" if name in required else "可选", desc[:70]))
+    return rows
+
+
+def render_tool_card(root: Path, tool_name: str, description: str, schema: dict) -> str:
+    """渲染一张**人类可读**的工具卡片（HTML）。"""
+    safe = "".join(c for c in tool_name if c.isalnum() or c in "_-")
+    hint = TOOL_HINTS.get(tool_name, {})
+    snap = _hub_snapshot(root)
+
+    params = _schema_rows(schema, tool_name)
+    param_html = (
+        "".join(
+            f"<tr><td><code>{_esc(n)}</code></td><td>{_esc(t)}</td><td>{_esc(req)}</td>"
+            f"<td class='dim'>{_esc(d)}</td></tr>"
+            for n, t, req, d in params
+        )
+        or "<tr><td colspan='4' class='dim'>（无参数）</td></tr>"
+    )
+
+    counts_html = " · ".join(f"{k} {v}" for k, v in snap["counts"].items())
+    samples_html = (
+        "".join(
+            f"<li><code>{_esc(slug)}</code> — <span class='dim'>{_esc(desc)}</span></li>"
+            for slug, desc in snap["samples"]
+        )
+        or "<li class='dim'>（暂无）</li>"
+    )
+    latest = snap["latest"] or "（无）"
+
+    return f"""<!doctype html>
+<html lang="zh"><head><meta charset="utf-8"><title>{_esc(safe)}</title>
+<style>
+ body{{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;margin:0;padding:18px 20px;line-height:1.55;color:#1a1a1a;background:#fff}}
+ h1{{font-size:18px;margin:0 0 4px}} h2{{font-size:13px;margin:18px 0 6px;color:#555;font-weight:600;letter-spacing:.02em}}
+ .lead{{margin:0 0 10px;color:#333}} .dim{{color:#777;font-size:12px}}
+ table{{border-collapse:collapse;width:100%;font-size:13px}}
+ td,th{{border-bottom:1px solid #eee;padding:5px 8px;text-align:left;vertical-align:top}}
+ code{{background:#f4f4f5;padding:1px 5px;border-radius:4px;font-size:12px}}
+ ul{{margin:6px 0 0;padding-left:18px;font-size:13px}}
+ .note{{background:#f7f7f8;border-left:3px solid #d0d0d4;padding:8px 12px;margin:12px 0;font-size:13px;color:#444}}
+ .kpi{{display:flex;gap:18px;flex-wrap:wrap;margin-top:6px}}
+ .kpi b{{display:block;font-size:19px;font-weight:650}}
+</style></head>
+<body>
+<h1>Agent Memory Hub · <code>{_esc(safe)}</code></h1>
+<p class="lead">{_esc(description or hint.get("what", ""))}</p>
+
+<div class="note">
+  <div><b>它做什么</b>：{_esc(hint.get("what", "—"))}</div>
+  <div style="margin-top:6px"><b>边界</b>：{_esc(hint.get("boundary", "—"))}</div>
+  <div style="margin-top:6px"><b>返回</b>：{_esc(hint.get("returns", "—"))}</div>
+</div>
+
+<h2>参数</h2>
+<table><tr><th>参数</th><th>类型</th><th>必填</th><th>说明</th></tr>{param_html}</table>
+
+<h2>中枢现状</h2>
+<div class="kpi">
+  <div><b>{snap["total"]}</b><span class="dim">张卡</span></div>
+  <div><b>{len(snap["samples"])}</b><span class="dim">目录样例</span></div>
+  <div><b>{_esc(latest.split("/")[0] if "/" in latest else "—")}</b><span class="dim">最近入区</span></div>
+</div>
+<p class="dim" style="margin-top:6px">{_esc(counts_html)}</p>
+
+<h2>目录里有什么（样例）</h2>
+<ul>{samples_html}</ul>
+
+<p class="dim" style="margin-top:16px">本卡片为<b>人类</b>阅读用（Agent 走文本响应，不需要界面）。
+数据取自中枢实测态，页面由 <code>hub-engine/mcp_server.py</code> 渲染。</p>
+</body></html>"""
+
+
+def render_error_card(tool_name: str, message: str) -> str:
+    """渲染失败时的兜底卡片（不抛 ⇒ 不影响宿主调用）。"""
+    return f"""<!doctype html><html lang="zh"><meta charset="utf-8">
+<title>{_esc(tool_name)}</title><body style="font-family:system-ui;padding:16px">
+<h2>Agent Memory Hub · {_esc(tool_name)}</h2>
+<p class="dim">卡片渲染降级：{_esc(message, 200)}</p>
+<p class="dim">工具本身仍可用（文本响应）。</p></body></html>"""
+
+
+__all__ = ["render_tool_card", "render_error_card", "TOOL_HINTS", "json"]

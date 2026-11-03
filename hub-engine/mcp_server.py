@@ -176,6 +176,15 @@ def _client_kind(explicit: str | None = None) -> str:
 # 默认**只给 WorkBuddy** 声明 ui:// 资源（它是唯一需要它们的 Apps 宿主）
 UI_CLIENTS_DEFAULT: tuple[str, ...] = ("workbuddy",)
 
+# 工具的（描述, inputSchema）——给**人类卡片**用；与 tools/list 的定义同源（避免卡片与实现漂移）
+_UI_TOOL_SPECS: dict[str, tuple[str, dict]] = {
+    "hub_search": ("混合检索中枢（确定性+语义）", SEARCH_SCHEMA),
+    "hub_get": ("按 slug/路径读单张卡片全文", GET_SCHEMA),
+    "hub_index": ("浏览五类目录结构", INDEX_SCHEMA),
+    "hub_bootstrap": ("任务级引导：按任务型分类检索生成引导块", BOOTSTRAP_SCHEMA),
+    "hub_ingest_candidate": ("候选回写（仅写 draft，不直写权威区）", INGEST_SCHEMA),
+}
+
 
 def _ui_enabled(client: str) -> bool:
     """本次是否声明 ui 资源。覆盖：`AGENT_MEMORY_HUB_MCP_UI=on|off|auto`（默认 auto）。"""
@@ -279,15 +288,25 @@ def build_server(root: Path, client: str | None = None) -> Server:
         return ListResourcesResult(resources=[Resource(uri=uri, name=f"{name} 卡片") for name, uri in _UI_META.items()])
 
     async def _read_resource(context, params) -> ReadResourceResult:
-        """提供极简 HTML 占位页；WorkBuddy 打开资源视图时使用"""
+        """提供**人类可读**的工具卡片（WorkBuddy 打开资源视图时使用）。
+
+        2026-11-03（A+）：原实现是占位页（只一句「仅供目录展示」）；现改为真卡片：
+        做什么 / 怎么调（参数表自动从 inputSchema 生成）/ 返回什么 / 中枢里现在有什么。
+        渲染失败**降级不抛**（不阻断宿主调用）。
+        """
         uri = params.uri
         name = uri.rsplit("/", 1)[-1].removesuffix(".html") if uri else "hub"
         safe = "".join(c for c in name if c.isalnum() or c == "_")
-        html = f"""<!doctype html><html lang="zh"><meta charset="utf-8">
-<title>{safe}</title><body style="font-family:system-ui;padding:16px">
-<h2>Agent Memory Hub · {safe}</h2><p>此工具以文本响应为主，UI 资源仅供 WorkBuddy MCP Apps 目录展示。</p>
-</body></html>"""
-        return ReadResourceResult(contents=[TextResourceContents(uri=uri, mime_type="text/html", text=html)])
+        try:
+            from tools.mcp_handlers import render_error_card, render_tool_card
+
+            spec = _UI_TOOL_SPECS.get(name, ("", {}))
+            html_text = render_tool_card(root, safe, spec[0], spec[1])
+        except Exception as exc:  # noqa: BLE001 - 渲染是旁路，绝不阻断工具调用
+            from tools.mcp_handlers import render_error_card
+
+            html_text = render_error_card(safe, f"{type(exc).__name__}: {exc}")
+        return ReadResourceResult(contents=[TextResourceContents(uri=uri, mime_type="text/html", text=html_text)])
 
     server.add_request_handler("tools/list", PaginatedRequestParams, _list_tools)
     server.add_request_handler("tools/call", CallToolRequestParams, _call_tool)
