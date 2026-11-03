@@ -12,6 +12,7 @@ from common.constants import HIGH_RISK  # 高风险类型：rule + methodology
 from common.frontmatter import (
     DEFAULT_GRADE_BY_DIR,
     Card,
+    infer_evidence,
     read_card,
     today_iso,
     try_read_card,
@@ -404,6 +405,7 @@ def _move_non_authority_draft(root: Path, p: Path, card, stat: dict) -> None:
     target_dir_name = target_dir.name
     if target_dir_name in DEFAULT_GRADE_BY_DIR and not str(card.extra.get("grade") or "").strip():
         card.extra["grade"] = DEFAULT_GRADE_BY_DIR[target_dir_name]
+        card.extra.setdefault("evidence", infer_evidence(card.extra, card.body))
         dst.write_text(write_card(card), encoding="utf-8")
         p.unlink()
     else:
@@ -605,6 +607,12 @@ def _promote_or_conflict_draft(root: Path, platform: str, p: Path, card, stat: d
         default_grade = DEFAULT_GRADE_BY_DIR.get(dst_dir)
         if default_grade:
             card.extra["grade"] = default_grade
+    # 2026-11-02 补（A8 方案 A）：**evidence 轴**（证据强度）。
+    # 为何不并进 `grade`：`grade` 是混合轴（强制性×证据强度×体裁），机械改它与人工标注
+    # 一致率只有 22%（实测）⇒ 另开一维，**只对新卡填**，不动存量、不改 grade。
+    # 判定只看结构标记（T1 小节且节内有实质证据 / 强结果形态）⇒ 抽样目视精度 12/12。
+    if not str(card.extra.get("evidence") or "").strip():
+        card.extra["evidence"] = infer_evidence(card.extra, card.body)
     dst.parent.mkdir(parents=True, exist_ok=True)
     dst.write_text(write_card(card), encoding="utf-8")
     stat["promoted"] += 1

@@ -95,6 +95,14 @@ def _log(root: Path, rows: list[dict]) -> None:
     )
 
 
+def _iso(days_ago: int) -> str:
+    """相对今天的 ISO 时间戳（**不写死日期**：写死会让测试随日历漂移）。"""
+    import datetime
+
+    t = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=-days_ago)
+    return t.isoformat()
+
+
 def _registered_hub(tmp_path: Path) -> Path:
     """带平台登记的中枢（活跃度只对**注册平台**判警）。"""
     hub = tmp_path / "AgentMemoryHub"
@@ -107,13 +115,16 @@ def _registered_hub(tmp_path: Path) -> Path:
 
 
 def test_platform_activity_flags_recently_used_but_now_silent(tmp_path):
-    """近 30 天用过、近 7 天零检索 ⇒ 列为「通道可能已死」（silent）。"""
+    """近 30 天用过、近 7 天零检索 ⇒ 列为「通道可能已死」（silent）。
+
+    注：测试数据用**相对日期**（`_iso(days_ago)`）⇒ 不随日历漂移。
+    """
     hub = _registered_hub(tmp_path)
     _log(
         hub,
         [
-            {"ts": "2026-11-02T01:00:00+08:00", "platform": "pi", "action": "bootstrap"},
-            {"ts": "2026-10-20T01:00:00+08:00", "platform": "workbuddy", "action": "search"},
+            {"ts": _iso(0), "platform": "pi", "action": "bootstrap"},
+            {"ts": _iso(10), "platform": "workbuddy", "action": "search"},
         ],
     )
     act = platform_activity(hub, days=7)
@@ -127,8 +138,8 @@ def test_platform_activity_ignores_long_unused_platform(tmp_path):
     _log(
         hub,
         [
-            {"ts": "2026-11-02T01:00:00+08:00", "platform": "pi", "action": "bootstrap"},
-            {"ts": "2026-01-02T01:00:00+08:00", "platform": "workbuddy", "action": "search"},
+            {"ts": _iso(0), "platform": "pi", "action": "bootstrap"},
+            {"ts": _iso(120), "platform": "workbuddy", "action": "search"},
         ],
     )
     act = platform_activity(hub, days=7)
@@ -138,7 +149,7 @@ def test_platform_activity_ignores_long_unused_platform(tmp_path):
 def test_platform_activity_ignores_never_seen_platforms(tmp_path):
     """从未出现过的平台**不算 silent**（否则天天误报 ⇒ 报警被忽略）。"""
     hub = _registered_hub(tmp_path)
-    _log(hub, [{"ts": "2026-11-02T01:00:00+08:00", "platform": "pi", "action": "bootstrap"}])
+    _log(hub, [{"ts": _iso(0), "platform": "pi", "action": "bootstrap"}])
     act = platform_activity(hub, days=7)
     assert act["silent"] == []
     assert act["seen"] == {"pi": 1}
@@ -150,8 +161,8 @@ def test_platform_activity_ignores_unregistered_platform_names(tmp_path):
     _log(
         hub,
         [
-            {"ts": "2026-10-20T01:00:00+08:00", "platform": "unknown", "action": "search"},
-            {"ts": "2026-11-02T01:00:00+08:00", "platform": "pi", "action": "bootstrap"},
+            {"ts": _iso(10), "platform": "unknown", "action": "search"},
+            {"ts": _iso(0), "platform": "pi", "action": "bootstrap"},
         ],
     )
     act = platform_activity(hub, days=7)

@@ -93,15 +93,20 @@ def test_scheduled_refs_detects_cmd_orchestration(tmp_path, monkeypatch):
 
 def test_last_run_evidence_prefers_real_artifact(monkeypatch, tmp_path):
     """`last_run` 必须优先取**产物时间戳**（真实运行时间），无证据则 None（不猜）。"""
+    import datetime
+
     import scripts.inventory as inv
 
     art = tmp_path / "retro"
     art.mkdir()
-    (art / "lint-report-2026-11-02.md").write_text("x", encoding="utf-8")
+    f = art / "lint-report-2026-11-02.md"
+    f.write_text("x", encoding="utf-8")
     monkeypatch.setattr(inv, "ARTIFACT_DIRS", (art,))
     stamp, kind = inv.last_run_evidence("lint_report", [])
     assert stamp is not None and kind == "artifact"
-    assert stamp.startswith("2026-11-02")
+    # 时间戳必须等于**该产物自己的 mtime**（不能用写死日期：那样测试会随日历漂移）
+    want = datetime.datetime.fromtimestamp(f.stat().st_mtime, inv.CST).strftime("%Y-%m-%d")
+    assert stamp.startswith(want)
     # 无证据 ⇒ None（诚实口径）
     assert inv.last_run_evidence("never_ran_module", []) == (None, "none")
 

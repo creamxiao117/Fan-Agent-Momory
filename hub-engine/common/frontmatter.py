@@ -1,5 +1,6 @@
 """统一知识卡片 frontmatter 的解析 / 写入 / 校验"""
 
+import re
 from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
 from pathlib import Path
@@ -67,6 +68,105 @@ DEFAULT_GRADE_BY_DIR: dict[str, str] = {
     "projects": "domain",  # 合法集 {domain, proven} → 取最弱的 domain
     "experience": "task",  # 合法集 {task, pitfall, proven} → 取最弱的 task
 }
+
+# ── evidence 轴（2026-11-02 新增，A8 方案 A）────────────────────────────────
+#
+# 为何**另开一轴**而不改 `grade`：实测证明 `grade` 是**混合轴**
+# （强制性 iron × 证据强度 proven/task × 体裁 pitfall/domain），
+# 用关键词拟合它与人工标注的**一致率只有 22%**（5/23）⇒ 机械改判不可行。
+#
+# 而「这张卡**自己**有没有验证记录」是**客观问题** ⇒ 适合机械填写，
+# 且与 `grade` **正交**（实测交叉表无相关）。
+#
+# 取值：
+#   `t1`       —— 本卡做过 T1 亲跑验证（沙盒 / `evidence: t1` / 「T1 验证」小节）
+#   `measured` —— 本卡有**自证型**验证记录（实测次数 / 测试通过 / 负样本打红 / 验证结果）
+#   `none`     —— 没有可识别的自证记录（**默认**）
+#
+# 关键约束：**必须自证**——「引用别人的结论」「规则陈述（必须/应当 X）」**不算**验证记录。
+EVIDENCE_VALUES: tuple[str, ...] = ("none", "measured", "t1")
+
+# T1 亲跑痕迹：**只看结构标记**（frontmatter 声明 / T1 小节标题 / 沙盒路径）——
+# 散文里的「T1 验证」三个字可能是**引用别人**（如路由表引用 T1 结论），不能当自证。
+_EV_T1_FM = re.compile(r"^evidence:\s*t1\s*$", re.M)
+_EV_T1_SECTION = re.compile(r"^#{2,4}[^\n]*\bT1\b", re.M)
+_EV_T1_SANDBOX = re.compile(r"AgentMemoryT1")
+# 验证类小节标题（结构位）
+_EV_VERIFY_SECTION = re.compile(r"^#{2,4}[^\n]*(验证|实测|复现|回归)", re.M)
+# 自证型验证**结果形态**（这些形态在散文里几乎不出现 ⇒ 精度高）：
+#   测试通过数 / exit 码 / 负样本打红 / 实测次数 / 跑通时间 / 复现成功
+_EV_RESULT = re.compile(
+    r"负样本.{0,16}(打红|自证|变红)"
+    r"|\d+\s*/\s*\d+\s*(tests?\s*)?(pass|passed|通过)"
+    r"|tests?\s+pass(ed)?\b"
+    r"|exit\s*[01]\b"
+    r"|实测\s*\d+\s*次"
+    r"|跑通时间"
+    r"|复现成功",
+    re.I,
+)
+# 「要求语气」= 规则陈述而非验证记录（如「写完**必须**跑通再交付」）
+_EV_REQUIREMENT = re.compile(r"必须|应当|应该|需先|禁止|务必|要跑|得跑")
+
+
+def _sections(body: str) -> list[tuple[str, str]]:
+    """正文 → [(小节标题, 小节内容)]（按 `##`/`###` 切分；首段归入空标题）。"""
+    out: list[tuple[str, str]] = []
+    head, buf = "", []
+    for ln in (body or "").splitlines():
+        if ln.startswith("#"):
+            if head or buf:
+                out.append((head, "\n".join(buf)))
+            head, buf = ln, []
+        else:
+            buf.append(ln)
+    if head or buf:
+        out.append((head, "\n".join(buf)))
+    return out
+
+
+def _has_t1_proof(body: str) -> bool:
+    """是否**真的**有 T1 验证记录（小节标题含 T1 **且**节内有结果形态/沙盒痕迹）。
+
+    为何要这一步（实测）：光看「标题含 T1」会把
+    「## 关键教训（适用所有 T1+ 任务）」这种**提及**误判成验证记录。
+    """
+    for head, content in _sections(body):
+        if "T1" not in head:
+            continue
+        if _EV_RESULT.search(content) or _EV_T1_SANDBOX.search(content) or "沙盒" in content:
+            return True
+    return False
+
+
+def infer_evidence(extra: dict, body: str) -> str:
+    """→ evidence 档（none/measured/t1）。
+
+    仅用于**入库时补全新卡**（不覆盖卡已声明的值，也**不改存量卡**）。
+
+    判定只看**结构标记**，不看散文措辞（v1 用散文关键词实测精度不足：
+    「引用别人的结论」「规则陈述（必须 X）」会被误判 ⇒ 已收窄）：
+      - T1：frontmatter 显式 `evidence: t1` / 有「T1」小节**且节内有实质证据** / 出现沙盒路径
+      - measured：有**验证类小节标题**且节内有**结果形态**，或全文出现**强结果形态**
+      - 其余：none
+    """
+    text = body or ""
+    # frontmatter 显式声明（extra 里是**已解析的值**，不是原文）
+    if str(extra.get("evidence") or "").strip() == "t1":
+        return "t1"
+    if _EV_T1_SANDBOX.search(text):
+        return "t1"
+    if _has_t1_proof(text):
+        return "t1"
+    has_section = bool(_EV_VERIFY_SECTION.search(text))
+    for line in text.splitlines():
+        if not _EV_RESULT.search(line):
+            continue
+        if _EV_REQUIREMENT.search(line):
+            continue  # 「必须跑通」= 要求，不是记录
+        if has_section or _EV_RESULT.search(line):
+            return "measured"
+    return "none"
 
 
 def raw_frontmatter(path: Path) -> dict:
@@ -178,6 +278,9 @@ def validate_card(card: Card) -> list[str]:
     grade = str(card.extra.get("grade") or "").strip()
     if grade and grade not in VALID_GRADES:
         errs.append(f"grade 必须为 {sorted(VALID_GRADES)} 之一，当前: {grade}")
+    evidence = str(card.extra.get("evidence") or "").strip()
+    if evidence and evidence not in EVIDENCE_VALUES:
+        errs.append(f"evidence 必须为 {sorted(EVIDENCE_VALUES)} 之一，当前: {evidence}")
     if grade and card.path is not None:
         allowed = GRADES_BY_DIR.get(card.path.parent.name)
         if allowed and grade not in allowed:
