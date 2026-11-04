@@ -243,7 +243,7 @@ def collect_flywheel_activity(hub_root: Path, days: int = 7) -> dict:
 def collect_llm_status() -> dict:
     """采集 Ollama 服务状态。"""
     try:
-        checker = LLMHealthChecker.get_instance("http://localhost:1234")
+        checker = LLMHealthChecker.get_instance("http://127.0.0.1:1234")
         status = checker.get_status()
         return {
             "available": status.available,

@@ -6,6 +6,16 @@
 3. 连接失败时自动重试
 4. 提供降级状态管理（记录最近一次失败时间）
 5. 兼容 LM Studio (端口 1234) 和 LLM (端口 11434)
+
+⚠️ **探针地址必须用 IPv4 字面量 `127.0.0.1`，不能用 `localhost`**（2026-11-04 实测）
+---------------------------------------------------------------------------
+LM Studio 只监听 **IPv4**（`127.0.0.1:1234`），而 `localhost` 会同时解析出 `::1` 与 `127.0.0.1`。
+`urllib` 依次尝试 ⇒ 先连 `::1` ⇒ **连接被丢弃 ⇒ 白等 ~2 s 的 SYN 超时** 才回落 IPv4。
+⇒ 实测同一端点：`http://localhost:1234/v1/models` = **2.07 s**，
+  `http://127.0.0.1:1234/v1/models` = **0.015 s**。
+⇒ 后果：探针把**自己的开销**记成「服务慢」⇒ 每日快照恒报「本地 LLM 响应 ~2000ms」
+  ⇒ 一条**假的**延迟告警长期占着告警位（真问题反而被淹没）。
+⇒ **别把这里改回 `localhost`**（回归测试见 `tests/test_llm_health.py`）。
 """
 
 from __future__ import annotations
@@ -54,7 +64,7 @@ class LLMHealthChecker:
 
     def __init__(
         self,
-        base_url: str = "http://localhost:1234",
+        base_url: str = "http://127.0.0.1:1234",
         check_timeout: float = 3.0,
         cooldown_after_fail: float = 30.0,
     ):
@@ -65,7 +75,7 @@ class LLMHealthChecker:
         self._cached_status: LLMStatus | None = None
 
     @classmethod
-    def get_instance(cls, base_url: str = "http://localhost:1234") -> LLMHealthChecker:
+    def get_instance(cls, base_url: str = "http://127.0.0.1:1234") -> LLMHealthChecker:
         """获取单例实例（按 base_url 分键，多端点链互不串味）。"""
         key = base_url.rstrip("/")
         if key not in cls._instances:
@@ -215,7 +225,7 @@ class LLMHealthChecker:
 def create_llm_health_wrapper(
     fn: Callable[..., str],
     on_unavailable: Callable[..., str] | None = None,
-    base_url: str = "http://localhost:11434",
+    base_url: str = "http://127.0.0.1:11434",
 ) -> Callable[..., str]:
     """创建 LLM 健康检测包装器。
 
@@ -250,13 +260,13 @@ def create_llm_health_wrapper(
 
 
 # 便捷函数
-def quick_check(url: str = "http://localhost:11434") -> bool:
+def quick_check(url: str = "http://127.0.0.1:11434") -> bool:
     """快速检测 LLM 是否在线。"""
     checker = LLMHealthChecker(base_url=url)
     return checker.is_available()
 
 
-def check_model(model: str, url: str = "http://localhost:11434") -> bool:
+def check_model(model: str, url: str = "http://127.0.0.1:11434") -> bool:
     """检测指定模型是否可用。"""
     checker = LLMHealthChecker(base_url=url)
     return checker.check_model(model)
@@ -303,7 +313,7 @@ def reset_self_heal_state() -> None:
 
 
 def ensure_llm_service(
-    base_url: str = "http://localhost:1234",
+    base_url: str = "http://127.0.0.1:1234",
     probe_timeout: float = 2.0,
     interval: float = 2.0,
     retries: int = 15,

@@ -125,7 +125,7 @@ def collect_llm_status() -> dict:
         # 运行时自愈（WORK.md 第20条）：离线先尝试拉起一次（手动下线标记则跳过），
         # 失败才让上层按 available=False 出 critical 告警
         ensure_llm_service()
-        checker = LLMHealthChecker.get_instance("http://localhost:1234")
+        checker = LLMHealthChecker.get_instance("http://127.0.0.1:1234")
         checker.reset_cooldown()  # ensure 可能已在别处记录失败冷却，强制真实复查
         status = checker.get_status()
         return {
@@ -143,7 +143,7 @@ def collect_llm_status() -> dict:
         return {
             "available": False,
             "error": str(e),
-            "url": "http://localhost:11434",
+            "url": "http://127.0.0.1:11434",
             "models": [],
             "model_count": 0,
             "response_time_ms": 0,

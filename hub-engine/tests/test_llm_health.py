@@ -1,6 +1,28 @@
-"""LLMHealthChecker：多端点链相关行为（端点判定 + 单例分键）"""
+"""LLMHealthChecker：多端点链相关行为（端点判定 + 单例分键 + 探针地址纪律）"""
 
-from tools.llm_health import LLMHealthChecker
+from tools.llm_health import LLMHealthChecker, ensure_llm_service
+
+
+def test_probe_uses_ipv4_literal_not_localhost():
+    """探针**必须**用 `127.0.0.1`，不得用 `localhost`（2026-11-04 实测）。
+
+    LM Studio 只监听 IPv4；`localhost` 先解析 `::1` ⇒ urllib 先连 `::1` ⇒
+    白等 ~2 s SYN 超时 ⇒ **把探针开销记成「服务慢」**（实测 2.07 s vs 0.015 s）⇒
+    一条假延迟告警长期占着告警位。
+    """
+    LLMHealthChecker.reset_instance()
+    assert LLMHealthChecker().base_url == "http://127.0.0.1:1234"
+    assert LLMHealthChecker.get_instance().base_url == "http://127.0.0.1:1234"
+    assert "localhost" not in LLMHealthChecker().base_url
+
+
+def test_ensure_llm_service_default_is_ipv4_literal():
+    """自愈入口的默认端点同样不得是 `localhost`（否则自愈探测也要白等 2 s）。"""
+    import inspect
+
+    default = inspect.signature(ensure_llm_service).parameters["base_url"].default
+    assert default == "http://127.0.0.1:1234"
+    assert "localhost" not in default
 
 
 def test_get_instance_keyed_by_base_url():
