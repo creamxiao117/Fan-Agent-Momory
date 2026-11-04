@@ -46,7 +46,7 @@ from scripts.patrol.core import (
     _run_cmd,
     _run_step,
 )
-from scripts.patrol.pipeline import IMPL, STEP_ORDER, STEPS
+from scripts.patrol.pipeline import IMPL, STEP_ORDER, STEPS, render_daily_snapshot
 from scripts.patrol.report import (
     _print_alerts,
     _print_autofix_results,
@@ -250,6 +250,12 @@ def run_patrol(root: Path, *, dry_run: bool = False, skip_if_exists: bool = Fals
         if report.snapshot:
             with contextlib.suppress(OSError):
                 snap_path.write_text(json.dumps(report.snapshot, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+                # 人读 md 必须与落盘 JSON **同源**：上面回填了 gate_health 并重算 overall，
+                # 若不重渲 md ⇒ md 停在回填前的分数 ⇒ md 与 json 分叉（又一处「产物说一套、账本另一套」）。
+                # 2026-11-04：此处补写（当日发现 md 恒为空壳 + 与 json 不同源）。
+                (root / "retro" / f"daily-{today}.md").write_text(
+                    render_daily_snapshot(report.snapshot, today), encoding="utf-8"
+                )
     report.alerts = (report.snapshot or {}).get("alerts", []) or []
     report.suggestions = _generate_suggestions(report)
     return report

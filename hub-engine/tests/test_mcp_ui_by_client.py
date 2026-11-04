@@ -12,7 +12,17 @@
 ⇒ 默认（`auto`）：**只给 workbuddy 声明**；其它客户端一律不声明。
 """
 
-from mcp_server import _client_kind, _ui_enabled, _ui_meta
+import sys
+from pathlib import Path
+
+# tests/ 是包（tests/__init__.py 存在）⇒ pytest 只把**根目录**放进 sys.path，不放 tests/
+# ⇒ 本文件里的 `from mcp_session import ...` 依赖别的测试文件先跑（**顺序依赖**）。
+# 自己把 tests/ 加进去 ⇒ **单跑也能过**（2026-11-04 修：单跑时该用例直接 ImportError）。
+_TESTS_DIR = str(Path(__file__).resolve().parent)
+if _TESTS_DIR not in sys.path:
+    sys.path.insert(0, _TESTS_DIR)
+
+from mcp_server import _client_kind, _ui_enabled, _ui_meta  # noqa: E402
 
 
 def test_auto_mode_only_declares_for_workbuddy():

@@ -3,6 +3,8 @@
 覆盖：今日新增/更新采集、pending 采集、今日 sleep 候选采集、渲染三区块。
 """
 
+import json
+
 from scripts.hub_review_today import (
     _today_local,
     collect_new_updated,
@@ -74,6 +76,28 @@ def test_collect_today_sleep(tmp_path):
     paths = collect_today_sleep(tmp_path)
     assert len(paths) == 1
     assert today in paths[0]
+
+
+def test_collect_today_sleep_skips_zero_candidate_proposal(tmp_path):
+    """**0 候选**的提案不进清单（夜间引擎每 8 小时的空提案别天天占两条假动作项）"""
+    today = _today_local().isoformat().replace("-", "")
+    pd = tmp_path / ".sync" / "state" / "sleep" / f"{today}-000000"
+    pd.mkdir(parents=True, exist_ok=True)
+    (pd / "proposal.json").write_text(json.dumps({"meta": {"n_candidates": 0}, "candidates": []}), encoding="utf-8")
+    (pd / "proposal.md").write_text("# p", encoding="utf-8")
+    assert collect_today_sleep(tmp_path) == []
+
+
+def test_collect_today_sleep_keeps_real_candidates(tmp_path):
+    """有候选的提案**仍要**进清单（别把真候选漏掉）"""
+    today = _today_local().isoformat().replace("-", "")
+    pd = tmp_path / ".sync" / "state" / "sleep" / f"{today}-010101"
+    pd.mkdir(parents=True, exist_ok=True)
+    (pd / "proposal.json").write_text(
+        json.dumps({"meta": {"n_candidates": 2}, "candidates": [{"slug": "a"}, {"slug": "b"}]}), encoding="utf-8"
+    )
+    (pd / "proposal.md").write_text("# p", encoding="utf-8")
+    assert len(collect_today_sleep(tmp_path)) == 1
 
 
 def test_render_sections(tmp_path):

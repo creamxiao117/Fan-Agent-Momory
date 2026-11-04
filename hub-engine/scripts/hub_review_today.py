@@ -63,14 +63,43 @@ def collect_pending(root: Path) -> list[str]:
     return [p.name for p in sorted(pd.glob("*.md"))]
 
 
+def _proposal_has_candidates(proposal_md: Path) -> bool:
+    """提案里**有没有候选**（0 候选 ⇒ 无需人工动作 ⇒ 不进清单）。
+
+    判据读同目录 `proposal.json` 的 `meta.n_candidates`；
+    读不到 / 字段缺失 / 值不合法 ⇒ **保守保留**（宁可多列一条，也不要把真候选漏出清单）。
+    """
+    data_path = proposal_md.parent / "proposal.json"
+    if not data_path.is_file():
+        return True
+    try:
+        data = json.loads(data_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return True
+    n = (data.get("meta") or {}).get("n_candidates")
+    if n is None:
+        return True
+    try:
+        return int(n) > 0
+    except (TypeError, ValueError):
+        return True
+
+
 def collect_today_sleep(root: Path) -> list[str]:
-    """今日 sleep 提案 proposal.md 路径（夜间引擎候选，待人工采纳/忽略）"""
+    """今日 sleep 提案 proposal.md 路径（夜间引擎候选，待人工采纳/忽略）
+
+    ⚠️ 2026-11-04：**0 候选的提案不进清单**。
+    夜间引擎每 8 小时产一个提案，空提案（本窗口无知识缺口）也占一行
+    ⇒ 清单天天挂着 2 条「要审的」**假动作项** ⇒ 真有候选时反而被淹没。
+    """
     today = _today_local().isoformat()
     base = root / ".sync" / "state" / "sleep"
     if not base.is_dir():
         return []
     hits = [
-        str(p.relative_to(base)) for p in base.glob("*/proposal.md") if p.parent.name.startswith(today.replace("-", ""))
+        str(p.relative_to(base))
+        for p in base.glob("*/proposal.md")
+        if p.parent.name.startswith(today.replace("-", "")) and _proposal_has_candidates(p)
     ]
     return sorted(hits)
 

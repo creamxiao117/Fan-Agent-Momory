@@ -273,28 +273,48 @@ def _step_snapshot(root: Path, engine_dir: Path) -> StepResult:
     )
 
 
-def _render_daily(snap: dict, today: str) -> str:
-    """人读快照（**从 JSON 派生**，不再让各脚本各写一种报告）。"""
-    health = snap.get("health") or {}
-    plat = (snap.get("platforms") or {}).get("platforms") or {}
-    plat_txt = ", ".join(f"{k}={v.get('status', '?')}" for k, v in plat.items()) or "—"
+def render_daily_snapshot(snap: dict, today: str) -> str:
+    """人读快照（**从 JSON 派生**，不再让各脚本各写一种报告）。
+
+    ⚠️ 2026-11-04 修（**schema 漂移 ⇒ 人读日报是空壳**）：
+    原实现读 `snap["health"]["overall_score"]` / `snap["health"]["card_health"]` /
+    `snap["platforms"]["platforms"]`，但 `engine.py status --json` 的真实键是
+    **`health_scores` / `cards`**，且**根本没有 `health` / `platforms` 键**
+    ⇒ 产物里「健康总分 / 卡片 / 平台」恒为 `—` / `{}` / `—`
+    ⇒ **JSON 是对的、md 是空的** ⇒ 人读日报连续多日无内容（空壳已进仓）。
+
+    ⇒ 纪律：**改数据源 schema 必须同时改渲染器**，验收判据 = 「产物非空」
+    （回归测试见 `tests/test_patrol_daily_render.py`）。
+    """
+    hs = snap.get("health_scores") or {}
+    cards = snap.get("cards") or {}
+    total = sum(v for v in cards.values() if isinstance(v, int))
     lines = [
         f"# 中枢每日快照 {today}",
         "",
         "> 由 `scripts/patrol_runner` 第 8 步生成（**巡检唯一产物**）。",
         "> 数据源 = `engine.py status --json`；不要手改本文件。",
         "",
-        f"- 健康总分：{health.get('overall_score', '—')}（{health.get('overall_verdict', '—')}）",
-        f"- 卡片：{json.dumps(health.get('card_health', {}), ensure_ascii=False)}",
-        f"- 平台：{plat_txt}",
+        f"- 健康总分：{hs.get('overall', '—')}",
+        f"- 卡片：{total} 张（{json.dumps(cards, ensure_ascii=False)}）",
     ]
-    alerts = snap.get("alerts") or {}
+    gate = snap.get("gate_detail") or {}
+    if gate:
+        lines.append(f"- 门禁：{json.dumps(gate, ensure_ascii=False)}")
+    plat = (snap.get("platforms") or {}).get("platforms") or {}
+    if plat:
+        lines.append("- 平台：" + ", ".join(f"{k}={v.get('status', '?')}" for k, v in plat.items()))
+    alerts = snap.get("alerts") or []
     if alerts:
         lines += ["", f"- 告警：{json.dumps(alerts, ensure_ascii=False)[:400]}"]
     for key in ("knowledge_gap", "cron_jobs"):
         if snap.get(key):
             lines.append(f"- {key}：{json.dumps(snap[key], ensure_ascii=False)[:300]}")
     return "\n".join(lines) + "\n"
+
+
+# 兼容旧名（保留内部调用点）
+_render_daily = render_daily_snapshot
 
 
 def _prune(retro: Path) -> int:

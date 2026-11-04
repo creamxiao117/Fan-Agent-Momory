@@ -176,6 +176,23 @@ def _client_kind(explicit: str | None = None) -> str:
 # 默认**只给 WorkBuddy** 声明 ui:// 资源（它是唯一需要它们的 Apps 宿主）
 UI_CLIENTS_DEFAULT: tuple[str, ...] = ("workbuddy",)
 
+# 客户端名 → 中枢平台名（= `hub.config.yaml` 的 `platforms:` 键）。
+# 客户端名与平台名同源（pi/workbuddy/hermes/deepseek/mavis/code）⇒ 同名映射；
+# 认不出的客户端保持 "unknown"（**不猜**）。
+_CLIENT_TO_PLATFORM: dict[str, str] = {
+    "pi": "pi",
+    "workbuddy": "workbuddy",
+    "hermes": "hermes",
+    "deepseek": "deepseek",
+    "mavis": "mavis",
+    "code": "code",
+}
+
+# 接受 `platform` 参数的工具（**其余工具不接受** ⇒ 不能无脑塞参数，否则 TypeError）。
+_PLATFORM_AWARE_TOOLS: frozenset[str] = frozenset(
+    {"hub_search", "hub_get", "hub_index", "hub_bootstrap", "hub_ingest_candidate", "hub_announce"}
+)
+
 # 工具的（描述, inputSchema）——给**人类卡片**用；与 tools/list 的定义同源（避免卡片与实现漂移）
 _UI_TOOL_SPECS: dict[str, tuple[str, dict]] = {
     "hub_search": ("混合检索中枢（确定性+语义）", SEARCH_SCHEMA),
@@ -277,6 +294,11 @@ def build_server(root: Path, client: str | None = None) -> Server:
     async def _call_tool(context, params) -> CallToolResult:
         name = params.name
         arguments = dict(params.arguments or {})
+        # 2026-11-04：调用方（pi 等）通常**不传** platform ⇒ 审计记 platform="unknown"
+        # ⇒ 「按平台」的检索/复用口径看不见 MCP 流量（pi 的调用全落 unknown）。
+        # ⇒ 缺省按**已识别的客户端**填 platform（认不出就不填，不猜）。
+        if name in _PLATFORM_AWARE_TOOLS and not arguments.get("platform"):
+            arguments["platform"] = _CLIENT_TO_PLATFORM.get(client_kind, "unknown")
         handler = HANDLERS.get(name)
         if handler is None:
             raise ValueError(f"未知工具: {name}")
