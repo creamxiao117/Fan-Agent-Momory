@@ -114,10 +114,16 @@ def test_auto_apply_p1_tags_applies_and_is_idempotent(tmp_path):
     # git 回滚点：最后一次 commit 是本功能的提交
     import subprocess
 
+    # ⚑ 必须**固定 UTF-8 解码**（同 test_commit_scope.py::_git 的既有约定）：
+    # git 的输出是 UTF-8 字节；不钉 encoding 时 Python 按**本机 locale**（中文 Windows = cp936/GBK）
+    # 解码 ⇒ 中文提交信息里的字节被当成 GBK 解析 ⇒ 解码异常 ⇒ stdout 变 None ⇒ 断言炸成
+    # 「NoneType is not iterable」（症状离根因很远）。门禁跑器会注入 PYTHONUTF8=1 ⇒ 该缺陷
+    # **只在直接跑 pytest 时显形** ⇒ 属环境依赖假红（与 2026-11-12 门禁自测纪律卡同族）。
     head = subprocess.run(
         ["git", "-C", str(root), "log", "--oneline", "-1"],
         capture_output=True,
         text=True,
+        encoding="utf-8",
     ).stdout
     assert "chore(p1-autotag)" in head
 
