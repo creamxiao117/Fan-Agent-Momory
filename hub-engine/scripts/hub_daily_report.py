@@ -14,11 +14,15 @@ from __future__ import annotations
 import argparse
 import contextlib
 import json
-import subprocess
 import sys
 import tempfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+
+# hub-engine 根（common.proc 可 import）
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from common.proc import run_utf8  # noqa: E402  (需先 sys.path.insert)
 
 # 微信平台每行长度有限，日报控制行宽
 CST = timezone(timedelta(hours=8))
@@ -244,7 +248,9 @@ def _collect_snapshot(hub_root: Path, skillhub_root: Path) -> dict:
     with tempfile.NamedTemporaryFile(suffix=".json", delete=False, mode="w", encoding="utf-8") as fh:
         out_path = fh.name
     try:
-        result = subprocess.run(
+        # ⚑ run_utf8：解码端 + 产出端同时钉 UTF-8（子进程 hub_health.py 在中文 Windows
+        # 默认吐 GBK 字节 ⇒ 之前会 stderr=None ⇒ 失败分支 result.stderr[-500:] 直接 TypeError）
+        result = run_utf8(
             [
                 sys.executable,
                 str(script),
@@ -257,8 +263,6 @@ def _collect_snapshot(hub_root: Path, skillhub_root: Path) -> dict:
                 out_path,
             ],
             capture_output=True,
-            text=True,
-            encoding="utf-8",
             timeout=180,
         )
         if result.returncode != 0:

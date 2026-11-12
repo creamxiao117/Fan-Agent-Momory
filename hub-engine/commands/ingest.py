@@ -12,9 +12,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 
 def cmd_ingest(args) -> int:
-    import subprocess
 
     from common.config import load_engine_config
+    from common.proc import run_utf8
     from engine import chat, smart_chat  # lazy: 避免循环导入
     from sync import ingest
 
@@ -62,7 +62,9 @@ def cmd_ingest(args) -> int:
                 hook_py = Path(__file__).resolve().parent.parent / "scripts" / "post_ingest_hook.py"
                 python_exe = sys.executable
                 try:
-                    r = subprocess.run(
+                    # ⚑ run_utf8：hook 打印中文 ⇒ 产出端不钉 UTF-8 时是 GBK 字节 ⇒
+                    # 之前 r.stdout 会变 None ⇒ splitlines() AttributeError（被兜成 WARN，功能退化）
+                    r = run_utf8(
                         [
                             python_exe,
                             str(hook_py),
@@ -72,8 +74,6 @@ def cmd_ingest(args) -> int:
                             ",".join(moved_names),
                         ],
                         capture_output=True,
-                        text=True,
-                        encoding="utf-8",
                         timeout=60,
                     )
                     if r.returncode == 0:

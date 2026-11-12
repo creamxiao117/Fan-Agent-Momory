@@ -48,5 +48,6 @@ def test_bootstrap_git_init(tmp_path):
         check=True,
         capture_output=True,
         text=True,
+        encoding="utf-8",
     )
     assert proc.stdout.strip()

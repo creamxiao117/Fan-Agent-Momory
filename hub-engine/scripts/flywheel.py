@@ -25,21 +25,24 @@ _SCRIPT_DIR = Path(__file__).resolve().parent
 import sys as _sys_mod
 
 _sys_mod.path.insert(0, str(_SCRIPT_DIR))
+# ⚑ common.proc 是「解码端 + 产出端同时钉 UTF-8」的唯一实现 ⇒ 需要 hub-engine 根可 import
+_sys_mod.path.insert(0, str(_SCRIPT_DIR.parent))
 
 from flywheel_runlog import append_record, make_record
 from flywheel_runlog import main as runlog_main
 
+from common.proc import run_utf8  # noqa: E402  (需先 sys.path.insert)
+
 
 def _run(cmd: list[str], **kwargs) -> subprocess.CompletedProcess:
-    """运行子命令，统一捕获输出。不抛异常，调用方自行判断 returncode。"""
-    return subprocess.run(
-        cmd,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        check=False,
-        **kwargs,
-    )
+    """运行子命令，统一捕获输出。不抛异常，调用方自行判断 returncode。
+
+    ⚑ 走 `common.proc.run_utf8`：**解码端**（utf-8 + replace，永不因解码崩）与
+    **产出端**（注入 PYTHONUTF8=1）**同时钉死** ⇒ 子进程 stdout 是 UTF-8 字节，
+    不会在中文 Windows（locale=cp936）下因解码失败把 stdout 变成 None
+    （实测 2026-11-12：`stdout is None` ⇒ 调用点 `.strip()` 直接 AttributeError）。
+    """
+    return run_utf8(cmd, capture_output=True, check=False, **kwargs)
 
 
 def step_flywheel(hub_root: str | Path, dry_run: bool) -> dict:
