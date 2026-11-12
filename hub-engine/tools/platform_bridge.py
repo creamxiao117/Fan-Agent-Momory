@@ -498,15 +498,24 @@ def _platform_budget(cfg, platform: str) -> int | None:
 
     ⚑ 这个数字必须等于**消费端自己的加载上限**（hermes = `memory_char_limit`）⇒
     中枢侧与消费侧说的是同一个数，不会各说各话。
+
+    ⚑ **声明了但非法 ⇒ 抛错（fail-closed）**，不得静默当成「未声明」：
+    误写成 `"16k"` / `-5` / `0` 若被当成「不设闸」，就是**本闸要根治的同一类
+    「生产端零信号」**（悄悄失效的闸比没有闸更坏）⇒ 调用方必须据此**拒绝写入**。
     """
     meta = (getattr(cfg, "platforms", None) or {}).get(platform) or {}
     raw = meta.get("memory_char_limit")
-    if raw in (None, "", 0):
+    if raw is None or raw == "":
         return None
+    if isinstance(raw, bool) or not isinstance(raw, (int, str)):
+        raise ValueError(f"平台 {platform} 的 memory_char_limit 非法：{raw!r}（须为正整数）")
     try:
-        return int(raw)
+        value = int(str(raw).strip())
     except (TypeError, ValueError):
-        return None
+        raise ValueError(f"平台 {platform} 的 memory_char_limit 非法：{raw!r}（须为正整数）") from None
+    if value <= 0:
+        raise ValueError(f"平台 {platform} 的 memory_char_limit 非法：{raw!r}（须为正整数）")
+    return value
 
 
 def _apply_push(
@@ -591,14 +600,23 @@ def push(
     # （hermes `memory_char_limit`）⇒ 超限后消费端会**拒绝一切新增/替换写入**，
     # 而 push 本身照样报「成功」⇒ 生产端不给任何信号，故必须在**写之前**按消费端上限核对。
     # 口径：按**推后文件长度**核对（文件长度 ≥ 消费端的条目计数 ⇒ 保守方向：宁严勿松）。
-    budget = _platform_budget(cfg, platform)
+    try:
+        budget = _platform_budget(cfg, platform)
+    except ValueError as exc:
+        stat["status"] = (
+            f"拒绝写入：{exc} ⇒ 配置错误不得静默当成「不设闸」（闸悄悄失效 = 生产端零信号 = 本闸要根治的那类事故）"
+        )
+        stat["added"] = 0
+        stat["updated"] = 0
+        stat["replaced"] = 0
+        return stat
     if budget is not None and (blocks or replacements):
         projected = _compose_text(text, blocks, replacements, titleless)
         if len(projected) > budget:
             stat["status"] = (
                 f"拒绝写入：推后体量 {len(projected)} 字符 > 平台记忆上限 {budget}"
                 f"（= 消费端加载上限；超限后消费端会拒绝一切新增/替换写入）"
-                f" ⇒ 改为只推指针，或先瘦身 {target.name}"
+                f" ⇒ 请改推更小的卡片，或先瘦身 {target.name}（中枢暂无「只推指针」模式）"
             )
             stat["added"] = 0
             stat["updated"] = 0

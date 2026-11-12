@@ -526,3 +526,69 @@ def test_push_budget_refusal_also_reported_in_dry_run(tmp_path):
     assert stat["status"] != "ok"
     assert "拒绝写入" in stat["status"]
     assert "新规则" not in (tmp_path / "platforms" / "memory.md").read_text(encoding="utf-8")
+
+
+def test_push_refuses_when_platform_budget_is_invalid(tmp_path):
+    """上限写错（"16k" / -5 / 0 / True）⇒ **拒绝写入**并明确报配置错误。
+
+    静默当成「不设闸」= **闸悄悄失效** = 生产端零信号 = 本闸要根治的那类事故 ⇒ 必须 fail-closed。
+    """
+    for bad in ("16k", -5, "0", 0, True):
+        root = _root_with_platform(tmp_path / f"case_{bad}", content="## 平台已有小节\n原有内容\n")
+        _hub_card(root, "新规则", "正文")
+        _set_platform_budget(root, "testplat", bad)
+        stat = push(root, "testplat")
+        assert stat["status"] != "ok", f"非法上限 {bad!r} 竟未拒绝"
+        assert "非法" in stat["status"]
+        assert stat["added"] == 0
+
+
+def test_push_allows_when_projected_size_equals_budget(tmp_path):
+    """边界：推后体量**恰好等于**上限 ⇒ 放行（与消费端 `> limit` 的严格大于语义一致）"""
+    root = _root_with_platform(tmp_path, content="## 平台已有小节\n原有内容\n")
+    original = (tmp_path / "platforms" / "memory.md").read_text(encoding="utf-8")
+    _hub_card(root, "新规则", "正文")
+    _set_platform_budget(root, "testplat", 10**6)
+    assert push(root, "testplat")["added"] == 1
+    exact = len((tmp_path / "platforms" / "memory.md").read_text(encoding="utf-8"))
+    # 复位现场：平台文件回到推前内容 + 台账清空 ⇒ 同一张卡的投影长度可复算
+    (tmp_path / "platforms" / "memory.md").write_text(original, encoding="utf-8")
+    (root / ".sync" / "state" / "pulled_testplat.json").unlink(missing_ok=True)
+    _set_platform_budget(root, "testplat", exact)
+    stat = push(root, "testplat")
+    assert stat["status"] == "ok", stat["status"]
+    assert stat["added"] == 1
+
+
+def test_push_refuses_when_replacement_would_exceed_budget(tmp_path):
+    """替换/更新路径也要计入体量：同一张卡改大后超限 ⇒ 拒绝且文件一字不动"""
+    root = _root_with_platform(tmp_path, content="## 平台已有小节\n原有内容\n")
+    _hub_card(root, "新规则", "短正文")
+    _set_platform_budget(root, "testplat", 10**6)
+    first = push(root, "testplat")
+    assert first["added"] == 1, first  # 首推必须是**新增**（预置文件不得与卡同名）
+    before = (tmp_path / "platforms" / "memory.md").read_text(encoding="utf-8")
+    _hub_card(root, "新规则", "长" * 500)
+    # dry-run 先确认走的确实是**替换**路径（而非新增/追加）——替换体量同样要计入闸
+    plan = push(root, "testplat", dry_run=True)
+    assert plan["replaced"] == 1, plan
+    assert (tmp_path / "platforms" / "memory.md").read_text(encoding="utf-8") == before
+    before = (tmp_path / "platforms" / "memory.md").read_text(encoding="utf-8")
+    _hub_card(root, "新规则", "长" * 500)
+    _set_platform_budget(root, "testplat", len(before) + 10)
+    stat = push(root, "testplat")
+    assert stat["status"] != "ok"
+    assert "拒绝写入" in stat["status"]
+    assert (tmp_path / "platforms" / "memory.md").read_text(encoding="utf-8") == before
+
+
+def test_push_refusal_leaves_platform_state_untouched(tmp_path):
+    """拒绝写入时**台账零污染**（否则下次 push 误判「已推过」而静默跳过 ⇒ 最静的后果）"""
+    root = _root_with_platform(tmp_path, content="## 平台已有小节\n原有内容\n")
+    _hub_card(root, "新规则", "正文")
+    _set_platform_budget(root, "testplat", 10)
+    state = root / ".sync" / "state" / "pulled_testplat.json"
+    before = state.read_text(encoding="utf-8") if state.exists() else None
+    assert push(root, "testplat")["status"] != "ok"
+    after = state.read_text(encoding="utf-8") if state.exists() else None
+    assert after == before

@@ -75,6 +75,10 @@ platforms:
   hermes:
     memory_dir: "{home}/AppData/Local/hermes/memories"
     target_file: "MEMORY.md"
+    # 平台记忆文件的**体量闸** = 消费端自己的加载上限（hermes config.yaml 的 memory_char_limit）。
+    # 不声明 ⇒ push 不设闸（可能把消费端灌爆，而 push 照样报「成功」）。
+    # ⚠ 必须与**本机**消费端配置一致（下面这个值要按本机 config.yaml 改）；改一边要改另一边。
+    memory_char_limit: 16000
   workbuddy:
     memory_dir: "{home}/.workbuddy"
     target_file: "MEMORY.md"
