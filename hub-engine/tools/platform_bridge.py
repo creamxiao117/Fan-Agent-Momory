@@ -473,6 +473,42 @@ def _plan_push(
     return blocks, replacements, pushed_fps
 
 
+def _compose_text(
+    text: str,
+    blocks: list[str],
+    replacements: list[tuple[str, str]],
+    titleless: bool,
+) -> str:
+    """把本轮推送**投影**成新的平台文件文本（**不落盘**）。
+
+    `_apply_push` 与体量闸共用同一段合成逻辑 ⇒ 闸算出来的体量 = 真会写下去的体量
+    （两处各写一份 ⇒ 闸算 A、写的却是 B ⇒ 闸形同虚设）。
+    """
+    new_text = text
+    for old_block, new_block in replacements:
+        new_text = new_text.replace(old_block, new_block, 1)
+    if blocks:
+        heads = _STOP_HEADS_SECT if titleless else _STOP_HEADS_MD
+        new_text = _insert_after_instruction(new_text, "\n\n".join(blocks), heads)
+    return new_text
+
+
+def _platform_budget(cfg, platform: str) -> int | None:
+    """平台声明的**记忆文件体量上限**（字符数）；未声明 ⇒ None（不设闸）。
+
+    ⚑ 这个数字必须等于**消费端自己的加载上限**（hermes = `memory_char_limit`）⇒
+    中枢侧与消费侧说的是同一个数，不会各说各话。
+    """
+    meta = (getattr(cfg, "platforms", None) or {}).get(platform) or {}
+    raw = meta.get("memory_char_limit")
+    if raw in (None, "", 0):
+        return None
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return None
+
+
 def _apply_push(
     root: Path,
     platform: str,
@@ -488,12 +524,7 @@ def _apply_push(
     """写盘 + 更新状态 + 记日志（单写者锁内）；返回错误信息或 None"""
     try:
         with _WriteLock(root):
-            new_text = text
-            for old_block, new_block in replacements:
-                new_text = new_text.replace(old_block, new_block, 1)
-            if blocks:
-                heads = _STOP_HEADS_SECT if titleless else _STOP_HEADS_MD
-                new_text = _insert_after_instruction(new_text, "\n\n".join(blocks), heads)
+            new_text = _compose_text(text, blocks, replacements, titleless)
             with target.open("w", encoding="utf-8", newline=_dominant_newline(target)) as f:
                 f.write(new_text)
             state["pushed"] = sorted(pushed_fps)
@@ -555,6 +586,24 @@ def push(
     blocks, replacements, pushed_fps = _plan_push(
         adapter, cards, text, state, titleless, existing_bodies, existing_titles, stat
     )
+
+    # ⚑ 体量闸（2026-11-12）：平台记忆文件是**消费端**的输入，消费端有自己的加载上限
+    # （hermes `memory_char_limit`）⇒ 超限后消费端会**拒绝一切新增/替换写入**，
+    # 而 push 本身照样报「成功」⇒ 生产端不给任何信号，故必须在**写之前**按消费端上限核对。
+    # 口径：按**推后文件长度**核对（文件长度 ≥ 消费端的条目计数 ⇒ 保守方向：宁严勿松）。
+    budget = _platform_budget(cfg, platform)
+    if budget is not None and (blocks or replacements):
+        projected = _compose_text(text, blocks, replacements, titleless)
+        if len(projected) > budget:
+            stat["status"] = (
+                f"拒绝写入：推后体量 {len(projected)} 字符 > 平台记忆上限 {budget}"
+                f"（= 消费端加载上限；超限后消费端会拒绝一切新增/替换写入）"
+                f" ⇒ 改为只推指针，或先瘦身 {target.name}"
+            )
+            stat["added"] = 0
+            stat["updated"] = 0
+            stat["replaced"] = 0
+            return stat
 
     if dry_run or (not blocks and not replacements):
         return stat

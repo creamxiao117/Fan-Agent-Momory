@@ -33,6 +33,14 @@ def _register_platform(root: Path, name: str, mem_dir: Path, target: str = "memo
     cfg_path.write_text(yaml.safe_dump(data, allow_unicode=True, sort_keys=False), encoding="utf-8")
 
 
+def _set_platform_budget(root: Path, name: str, limit: int) -> None:
+    """给测试中枢的平台登记**体量闸**（= 消费端自己的加载上限，如 hermes memory_char_limit）"""
+    cfg_path = root / "hub.config.yaml"
+    data = yaml.safe_load(cfg_path.read_text(encoding="utf-8")) or {}
+    data.setdefault("platforms", {}).setdefault(name, {})["memory_char_limit"] = limit
+    cfg_path.write_text(yaml.safe_dump(data, allow_unicode=True, sort_keys=False), encoding="utf-8")
+
+
 def _root_with_platform(
     tmp_path: Path,
     platform: str = "testplat",
@@ -467,3 +475,54 @@ def test_hermes_repush_fence_aware_no_cross_fence_replace(tmp_path):
     assert "正文第二段（围栏后，越界替换会把它吞掉）。" in text  # 围栏后正文未被吞
     assert "- V1.1 新增围栏感知说明" in text  # 第二版已替换进来
     assert text.count("```") == 2  # 围栏成对、未被劈开
+
+
+# ---------- Push 体量闸（2026-11-12：中枢 push 曾把 hermes 平台记忆灌到超限 12.8 倍）----------
+
+
+def test_push_refuses_when_projected_size_exceeds_platform_budget(tmp_path):
+    """推后体量超平台上限 ⇒ 拒绝写入，文件一字不动。
+
+    实测 2026-11-12：中枢 push 7 张卡把 hermes MEMORY.md 灌到 30,668 字符，
+    而消费端 `memory_char_limit: 2400` ⇒ **消费端从此拒绝一切写入**，而 push 本身照样报「成功」。
+    """
+    root = _root_with_platform(tmp_path, content="## 平台已有小节\n原有内容\n")
+    _hub_card(root, "新规则", "中枢规则正文" * 50)
+    _set_platform_budget(root, "testplat", 100)
+    before = (tmp_path / "platforms" / "memory.md").read_text(encoding="utf-8")
+    stat = push(root, "testplat")
+    assert stat["status"] != "ok"
+    assert "拒绝写入" in stat["status"]
+    assert stat["added"] == 0
+    assert (tmp_path / "platforms" / "memory.md").read_text(encoding="utf-8") == before
+
+
+def test_push_allowed_when_within_platform_budget(tmp_path):
+    """在上限之内 ⇒ 正常写入（闸只拦超限，不拦正常同步）"""
+    root = _root_with_platform(tmp_path, content="## 平台已有小节\n原有内容\n")
+    _hub_card(root, "新规则", "正文")
+    _set_platform_budget(root, "testplat", 5000)
+    stat = push(root, "testplat")
+    assert stat["status"] == "ok"
+    assert stat["added"] == 1
+    assert "新规则" in (tmp_path / "platforms" / "memory.md").read_text(encoding="utf-8")
+
+
+def test_push_without_declared_budget_is_unaffected(tmp_path):
+    """未声明上限的平台（mavis 等镜像）⇒ 不设闸，行为逐字不变"""
+    root = _root_with_platform(tmp_path, content="## 平台已有小节\n原有内容\n")
+    _hub_card(root, "新规则", "正文" * 200)
+    stat = push(root, "testplat")
+    assert stat["status"] == "ok"
+    assert stat["added"] == 1
+
+
+def test_push_budget_refusal_also_reported_in_dry_run(tmp_path):
+    """dry-run 也要报出超限（维护者要先看见，才不会在实推时被拒）"""
+    root = _root_with_platform(tmp_path, content="## 平台已有小节\n原有内容\n")
+    _hub_card(root, "新规则", "正文" * 200)
+    _set_platform_budget(root, "testplat", 100)
+    stat = push(root, "testplat", dry_run=True)
+    assert stat["status"] != "ok"
+    assert "拒绝写入" in stat["status"]
+    assert "新规则" not in (tmp_path / "platforms" / "memory.md").read_text(encoding="utf-8")
