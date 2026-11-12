@@ -62,6 +62,43 @@ def test_set_fields_preserves_bom_and_crlf(tmp_path: Path):
     assert raw.count(b"\r\n") >= 4, "换行风格必须保留（默认 write_text 会翻成 \\r\\n 全文件漂移）"
 
 
+def test_set_fields_replaces_a_multiline_value_without_leftover(tmp_path: Path):
+    """多行折叠值必须**整块**替换：只换首行会把旧续行留在文件里（值越写越长）。
+
+    2026-11-12 实测：`set_index_meta` 改写 5 张蓝图的 `index_desc` 后，描述从 1051 字符
+    涨到 1664 字符 —— 新首行 + 旧续行拼在一起，audit 反而更红。
+    """
+    p = tmp_path / "multi.md"
+    p.write_text(
+        "---\ntype: rule\nindex_desc: 旧描述首行\n  旧描述续行一\n  旧描述续行二\nindex_note: 注解\n---\n\n正文\n",
+        encoding="utf-8",
+    )
+
+    set_fields(p, {"index_desc": "新描述"})
+
+    text = p.read_text(encoding="utf-8")
+    assert "旧描述续行一" not in text
+    assert "旧描述续行二" not in text
+    fm = yaml.safe_load(text[: text.index("---", 3)])
+    assert fm["index_desc"] == "新描述"
+    assert fm["index_note"] == "注解", "相邻字段不得被牵连"
+
+
+def test_remove_field_removes_a_multiline_value(tmp_path: Path):
+    """删除也要整块删：只删首行会让续行变成没有键的野行。"""
+    p = tmp_path / "multi2.md"
+    p.write_text(
+        "---\ntype: rule\nindex_note: 注解首行\n  注解续行\n---\n\n正文\n",
+        encoding="utf-8",
+    )
+
+    assert remove_field(p, "index_note") is True
+
+    text = p.read_text(encoding="utf-8")
+    assert "注解续行" not in text
+    assert "index_note" not in text
+
+
 def test_remove_field(tmp_path: Path):
     p = tmp_path / "c.md"
     p.write_text("---\ntype: rule\nindex_note: x\n---\n\n正文\n", encoding="utf-8")

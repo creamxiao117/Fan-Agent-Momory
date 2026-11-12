@@ -32,6 +32,24 @@ def _frontmatter_end(lines: list[str]) -> int:
     raise ValueError("frontmatter 未闭合（找不到第二个 ---）")
 
 
+def _value_end(lines: list[str], start: int, end: int) -> int:
+    """``start`` 处标量键的**值块**结束行号（不含）。
+
+    YAML 的多行折叠值是「首行 + 缩进续行」**同一个**标量 ⇒ 改写/删除一个键必须整块处理；
+    只处理首行会把旧续行留在文件里（值 = 新首行 + 旧续行）。
+
+    续行 = 紧随其后、以空白开头的行；遇到空行或新的顶层键即止。
+    """
+    i = start + 1
+    while i < end:
+        ln = lines[i]
+        if ln[:1] in (" ", "\t"):
+            i += 1
+            continue
+        break
+    return i
+
+
 def set_fields(path: Path, fields: dict[str, str]) -> None:
     """写入/替换卡 frontmatter 字段（保留 BOM 与换行风格，原地替换已存在键）。"""
     raw = path.read_bytes()
@@ -51,7 +69,13 @@ def set_fields(path: Path, fields: dict[str, str]) -> None:
     for key, value in fields.items():
         rendered = yaml_line(key, value) + newline
         if key in slots:
-            lines[slots[key]] = rendered
+            # ⚑ 旧值可能是**多行折叠**（YAML 折行续行）⇒ 只换首行会把旧续行留在文件里，
+            #   值变成「新首行 + 旧续行」⇒ 实测把 index_desc 越写越长（1051 → 1664 字符）
+            #   ⇒ 整块替换：首行连同它的续行一起换成新值。
+            i = slots[key]
+            stop = _value_end(lines, i, end)
+            lines[i:stop] = [rendered]
+            end -= stop - i - 1
         else:
             lines.insert(end, rendered)
             end += 1
@@ -66,7 +90,8 @@ def remove_field(path: Path, key: str) -> bool:
     end = _frontmatter_end(lines)
     for i, ln in enumerate(lines[:end]):
         if ln.startswith(f"{key}:"):
-            del lines[i]
+            # 同 set_fields：多行折叠值要**整块**删，否则续行会留在文件里变成野值。
+            del lines[i : _value_end(lines, i, end)]
             path.write_text("".join(lines), encoding=encoding, newline="")
             return True
     return False
