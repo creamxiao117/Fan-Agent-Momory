@@ -2,6 +2,36 @@
 
 按轮次（R1…）追加；每条含巡检/门禁结果、决策与进行中的事项。当前状态见 `WORK.md`。
 
+## [2026-11-13] R35 | 上游 PR #154743 关闭（DROP）+ 本地分支身份卫生 + 主仓 CI 编码红治本 + WORK.md 数字校准
+
+- **① 上游 PR #154743 存废 = 关闭**：维护者 **kvnloo** 判决 **DROP — requirement mismatch**
+  （issue #133137 的契约 = 「被禁用的 pin 必须推进 fallback」= fail-soft；我方 PR = fail-closed ⇒ **语义相反**）；
+  原话 *Prefer #133150 unless fail-closed has a separate user requirement*。
+  已留评论（接受判决 / 语义对照 / typed error 的独立价值 / 要 fail-closed 须另开 PR）⇒ `gh pr close 154743`。
+  ⇒ **规则**：提 PR 前先对齐**它所修的那个 issue 的契约语义方向**；fail-closed 属我方偏好，
+  要保留必须有**独立 user requirement** 另开 PR，不能混进「修 bug」的 PR。
+- **② 本地分支身份卫生**：hermes 主 checkout `local/fix/provider-disabled-model-switch` 的
+  `tests/gateway/test_session_mutation_model_disabled_provider.py` 内嵌真实身份串
+  （`mimo-v2.6-flash` / `xiaomi` / `https://token-plan-cn.xiaomimimo.com/v1`）⇒ 泛化为
+  `m-model` / `provx` / `https://example.invalid/v1`；**pathspec 只提交该文件**（`b9e8136fc7b`），
+  hermes 在途的 `agent_init.py` / `memory_tool.py` / `memory_tool_store.py` / `test_memory_dynamic_limit.py` **零改动**；
+  测试 2 passed、pre-commit lint 全绿。**网关未重启**（只改测试文件 ⇒ 运行时零影响；code_sha 与 HEAD 失配属预期）。
+- **③ 主仓 CI 编码红治本**：GitHub windows runner 的 ANSI 代码页 = **cp1252**（本机 = cp936 ⇒ **本地永远复现不出来**）
+  ⇒ 脚本往 stdout 打中文必 `UnicodeEncodeError` ⇒ CI 自 2026-11-12 起每次 push 都红在**第一步**（门禁根本没跑）。
+  修法照本仓既有范式（`gui_vision/src/verify/cross_check.py`）：10 个脚本加
+  `sys.stdout/stderr.reconfigure(encoding="utf-8", errors="replace")` + CI job 级 `env: PYTHONIOENCODING: utf-8`；
+  提交 `7de2db8` 已推。**A/B 复现必须强制 `PYTHONIOENCODING=cp1252`**（本机默认永远绿 ⇒ 等于没验）。
+- **④ WORK.md 数字校准（净变化 0，仍 4,942 ≤ 5,000）**：卡片 616 → **702**
+  （blueprints 232 / experience 350 / methodology 76 / projects 23 / rules 13 / longterm 8）；
+  测试 841 → **945**；grade 覆盖 **702/702 = 100%**（iron 7 / proven 136 / domain 213 / pitfall 45 / task 301）；
+  账本 114 条 keep 81 / manual-cli 33 → **keep 107 / manual-cli 7**（棘轮 114、在役覆盖 93.9% 不变）。
+  ⚠ **探针坑（可复用）**：限行扫描（`Get-Content -TotalCount 20/25`）会漏掉 frontmatter 长的卡
+  （18 张卡的 `grade:` 在第 26 行后）⇒ 第一次测得「611/702 = 87%」是**假阴性**；
+  **覆盖率统计必须全文件扫 + 与权威 `engine.py lint` 交叉验证**（lint：702 张全 0 缺陷）。
+- **⑤ A10 收敛到 2 项**：hermes 已把中枢推到 `origin/master=d7dd7d3`（本地 ahead **1** = 本轮 mavis 两卡 `2470edb`）；
+  `mavis.memory_char_warn_limit: 58000` 已写入；`capability_scan --check` **PASS**（账本与实测态一致）；
+  `inventory --write` 已重渲（114 模块）⇒ **仅剩「推中枢仓」与「动态约束落刀」**。
+
 ## [2026-11-13] R34 | 提交面治本（l0 死锁根治 + 同源第二入口）+ 平台体量告警预算 + 中枢任务交办 Hermes
 
 - **① 根治 l0 门禁死锁（`ec78c36`）**：l0 判据对象是**暂存态**；旧流程 INDEX 的渲染发生在 protect 快照**之后**
