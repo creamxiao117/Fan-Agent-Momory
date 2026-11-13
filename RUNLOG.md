@@ -2,6 +2,31 @@
 
 按轮次（R1…）追加；每条含巡检/门禁结果、决策与进行中的事项。当前状态见 `WORK.md`。
 
+## [2026-11-13] R34 | 提交面治本（l0 死锁根治 + 同源第二入口）+ 平台体量告警预算 + 中枢任务交办 Hermes
+
+- **① 根治 l0 门禁死锁（`ec78c36`）**：l0 判据对象是**暂存态**；旧流程 INDEX 的渲染发生在 protect 快照**之后**
+  ⇒ 提交里带的是**陈旧 INDEX** ⇒ 判不一致 ⇒ 阻断 ⇒ 该批产物永久滞留暂存区 ⇒ 之后每次提交都被同一个 l0 挡下（流水线整体卡死）。
+  修法两条不变式：① 提交内容自洽（`GIT_INDEX_FILE` 临时索引精确提交「HEAD + 本次产物 + 提交树专属渲染的 INDEX」）
+  ② 工作树仍自洽（提交后重渲染工作树 INDEX）。附带：暂存区自愈（只改渲染产物，不碰他人已暂存卡）。
+- **② 同源第二入口治本（`6c5e09e`）**：`post_ingest_hook._commit_indices` 仍是「`git add` + `git commit`」⇒ 提交整个索引
+  ⇒ 卷走他人已暂存项 + 可能提交陈旧 INDEX ⇒ 改走 scoped 提交。两个坑：幂等预检必须用 **git 自己的口径**
+  （`git diff --quiet HEAD`；工作树 CRLF vs blob LF ⇒ 逐字节比对永远判「有差异」）；`git commit` 的「nothing to commit」走 **stdout**。
+  判据 `tests/test_post_ingest_hook_commit.py` 4 条 + 相邻回归 27 passed。
+- **③ 平台体量告警预算（`a7a9b54`）**：新增 `memory_char_warn_limit`（hub 侧自设预算，**只报不拦**），
+  与 `memory_char_limit`（消费端加载上限，**阻断**）语义严格分离；声明了但非法 ⇒ fail-closed 拒绝写入（用户已裁定）。
+  **关键取证**：mavis 平台文件在 MiniMax Code 运行时**无任何读取路径**（`app.asar` 字节级扫描 count 0）⇒ 本质是中枢镜像
+  ⇒ **不得声明** `memory_char_limit` ⇒ 告警线是唯一合适机制。
+- **④ 中枢任务交办 Hermes（↑ A10）**：中枢仓本地 **ahead 56 未推**（推送权已交回）⇒ 任务包
+  `docs/compose/plans/2026-11-13-hermes-hub-task-pack.md`：推仓 / `mavis.memory_char_warn_limit: 58000` /
+  `capability_scan --write` / `inventory --write`（解唯一红项）/ hermes 动态约束落刀位置 + 验收清单。
+- **⑤ 只读调查（explore）**：hermes 仓**不存在**动态约束（两 checkout + 上游 main 逐项排查，工作树干净、无相关分支/stash/提交）；
+  唯一落刀点 `tools/memory_tool_store.py:312 _char_limit()`（4 个判定点全经它 ⇒ 不要新开旁路）；
+  可照搬中枢 `capability_reconcile.py:891-1000` 的「基线 + 膨胀检测 + 只降不升」范式。
+- **⑥ 体量实测（14:03）**：hermes MEMORY **14,287/16,000（89.3%）**、**USER.md 1,469/1,500（97.9%，仅剩 31 字符）**
+  ⇒ 动态约束已逼近硬限；且中枢闸算**整文件长度**、hermes 算**条目拼接长度**，**差 355 字符** ⇒ 喂值必须用消费端口径。
+- **⑦ 复验**：hub-engine 全量 **944 passed / 1 failed**（唯一失败＝维护者未提交的 `capability_reconcile.py` 造成的台账不一致）
+  · ruff 全绿 · 中枢 `render_index --check` PASS · audit **700/700** ✅ · 记忆 topic 重同步（experience 348）。
+
 ## [2026-11-03] R33 | A+ 落实：MCP Apps 人类卡片（占位页 → 真卡片）+ 弹窗三层修复收口
 
 - **① A+（用户选 A+）**：`ui://agent-memory-hub/<tool>.html` 从**占位页**（只一句「仅供目录展示」）升级为**人类真卡片**：

@@ -1,8 +1,8 @@
 # WORK.md（当前状态 · 唯一来源）
 
-更新于：2026-11-02 · 架构重构（2026-10-02 两计划）主体已落地：判据 **C1–C7 通过，C8 已重新定义**
+更新于：**2026-11-13** · 架构重构（2026-10-02 两计划）主体已落地：判据 **C1–C7 通过，C8 已重新定义**
 
-> 过程明细 `docs/superpowers/retro/work-history.md`｜审计 `docs/compose/reports/2026-09-25-project-audit.md`｜**重构计划 `docs/compose/plans/2026-10-02-hub-architecture-refactor.md`**｜**pi 计划 `...-pi-hub-bridge.md`**｜逐轮日志 `RUNLOG.md`（最新在前）
+> 过程明细 `docs/superpowers/retro/work-history.md`｜**重构计划 `docs/compose/plans/2026-10-02-hub-architecture-refactor.md`**｜**中枢任务包 `docs/compose/plans/2026-11-13-hermes-hub-task-pack.md`**｜逐轮日志 `RUNLOG.md`（最新在前）
 
 ## 当前状态（2026-11-02 实测）
 
@@ -18,15 +18,15 @@
 | # | 任务 | 判据 / 做法 |
 | -- | --- | -- |
 | **A1–A3** | ✅ **已达成**：grade 616/616 + `tier`/`l1_tier` 退役 · `rules/` 23→13（迁区零损伤）· **C8 重新定义**（`unused`=0 · `duplicate`=0 · 在役证据覆盖 93.9% · 模块数棘轮 114，`inventory.py::c8_violations` 自动判定） | 明细见 RUNLOG R23–R27 |
-| **A4** | ✅ **重跑 + 口径修正后成立**：判据①**正面**（后窗口 **37 天** 全 0）、②**正面**（产出率 **66%**、重复率 **34%**）；此前「3.2%」是**指标 bug**（漏计 227 条真实入区）⇒「未触及根因」是**误判**。W40–41 低谷 = **模型漏写 `confidence` ⇒ 静默降级 review**（10-10/10-12 已修）⇒ 本轮补「退化可见」：`degraded` 标记 + 判决台账 + `dedup_stats` 进巡检第 4 步 | 维持 |
-| **A5–A7** | ✅ **已达成**：`/hub-write`（预览+确认制 → CLI `draft-write`）+ 检索/失败可见 · 预算帽（棘轮 + 60% 降级目标 + 降级路线图）· 盘点卡去数字化 | 见 RUNLOG R26 || **A8** | ✅ **方案 A 全落地**：① 字段 `evidence`（none/measured/t1，ingest 只给新卡填）② **检索侧**：摘录长度按 evidence 加成（task+measured=240≈proven）+ 命中项透出 evidence + 注入块标 `[measured]` ③ **存量回填 149 张**（v5 判据 + 18 张抽样全成立；t1 92 · measured 57；其余不写=缺失即 none） | 报告 `docs/compose/reports/2026-11-02-evidence-axis.md` |
-| **A9** | ✅ **已判定**：用户确认 **workbuddy 最近没使用** ⇒ 原「近 30 天用过 + 近 7 天零检索」告警属**噪音** ⇒ 收紧为「**近 14 天**用过 + 近 7 天零检索」；实测不再被报 | 维持 |### T1 判据（重跑 + 口径修正）
+| **A4** | ✅ **成立**（重跑 + 口径修正后）：后窗口 37 天全 0 · 产出率 **66%** / 重复率 **34%**；「3.2%」是指标 bug（漏计 227 条真实入区）⇒ 旧「未触及根因」作废；已补「退化可见」（`degraded` + 判决台账） | 明细见 `docs/compose/metrics/2026-11-02-t1-rerun.md` |
+| **A5–A7** | ✅ **已达成**：`/hub-write`（预览+确认制）· 检索/失败可见 · 预算帽（棘轮 + 60% 降级目标 + 降级路线图）· 盘点卡去数字化 | 见 RUNLOG R26 |
+| **A8** | ✅ **方案 A 全落地**：`evidence` 字段（none/measured/t1）· 检索侧按 evidence 加成 + 透出 + 标 `[measured]` · 存量回填 149 张 | 报告 `docs/compose/reports/2026-11-02-evidence-axis.md` |
+| **A9** | ✅ **已判定**：用户确认 **workbuddy 最近没使用** ⇒ 原「近 30 天用过 + 近 7 天零检索」告警属**噪音** ⇒ 收紧为「**近 14 天**用过 + 近 7 天零检索」；实测不再被报 | 维持 |
+| **A10** | 🟡 **待 Hermes 执行（中枢任务包，2026-11-13 交办）**：推中枢仓（ahead **56**）· `mavis.memory_char_warn_limit: 58000` · `capability_scan --write` · `inventory --write` · hermes 动态约束落刀（`_char_limit()` 改动态上限） | 任务包全文 `docs/compose/plans/2026-11-13-hermes-hub-task-pack.md` |
 
-1. 门禁：后窗口 **≥10 天**且 `invalid/orphans/ghosts` 全 0 → 正面（**达成**：37/37 天全 0）
-2. 产出：周产出率 **≥40%** 且重复率 **≤60%** → 流入恢复（**达成**：**66%** / **34%**）
-3. 反面：任一维度复现非零 / 产出率仍 **≤11%** → 未触及根因（**不命中**）
+### T1 判据（重跑 + 口径修正）
 
-> 两处口径修正（已留档 `docs/compose/metrics/2026-11-02-t1-rerun.md`）：①「后窗口」原**硬编码 2 天** ⇒ 判据①结构上不可能满足；②入区统计原只认「自动入区」一种字样 ⇒ **漏计 227 条真实入区**（产出率被算成 3%）⇒ 上一轮「未触及根因」是**指标 bug 造成的误判**。
+> **①** 门禁＝后窗口 **≥10 天**且 `invalid/orphans/ghosts` 全 0（达成 37/37 天）**②** 产出率 **≥40%** 且重复率 **≤60%**（达成 66% / 34%）**③** 任一维度复现非零或产出率 ≤11% ⇒ 未触及根因（不命中）。口径修正见 `docs/compose/metrics/2026-11-02-t1-rerun.md`（原「后窗口」硬编码 2 天 ⇒ 判据①结构上不可能满足；入区统计漏计 227 条真实入区 ⇒ 旧「未触及根因」是**指标 bug 误判**）。
 
 ## 架构重构判据现状（C1–C8）
 
