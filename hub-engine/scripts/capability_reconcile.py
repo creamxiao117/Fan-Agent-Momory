@@ -33,6 +33,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from collections import Counter
 from datetime import datetime, timedelta, timezone
@@ -605,6 +606,138 @@ def _monthly_state_dir(root: Path) -> Path:
     return d
 
 
+def _read_capability_events(state: Path, cut_s: str) -> tuple[set[str], set[str]]:
+    """读能力事件台账 ⇒ (窗口内用过的**能力名**, 出现过的平台)。
+
+    ⚠️ 唯一可信的「能力被用过」信号（**能力名维度**）。
+    """
+    import json as _json
+
+    used: set[str] = set()
+    observed: set[str] = set()
+    ev = state / "capability_events.jsonl"
+    if not ev.is_file():
+        return used, observed
+    for line in ev.read_text(encoding="utf-8", errors="ignore").split("\n"):
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            d = _json.loads(line)
+        except Exception:
+            continue
+        plat = str(d.get("platform") or "")
+        if plat:
+            observed.add(plat)
+        ts = str(d.get("ts") or "")
+        if len(ts) >= 19 and ts >= cut_s and d.get("name"):
+            used.add(str(d["name"]))
+    return used, observed
+
+
+def _read_query_card_hits(state: Path, cut_s: str) -> tuple[set[str], set[str]]:
+    """读检索留痕 ⇒ (窗口内命中的**卡片名**, 出现过的平台)。
+
+    ⚠️ 检索留痕记的是**卡片路径**（`hit_paths`）⇒ **不是能力名**
+    （中枢卡片与客户端技能是两套命名空间）⇒ 只用于**反查同名能力**。
+    """
+    import json as _json
+
+    cards: set[str] = set()
+    observed: set[str] = set()
+    for q in sorted(state.glob("query.log*.jsonl")):
+        for line in q.read_text(encoding="utf-8", errors="ignore").split("\n"):
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                d = _json.loads(line)
+            except Exception:
+                continue
+            plat = str(d.get("platform") or "")
+            if plat:
+                observed.add(plat)
+            ts = str(d.get("ts") or "")
+            if len(ts) >= 19 and ts >= cut_s:
+                for hp in d.get("hit_paths") or []:
+                    stem = Path(str(hp)).stem
+                    if stem:
+                        cards.add(stem)
+    return cards, observed
+
+
+def _usage_evidence_window(root: Path, days: int = 14) -> dict:
+    """**两周窗口**的能力使用证据（中枢侧可取证）。
+
+    ⚠️ 2026-11-13（用户裁定：「月度调整改成两周调整」）+ 证据分级：
+
+    返回 `{"used": {名字}, "observed_platforms": [...], "covered_platforms": [...],
+             "uncovered_platforms": [...]}`。
+
+    **信号源**（全部带 ts ⇒ 可切窗口）：
+    - `.sync/state/capability_events.jsonl`（ts + platform + name）—— 能力路由器/tier-bootstrap
+    - `.sync/state/query.log*.jsonl`（ts + hit_paths）—— 检索命中（卡片维度）
+
+    **关键：证据不足 ≠ 未使用**（fail-closed）：
+    能力事件台账**只覆盖走过能力路由器的平台**（实测：pi / workbuddy）。
+    对**没有覆盖**的平台，「两周内无记录」是**证据不足**，不是「没用过」⇒
+    绝不能据此自动降级（会把正在用的能力误降）。
+
+    ⇒ `covered_platforms` = 台账里出现过的平台；只有它才能参与自动降级判定。
+    """
+    now = datetime.now(CST)
+    cut = now - timedelta(days=days)
+    cut_s = cut.isoformat()
+
+    used: set[str] = set()
+    observed: set[str] = set()
+    # ⚠️ 2026-11-13 修（**命名空间混用 ⇒ 判定完全失效**）：
+    #   检索日志的 `hit_paths` 记的是**卡片名**（如 `experience/2026-09-10-xxx.md`），
+    #   **不是能力名** —— 两者是两套命名空间（中枢卡片 vs 客户端技能）。
+    #   原实现把卡片名直接塞进 `used` ⇒ 227 个"用过"里绝大多数是卡片 ⇒
+    #   真闲置能力被误判为活跃 ⇒ 闲置判定形同虚设。
+    #   修法：卡片名只用于**反查同名能力**（交集才算用过），不进 `used`。
+    card_hits: set[str] = set()
+
+    state = root / ".sync" / "state"
+
+    # ① 能力事件（**能力名维度**，唯一可信的「能力被用过」信号）
+    _used_ev, observed_ev = _read_capability_events(state, cut_s)
+    used |= _used_ev
+    observed |= observed_ev
+
+    # ② 检索命中（**卡片名维度**）⇒ 只留作交集反查，不直接进 used
+    _cards_q, observed_q = _read_query_card_hits(state, cut_s)
+    card_hits |= _cards_q
+    observed |= observed_q
+
+    # ③ 交集反查：卡片名同时也是**已登记能力名**时 ⇒ 该能力确实被用到
+    #    （这是唯一合法的「卡片证据 → 能力活跃」推论路径）
+    registered = _monthly_used_skills(root)
+    used |= card_hits & registered
+
+    # 观测平台里剔除**非真实平台**（测试/占位值）
+    noise = {"", "unknown", "default", "e2e-test", "t", "tracet", "session_preload", "test"}
+    observed = {p for p in observed if p and p not in noise}
+
+    # 所有登记平台（用于区分「有信号但没用到」 vs 「根本没信号」）
+    try:
+        from common.config import HubConfig
+
+        all_platforms = set((HubConfig.load(root).data.get("platforms") or {}).keys())
+    except Exception:
+        all_platforms = set()
+
+    return {
+        "used": used,
+        "observed_platforms": sorted(observed),
+        "covered_platforms": sorted(observed),
+        "uncovered_platforms": sorted(all_platforms - observed),
+        "window_days": days,
+        "since": cut_s,
+    }
+
+
 def _monthly_used_skills(root: Path) -> set[str]:
     """**已登记 / 有实现**的技能名（质量闸信号源：这些不许自动建议降级）。
 
@@ -619,6 +752,11 @@ def _monthly_used_skills(root: Path) -> set[str]:
     最终版：直接读 `router/router.yaml` 的登记名 + `skills/**/{skill.yaml,SKILL.md}`
     的实现名（与 `registry_coverage()` **同一套口径**，但不依赖它的返回值形态）。
     「登记过」= 用户认可并在用 ⇒ 降级它要先问人。
+
+    ⚠️ 2026-11-13（两周窗口）：本函数返回的是「**已登记**」集合（与时间无关），
+       用于**质量闸**（登记过 ⇒ 降级要问人）。
+       「两周内未使用」的判定见 `_usage_evidence_window()` —— 两者**职责不同**，
+       不要混用：登记过但两周没用 ⇒ 仍可自动降级（用户已明确授权这个规则）。
     """
     used: set[str] = set()
     try:
@@ -639,6 +777,154 @@ def _monthly_used_skills(root: Path) -> set[str]:
     except Exception:  # noqa: BLE001 - 量不到就当"全可降级"，不猜
         return set()
     return used
+
+
+def _find_idle_always_skills(root: Path, usage: dict, used_registered: set[str]) -> dict:
+    """找出「**两周内未使用**且当前常驻（deploy_scope=always）」的能力。
+
+    ⚠️ **证据不足 ≠ 未使用**（fail-closed）：
+    使用事件台账只覆盖**走过能力路由器的平台**（实测：pi / workbuddy）。
+    若 `usage["uncovered_platforms"]` 非空 ⇒ 这些平台上的「无记录」是**证据不足**，
+    不能据此判定闲置 ⇒ 本函数在这种情况下**只对 covered 平台出结论**，
+    并把 uncovered 平台列进 `blocked_by_evidence_gap`，交人工判断。
+
+    返回 `{"idle": [名字...], "blocked": [...], "evidence_gap_platforms": [...]}`。
+    """
+    idle: list[str] = []
+    blocked: list[str] = []
+    gap = list(usage.get("uncovered_platforms") or [])
+
+    try:
+        from common.config import external_path
+
+        sh = Path(str(external_path("skillhub", root) or ""))
+        router = sh / "router" / "router.yaml"
+        if not router.is_file():
+            return {"idle": [], "blocked": [], "evidence_gap_platforms": gap}
+
+        import yaml
+
+        rows = (yaml.safe_load(router.read_text(encoding="utf-8")) or {}).get("skills") or []
+        used_recent = usage.get("used") or set()
+
+        for r in rows:
+            if not isinstance(r, dict):
+                continue
+            name = str(r.get("name") or "")
+            if not name:
+                continue
+            scope = str(r.get("deploy_scope") or "always")
+            if scope != "always":
+                continue  # 只有常驻的才谈降级
+            if name in used_recent:
+                continue  # 两周内用过 ⇒ 活跃
+            idle.append(name)
+    except Exception:  # noqa: BLE001 - 量不到就不判
+        return {"idle": [], "blocked": [], "evidence_gap_platforms": gap}
+
+    # 有证据缺口 ⇒ 不自动降级，只登记为「待人工确认」
+    if gap:
+        return {"idle": [], "blocked": idle, "evidence_gap_platforms": gap}
+    return {"idle": idle, "blocked": blocked, "evidence_gap_platforms": gap}
+
+
+def _rewrite_scope_lines(raw: str, targets: set[str]) -> list[str]:
+    """把目标条目的 `deploy_scope: always` 改成 `on-demand`（**行级**替换）。
+
+    ⚠️ 2026-11-13 修（**字段顺序依赖 ⇒ 匹配失效**）：
+       原实现靠「先遇 name 行，再改后续 scope 行」的**顺序假设**；
+       但 `yaml.safe_dump` 按**字母序**输出 ⇒ `deploy_scope` 排在 `name` **之前**
+       ⇒ 该假设不成立 ⇒ 匹配不到（测试打红：always 未被改成 on-demand）。
+       修法：**不依赖字段顺序** —— 先切出每个条目的行区间，再在区间内替换 scope 行。
+
+    ⚠️ 2026-11-13 修（**嵌套 list 被误判为条目起点**）：
+       原正则（允许前导空白 + `- `）会把**嵌套 list**（如 `forgot:` 下的 `- 不用我`）
+       也当成条目起点 ⇒ 区间被切碎 ⇒ owner 映射错乱 ⇒ 替换漏掉。
+       修法：只认**行首**的 `- `（顶层）；嵌套 list 缩进 > 0，不算。
+
+    ⚠️ 行首可能是 `- deploy_scope: always`（**list item 首字段与 `-` 同行**，
+       yaml.safe_dump 的默认形态）⇒ 正则必须允许 `- ` 前缀。
+    """
+    lines = raw.split("\n")
+
+    # ① 切条目区间：以**顶层** list item（`- ` 在行首，缩进为 0）为条目起点
+    starts: list[int] = []
+    for i, line in enumerate(lines):
+        if re.match(r"^-\s+\S", line) or re.match(r"^-\s*$", line):
+            starts.append(i)
+    starts.append(len(lines))
+
+    # ② 建立「行号 → 所属条目名」映射
+    owner: dict[int, str] = {}
+    for idx in range(len(starts) - 1):
+        lo, hi = starts[idx], starts[idx + 1]
+        name = None
+        for i in range(lo, hi):
+            m = re.match(r"^\s*name:\s*['\"]?([\w.\-]+)['\"]?\s*$", lines[i])
+            if m:
+                name = m.group(1)
+                break
+        for i in range(lo, hi):
+            if name:
+                owner[i] = name
+
+    # ③ 在目标条目的区间内替换 scope 行
+    scope_re = re.compile(r"^(\s*(?:-\s+)?)deploy_scope:\s*always\s*$")
+    for i, line in enumerate(lines):
+        if owner.get(i) in targets:
+            m = scope_re.match(line)
+            if m:
+                lines[i] = f"{m.group(1)}deploy_scope: on-demand"
+    return lines
+
+
+def _apply_scope_demotion(root: Path, names: list[str]) -> dict:
+    """把给定能力在 `router.yaml` 里的 `deploy_scope` 从 `always` 改成 `on-demand`。
+
+    ⚠️ **只改 deploy_scope 一处**，不动其它字段（trigger/forgot/description 等）——
+       降级 = 「不再默认加载」，不等于「删除」（用到时仍可按需装）。
+
+    返回 `{"changed": [...], "skipped": [...], "error": str|None}`。
+    """
+    try:
+        from common.config import external_path
+
+        sh = Path(str(external_path("skillhub", root) or ""))
+        router = sh / "router" / "router.yaml"
+        if not router.is_file():
+            return {"changed": [], "skipped": names, "error": "router.yaml 不存在"}
+
+        import yaml
+
+        raw = router.read_text(encoding="utf-8")
+        data = yaml.safe_load(raw) or {}
+        rows = data.get("skills") or []
+        targets = set(names)
+
+        changed: list[str] = []
+        skipped: list[str] = []
+        for r in rows:
+            if not isinstance(r, dict):
+                continue
+            name = str(r.get("name") or "")
+            if name not in targets:
+                continue
+            if str(r.get("deploy_scope") or "always") != "always":
+                skipped.append(name)
+                continue
+            r["deploy_scope"] = "on-demand"
+            changed.append(name)
+
+        if not changed:
+            return {"changed": [], "skipped": skipped, "error": None}
+
+        # ⚠️ 用 yaml.safe_dump 回写会**重排整个文件**（丢注释、丢字段顺序）⇒
+        #   改用**行级替换**：只在原文里把目标条目的 deploy_scope 行改掉。
+        #   （实现细节见 `_rewrite_scope_lines`）
+        router.write_text("\n".join(_rewrite_scope_lines(raw, targets)), encoding="utf-8")
+        return {"changed": changed, "skipped": skipped, "error": None}
+    except Exception as exc:  # noqa: BLE001
+        return {"changed": [], "skipped": list(names), "error": str(exc)}
 
 
 def monthly_review(root: Path) -> dict:
@@ -672,6 +958,11 @@ def monthly_review(root: Path) -> dict:
             prev = {}
     prev_costs = (prev.get("platforms") or prev.get("costs") or {}) if prev else {}
     used = _monthly_used_skills(root)
+
+    # ⚠️ 2026-11-13（用户裁定：月度改两周）：
+    #   窗口 14 天 ⇒ 能力使用证据按两周切；并据此判定「闲置 ⇒ 自动降级」。
+    usage = _usage_evidence_window(root, days=14)
+    used_recent = usage["used"]
 
     # ⚠️ 2026-11-13 补（同月内膨胀检测）：
     #   原实现只比对**上月**留痕 ⇒ 同月内连续跑多次时，膨胀永远看不出来
@@ -719,7 +1010,10 @@ def monthly_review(root: Path) -> dict:
                     "skill": name,
                     "tokens": int(tok),
                     "in_use": name in used,
-                    "actionable": name not in used,
+                    # ⚠️ 2026-11-13（两周窗口）：「两周内用过」优先于「登记过」
+                    #   —— 登记过但两周没用 ⇒ 仍是闲置候选（用户明确授权该规则）。
+                    "recently_used": name in used_recent,
+                    "actionable": name not in used_recent,
                 }
             )
 
@@ -748,6 +1042,10 @@ def monthly_review(root: Path) -> dict:
             "actionable_savings": sum(x["tokens"] for x in candidates if x["actionable"]),
         }
 
+    # ⚠️ 2026-11-13（用户裁定：月度改两周 + 两周未用即降级）：
+    #   找出「常驻(always) + 两周内未使用」的能力 ⇒ 降级为 on-demand（不再默认加载）
+    idle_info = _find_idle_always_skills(root, usage, used)
+
     return {
         "generated_at": now.isoformat(),
         "month": month,
@@ -755,6 +1053,14 @@ def monthly_review(root: Path) -> dict:
         "has_prev": bool(prev),
         # 「上次运行」基线是否存在（用于首期提示；有它就不该再说「无基线」）
         "has_last": bool(last),
+        "window_days": usage.get("window_days", 14),
+        "usage_evidence": {
+            "used_count": len(used_recent),
+            "observed_platforms": usage.get("observed_platforms") or [],
+            "uncovered_platforms": usage.get("uncovered_platforms") or [],
+            "since": usage.get("since"),
+        },
+        "idle": idle_info,
         "platforms": platforms,
         "summary": {
             "total_current": sum(p["current_tokens"] for p in platforms.values()),
@@ -765,8 +1071,13 @@ def monthly_review(root: Path) -> dict:
             "in_use_protected": sum(
                 x["tokens"] for p in platforms.values() for x in p["candidates"] if not x["actionable"]
             ),
+            "idle_count": len(idle_info.get("idle") or []),
+            "idle_blocked": len(idle_info.get("blocked") or []),
         },
-        "note": "只建议不擅自动手：写入 hub.config.yaml 需人工确认；降级能力需用户批准。",
+        "note": (
+            "只建议不擅自动手：写入 hub.config.yaml 需人工确认；"
+            "降级（deploy_scope: always→on-demand）由 --demote 显式触发。"
+        ),
     }
 
 
@@ -823,13 +1134,67 @@ def render_monthly(rep: dict) -> str:
         )
         L.append(f"- **{plat}**（{p['current_tokens']} token，建议目标 {p['suggested_target']}）：{items}")
     L.append("")
+    # ⚠️ 2026-11-13（两周窗口 + 闲置降级）：闲置清单与证据覆盖
+    idle = rep.get("idle") or {}
+    ev = rep.get("usage_evidence") or {}
+    win = rep.get("window_days") or 14
+    L.append(f"## 闲置判定（窗口 {win} 天）")
+    L.append("")
+    L.append(
+        f"- 使用证据覆盖平台：{', '.join(ev.get('observed_platforms') or []) or '（无）'}"
+        f"；**无证据平台**：{', '.join(ev.get('uncovered_platforms') or []) or '（无）'}"
+    )
+    if ev.get("uncovered_platforms"):
+        L.append("  - ⚠️ 无证据平台的「无记录」是**证据不足**（≠ 未使用）⇒ **不自动降级**，只列为待人工确认。")
+    L.append(f"- 窗口内有用记录：{ev.get('used_count', 0)} 个能力")
+    L.append(
+        f"- **闲置候选（常驻 always + 窗口内未使用）**："
+        f"{len(idle.get('idle') or [])} 个（可自动降级）/ "
+        f"{len(idle.get('blocked') or [])} 个（待人工确认）"
+    )
+    if idle.get("idle"):
+        L.append("")
+        for n in idle["idle"][:25]:
+            L.append(f"  - `{n}`")
+        if len(idle["idle"]) > 25:
+            L.append(f"  - … 还有 {len(idle['idle']) - 25} 个")
+    dem = rep.get("demotion") or {}
+    if dem.get("changed"):
+        L.append("")
+        L.append(f"### 已降级（always → on-demand）：{len(dem['changed'])} 个")
+        for n in dem["changed"][:25]:
+            L.append(f"  - `{n}`")
+    L.append("")
     L.append(f"> {rep['note']}")
     return "\n".join(L)
 
 
-def _monthly_main(root: Path, *, write: bool, as_json: bool) -> int:
+def _monthly_main(root: Path, *, write: bool, as_json: bool, demote: bool = False) -> int:
     """月度体检的 CLI 入口（并入本模块 ⇒ 不新增模块数，守住 C8④ 棘轮）。"""
     rep = monthly_review(root)
+
+    # ⚠️ 2026-11-13：降级**只在 --demote 显式开启时执行**（默认只报告）
+    if demote:
+        idle = rep.get("idle") or {}
+        names = list(idle.get("idle") or [])
+        if names:
+            res = _apply_scope_demotion(root, names)
+            rep.setdefault("demotion", {}).update(res)
+            print(f"\n[降级] 已把 {len(res.get('changed') or [])} 个能力从 always 降为 on-demand")
+            for n in (res.get("changed") or [])[:20]:
+                print(f"  · {n}")
+            if res.get("error"):
+                print(f"  ⚠️ 降级出错：{res['error']}", file=sys.stderr)
+        else:
+            gap = rep.get("idle", {}).get("evidence_gap_platforms") or []
+            if gap:
+                print(
+                    f"\n[降级] **未执行**：{', '.join(gap)} 无使用证据台账（证据不足 ≠ 未使用）"
+                    f"；{len(idle.get('blocked') or [])} 个候选待人工确认。"
+                )
+            else:
+                print("\n[降级] 无闲置候选（两周内都有使用记录）")
+
     if as_json:
         print(json.dumps(rep, ensure_ascii=False, indent=2))
     else:
@@ -858,11 +1223,16 @@ def main(argv: list[str] | None = None) -> int:
         help="月度体检模式：比上月基线检膨胀 + 给降级建议（只建议不擅自动手）",
     )
     ap.add_argument("--write", action="store_true", help="月度体检：写留痕到 .sync/state/")
+    ap.add_argument(
+        "--demote",
+        action="store_true",
+        help="两周内未使用的常驻能力 ⇒ 降级为 on-demand（不再默认加载）",
+    )
     args = ap.parse_args(argv)
     root = args.root or (_HUB_ENGINE.parent / "AgentMemoryHub")
 
     if args.monthly:
-        return _monthly_main(root, write=args.write, as_json=args.json)
+        return _monthly_main(root, write=args.write, as_json=args.json, demote=args.demote)
 
     r = reconcile(root)
     if args.json:

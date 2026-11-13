@@ -292,6 +292,182 @@ class TestMonthlyReview:
         # 渲染不应误报「首期」以外的矛盾
         assert "无基线" in m.render_monthly(rep)
 
+
+class TestBiweeklyIdleDemotion:
+    """两周窗口 + 闲置自动降级（用户裁定 2026-11-13）。
+
+    用户原话：「月度调整改成两周调整，在两周之内没有使用的限制能力，
+    就让平台不再默认加载它们。」
+
+    ⇒ 落地：`deploy_scope: always → on-demand`（= 不再默认加载，用到时按需装）。
+    """
+
+    def _module(self):
+        from scripts import capability_reconcile as m
+
+        return m
+
+    def _make_hub(self, tmp_path: Path, *, router_skills: list[dict]) -> Path:
+        """造一个假中枢 + 假 SkillHub（含 router.yaml）。"""
+        skills_dir = tmp_path / "skills"
+        (skills_dir / "s1").mkdir(parents=True)
+        (skills_dir / "s1" / "SKILL.md").write_text(
+            "---\nname: s1\ndescription: " + ("x" * 400) + "\n---\n", encoding="utf-8"
+        )
+        sh = tmp_path / "skillhub"
+        (sh / "router").mkdir(parents=True)
+        (sh / "skills").mkdir(parents=True)
+        import yaml
+
+        (sh / "router" / "router.yaml").write_text(
+            yaml.safe_dump({"version": 1, "skills": router_skills}, allow_unicode=True),
+            encoding="utf-8",
+        )
+        (tmp_path / "hub.config.yaml").write_text(
+            yaml.safe_dump(
+                {
+                    "version": 1,
+                    "external_paths": {"skillhub": str(sh)},
+                    "platforms_global": {"capability_budget": {}},
+                    "platforms": {"code": {"skills_dir": str(skills_dir), "mcp_config_path": ""}},
+                },
+                allow_unicode=True,
+            ),
+            encoding="utf-8",
+        )
+        return sh
+
+    def test_idle_always_skill_is_demoted(self, tmp_path: Path) -> None:
+        """常驻(always) + 两周内未使用 ⇒ 降级为 on-demand。"""
+        m = self._module()
+        self._make_hub(tmp_path, router_skills=[{"name": "idle-skill", "deploy_scope": "always"}])
+
+        res = m._apply_scope_demotion(tmp_path, ["idle-skill"])
+        assert res["error"] is None
+        assert res["changed"] == ["idle-skill"]
+
+        import yaml
+
+        router = yaml.safe_load((tmp_path / "skillhub" / "router" / "router.yaml").read_text(encoding="utf-8"))
+        got = router["skills"][0]["deploy_scope"]
+        assert got == "on-demand", f"降级未生效：{got}"
+
+    def test_demotion_preserves_other_fields(self, tmp_path: Path) -> None:
+        """降级**只改 deploy_scope 一处**，其余字段（trigger/forgot/description）必须原样保留。
+
+        守门点：用 yaml.safe_dump 回写会重排整个文件、丢注释 ⇒ 必须行级替换。
+        """
+        m = self._module()
+        sh = self._make_hub(
+            tmp_path,
+            router_skills=[
+                {
+                    "name": "idle-skill",
+                    "deploy_scope": "always",
+                    "trigger": ["用我"],
+                    "forgot": ["不用我"],
+                    "description_model": "保留我",
+                }
+            ],
+        )
+        m._apply_scope_demotion(tmp_path, ["idle-skill"])
+
+        import yaml
+
+        router = yaml.safe_load((sh / "router" / "router.yaml").read_text(encoding="utf-8"))
+        row = router["skills"][0]
+        assert row["trigger"] == ["用我"]
+        assert row["forgot"] == ["不用我"]
+        assert row["description_model"] == "保留我"
+        assert row["deploy_scope"] == "on-demand"
+
+    def test_evidence_gap_blocks_auto_demotion(self, tmp_path: Path) -> None:
+        """⚠️ **证据不足 ≠ 未使用**（fail-closed）。
+
+        若某平台**没有使用证据台账** ⇒ 该平台的「无记录」不能判定为闲置
+        ⇒ 候选进 `blocked`（待人工确认），**不进** `idle`（可自动降级）。
+        """
+        m = self._module()
+        self._make_hub(tmp_path, router_skills=[{"name": "idle-skill", "deploy_scope": "always"}])
+
+        usage = {
+            "used": set(),
+            "observed_platforms": ["pi"],
+            "uncovered_platforms": ["hermes", "code"],  # ⇒ 有证据缺口
+        }
+        info = m._find_idle_always_skills(tmp_path, usage, set())
+        assert info["idle"] == [], "有证据缺口时不该产出可自动降级的清单"
+        assert info["blocked"], "候选应进 blocked 待人工确认"
+        assert "hermes" in info["evidence_gap_platforms"]
+
+    def test_no_evidence_gap_allows_auto_demotion(self, tmp_path: Path) -> None:
+        """无证据缺口 ⇒ 两周未用的常驻能力**可**自动降级。"""
+        m = self._module()
+        self._make_hub(
+            tmp_path,
+            router_skills=[
+                {"name": "idle-skill", "deploy_scope": "always"},
+                {"name": "busy-skill", "deploy_scope": "always"},
+                {"name": "on-demand-skill", "deploy_scope": "on-demand"},
+            ],
+        )
+        usage = {
+            "used": {"busy-skill"},
+            "observed_platforms": ["pi", "hermes", "code"],
+            "uncovered_platforms": [],
+        }
+        info = m._find_idle_always_skills(tmp_path, usage, set())
+        assert info["idle"] == ["idle-skill"], info
+        assert "busy-skill" not in info["idle"]
+        assert "on-demand-skill" not in info["idle"], "已是 on-demand 的不该再判闲置"
+
+    def test_card_names_not_treated_as_skill_usage(self, tmp_path: Path) -> None:
+        """⚠️ **命名空间混用 ⇒ 判定失效**（真缺陷）。
+
+        检索日志的 `hit_paths` 是**卡片名**（`experience/xxx.md`），
+        不是能力名 ⇒ 把它当「能力用过」会让真闲置能力被误判为活跃。
+
+        本测试：只有卡片命中、能力事件为空 ⇒ 能力**不得**被算作用过。
+        """
+        m = self._module()
+        state = tmp_path / ".sync" / "state"
+        state.mkdir(parents=True)
+        (state / "capability_events.jsonl").write_text("", encoding="utf-8")
+        (state / "query.log-2026-11-12.jsonl").write_text(
+            json.dumps(
+                {
+                    "ts": "2026-11-12T08:00:00+08:00",
+                    "platform": "pi",
+                    "hit_paths": ["experience/some-card.md"],
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        # 卡片名与能力名**不同** ⇒ 不该进 used
+        usage = m._usage_evidence_window(tmp_path, days=14)
+        assert "some-card" not in usage["used"], "卡片名被当成了能力使用（命名空间混用）"
+
+    def test_window_is_fourteen_days(self, tmp_path: Path) -> None:
+        """窗口 = 14 天（用户裁定：月度改两周）。"""
+        m = self._module()
+        state = tmp_path / ".sync" / "state"
+        state.mkdir(parents=True)
+        (state / "capability_events.jsonl").write_text(
+            json.dumps(
+                {
+                    "ts": "2026-11-12T08:00:00+08:00",
+                    "platform": "pi",
+                    "name": "recent-skill",
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        usage = m._usage_evidence_window(tmp_path, days=14)
+        assert usage["window_days"] == 14
+        assert "recent-skill" in usage["used"]
+
     def test_monthly_is_subcommand_not_new_module(self) -> None:
         """月度体检**不是新模块** —— 它是 `capability_reconcile` 的子命令。
 
