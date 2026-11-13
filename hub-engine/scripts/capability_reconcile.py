@@ -662,7 +662,8 @@ def monthly_review(root: Path) -> dict:
     caps = ratchet(root)
     soft = budgets(root)
 
-    prev_file = _monthly_state_dir(root) / f"capability_budget_review-{prev_month}.json"
+    state_dir = _monthly_state_dir(root)
+    prev_file = state_dir / f"capability_budget_review-{prev_month}.json"
     prev: dict = {}
     if prev_file.is_file():
         try:
@@ -672,13 +673,41 @@ def monthly_review(root: Path) -> dict:
     prev_costs = (prev.get("platforms") or prev.get("costs") or {}) if prev else {}
     used = _monthly_used_skills(root)
 
+    # ⚠️ 2026-11-13 补（同月内膨胀检测）：
+    #   原实现只比对**上月**留痕 ⇒ 同月内连续跑多次时，膨胀永远看不出来
+    #   （例：code 上月=1312，本月内加了技能→1400，比对 1312 仍判「未膨胀」）。
+    #   补：**同月**留痕保存的是「上一次运行」的快照 ⇒ 逐次比对即可发现任何时点的膨胀。
+    #   优先级：**上次运行**（同月）> 上月（跨月首跑）。
+    last_file = state_dir / "capability_budget_review-last.json"
+    last: dict = {}
+    if last_file.is_file():
+        try:
+            last = json.loads(last_file.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            last = {}
+    last_costs = (last.get("platforms") or last.get("costs") or {}) if last else {}
+
     platforms: dict[str, dict] = {}
     for plat, c in sorted(costs.items()):
         cur = int(c.get("per_session_tokens") or 0)
+
+        # 基线择优：同月有「上次运行」用它（更贴近真实膨胀）；否则用上月
+        lv = last_costs.get(plat) or {}
+        last_val = int(lv.get("current_tokens") or 0) or int(lv.get("per_session_tokens") or 0)
         pv = prev_costs.get(plat) or {}
         prev_val = int(pv.get("current_tokens") or 0) or int(pv.get("per_session_tokens") or 0)
-        delta = cur - prev_val if prev_val else 0
-        pct = (delta / prev_val * 100) if prev_val else 0.0
+
+        if last_val:
+            base_val = last_val
+            base_label = "上次运行"
+        else:
+            base_val = prev_val
+            base_label = "上月"
+
+        delta = cur - base_val if base_val else 0
+        pct = (delta / base_val * 100) if base_val else 0.0
+        # 「较上月」单独保留（月度视角）
+        m_delta = (cur - prev_val) if prev_val else 0
 
         cap = caps.get(plat)
         target = target_for(plat, soft)
@@ -694,12 +723,15 @@ def monthly_review(root: Path) -> dict:
                 }
             )
 
-        # 建议目标线：**以实测为基线**，只允许 ≤ 上月基线（只降不升）
-        suggested = prev_val if (prev_val and delta > 0) else cur
+        # 建议目标线：**以实测为基线**，只允许 ≤ 基线（只降不升）
+        suggested = base_val if (base_val and delta > 0) else cur
 
         platforms[plat] = {
             "current_tokens": cur,
             "prev_tokens": prev_val,
+            "last_tokens": last_val,
+            "base_label": base_label,
+            "month_delta": m_delta,
             "delta": delta,
             "delta_pct": round(pct, 1),
             "ratchet": cap,
@@ -707,7 +739,10 @@ def monthly_review(root: Path) -> dict:
             "suggested_target": min(suggested, cur),
             "over_ratchet": bool(cap is not None and cur > cap),
             "over_target": bool(target and cur > target),
-            "bloat": bool(prev_val and delta > 0),
+            # ⚠️ 2026-11-13 修：判定必须用**实际基线**（base_val），不是 prev_val
+            #   —— 原式 `bool(prev_val and delta > 0)` 在同月场景下恒 False
+            #   （prev_val=0 ⇒ bloat 永远 False ⇒ 同月膨胀检测形同虚设）。
+            "bloat": bool(base_val and delta > 0),
             "mcp_servers": int(c.get("mcp_servers") or 0),
             "candidates": candidates,
             "actionable_savings": sum(x["tokens"] for x in candidates if x["actionable"]),
@@ -718,6 +753,8 @@ def monthly_review(root: Path) -> dict:
         "month": month,
         "prev_month": prev_month,
         "has_prev": bool(prev),
+        # 「上次运行」基线是否存在（用于首期提示；有它就不该再说「无基线」）
+        "has_last": bool(last),
         "platforms": platforms,
         "summary": {
             "total_current": sum(p["current_tokens"] for p in platforms.values()),
@@ -738,16 +775,22 @@ def render_monthly(rep: dict) -> str:
     L: list[str] = []
     L.append(f"# 能力常驻成本月度体检 · {rep['month']}")
     L.append("")
-    if not rep["has_prev"]:
-        L.append(f"> ⚠️ 无上月基线（{rep['prev_month']}）⇒ 本次为**首期**，「膨胀」判定不可用，但目标线建议仍有效。")
+    if not rep["has_prev"] and not rep.get("has_last"):
+        L.append(
+            f"> ⚠️ 无基线（既无上月 {rep['prev_month']}，也无上次运行记录）⇒ 本次为**首期**，"
+            "「膨胀」判定不可用，但目标线建议仍有效。"
+        )
         L.append("")
-    L.append("| 平台 | 本月实测 | 上月实测 | 变化 | 棘轮 | 当前目标线 | 建议目标线 | 状态 |")
-    L.append("| --- | --- | --- | --- | --- | --- | --- | --- |")
+    L.append("| 平台 | 本月实测 | 基线 | 变化 | 较上月 | 棘轮 | 当前目标线 | 建议目标线 | 状态 |")
+    L.append("| --- | --- | --- | --- | --- | --- | --- | --- | --- |")
     for plat, p in rep["platforms"].items():
         d = p["delta"]
-        dtxt = f"{d:+d}" if p["prev_tokens"] else "—"
+        base = p.get("base_label") or "上月"
+        dtxt = f"{d:+d}" if p.get("base_tokens") or p.get("last_tokens") or p.get("prev_tokens") else "—"
         if p["bloat"]:
             dtxt += f" ({p['delta_pct']:+.1f}%) 🔺"
+        m_delta = p.get("month_delta") or 0
+        mtxt = f"{m_delta:+d}" if p.get("prev_tokens") else "—"
         st = []
         if p["over_ratchet"]:
             st.append("❌超棘轮")
@@ -756,7 +799,7 @@ def render_monthly(rep: dict) -> str:
         if not st:
             st.append("✅")
         L.append(
-            f"| {plat} | {p['current_tokens']} | {p['prev_tokens'] or '—'} | {dtxt} | "
+            f"| {plat} | {p['current_tokens']} | {base} | {dtxt} | {mtxt} | "
             f"{p['ratchet'] if p['ratchet'] is not None else '—'} | {p['target'] or '—'} | "
             f"**{p['suggested_target']}** | {' '.join(st)} |"
         )
@@ -792,9 +835,16 @@ def _monthly_main(root: Path, *, write: bool, as_json: bool) -> int:
     else:
         print(render_monthly(rep))
     if write:
+        payload = json.dumps(rep, ensure_ascii=False, indent=2) + "\n"
         p = _monthly_state_dir(root) / f"capability_budget_review-{rep['month']}.json"
-        p.write_text(json.dumps(rep, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        p.write_text(payload, encoding="utf-8")
         print(f"\n留痕已写：{p}")
+        # ⚠️ 2026-11-13：另写「上次运行」快照 ⇒ **同月内**的膨胀也能被检出
+        #   （只比对上月 ⇒ 同月连续跑多次时膨胀永远看不出来）。
+        #   注意顺序：先读旧 last 算出 delta，**再**覆盖 ⇒ 本次留痕是「本次实测」。
+        pl = _monthly_state_dir(root) / "capability_budget_review-last.json"
+        pl.write_text(payload, encoding="utf-8")
+        print(f"上次运行基线已更新：{pl.name}")
     return 0  # 只建议 ⇒ 永远 exit 0
 
 

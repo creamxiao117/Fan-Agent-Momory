@@ -226,6 +226,72 @@ class TestMonthlyReview:
         rc = m.main(["--monthly", "--root", str(tmp_path)])
         assert rc == 0
 
+    def test_same_month_bloat_detected_via_last_snapshot(self, tmp_path: Path) -> None:
+        """⚠️ 同月内膨胀检测（2026-11-13 补的真实漏洞）。
+
+        原实现只比对**上月**留痕 ⇒ 同月内连续跑多次时，膨胀永远看不出来
+        （例：code 上月=1312，本月内加技能→1400，比对 1312 仍判「未膨胀」）。
+
+        修法：另写 `capability_budget_review-last.json`（上次运行快照）⇒ 逐次比对。
+
+        本测试用**假中枢**验证：先写一份 last 基线（比实测低）⇒ 必须判膨胀。
+        """
+        m = self._module()
+        skills_dir = tmp_path / "skills"
+        (skills_dir / "s1").mkdir(parents=True)
+        (skills_dir / "s1" / "SKILL.md").write_text(
+            "---\nname: s1\ndescription: " + ("x" * 800) + "\n---\n", encoding="utf-8"
+        )
+        (tmp_path / "hub.config.yaml").write_text(
+            yaml.safe_dump(
+                {
+                    "version": 1,
+                    "platforms_global": {"capability_budget": {"per_platform_ratchet": {"code": 99999}}},
+                    "platforms": {"code": {"skills_dir": str(skills_dir), "mcp_config_path": ""}},
+                },
+                allow_unicode=True,
+            ),
+            encoding="utf-8",
+        )
+        # 造「上次运行」基线（远低于当前实测 ⇒ 应判膨胀）
+        state = tmp_path / ".sync" / "state"
+        state.mkdir(parents=True, exist_ok=True)
+        (state / "capability_budget_review-last.json").write_text(
+            json.dumps({"month": "2026-11", "platforms": {"code": {"current_tokens": 10}}}),
+            encoding="utf-8",
+        )
+
+        rep = m.monthly_review(tmp_path)
+        p = rep["platforms"]["code"]
+        assert p["base_label"] == "上次运行", f"未优先用『上次运行』基线：{p['base_label']}"
+        assert p["bloat"] is True, "同月内膨胀没被检出"
+        assert p["delta"] > 0
+        # 建议目标线仍只降不升（≤ 基线）
+        assert p["suggested_target"] <= p["current_tokens"]
+
+    def test_first_run_has_no_baseline(self, tmp_path: Path) -> None:
+        """首期（既无上月、也无上次运行）⇒ 应标 `has_prev=False` 且 `has_last=False`。"""
+        m = self._module()
+        skills_dir = tmp_path / "skills"
+        (skills_dir / "s1").mkdir(parents=True)
+        (skills_dir / "s1" / "SKILL.md").write_text("---\nname: s1\ndescription: x\n---\n", encoding="utf-8")
+        (tmp_path / "hub.config.yaml").write_text(
+            yaml.safe_dump(
+                {
+                    "version": 1,
+                    "platforms_global": {"capability_budget": {}},
+                    "platforms": {"code": {"skills_dir": str(skills_dir), "mcp_config_path": ""}},
+                },
+                allow_unicode=True,
+            ),
+            encoding="utf-8",
+        )
+        rep = m.monthly_review(tmp_path)
+        assert rep["has_prev"] is False
+        assert rep.get("has_last") is False
+        # 渲染不应误报「首期」以外的矛盾
+        assert "无基线" in m.render_monthly(rep)
+
     def test_monthly_is_subcommand_not_new_module(self) -> None:
         """月度体检**不是新模块** —— 它是 `capability_reconcile` 的子命令。
 
