@@ -2,6 +2,48 @@
 
 按轮次（R1…）追加；每条含巡检/门禁结果、决策与进行中的事项。当前状态见 `WORK.md`。
 
+## [2026-11-13] R36 | 主仓 CI 剩余两红项治本 ⇒ **CI 首次全绿** + 中枢本轮两卡入库
+
+- **① P0/P1 机械链 S10（脚本级三条）**：根因 = `tools/manual/start_cad.ps1` 开头**无条件** `Get-Sj3Root`，
+  而 `plugin_root.txt` 指向**本机专属**插件工程（须含 `src/YjkCadPlugin`）⇒ hosted runner / 他机 clone 上必然不存在
+  ⇒ fail-closed 显式 throw ⇒ 脚本退 1 ⇒ 连 `-DryRun` 这条**纯离线**判据都跑不到
+  ⇒ **离线判据被本机资产绑架**。A/B 实证：路径存在 ⇒ exit=5 正常；路径改坏 ⇒ **exit=1 + 报错文本与 CI 完全一致**。
+  治法 = **懒解析**（`$root=''; if (-not $DryRun) { $root = Get-Sj3Root }`）⇒ **`-DryRun` 不碰本机资产**、
+  **真机路径照旧 fail-closed**（且仍在碰 CAD 之前）⇒ **放宽的是环境依赖，不是判据**。
+  附带实测：`New-Sj3RunDir` 只依赖 `Get-Sj3SelfRoot`（`$Root` 参数未被使用）⇒ `$root=''` 安全。
+- **② TD-12 cap 落地门禁**：根因 = `.gitignore` 的 `docs/**/*.png`（证据出仓政策，354 条清单见 `docs/evidence-ASSETS.md`）
+  ⇒ 干净 clone 里素材目录 **PNG 数 = 0**（本地 100 张 / 21 MB）⇒ `list_real_frames()` 返回空
+  ⇒ 探针 `GATE_NO_IMAGES` ⇒ **rc=2**（素材缺失 ≠ 逻辑红）⇒ P1/P2/P3 + N2 共 4 条断言失败。
+  治法 = **入库探针实际选中的最小 3 帧**（≈683 KB，其余 97 帧仍出仓；`.gitignore` 加 3 条 `!` 反向规则）；
+  选帧口径可复算：去重后 52 帧 ⇒ `sub = frames[::max(1, N//3)][:3]` ⇒ 索引 0/17/34。
+  **可复现性已证**：最小素材树 ⇒ anchor **0.8167** 与 committed 基线**逐位相同**；CI runner 上同样 **0.8167**。
+  另：TD-12 本地 ~170 s > 全局 180 s 上限 ⇒ 批跑框架加**每套可选 `TimeoutSec`**（本例 600 s）——
+  **超时仍判 FAIL**，只是不再被误判（**运行预算 ≠ 判据**）。
+- **③ CI 首次全绿**：run **`43434141079`**（head `2ebc968`）⇒ **12/12 步 success**，
+  批跑报告 **PASS=24 FAIL=0 SKIP=0 MISSING=0**（artifact `selftest-logs` 复核）。
+  S10 在 runner 上 8 条断言全 PASS（负样本 `code=5` + `DWG_REFUSED_BY_WHITELIST`、正样本 `code=0`、
+  「白名单根必须是路径」PASS、结构断言 `iPre=2973 < iConn=4032`）；
+  TD-12 在 runner 上正样本 `GATE_VERDICT: PASS` / 负样本 `GATE_VERDICT: FAIL` + exit=1（**能红**）、探针 rc=0。
+  ⇒ 此前所有红项（编码 / 依赖 / locale / 副屏落位 / S10 / TD-12）**均已治本转绿**。
+- **④ 文档侧治本（类级缺陷复发）**：用 Python 脚本批量写文档时 `\b`/`\v`/`\a`/`\A`/`\2` 被当**转义序列**
+  ⇒ 文件名首字母凭空消失（`\beam_mark_audit.py` → `\x08eam_mark_audit.py`）、路径段被吞（`D:\AIwork\20260917` → `D:AIwork20260917`）
+  ⇒ **控制字符在 Markdown 渲染里几乎看不见** ⇒ 文档与真实文件脱节。
+  `git show HEAD:STATUS.md` 里**已存在** 9 个 ⇒ **同根因跨轮复发** ⇒ 按类级缺陷全量扫（STATUS.md + evidence README）
+  ⇒ 还原时**先在仓里 grep 真实文件名**（实证 `tools/p11/beam_mark_audit.py` ⇒ 首字母是 **b** 不是 `t`）
+  ⇒ 修后 `ctrl_left=0` + 14 条关键路径逐字断言全 OK。提交 `06ae14b`。
+- **⑤ 中枢本轮两卡入库**（走**官方 `draft-write` 入口**，不是手写草稿）：
+  `2026-11-13-offline-gate-must-not-depend-on-local-assets`（离线判据不得依赖本机资产）、
+  `2026-11-13-python-docstring-escape-eats-filenames`（脚本写文档的转义吞字）。
+  ⚑ **踩坑（可复用）**：`engine.py ingest` 扫的是 `.sync/drafts/<platform>_draft/`（mavis ⇒ `mavis_draft`）
+  ⇒ **手写 `code_draft/` 不会被 ingest 扫到**（返回 `promoted=0 / moved_names=[]` 静默无动作）；
+  正确姿势 = `engine.py draft-write --platform mavis --body-file <完整卡>`（自动拆 frontmatter，落 `mavis_draft/` 根目录）
+  ⇒ 再 `engine.py ingest --platform mavis`。
+  ingest 结果 `moved=2`、`lint_errors=[]`；`engine.py audit` ⇒ **705/705 健康**；
+  `render_index --check` **PASS**（三份 INDEX 与卡文件一致）；**逐张推 mavis `added=1` 各一**
+  （体量告警 59,581 / 62,391 > 58,000，**只报不拦**，写入照常）。
+- **⑥ 交办 Hermes（中枢推送）**：中枢仓 **ahead 2**（`2edfc6c` ingest 提交 + 此前一笔）⇒ **推送权在 Hermes**，
+  按纪律**不代推**；任务已写进本 RUNLOG（即 Hermes 的每天必读状态源）。
+
 ## [2026-11-13] R35 | 上游 PR #154743 关闭（DROP）+ 本地分支身份卫生 + 主仓 CI 编码红治本 + WORK.md 数字校准
 
 - **① 上游 PR #154743 存废 = 关闭**：维护者 **kvnloo** 判决 **DROP — requirement mismatch**

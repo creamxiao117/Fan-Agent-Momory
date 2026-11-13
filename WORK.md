@@ -6,10 +6,10 @@
 
 ## 当前状态（卡片/测试/grade/账本=2026-11-13，其余 2026-11-02 实测）
 
-- 卡片 **702**（blueprints 232 / experience 350 / methodology 76 / projects 23 / rules 13 / longterm 8）；lint **全 0**（orphan/ghost/hook/stale/invalid/schema_drift）
+- 卡片 **705**（blueprints 232 / experience 352 / methodology 76 / projects 23 / rules 13 / longterm 8）；lint **全 0**（orphan/ghost/hook/stale/invalid/schema_drift）
 - 巡检 **8 步 exit 0**（lint / render_check / audit / recall / reconcile / secret_sentry / encoding / tests）；产物恰两件 `retro/snapshot-*.json` + `retro/daily-*.md`；健康 **91.9/100**（card 100 / skill 100 / gate 100 / flywheel 85.7 / **llm 60** ← LM Studio 2060 ms，唯一 info 告警）
 - 测试 **945 用例已收集**；**门禁 9→3 且 scope-gated**（`common/gate_scope.py`：`code`/`text`/`l0`，按 staged 触发）⇒「他人未提交改动阻断提交」缺陷已消除，`--no-verify` 合法用途归零
-- **grade 覆盖 702/702 = 100%**（iron 7 / proven 136 / domain 213 / pitfall 45 / task 301）；**L1 由 `grade=iron` 派生**、`tiers` 归型；bootstrap 按 grade 三段分层；**正交轴 `evidence`**（t1 92 · measured 57，其余缺失即 none）
+- **grade 覆盖 705/705 = 100%**（iron 7 / proven 136 / domain 213 / pitfall 45 / task 304）；**L1 由 `grade=iron` 派生**、`tiers` 归型；bootstrap 按 grade 三段分层；**正交轴 `evidence`**（t1 92 · measured 57，其余缺失即 none）
 - 平台元数据**单源**（`hub.config.yaml`；旧双源文件已删）；能力账本 `system/capabilities.json|md` + `scripts/INVENTORY.json`（**114 条**：keep 107 · manual-cli 7 · unused 0）；`capability_reconcile` 已挂巡检第 4 步（含**降级路线图**）
 - **pi 接入**：MCP 已通（本会话 7 工具）· `agent/mcp.json` → `.venv` · `agent/AGENTS.md` **顶部托管块**已注入 · 扩展 `memory-hub.ts`（`/hub` `/hub-write` `/hub-cap` `/hub-on` `/hub-off`；注入走 `sections["hub-context"]`）· 回写落 `.sync/drafts/pi_draft/`（**人工确认制**）· 降级账本 `<agent-dir>/hub-bridge.log` · MCP ui 资源**按客户端声明**（agent 侧零弹窗）+ WorkBuddy 侧为**人类真卡片**
 - 定时链：07:30 巡检 / 00:35 夜间合并 / 06:00 密钥哨兵 / 09:00 临时目录清理 + Hermes 5 任务（晨报→提升→star-distill+T1→周六评测）；**微信通道已停用**
@@ -37,16 +37,17 @@
 | C3 尺子双把 | ✅ `INVENTORY.json` + `capabilities.json`（`--check` 可跑） |
 | C4 门禁瘦身 | ✅ 3 道 scope-gated |
 | C5 流水线瘦身 | ✅ 8 步 + 两件产物 |
-| C6 等级轴 | ✅ grade **100%**（702/702）；每型 iron ≤3（code 3 / hub 3 / sync 2）；L1 由 `grade=iron` 派生（`tiers` 归型）；抽样复核 37 张（改判 3 张） |
+| C6 等级轴 | ✅ grade **100%**（705/705）；每型 iron ≤3（code 3 / hub 3 / sync 2）；L1 由 `grade=iron` 派生（`tiers` 归型）；抽样复核 37 张（改判 3 张） |
 | C7 账本对账 | ✅ 巡检 pass（差异 0）；帽已定：逐平台棘轮 + 60% 降级目标 + 降级路线图 |
 | C8 瘦身结果 | ✅ **已重新定义**（原「≤75」按证据不可达）：`unused`=0 · `duplicate`=0 · 在役证据覆盖 **93.9%**（≥90%）· 模块数**棘轮 114**（新增须等量退役）——全部由 `inventory.py::c8_violations` 自动判定 |
 
 ## 门禁
 
-- **提交时**（外层 + 中枢两钩子，逻辑同一份 `hub-engine/scripts/gate_runner.py`）：`code` → ruff×2 · `text` → 编码+markdownlint · `l0` → startup_budget + render_index --check（**按 staged 触发**）；退出码 0/1/2/3
+- **提交时**（外层 + 中枢两钩子，同一份 `hub-engine/scripts/gate_runner.py`）：`code` → ruff×2 · `text` → 编码+markdownlint · `l0` → startup_budget + render_index --check（**按 staged 触发**）；退出码 0/1/2/3
 - **每日** 07:30 巡检 8 步 · 00:35 夜间合并 · 06:00 密钥哨兵 · 09:00 临时目录清理
-- **手动** `python -m scripts.recall_regression`（58 条金标准，退出码 2 = 未达 90%）；`python -m scripts.inventory --check`；`python -m scripts.capability_reconcile --root ../AgentMemoryHub`
+- **手动** `recall_regression`（58 条金标准，退出码 2 = 未达 90%）· `inventory --check` · `capability_reconcile`
 - 验收：`.venv\Scripts\python.exe -m pytest` → **945 用例**；`ruff check` 全绿
+- **主仓 CI 首次全绿**（run `43434141079`）：12/12 步 success · 批跑 **PASS=24**；S10 + TD-12 两红项已治本
 
 ## 禁止 / 注意
 
@@ -57,6 +58,6 @@
 - **改 `hub.config.yaml` 后必须 `capability_scan --write`**：否则巡检 reconcile 步报「账本与实测态不一致」
 - `INDEX*.md` 是渲染产物，禁手改；改卡后 `python -m scripts.render_index --write`
 - **提交门禁自改期间不得 `--no-verify`**；门禁故障当场修
-- **状态源纪律**：WORK.md = 唯一状态；每轮改动在 RUNLOG.md 追加（最新在前）；**别新建笔记文件**
+- **状态源纪律**：WORK.md = 唯一状态；每轮改动追加 RUNLOG.md（最新在前）；**别新建笔记文件**
 - 外层超时必须 > 内层（pytest 外 420s / 内 180s）；归档卡须同步检查引用它的夹具（期望卡名会漂移）
 - GitHub push 走 **HTTP/1.1**（`git -c http.version=HTTP/1.1 push`）：本机 HTTP/2 协商被中间设备打断
