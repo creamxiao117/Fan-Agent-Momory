@@ -41,17 +41,29 @@ def _make_draft(root: Path, platform: str, name: str, body: str) -> Path:
     return p
 
 
+def _card_text(body: str) -> str:
+    """一张**合法**卡的文本。
+
+    ⚠️ 2026-11-13：权威区里的 .md **就是卡**（hub_registry 的扫描口径）⇒ 裸文本 .md 是
+    **非法卡** ⇒ INDEX 渲染 fail-closed（与 l0 门禁同口径）⇒ 夹具必须写成合法卡。
+    """
+    return (
+        "---\ntype: project\ntags:\n  - test\nupdated: 2026-11-13\n"
+        "status: active\nreuse_count: 0\n---\n\n# 他人卡\n\n" + body.rstrip("\n") + "\n"
+    )
+
+
 def _setup_foreign_scene(root: Path) -> tuple[Path, Path]:
     """造「他人现场」：一个已跟踪被改动的文件 + 一个未跟踪文件。返回两者路径。"""
     tracked = root / "projects" / "foreign-tracked.md"
     tracked.parent.mkdir(parents=True, exist_ok=True)
-    tracked.write_text("他人基线内容\n", encoding="utf-8")
+    tracked.write_text(_card_text("他人基线内容\n"), encoding="utf-8")
     _git(root, "add", "projects/foreign-tracked.md")
     _git(root, "commit", "-m", "他人: 基线")
-    tracked.write_text("他人正在改的内容（未提交）\n", encoding="utf-8")  # 变脏
+    tracked.write_text(_card_text("他人正在改的内容（未提交）\n"), encoding="utf-8")  # 变脏
 
     untracked = root / "projects" / "foreign-untracked.md"
-    untracked.write_text("他人未跟踪文件\n", encoding="utf-8")
+    untracked.write_text(_card_text("他人未跟踪文件\n"), encoding="utf-8")
     return tracked, untracked
 
 
@@ -93,11 +105,19 @@ def test_snapshot_excludes_input_from_commit(tmp_path: Path):
     protect = _snapshot_dirty(root)
 
     mine = root / "projects" / "mine.md"
-    mine.write_text("本次新产出\n", encoding="utf-8")
+    mine.write_text(_card_text("本次新产出\n"), encoding="utf-8")
     _commit(root, "test: 只提交本次新产出", protect=protect)
 
     changed = set(_git(root, "show", "--name-only", "--format=", "HEAD").split())
-    assert changed == {"projects/mine.md"}, f"提交范围应精确为本次产出，实际 {changed}"
+    assert "projects/mine.md" in changed, "本次产物必须进提交"
+    # 提交范围 = 本次产物 + 其**配套的渲染产物**（INDEX 三件套）；他人现场不得进
+    assert changed <= {
+        "projects/mine.md",
+        "INDEX.md",
+        "INDEX-full.md",
+        "INDEX-experience.md",
+    }, f"提交范围越界：{changed}"
+    assert not any(p.startswith("projects/foreign") for p in changed), "他人现场被卷入提交"
 
 
 def test_legacy_protect_none_still_adds_all_with_warning(tmp_path: Path, capsys):

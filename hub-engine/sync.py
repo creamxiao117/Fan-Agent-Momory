@@ -5,12 +5,14 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
 import time as _t
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 CST = timezone(timedelta(hours=8))
 
+from common.authority import CARD_DIRS  # 参与 INDEX 渲染的卡目录（单一事实源）
 from common.constants import HIGH_RISK  # 高风险类型：rule + methodology
 from common.frontmatter import (
     DEFAULT_GRADE_BY_DIR,
@@ -173,11 +175,248 @@ def _sync_index_before_commit(root: Path, names: list[str]) -> None:
         print(f"[sync] INDEX 同步失败（不阻断提交）：{type(e).__name__}: {e}", file=sys.stderr)
 
 
+# ── 提交自洽（2026-11-13 修 l0 死锁）────────────────────────────────────────
+#
+# 缺陷事实（2026-11-13 实测）：pre-commit 的 l0 门禁（scripts/gate_runner.py::gate_l0）
+# 把 **git index 物化**成目录后重渲染 INDEX，再与 index 里的 INDEX 产物比对
+# ⇒ **判据对象是「暂存态」**，不是工作树态。
+# 旧流程里 INDEX 的渲染发生在 `_snapshot_dirty` **之后**：INDEX.md 早就 dirty
+# ⇒ 被 protect 排除 ⇒ 不进 mine ⇒ 提交里带的是**陈旧 INDEX**（缺本轮新卡）
+# ⇒ l0 拿「暂存态的卡」重渲染后与「暂存态的 INDEX」比对 ⇒ 不一致 ⇒ 阻断提交
+# ⇒ 该批产物永久滞留暂存区 ⇒ 之后**每一次**提交都被同一个 l0 挡下（流水线整体卡死）。
+#
+# 修法（两条同时成立才算修好）：
+#   ① 提交内容自洽：提交里的 INDEX 必须与**该提交里的卡集合**一致（不得有幽灵登记）；
+#   ② 工作树仍自洽：提交后工作树的 INDEX 必须与**工作树里的卡集合**一致。
+# 二者的卡集合可能不同（工作树里有他人未提交的卡）⇒ **必须渲染两份**：
+#   提交树（HEAD + 本次产物）⇒ 进提交；工作树 ⇒ 留在工作树。
+
+
+def _git_env(repo: Path, env: dict[str, str], *args: str) -> str:
+    """带环境变量跑 git（临时索引靠 GIT_INDEX_FILE 指定）；失败透传 stderr。
+
+    为何要临时索引：`git commit` 提交的是**整个索引** ⇒ 别人已 `git add` 但未提交
+    的改动会被一并带走（破坏 §4 工作区守护）。用临时索引可以**精确**提交
+    「HEAD + 本次产物 + 配套渲染产物」，且**不改动**真实索引里别人的暂存项。
+    """
+    cmd = ["git", "-C", str(repo), *args]
+    full_env = os.environ.copy()
+    full_env.update(env)
+    try:
+        r = subprocess.run(cmd, check=True, capture_output=True, text=True, encoding="utf-8", env=full_env)
+        return r.stdout or ""
+    except subprocess.CalledProcessError as e:
+        stderr = (e.stderr or "").strip()
+        raise RuntimeError(f"git 命令失败: {' '.join(cmd)}\n{stderr or e}") from e
+
+
+def _repo_root(repo: Path) -> Path:
+    """git 仓库根（中枢仓通常 == 中枢根；分开时路径一律按仓库根算）。"""
+    return Path(_git(repo, "rev-parse", "--show-toplevel").strip())
+
+
+def _staged_paths(repo: Path) -> set[str]:
+    """**索引**里已暂存的路径（仓库根相对，posix 风格）。"""
+    out = _git(repo, "-c", "core.quotepath=false", "diff", "--cached", "--name-only")
+    return {ln.strip() for ln in out.splitlines() if ln.strip()}
+
+
+def _hub_rel_prefix(repo: Path) -> str:
+    """中枢根相对 git 仓库根的 posix 前缀（中枢仓 == 仓库根时为空串）。"""
+    try:
+        rel = os.path.relpath(Path(repo).resolve(), _repo_root(repo).resolve())
+    except ValueError:  # 跨盘符（罕见）：退化为「中枢根 == 仓库根」的假设
+        return ""
+    return "" if rel == "." else Path(rel).as_posix()
+
+
+def _hub_rel(rel: str, prefix: str) -> str:
+    """仓库相对路径 → 中枢相对路径（中枢仓 == 仓库根时原样返回）。"""
+    if not prefix:
+        return rel
+    if rel == prefix:
+        return ""
+    if rel.startswith(prefix + "/"):
+        return rel[len(prefix) + 1 :]
+    return rel
+
+
+def _affects_index(rel: str, prefix: str) -> bool:
+    """该（仓库相对）路径是否影响 INDEX 渲染：权威区卡文件 或 渲染产物本身。"""
+    from scripts.render_index import EXPERIENCE_NAME, FULL_NAME, L0_NAME
+
+    if rel in (L0_NAME, FULL_NAME, EXPERIENCE_NAME):
+        return True
+    hub_rel = _hub_rel(rel, prefix)
+    if not hub_rel:
+        return False
+    p = PurePosixPath(hub_rel)
+    return bool(p.suffix.lower() == ".md" and p.parts and p.parts[0] in CARD_DIRS)
+
+
+def _index_blob_sha(repo: Path, rel: str) -> str | None:
+    """索引里某路径的 blob sha（不在索引里则 None）。"""
+    out = _git(repo, "ls-files", "-s", "--", rel)
+    for line in out.splitlines():
+        parts = line.split()
+        if len(parts) >= 2:
+            return parts[1]
+    return None
+
+
+def _render_index_for_tree(tree_hub: Path, prefix: str) -> dict[str, Path]:
+    """在**提交树**上渲染 INDEX 产物 → {仓库相对路径: 树内文件路径}。
+
+    为何渲染到提交树而不是工作树：提交里的 INDEX 必须与**该提交里的卡集合**一致；
+    工作树里可能有**他人未提交的卡**，把它们写进本次提交的 INDEX 即「幽灵登记」
+    （INDEX 列了本次提交里不存在的卡）⇒ l0 门禁必然判不一致 ⇒ 死锁复发。
+
+    渲染失败 ⇒ **fail-closed**（抛 RuntimeError，不提交）：提交一个自相矛盾的
+    INDEX 只会把「可执行的报错」换成 l0 的一句「跑 --write 修复」（而那一句
+    在暂存态上跑依然失败）——这正是本次要消灭的失败形态。
+    """
+    from scripts.render_index import EXPERIENCE_NAME, FULL_NAME, L0_NAME
+    from scripts.render_index import write as render_write
+
+    errs = render_write(tree_hub, lock=False)
+    if errs:
+        raise RuntimeError(
+            "本次提交无法自洽：提交树上的 INDEX 渲染失败（fail-closed，已放弃本次提交）。\n"
+            + "\n".join(f"  - {e}" for e in errs)
+            + "\n请先修好上述卡（frontmatter/字段非法），或把它们移出权威区目录，再重跑本轮；"
+            "本次提交已放弃（**未产生任何提交**，工作树里的改动仍在，可直接重试）。"
+        )
+    out: dict[str, Path] = {}
+    for name in (L0_NAME, FULL_NAME, EXPERIENCE_NAME):
+        rel = f"{prefix}/{name}" if prefix else name
+        out[rel] = tree_hub / name
+    return out
+
+
+def _rerender_worktree(root: Path) -> None:
+    """提交后重渲染**工作树**的 INDEX 产物（保证工作树态自洽）。
+
+    为何要重渲染：本次提交带的是「提交树专属」的 INDEX（不含他人未提交的卡），
+    而工作树的 INDEX 必须反映**工作树**里的卡 ⇒ 两者本就可能不同 ⇒ 提交后重渲染，
+    工作树才回到「INDEX == 工作树的卡集合」这一不变式。
+    失败只告警：工作树不自洽是**先前**就存在的问题，不该让已成功的提交回滚。
+    """
+    try:
+        from scripts.render_index import write as render_write
+
+        errs = render_write(root, lock=False)
+        if errs:
+            print(f"[sync] 工作树 INDEX 重渲染失败（不阻断提交）：{errs}", file=sys.stderr)
+    except Exception as e:  # noqa: BLE001 - 重渲染失败不得回滚已成功的提交
+        print(
+            f"[sync] 工作树 INDEX 重渲染异常（不阻断提交）：{type(e).__name__}: {e}",
+            file=sys.stderr,
+        )
+
+
+def _repair_staged_index(root: Path, foreign_staged: set[str], prefix: str) -> None:
+    """让**暂存区整体**自洽：INDEX 产物必须与「即将提交的内容」一致。
+
+    为何需要：本次提交只带走了自己的产物，但**别人已 `git add` 却未提交**的卡改动
+    仍留在暂存区 ⇒ 暂存区与 INDEX 产物不一致 ⇒ **下一个**提交（无论谁做）都会被
+    l0 门禁挡下（2026-11-13 实测：88 路径批次永久滞留 ⇒ 之后每次提交都被同一个
+    l0 挡下 ⇒ 流水线整体卡死）。修法：把暂存区物化成树 → 在那棵树上渲染 INDEX
+    → 把渲染结果写回暂存区 ⇒ 下一个提交能过。
+    只改**渲染产物**，不碰别人已暂存的卡内容。
+    """
+    if not any(_affects_index(p, prefix) for p in foreign_staged):
+        return  # 暂存区里没有别人的卡/渲染产物 ⇒ 暂存区天然自洽
+    from scripts.render_index import EXPERIENCE_NAME, FULL_NAME, L0_NAME
+    from scripts.render_index import write as render_write
+
+    repo = _repo_root(root)
+    names = (L0_NAME, FULL_NAME, EXPERIENCE_NAME)
+    with tempfile.TemporaryDirectory(prefix="hub-index-") as td:
+        tree = Path(td) / "tree"
+        tree.mkdir(parents=True, exist_ok=True)  # checkout-index 不会自建前缀根目录
+        _git(repo, "checkout-index", "-a", f"--prefix={tree}{os.sep}")
+        tree_hub = tree / prefix if prefix else tree
+        before = {name: _index_blob_sha(repo, f"{prefix}/{name}" if prefix else name) for name in names}
+        errs = render_write(tree_hub, lock=False)
+        if errs:
+            print(
+                "[sync] ⚠️ 暂存区里存在他人未提交的卡变动，但暂存区的 INDEX 渲染失败：\n"
+                + "\n".join(f"  - {e}" for e in errs)
+                + "\n收口建议：先修好上述卡（暂存区的 INDEX 产物必须与**暂存区的卡集合**一致，"
+                "否则下一个提交仍会被 l0 门禁挡下）；修好后重跑一次入库，"
+                "引擎会自动把暂存区的 INDEX 重渲染并暂存。",
+                file=sys.stderr,
+            )
+            return
+        changed: list[str] = []
+        for name in names:
+            rel = f"{prefix}/{name}" if prefix else name
+            blob = _git(repo, "hash-object", "-w", "--path", rel, str(tree_hub / name)).strip()
+            if blob != before.get(name):
+                _git(repo, "update-index", "--add", "--cacheinfo", f"100644,{blob},{rel}")
+                changed.append(name)
+        if changed:
+            print(
+                f"[sync] 暂存区自洽修复：已重渲染并暂存 {changed}"
+                "（暂存区里存在他人未提交的卡变动 ⇒ 否则下一个提交会被 l0 门禁挡下）"
+            )
+
+
+def _commit_scoped(root: Path, message: str, mine: list[str]) -> None:
+    """只提交本次操作自己的产物：**HEAD + mine + 配套的 INDEX 渲染产物**。
+
+    两条不变式（2026-11-13 修 l0 死锁）：
+      ① 提交内容自洽 —— 提交里的 INDEX 与**该提交里的卡集合**一致（无幽灵登记）；
+      ② 工作树仍自洽 —— 提交后工作树的 INDEX 与**工作树里的卡集合**一致。
+
+    为何用**临时索引**：`git commit` 提交的是整个索引 ⇒ 别人已 `git add` 但未
+    提交的改动会被一并带走。临时索引让提交内容 = HEAD + 本次产物（+ 渲染产物），
+    真实索引里别人的暂存项原样保留。
+    """
+    repo = _repo_root(root)
+    prefix = _hub_rel_prefix(root)
+    parent_sha = _git(repo, "rev-parse", "HEAD").strip()
+    foreign_staged = _staged_paths(repo)  # 他人已暂存项：提交后必须仍在暂存区
+    touched = [p for p in mine if _affects_index(p, prefix)]
+    rendered: dict[str, Path] = {}
+    with tempfile.TemporaryDirectory(prefix="hub-commit-") as td:
+        tmp = Path(td)
+        env = {"GIT_INDEX_FILE": str(tmp / "index")}
+        tree = tmp / "tree"
+        tree.mkdir(parents=True, exist_ok=True)  # checkout-index 不会自建前缀根目录
+        # 提交树 = HEAD + 本次产物（工作树内容；删除也会被正确记录）
+        _git_env(repo, env, "read-tree", "HEAD")
+        _git_env(repo, env, "add", "--", *mine)
+        _git_env(repo, env, "checkout-index", "-a", f"--prefix={tree}{os.sep}")
+        if touched:
+            tree_hub = tree / prefix if prefix else tree
+            rendered = _render_index_for_tree(tree_hub, prefix)
+            for rel, path in rendered.items():
+                blob = _git_env(repo, env, "hash-object", "-w", "--path", rel, str(path)).strip()
+                _git_env(repo, env, "update-index", "--add", "--cacheinfo", f"100644,{blob},{rel}")
+        _git_env(repo, env, *GIT_ID, "commit", "-m", message)
+    new_sha = _git(repo, "rev-parse", "HEAD").strip()
+    # 真实索引对齐新 HEAD（本次产物 + 本次的渲染产物）；他人已暂存项原样保留
+    reset_paths = sorted((set(mine) | set(rendered)) - foreign_staged)
+    if reset_paths:
+        _git(repo, "reset", "-q", "--", *reset_paths)
+    _record_commit(root, parent_sha, new_sha, message)
+    if touched:
+        _rerender_worktree(root)
+    _repair_staged_index(root, foreign_staged, prefix)
+
+
 def _commit(root: Path, message: str, protect: set[str] | None = None) -> None:
     """提交变更：只提交本次操作新产生的改动；无变更时跳过；Git 失败透传 stderr
 
+    V1.4 (2026-11-13): 提交**自洽** + 不卷入他人已暂存项（修 l0 门禁死锁）。
+      - 提交内容 = HEAD + 本次产物 + **配套的 INDEX 渲染产物**（在提交树上渲染）
+        ⇒ 提交里的 INDEX 与该提交里的卡严格一致 ⇒ l0 门禁不再误挡（详见
+        `_commit_scoped` 与本文件顶部「提交自洽」注释）。
+      - 用临时索引提交 ⇒ 别人已 `git add` 但未提交的改动**不会**被带走。
+
     V1.3 (2026-09-19): 新增 protect（_snapshot_dirty 产物）。
-      protect 有值 → 只 `git add` 本次新变化，绝不卷入他人未提交改动
+      protect 有值 → 只提交本次新变化，绝不卷入他人未提交改动
       protect=None → 兼容旧调用，退回 add -A 并打印告警
 
     V1.1 (2026-09-08): T10 Phase 2 —— commit_ledger 双平台协调。
@@ -192,17 +431,16 @@ def _commit(root: Path, message: str, protect: set[str] | None = None) -> None:
         return
     if protect is None:
         print("[sync] 警告: _commit 未给 protect 快照, 退回 git add -A（可能卷入他人改动）")
-        add_args = ["add", "-A"]
-    else:
-        mine = sorted(_snapshot_dirty(root) - protect)
-        if not mine:
-            return
-        add_args = ["add", "--", *mine]
-    parent_sha = _git(root, "rev-parse", "HEAD").strip()
-    _git(root, *add_args)
-    _git(root, *GIT_ID, "commit", "-m", message)
-    new_sha = _git(root, "rev-parse", "HEAD").strip()
-    _record_commit(root, parent_sha, new_sha, message)
+        _git(root, "add", "-A")
+        parent_sha = _git(root, "rev-parse", "HEAD").strip()
+        _git(root, *GIT_ID, "commit", "-m", message)
+        new_sha = _git(root, "rev-parse", "HEAD").strip()
+        _record_commit(root, parent_sha, new_sha, message)
+        return
+    mine = sorted(_snapshot_dirty(root) - protect)
+    if not mine:
+        return
+    _commit_scoped(root, message, mine)
 
 
 def _record_commit(root: Path, parent_sha: str, new_sha: str, intent: str) -> None:
