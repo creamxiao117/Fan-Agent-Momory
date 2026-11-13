@@ -10,6 +10,7 @@
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 import time
@@ -25,6 +26,53 @@ if str(_HUB_ENGINE_DIR) not in sys.path:
 from common.proc import run_utf8  # noqa: E402  (需先 sys.path.insert)
 
 _LOCAL_TZ = timezone(timedelta(hours=+8))
+
+
+def resolve_python(engine_dir: Path | None = None) -> str:
+    """解析**跑 hub-engine 自身**的 Python 解释器。
+
+    ⚠️ 2026-11-13 修（**巡检假红**：tests 步永远红）：
+    巡检子进程原先一律用 `sys.executable` ⇒ 当巡检是被 **Hermes venv** 拉起时
+    （`.../hermes/installs/<id>/environments/<id>/venv/Scripts/python.exe`），
+    该环境**没有 pytest/ruff** ⇒ `_step_pytest` 以
+    `No module named pytest` exit=1 结束（仅 192ms ⇒ 典型快速失败）。
+    ⇒ 真实套件（904 passed / 141s）从未被执行 ⇒ 回归网形同虚设。
+
+    口径（**fail-closed**：找不到就回退 sys.executable，不静默跳过门禁）：
+    1. `hub-engine/.venv/Scripts/python.exe`（子项目 venv）
+    2. 仓库根 `.venv/Scripts/python.exe`（pyproject.toml 指定的官方解释器）
+    3. `sys.executable`（回退）
+    4. POSIX 形态 `bin/python`（非 Windows）
+
+    注意：解释器必须**能 import pytest / ruff** 才算合格；仅存在不算。
+    """
+    base = Path(engine_dir) if engine_dir else _HUB_ENGINE_DIR
+    repo_root = base.parent
+    names = ("Scripts/python.exe", "bin/python") if os.name == "nt" else ("bin/python",)
+
+    candidates: list[Path] = []
+    for root in (base, repo_root):
+        for name in names:
+            candidates.append(root / ".venv" / name)
+
+    for cand in candidates:
+        if not cand.is_file():
+            continue
+        # 存在还不够：必须能 import pytest（否则仍会 No module named pytest）
+        try:
+            r = subprocess.run(
+                [str(cand), "-c", "import pytest"],
+                capture_output=True,
+                text=True,
+                timeout=30,
+                check=False,
+            )
+        except (subprocess.SubprocessError, OSError):
+            continue
+        if r.returncode == 0:
+            return str(cand)
+
+    return sys.executable
 
 
 @dataclass

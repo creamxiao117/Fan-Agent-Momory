@@ -23,6 +23,7 @@ from scripts.patrol.core import (  # noqa: E402  (需先 sys.path.insert)
     PatrolReport,
     StepResult,
     _run_cmd,
+    resolve_python,
 )
 
 
@@ -126,9 +127,14 @@ def _step_pytest(engine_dir: Path) -> StepResult:
     120s 边缘，导致 2026-09-23 合并到 master 后的巡检直接
     `pytest 失败: 超时 (120s)` → 总体退出码 2。
     跳过比超时更不可接受（测试是回归网），故给足余量（锁余 ≈4x）。
+
+    ⚠️ 2026-11-13 修（**假红**）：解释器改用 `resolve_python()`。
+    原先用 `sys.executable` ⇒ 巡检被 Hermes venv 拉起时该环境无 pytest
+    ⇒ 192ms 内 exit=1（`No module named pytest`）⇒ 套件从未真跑。
     """
+    py = resolve_python(engine_dir)
     exit_code, stdout, stderr = _run_cmd(
-        [sys.executable, "-m", "pytest", "-q"],
+        [py, "-m", "pytest", "-q"],
         cwd=engine_dir,
         timeout=420,
     )
@@ -163,9 +169,13 @@ def _step_pytest(engine_dir: Path) -> StepResult:
 
 
 def _step_ruff(engine_dir: Path) -> StepResult:
-    """运行 ruff check。始终执行，不依赖 LLM。"""
+    """运行 ruff check。始终执行，不依赖 LLM。
+
+    ⚠️ 2026-11-13：解释器同 pytest ⇒ 改用 `resolve_python()`（否则 Hermes venv 无 ruff）。
+    """
+    py = resolve_python(engine_dir)
     exit_code, stdout, stderr = _run_cmd(
-        [sys.executable, "-m", "ruff", "check", "."],
+        [py, "-m", "ruff", "check", "."],
         cwd=engine_dir,
         timeout=60,
     )
@@ -473,12 +483,13 @@ def _step_verify_after_fix(engine_dir: Path, fix_results: dict) -> StepResult:
     任一失败则产生 critical 告警，避免静默通过。
     """
 
+    py = resolve_python(engine_dir)
     cmds = [
         (
             "pytest_smoke",
-            [sys.executable, "-m", "pytest", "tests/", "-q", "--tb=no", "-x"],
+            [py, "-m", "pytest", "tests/", "-q", "--tb=no", "-x"],
         ),
-        ("ruff_check", [sys.executable, "-m", "ruff", "check", "."]),
+        ("ruff_check", [py, "-m", "ruff", "check", "."]),
     ]
     failed: list[str] = []
     outputs: list[str] = []

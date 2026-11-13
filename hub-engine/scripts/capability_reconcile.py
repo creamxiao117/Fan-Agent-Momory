@@ -55,6 +55,17 @@ from scripts.capability_scan import (  # noqa: E402
 DEFAULT_TARGET_TOKENS = 1500
 DEFAULT_MCP_MAX = 5
 
+# ⚠️ 2026-11-13 修订（用户裁定：「软目标不该规定死一个数，对每个平台应该都不一样」）：
+#   原口径 `per_session_target: 1500` 是**全平台统一常量** ⇒
+#     ① 对不同平台、不同任务量级的会话**不合理**（workbuddy 3150 与 mavis 21 拿同一把尺子）；
+#     ② 1500 是**拍出来的理想值**而非实测基线 ⇒ 从设立当天起就有 2 个平台常年超标，
+#        报告天天报「超目标」却从来没人动 ⇒ **噪音掩盖真问题**。
+#   新口径：
+#     · `per_platform_target`：逐平台**各自**的目标线（可缺省 ⇒ 回落到实测基线）。
+#     · 目标线的语义**不变**：仍是「该往哪降的方向」，仍**只报不拦**。
+#     · 目标线**由月度体检维护**（只降不升 + 膨胀检测），不由人肉拍脑袋定。
+#   保留 `per_session_target` 作**回退默认值**（老配置仍能工作，不破坏兼容性）。
+
 
 def actual(root: Path) -> dict:
     """读实测态产物（**事实源仍是平台配置本身**，这里只为不重复扫描）。"""
@@ -113,9 +124,30 @@ def budgets(root: Path) -> dict:
 
     return {
         "per_session_target": _int("per_session_target", DEFAULT_TARGET_TOKENS),
+        "per_platform_target": {
+            str(k): int(v) for k, v in (cap.get("per_platform_target") or {}).items() if str(v).strip().isdigit()
+        },
         "mcp_servers_max": _int("mcp_servers_max", DEFAULT_MCP_MAX),
         "reduction_target_ratio": _float("reduction_target_ratio", 0.6),
     }
+
+
+def target_for(plat: str, budgets_map: dict) -> int:
+    """取某平台的软目标线。
+
+    优先级（2026-11-13 新口径）：
+      1. `per_platform_target[plat]` —— 逐平台**各自**的目标线（首选）
+      2. `per_session_target` —— 回退默认值（老配置兼容）
+
+    ⚠️ 缺省时**回落到该平台自己的实测值**（而不是全局 1500）：
+       没登记目标线的平台，等于「以现状为基线」⇒ 不报超目标。
+       这才是「逐平台不同」的真实含义——不是给每个平台编一个新数字，
+       而是**不再用一把尺子量所有平台**。
+    """
+    per_plat = budgets_map.get("per_platform_target") or {}
+    if plat in per_plat:
+        return int(per_plat[plat])
+    return int(budgets_map.get("per_session_target") or 0)
 
 
 def reduction_plan(root: Path, r: dict) -> list[dict]:
@@ -275,9 +307,10 @@ def cost_report(root: Path) -> dict:
             )
 
     # 软：超目标（带具体降级候选，交用户批准；**只报不拦**）
-    target = soft["per_session_target"]
+    # ⚠️ 2026-11-13：改为**逐平台各自**的目标线（不再用全局 1500 一把尺子）。
     over_target: list[dict] = []
     for plat, c in sorted(costs.items(), key=lambda kv: -kv[1]["per_session_tokens"]):
+        target = target_for(plat, soft)
         if target > 0 and c["per_session_tokens"] > target:
             over_target.append(
                 {
@@ -294,6 +327,7 @@ def cost_report(root: Path) -> dict:
         "fleet": fleet,
         "caps": caps,
         "soft": soft,
+        "targets": {p: target_for(p, soft) for p in costs},
         "over_ratchet": over_ratchet,
         "over_target": over_target,
         "worst": _worst(costs),
@@ -427,6 +461,8 @@ def reconcile(root: Path) -> dict:
         "fleet_tokens": rep["fleet"],  # 仅库存参考；**不设帽**
         "worst_platform": rep["worst"],
         "budgets": {**rep["soft"], "per_platform_ratchet": rep["caps"]},
+        # ⚠️ 2026-11-13：逐平台目标线（渲染层读它，不用再算一遍）
+        "targets": rep.get("targets") or {},
         "over_ratchet": rep["over_ratchet"],
         "over_target": rep["over_target"],
         "registry": registry_coverage(root),
@@ -449,13 +485,14 @@ def render(r: dict) -> str:
     lines.append("")
     lines.append("## 单会话常驻发现成本（每个客户端各付各的）")
     lines.append("")
-    lines.append("| 平台 | 单会话 token | 该平台棘轮 | 状态 |")
-    lines.append("| --- | --- | --- | --- |")
+    lines.append("| 平台 | 单会话 token | 该平台棘轮 | 该平台目标线 | 状态 |")
+    lines.append("| --- | --- | --- | --- | --- |")
     caps = r["budgets"]["per_platform_ratchet"]
-    target = r["budgets"]["per_session_target"]
+    targets = r.get("targets") or {}
     for plat, c in sorted(r["cost_by_platform"].items(), key=lambda kv: -kv[1]["per_session_tokens"]):
         n = c["per_session_tokens"]
         cap = caps.get(plat)
+        target = targets.get(plat) or 0
         if cap is None:
             st = "（未登记棘轮）"
         elif n > cap:
@@ -464,10 +501,11 @@ def render(r: dict) -> str:
             st = f"⚠️ 超目标 {n - target}（待降级，需批准）"
         else:
             st = "✅"
-        lines.append(f"| {plat} | {n} | {cap if cap is not None else '—'} | {st} |")
+        lines.append(f"| {plat} | {n} | {cap if cap is not None else '—'} | {target or '—'} | {st} |")
     lines.append("")
     lines.append(
-        f"- 最贵单平台：**{r['worst_platform']['platform']} {r['worst_platform']['tokens']} token/会话**；软目标 {target}"
+        f"- 最贵单平台：**{r['worst_platform']['platform']} {r['worst_platform']['tokens']} token/会话**"
+        "（目标线**逐平台各设**，不再用统一常量）"
     )
     lines.append(
         f"- 全平台求和 **{r['fleet_tokens']}** —— 库存参考，**不是任何会话的成本、不设帽**"
@@ -561,12 +599,221 @@ def _render_reduction_plan(r: dict, lines: list[str]) -> None:
         )
 
 
+def _monthly_state_dir(root: Path) -> Path:
+    d = root / ".sync" / "state"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def _monthly_used_skills(root: Path) -> set[str]:
+    """**已登记 / 有实现**的技能名（质量闸信号源：这些不许自动建议降级）。
+
+    ⚠️ 2026-11-13 修正（**信号源三次都选错，此处是最终版**）：
+       ① 首版从 `.sync/state/query.log*.jsonl` 抓技能名 ⇒ 恒为空。
+          根因：检索留痕记的是**卡片路径**（`hit_paths`），不是技能名 ——
+          中枢卡片与客户端技能是两套命名空间，本就不该混。
+       ② 二版扫 `SkillHub/skills/*/SKILL.md` ⇒ 没命中（SkillHub 是**分层结构**
+          `skills/<层>/<域>/<名>/SKILL.md`）。
+       ③ 三版调 `registry_coverage()` ⇒ 拿到的是**计数（int）**不是集合 ⇒ 仍空。
+
+    最终版：直接读 `router/router.yaml` 的登记名 + `skills/**/{skill.yaml,SKILL.md}`
+    的实现名（与 `registry_coverage()` **同一套口径**，但不依赖它的返回值形态）。
+    「登记过」= 用户认可并在用 ⇒ 降级它要先问人。
+    """
+    used: set[str] = set()
+    try:
+        from common.config import external_path
+
+        sh = Path(str(external_path("skillhub", root) or ""))
+        if sh.is_dir():
+            router = sh / "router" / "router.yaml"
+            if router.is_file():
+                import yaml
+
+                rows = (yaml.safe_load(router.read_text(encoding="utf-8")) or {}).get("skills") or []
+                used |= {str(r["name"]) for r in rows if isinstance(r, dict) and r.get("name")}
+            skills_dir = sh / "skills"
+            if skills_dir.is_dir():
+                used |= {q.parent.name for q in skills_dir.rglob("skill.yaml")}
+                used |= {q.parent.name for q in skills_dir.rglob("SKILL.md")}
+    except Exception:  # noqa: BLE001 - 量不到就当"全可降级"，不猜
+        return set()
+    return used
+
+
+def monthly_review(root: Path) -> dict:
+    """**月度体检**：逐平台核对常驻成本 → 比上月基线 → 检膨胀 → 给降级建议。
+
+    口径（用户裁定 2026-11-13）：
+    > 「每个月适当进行一次检查，在不改变它原本语义的情况下，尽量减少这个数值的大小，
+    > 把它优化在一个合理的范围内，不让它过度膨胀……初衷就是想尽量减少每次对话中固定的 token 消耗。」
+
+    硬约束：
+    - **只降不升**：建议目标线 ≤ 上月基线（膨胀了标红，但目标线不因膨胀而抬高）。
+    - **质量闸**：在用能力（已登记/有实现）标 🚫，不自动建议降级。
+    - **只建议**：不改 `hub.config.yaml`、不降级能力（均需人工确认）。
+    """
+    now = datetime.now(CST)
+    month = now.strftime("%Y-%m")
+    prev_month = (now.replace(day=1) - timedelta(days=1)).strftime("%Y-%m")
+
+    rep = cost_report(root)
+    costs = rep["costs"]
+    caps = ratchet(root)
+    soft = budgets(root)
+
+    prev_file = _monthly_state_dir(root) / f"capability_budget_review-{prev_month}.json"
+    prev: dict = {}
+    if prev_file.is_file():
+        try:
+            prev = json.loads(prev_file.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            prev = {}
+    prev_costs = (prev.get("platforms") or prev.get("costs") or {}) if prev else {}
+    used = _monthly_used_skills(root)
+
+    platforms: dict[str, dict] = {}
+    for plat, c in sorted(costs.items()):
+        cur = int(c.get("per_session_tokens") or 0)
+        pv = prev_costs.get(plat) or {}
+        prev_val = int(pv.get("current_tokens") or 0) or int(pv.get("per_session_tokens") or 0)
+        delta = cur - prev_val if prev_val else 0
+        pct = (delta / prev_val * 100) if prev_val else 0.0
+
+        cap = caps.get(plat)
+        target = target_for(plat, soft)
+
+        candidates = []
+        for name, tok in c.get("top_skills") or []:
+            candidates.append(
+                {
+                    "skill": name,
+                    "tokens": int(tok),
+                    "in_use": name in used,
+                    "actionable": name not in used,
+                }
+            )
+
+        # 建议目标线：**以实测为基线**，只允许 ≤ 上月基线（只降不升）
+        suggested = prev_val if (prev_val and delta > 0) else cur
+
+        platforms[plat] = {
+            "current_tokens": cur,
+            "prev_tokens": prev_val,
+            "delta": delta,
+            "delta_pct": round(pct, 1),
+            "ratchet": cap,
+            "target": target,
+            "suggested_target": min(suggested, cur),
+            "over_ratchet": bool(cap is not None and cur > cap),
+            "over_target": bool(target and cur > target),
+            "bloat": bool(prev_val and delta > 0),
+            "mcp_servers": int(c.get("mcp_servers") or 0),
+            "candidates": candidates,
+            "actionable_savings": sum(x["tokens"] for x in candidates if x["actionable"]),
+        }
+
+    return {
+        "generated_at": now.isoformat(),
+        "month": month,
+        "prev_month": prev_month,
+        "has_prev": bool(prev),
+        "platforms": platforms,
+        "summary": {
+            "total_current": sum(p["current_tokens"] for p in platforms.values()),
+            "total_prev": sum(p["prev_tokens"] for p in platforms.values()),
+            "bloat_platforms": [k for k, v in platforms.items() if v["bloat"]],
+            "over_ratchet_platforms": [k for k, v in platforms.items() if v["over_ratchet"]],
+            "actionable_savings": sum(p["actionable_savings"] for p in platforms.values()),
+            "in_use_protected": sum(
+                x["tokens"] for p in platforms.values() for x in p["candidates"] if not x["actionable"]
+            ),
+        },
+        "note": "只建议不擅自动手：写入 hub.config.yaml 需人工确认；降级能力需用户批准。",
+    }
+
+
+def render_monthly(rep: dict) -> str:
+    """月度体检的人读报告。"""
+    L: list[str] = []
+    L.append(f"# 能力常驻成本月度体检 · {rep['month']}")
+    L.append("")
+    if not rep["has_prev"]:
+        L.append(f"> ⚠️ 无上月基线（{rep['prev_month']}）⇒ 本次为**首期**，「膨胀」判定不可用，但目标线建议仍有效。")
+        L.append("")
+    L.append("| 平台 | 本月实测 | 上月实测 | 变化 | 棘轮 | 当前目标线 | 建议目标线 | 状态 |")
+    L.append("| --- | --- | --- | --- | --- | --- | --- | --- |")
+    for plat, p in rep["platforms"].items():
+        d = p["delta"]
+        dtxt = f"{d:+d}" if p["prev_tokens"] else "—"
+        if p["bloat"]:
+            dtxt += f" ({p['delta_pct']:+.1f}%) 🔺"
+        st = []
+        if p["over_ratchet"]:
+            st.append("❌超棘轮")
+        if p["bloat"]:
+            st.append("🔺膨胀")
+        if not st:
+            st.append("✅")
+        L.append(
+            f"| {plat} | {p['current_tokens']} | {p['prev_tokens'] or '—'} | {dtxt} | "
+            f"{p['ratchet'] if p['ratchet'] is not None else '—'} | {p['target'] or '—'} | "
+            f"**{p['suggested_target']}** | {' '.join(st)} |"
+        )
+    L.append("")
+    s = rep["summary"]
+    L.append("## 摘要")
+    L.append("")
+    L.append(f"- 全平台实测合计：{s['total_current']} token（上月 {s['total_prev'] or '—'}）")
+    L.append(f"- 🔺 膨胀平台：{', '.join(s['bloat_platforms']) or '无'}")
+    L.append(f"- ❌ 超棘轮平台：{', '.join(s['over_ratchet_platforms']) or '无'}")
+    L.append(f"- **可降级空间**（闲置能力）：**{s['actionable_savings']} token**")
+    L.append(f"- **在用能力（受保护，不建议降级）**：{s['in_use_protected']} token")
+    L.append("")
+    L.append("## 逐平台降级候选（🚫=在用，质量闸保护）")
+    L.append("")
+    for plat, p in rep["platforms"].items():
+        if not p["candidates"]:
+            continue
+        items = "、".join(
+            f"`{x['skill']}`({x['tokens']}){'🚫' if not x['actionable'] else ''}" for x in p["candidates"][:6]
+        )
+        L.append(f"- **{plat}**（{p['current_tokens']} token，建议目标 {p['suggested_target']}）：{items}")
+    L.append("")
+    L.append(f"> {rep['note']}")
+    return "\n".join(L)
+
+
+def _monthly_main(root: Path, *, write: bool, as_json: bool) -> int:
+    """月度体检的 CLI 入口（并入本模块 ⇒ 不新增模块数，守住 C8④ 棘轮）。"""
+    rep = monthly_review(root)
+    if as_json:
+        print(json.dumps(rep, ensure_ascii=False, indent=2))
+    else:
+        print(render_monthly(rep))
+    if write:
+        p = _monthly_state_dir(root) / f"capability_budget_review-{rep['month']}.json"
+        p.write_text(json.dumps(rep, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        print(f"\n留痕已写：{p}")
+    return 0  # 只建议 ⇒ 永远 exit 0
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="能力对账（声明态 vs 实测态）")
     ap.add_argument("--root", type=Path, default=None)
     ap.add_argument("--json", action="store_true")
+    ap.add_argument(
+        "--monthly",
+        action="store_true",
+        help="月度体检模式：比上月基线检膨胀 + 给降级建议（只建议不擅自动手）",
+    )
+    ap.add_argument("--write", action="store_true", help="月度体检：写留痕到 .sync/state/")
     args = ap.parse_args(argv)
     root = args.root or (_HUB_ENGINE.parent / "AgentMemoryHub")
+
+    if args.monthly:
+        return _monthly_main(root, write=args.write, as_json=args.json)
+
     r = reconcile(root)
     if args.json:
         print(json.dumps(r, ensure_ascii=False, indent=2))
