@@ -7,7 +7,7 @@
 ## 当前状态（卡片/测试/grade/账本=2026-11-13，其余 2026-11-02 实测）
 
 - 卡片 **704**（blueprints 232 / experience 352 / methodology 77 / projects 23 / rules 13 / longterm 8）；lint **全 0**
-- 巡检 **9 步**；**pytest 969 passed**（指针模式新增 24 条回归）；健康 **98.5/100**（card/skill/flywheel/llm 全 100、gate 93.8）⇒ ⚠ exit 2 仅因 code 平台 `capability_reconcile.py` 未提交改动的 3 处 ruff 告警（**非本次改动**）
+- 巡检 **9 步**；**pytest 969 passed**（指针模式 +24 条回归）；健康 **98.5/100**（card/skill/flywheel/llm 全 100、gate 93.8）⇒ ✅ **exit 0**（code 平台未提交的 `capability_reconcile.py` 已按 §4-A 收口提交 `a62dbe8`，ruff 告警清零）
 - 测试 **969 用例**；**门禁 9→3 且 scope-gated**（`common/gate_scope.py`，按 staged 触发）⇒「他人未提交改动阻断提交」缺陷已消除，`--no-verify` 合法用途归零
 - **grade 覆盖 704/704 = 100%**（iron 7 / proven 136 / domain 214 / pitfall 45 / task 302）；**L1 由 `grade=iron` 派生**；bootstrap 按 grade 三段分层；**正交轴 `evidence`**（t1 92 · measured 57）
 - 平台元数据**单源**（`hub.config.yaml`）；账本 `capabilities.json|md`+`INVENTORY.json`（**114 条**：keep 107·manual-cli 7·unused 0）；`capability_reconcile` 挂巡检第 4 步（含降级路线图）
@@ -35,7 +35,7 @@
 | -- | --- | -- |
 | **A1–A3** | ✅ **已达成**：grade 100% + `tier`/`l1_tier` 退役 · `rules/` 23→13 · **C8 重定义**（`unused`=0·`duplicate`=0·在役证据覆盖 93.9%·模块数棘轮 114，`c8_violations` 自动判定） | RUNLOG R23–R27 |
 | **A4** | ✅ **成立**：后窗口 37 天全 0 · 产出率 **66%**/重复率 **34%**；「3.2%」是指标 bug（漏计 227 条）⇒ 旧「未触及根因」作废；已补「退化可见」（`degraded`） | 明细见 `docs/compose/metrics/2026-11-02-t1-rerun.md` |
-| **A5–A7** | ✅ **已达成**：`/hub-write`（预览+确认制）· 检索/失败可见 · 预算帽（棘轮+60%降级目标）· 盘点卡去数字化 | RUNLOG R26 |
+| **A5–A7** | ✅ **已达成**：`/hub-write`（预览+确认制）· 检索/失败可见 · 预算帽（棘轮+60%降级目标）· 盘点卡去数字化 | R26 |
 | **A8** | ✅ **方案 A 全落地**：`evidence` 字段（none/measured/t1）· 检索侧按 evidence 加成+透出+标 `[measured]` · 回填 149 张 | 报告 `docs/compose/reports/2026-11-02-evidence-axis.md` |
 | **A9** | ✅ **已判定**：用户确认 workbuddy 最近没使用 ⇒ 原「近 30 天用过+近 7 天零检索」告警属噪音 ⇒ 收紧为「**近 14 天**用过+近 7 天零检索」；实测不再被报 | 维持 |
 | **A10** | ✅ **全部达成**（2026-11-13 晚）：推中枢仓（`409f5ec`+`adc3055`）· 告警线 58000 · capability_scan · inventory · **hermes 动态约束落刀**（`_char_limit()` 改「基线+窗口增量」⇒ 无死上限；`4285fd8c847` 已推 fork）· **§3.5 反向对应**（hermes 16000→`memory_char_warn_limit` 17000 只报不拦）· **指针模式**（三消费端 ⇒ ↓72.1%） | 任务包 `docs/compose/plans/2026-11-13-hermes-hub-task-pack.md`｜方法论卡 `2026-11-13-platform-memory-pointer-mode.md` |
