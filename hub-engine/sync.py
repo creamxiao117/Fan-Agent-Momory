@@ -207,7 +207,10 @@ def _git_env(repo: Path, env: dict[str, str], *args: str) -> str:
         return r.stdout or ""
     except subprocess.CalledProcessError as e:
         stderr = (e.stderr or "").strip()
-        raise RuntimeError(f"git 命令失败: {' '.join(cmd)}\n{stderr or e}") from e
+        stdout = (e.stdout or "").strip()
+        # ⚠ `git commit` 的「nothing to commit」等提示走 **stdout**（不是 stderr）
+        # ⇒ 只带 stderr 时报错只剩 exit 1，信息为零 ⇒ 这里两边都带。
+        raise RuntimeError(f"git 命令失败: {' '.join(cmd)}\n{stderr or stdout or e}") from e
 
 
 def _repo_root(repo: Path) -> Path:

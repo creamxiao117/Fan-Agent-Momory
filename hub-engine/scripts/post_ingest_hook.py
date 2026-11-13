@@ -356,10 +356,22 @@ def sync_indices(root: Path, names: list[str], *, lock: bool = True) -> set[str]
     return written
 
 
-def _has_staged_changes(root: Path, paths: list[str]) -> bool:
-    """指定路径是否有已暂存的差异（幂等重跑时避免 `git commit` 报 nothing to commit）。"""
+def _changes_vs_head(root: Path, rel_paths: list[str]) -> bool:
+    """这些（**仓库根相对**）路径在工作树里是否与 HEAD 有差异（幂等预检）。
+
+    为何不用「暂存态」判定：新的提交路径走**临时索引**（不碰真实索引），
+    真实索引里没有本次产物 ⇒ 暂存态永远显示「无变化」⇒ 幂等判断会永远成立
+    ⇒ 真正需要提交时反而不提交。故直接比「工作树内容 vs HEAD」。
+    """
+    from sync import _repo_root
+
+    repo = _repo_root(root)
+    # ⚠ 必须用 **git 自己的比较口径**（`git diff HEAD`）：工作树文件在 Windows 上是 CRLF，
+    # 而 `git show HEAD:<path>` 取的是 blob（LF）⇒ 逐字节比对**永远**判「有差异」
+    # ⇒ 幂等预检永远不成立 ⇒ 每次都去提交 ⇒ 撞上「nothing to commit」。
+    # `git diff` 走 autocrlf / .gitattributes 的归一化 ⇒ 比较结果与提交内容同口径。
     r = subprocess.run(
-        ["git", "-C", str(root), "diff", "--cached", "--quiet", "--", *paths],
+        ["git", "-C", str(repo), "diff", "--quiet", "HEAD", "--", *rel_paths],
         check=False,
         capture_output=True,
     )
@@ -369,23 +381,35 @@ def _has_staged_changes(root: Path, paths: list[str]) -> bool:
 def _commit_indices(root: Path, written_files: set[str], added: list[str]) -> bool:
     """提交索引变更；失败返回 False（调用方转成退出码 3）。
 
-    只暂存**实际写入过的**索引文件：此前硬编码只 add INDEX.md，在 experience 拆到
-    分册后 → 分册的改动从未被暂存 ⇒ commit 无内容 ⇒ 报错退出
-    （同一 bug 类的第二处：写入路由改了，暂存路径没改）。
+    2026-11-13（治本）：改走 **scoped 提交**（与 `sync._commit` 同一套机制）。
+    旧写法「`git add <INDEX>` + `git commit`」提交的是**整个索引** ⇒ 两个后果：
+      ① 卷走他人已 `git add` 但未提交的改动；
+      ② 提交里可能带**陈旧 INDEX**（缺本轮新卡）⇒ 再次触发 l0 门禁死锁
+         （判据是**暂存态**，陈旧 INDEX ⇒ 每次提交都被挡 ⇒ 流水线整体卡死）。
+
+    新写法：提交内容 = HEAD + 本次写入的渲染产物 + **提交树专属**渲染的 INDEX
+      ⇒ 提交里的 INDEX 与该提交里的卡集合一致（**无幽灵登记**）；
+      ⇒ 用临时索引**精确**提交，**不卷入**他人已暂存项。
+
+    语义保持不变：只暂存**实际写入过的**索引文件（此前硬编码只 add INDEX.md，
+    experience 拆到分册后 → 分册改动从未被暂存 ⇒ commit 无内容 ⇒ 报错退出）；
+    幂等重跑不产生空提交（返回 True）；失败返回 False（调用方转退出码 3）。
     """
-    env = os.environ.copy()
-    env["GIT_AUTHOR_NAME"] = "AgentMemoryHub"
-    env["GIT_AUTHOR_EMAIL"] = "hub@local"
-    env["GIT_COMMITTER_NAME"] = "AgentMemoryHub"
-    env["GIT_COMMITTER_EMAIL"] = "hub@local"
-    staged_paths = sorted(written_files)
     try:
-        git(root, "add", *staged_paths, env=env)
-        if not _has_staged_changes(root, staged_paths):
+        # 局部 import：与 sync.py 的「局部 import post_ingest_hook」对称，避开启动期循环依赖
+        from sync import _commit_scoped, _hub_rel_prefix
+
+        prefix = _hub_rel_prefix(root)
+        mine = sorted((f"{prefix}/{name}" if prefix else name) for name in written_files)
+        if not mine:
+            return True
+        if not _changes_vs_head(root, mine):
             return True  # 幂等重跑：渲染内容未变，无东西可提交
         msg = f"docs(INDEX): post_ingest_hook 同步渲染产物（登记 {len(added)} 张新卡）"
-        git(root, "commit", "-m", msg, env=env)
-    except (RuntimeError, subprocess.CalledProcessError) as e:
+        _commit_scoped(root, msg, mine)
+    except Exception as e:  # noqa: BLE001 - 提交失败统一转 False（⇒ 退出码 3）
+        if "nothing to commit" in str(e).lower():
+            return True  # 提交树与 HEAD 无差异（幂等）
         print(f"commit 失败: {e}", file=sys.stderr)
         return False
     return True
