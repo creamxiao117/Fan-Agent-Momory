@@ -425,6 +425,382 @@ def _select_cards(root: Path, only_rules: bool, name_filter: str | None) -> tupl
     return cards, None
 
 
+# ---------- 指针模式（2026-11-13）------------------------------------------------
+# 平台记忆文件是**每轮对话都加载**的输入（hermes: agent/system_prompt.py:529
+# ⇒ MEMORY.md 全文进系统提示）⇒ 卡正文全是「每轮固定成本」。
+# 指针模式：平台只收「卡名 + 一句话 + 中枢检索路径」，正文留中枢按需检索
+# ⇒ 既覆盖全部规则，又把每轮固定成本压到 ~10%。
+# ⚠ 与 GR-1 的关系：平台记忆里已有「必须检索中枢」机制 ⇒ 指针是被读的**入口**，不是死文档。
+
+_POINTER_MAX_DESC = 120  # 一句话摘要截断长度（超长会把指针变成第二份正文）
+
+
+def _pointer_body(card, hub_root: Path) -> str:
+    """把一张权威卡压成**指针块**（正文留中枢，平台只留检索线索）。
+
+    块结构：
+        > **<标题>** —— <一句话摘要>
+        > 中枢路径：`AgentMemoryHub/rules/<slug>.md`（用 hub_search / hub_get 按需取全文）
+
+    ⚠ 摘要取 frontmatter 的 `description`（卡片自述）⇒ 不是从正文截断
+    ⇒ 不会把「正文前 120 字」这种半截句子当成摘要。
+    """
+    path = card.path
+    desc = ""
+    if path and path.is_file():
+        try:
+            text = path.read_text(encoding="utf-8")
+        except OSError:
+            text = ""
+        if text:
+            # ① frontmatter 的 description（若有）—— 最准
+            m = re.search(r"^description:\s*(.+)$", text[:2000], re.M)
+            if m:
+                desc = m.group(1).strip().strip("'\"")
+            if not desc:
+                # ② 正文首个 `>` 引用行（中枢卡的惯例 = 一句话导语）
+                for line in text.split("\n"):
+                    st = line.strip()
+                    if st.startswith(">") and not st.startswith(">-"):
+                        desc = st.lstrip(">").strip()
+                        break
+            if not desc:
+                # ③ 首个 H1 标题（去掉 `#`）⇒ 至少有点定位信息
+                m = re.search(r"^#\s+(.+)$", text, re.M)
+                if m:
+                    desc = m.group(1).strip()
+    if len(desc) > _POINTER_MAX_DESC:
+        desc = desc[: _POINTER_MAX_DESC - 1].rstrip() + "…"
+
+    slug = path.stem if path else "?"
+    rel = path.relative_to(hub_root.parent).as_posix() if path else "?"
+    title = desc or slug
+    return f"> **{slug}** —— {title}\n> 中枢路径：`{rel}`（用 `hub_search` / `hub_get` 按需取全文）"
+
+
+# ⚑ 清单区（2026-11-13，迭代2）：指针模式下，平台记忆里的**全部**规则条目
+#   收进**一个**可整体替换的区块 ⇒ 推送时按清单重算并**覆盖**旧清单
+#   （而不是逐卡追加 ⇒ 逐卡追加会让清单与实际推送集合漂移、且重推时新旧两份并存）。
+#
+#   区块头（哨兵）：固定文本 ⇒ 两端都能精确定位 ⇒ 幂等覆盖。
+_POINTER_INDEX_HEAD = "【中枢规则指针清单】"
+# ⚑⚑ **托管区哨兵**（2026-11-13，迭代4）：指针模式下，中枢管辖的全部内容
+#   （清单区 + 内联白名单卡 + 旧全文块清理）收进**一个**哨兵包围的区块。
+#
+#   为什么必须这样（迭代 2/3 的实测教训）：
+#     · 逐块定位（`## <slug>` / 中文标题）在**交错**结构里必然不稳
+#       （实测 workbuddy：`## global-rules` 与 `# 全局规则` 交错 ⇒ 替换互吞 ⇒ 不幂等）。
+#     · 边界靠「猜」（下一个标题 / 空行）⇒ 越界吞掉别的内容（实测吞 2,364 字符）。
+#   ⇒ 唯一可靠口径：**哨兵包围** ⇒ 边界由中枢自己的标记决定 ⇒ 天然幂等。
+_MANAGED_BEGIN = "<!-- hub-managed:begin -->"
+_MANAGED_END = "<!-- hub-managed:end -->"
+# ⚑ 永远**内联全文**的规则卡（不进指针清单、也不删旧全文块）。
+#   理由：这些是**每轮都该生效**的铁律（GR-1~GR-4）⇒ 指针化会削弱合规性。
+_KEEP_INLINE_RULES = {"global-rules"}
+_POINTER_INDEX_HEAD_MD = "## 中枢规则指针清单"
+
+
+def _pointer_index_body(cards, hub_root: Path) -> str:
+    """生成**指针清单区**正文（含哨兵头 + 全部卡的指针行）。
+
+    ⚠ 只列**本次推送集合**的卡 ⇒ 清单与实际落地始终一致（不会多、不会少）。
+    """
+    lines = [
+        _POINTER_INDEX_HEAD,
+        "（下列规则的**全文在中枢**⇒ 执行前用 `hub_search` / `hub_get` 按需检索，不要凭印象执行；",
+        " `global-rules`（GR-1~GR-4）已内联 ⇒ 直接可读）",
+        "",
+    ]
+    for card in cards:
+        if not card.path:
+            continue
+        # ⚠ `global-rules` 永远内联 ⇒ 不重复出现在清单里（避免两份口径）
+        if card.path.stem in _KEEP_INLINE_RULES:
+            continue
+        body = _pointer_body(card, hub_root)
+        if body:
+            lines.append(body)
+    return "\n".join(lines)
+
+
+def _title_block_line_ranges(text: str, titles: set[str]) -> list[tuple[int, int]]:
+    """按**标题文本**定位旧块（行区间），兼容两种形态：
+      · slug 式：`## global-rules`
+      · 中文标题式：`# 全局规则（GR-1 ~ GR-4）`（hermes 平台推 `global-rules` 后的形态）
+
+    ⚠ 同名标题可能**多处**（实测 workbuddy 同时有 `## global-rules` 与
+      `# 全局规则（GR-1 ~ GR-4）` 两份）⇒ 返回**全部**命中区间，
+      由调用方逐个替换（否则旧份残留 ⇒ 越推越臃肿）。
+    """
+    lines = text.splitlines(keepends=True)
+    hits: list[tuple[int, int]] = []
+    pat = re.compile(r"^#{1,3}\s+(.+?)\s*$")
+    for i, ln in enumerate(lines):
+        m = pat.match(ln.strip())
+        if not m:
+            continue
+        head = m.group(1).strip()
+        if head not in titles:
+            continue
+        j = i + 1
+        while j < len(lines):
+            st = lines[j].strip()
+            # ⚠⚠ 清单区哨兵 ⇒ **本块到此结束**
+            #   （实测 workbuddy 的清单区**落在 global-rules 全文块内部**
+            #    ⇒ 白名单替换整块时会把清单区一起清掉 ⇒ 推送后清单消失 ⇒ 规则指针全丢）
+            if st.startswith(_POINTER_INDEX_HEAD) or st.startswith(_POINTER_INDEX_HEAD_MD):
+                break
+            nxt = pat.match(st)
+            if nxt and nxt.group(1).strip() in titles:
+                break
+            # ⚠ 下一个**卡名式**标题（`## global-rules`）也算边界
+            #   ⇒ 否则中文标题块（`# 全局规则（GR-1 ~ GR-4）`）的范围会跨过它
+            #   ⇒ 旧块没被清掉 ⇒ **两份 global-rules 并存**（实测 code/workbuddy 各 2 份）。
+            if re.match(r"^#{1,3}\s+[a-z0-9][a-z0-9\-]*\s*$", st):
+                break
+            j += 1
+        hits.append((i, j))
+    return hits
+
+
+def _slug_block_line_ranges(text: str, slugs: set[str]) -> list[tuple[int, int]]:
+    """找出平台文件里 `## <slug>` 形态的**规则卡全文块**的行区间。
+
+    ⚠ 只认**顶层** `## <slug>`（slug 是 `a-z0-9-` 形态的**卡名**）⇒
+      卡片**内部**的子标题（`## 一句话结论` / `## 关联` …）**不**误伤
+      （实测 code 平台一张卡内部就有 20+ 个 `## ` 子标题 ⇒ 按标题一刀切会碎成一地）。
+    """
+    lines = text.splitlines(keepends=True)
+    hits: list[tuple[int, int]] = []
+    pat = re.compile(r"^## ([a-z0-9][a-z0-9\-]*)\s*$")
+    # ⚠ 块结束边界 = **下一个卡名式标题**（`## <slug>`）——
+    #   · 不能用「任何 `## `」：卡**内部**的中文子标题（`## 关键语义`）会截断块
+    #     ⇒ 块尾正文变成孤儿（实测：块删了但体量反而涨 1,022 字符）。
+    #   · 不能用「卡内子标题也算块内」而不管下一个卡名：那样会把**下一张卡**
+    #     一起吞掉（实测 `## 关键语义` 被误删）。
+    #   ⇒ 正确口径：**卡名式标题之间**才算同一张卡（中枢推的卡就是 `## <slug>` 形态，
+    #     卡内子标题是 `## 中文标题`，两者可区分）。
+    pat_any = re.compile(r"^## ([a-z0-9][a-z0-9\-]*)\s*$")
+    for i, ln in enumerate(lines):
+        m = pat.match(ln.strip())
+        if not m or m.group(1) not in slugs:
+            continue
+        j = i + 1
+        while j < len(lines):
+            st = lines[j].strip()
+            # ⚠ 清单区哨兵 ⇒ 本块结束（否则旧全文块清理会把清单区一起删掉）
+            if st.startswith(_POINTER_INDEX_HEAD) or st.startswith(_POINTER_INDEX_HEAD_MD):
+                break
+            if pat_any.match(st):  # 下一个卡名式标题 ⇒ 本块结束
+                break
+            j += 1
+        hits.append((i, j))
+    return hits
+
+
+def _pointer_index_line_range(text: str) -> tuple[int, int] | None:
+    """定位清单区在 `text` 中的**行区间** `[start, end)`（含）。
+
+    ⚠ 为什么用**行区间**而不是字符串 span：
+      清单区常被 `_insert_after_instruction` 插在某个 § 条目**内部**
+      （实测：插在 §[11] 中枢规则块内，后面紧跟 global-rules 全文）
+      ⇒ 任何「按分隔符/空行猜边界」的做法都会**越界吞掉别的内容**
+      （实测两次：吞掉 global-rules 全文 2,364 字符 / 吞掉 global-rules 标题行）。
+      ⇒ 唯一可靠口径：**清单区 = 哨兵行 + 连续的 `> ` 指针行**（消费到即止），
+        边界由**内容**决定，不由分隔符决定。
+    """
+    lines = text.splitlines(keepends=True)
+    start = None
+    for i, ln in enumerate(lines):
+        st = ln.strip()
+        # ⚠ 兼容两种渲染形态：`§` 平台是裸文本行、`## ` 平台是 `## 【中枢规则指针清单】`
+        #   ⇒ 定位必须容忍标题前缀（否则起点算错 ⇒ 替换时把上一行也换掉 ⇒ 重复）。
+        if st in (_POINTER_INDEX_HEAD, _POINTER_INDEX_HEAD_MD):
+            start = i
+            break
+        if st.endswith(_POINTER_INDEX_HEAD) and st.startswith("#"):
+            start = i
+            break
+    if start is None:
+        return None
+    end = start + 1
+    seen_pointer = False
+    while end < len(lines):
+        st = lines[end].strip()
+        if st.startswith(">"):
+            seen_pointer = True
+            end += 1
+            continue
+        if not seen_pointer:
+            end += 1  # 说明行 / 空行 ⇒ 清单头部
+            continue
+        break  # 指针区结束
+    return start, end
+
+
+def _managed_zone_span(text: str) -> tuple[int, int] | None:
+    """定位托管区（哨兵包围）的**行区间** `[start, end)`。
+
+    找不到 ⇒ None（⇒ 首次推送时新建）。
+    """
+    lines = text.splitlines(keepends=True)
+    b = e = None
+    for i, ln in enumerate(lines):
+        st = ln.strip()
+        if st == _MANAGED_BEGIN and b is None:
+            b = i
+        elif st == _MANAGED_END and b is not None:
+            e = i + 1
+            break
+    if b is None or e is None:
+        return None
+    return b, e
+
+
+def _managed_zone_content(
+    adapter,
+    index_cards: list,
+    hub_root: Path,
+    keep_inline_cards: list,
+    old_full_slugs: set[str],
+    text: str,
+    titleless: bool,
+) -> str:
+    """生成**托管区**内容（哨兵 + 清单区 + 内联白名单卡）。
+
+    ⚠ 托管区**完全重建**（不增量）⇒ 内容只取决于中枢当前状态 ⇒ **天然幂等**。
+    ⚠ 旧全文块（`## <slug>` 形态）**不**放进托管区，而是在托管区**之外**清理
+      （旧块可能在文件任意位置；放进托管区会让文件结构错乱）。
+    """
+    parts: list[str] = [_MANAGED_BEGIN + "\n"]
+
+    # ① 内联白名单卡（global-rules 等）—— 铁律必须常驻
+    for card in keep_inline_cards:
+        if not card.path:
+            continue
+        body = card.body.strip()
+        if not body:
+            continue
+        blk = _render_section(adapter, card.path.stem, body)
+        if not blk.endswith("\n"):
+            blk += "\n"
+        parts.append(blk)
+
+    # ② 指针清单区
+    index_body = _pointer_index_body(index_cards, hub_root)
+    if index_body:
+        blk = _render_section(adapter, _POINTER_INDEX_HEAD, index_body)
+        if not blk.endswith("\n"):
+            blk += "\n"
+        parts.append(blk)
+
+    parts.append(_MANAGED_END + "\n")
+    return "".join(parts)
+
+
+def _push_mode(cfg, platform: str) -> str:
+    """平台记忆推送模式：`pointer`（只推指针）/ `full`（推全文，默认）。
+
+    ⚠ 默认 `full` ⇒ **行为逐字不变**（向后兼容；老平台不受影响）。
+    """
+    meta = (getattr(cfg, "platforms", None) or {}).get(platform) or {}
+    mode = str(meta.get("memory_push_mode") or "full").strip().lower()
+    if mode not in ("full", "pointer"):
+        raise ValueError(f"平台 {platform} 的 memory_push_mode 非法：{mode!r}（须为 full 或 pointer）")
+    return mode
+
+
+def _plan_push_pointer(
+    adapter,
+    cards: list,
+    text: str,
+    stat: dict,
+    hub_root: Path,
+    index_cards: list | None,
+    titleless: bool,
+) -> tuple[list[str], list[tuple], set[str]]:
+    """指针模式的推送规划（**托管区**方案，迭代4）。
+
+    托管区 = 中枢管辖内容的**哨兵包围区块**（内联白名单卡 + 指针清单区）⇒
+    边界由哨兵决定 ⇒ **完全重建** ⇒ 天然幂等（推 N 次内容逐字符相同）。
+    """
+    blocks: list[str] = []
+    replacements: list[tuple] = []
+    pushed_fps: set[str] = set()
+    if hub_root is None:
+        return blocks, replacements, pushed_fps
+
+    # ⚠⚠ 清单区必须基于**全量规则卡**生成，**不能**用本次推送集合：
+    #   `--name xxx` 只推一张时，若清单按推送集合重算 ⇒ 清单只剩那张卡
+    #   ⇒ **规则清单丢失**（实测 7,457 → 5,186，少 2,271 字符）。
+    if index_cards is None:
+        index_cards = cards
+
+    keep_inline = [c for c in index_cards if c.path and c.path.stem in _KEEP_INLINE_RULES]
+
+    # ① 清理**托管区之外**的旧全文块
+    #    （指针模式切换前推的全文块；否则「清单区 + 旧全文」并存 ⇒ 臃肿 + 两套口径打架）
+    zone_rng = _managed_zone_span(text)
+    slugs = {c.path.stem for c in index_cards if c.path}
+    hits = list(_slug_block_line_ranges(text, slugs))
+    # ⚠ 白名单卡的中文标题形态旧块也要清（hermes/workbuddy 实测有独立的
+    #   `# 全局规则（GR-1 ~ GR-4）` 块）⇒ **总是**按标题形态定位；
+    #   与 slug 块**重叠**的问题由后面的「区间合并」解决。
+    for c in index_cards:
+        if not c.path or c.path.stem not in _KEEP_INLINE_RULES:
+            continue
+        m = re.search(r"^#\s+(.+)$", c.body, re.M)
+        if m:
+            hits.extend(_title_block_line_ranges(text, {m.group(1).strip()}))
+    for rng in hits:
+        # 跳过托管区内部（托管区整体会被替换 ⇒ 内部无需逐块清）
+        if zone_rng and rng[0] >= zone_rng[0] and rng[1] <= zone_rng[1]:
+            continue
+        replacements.append((rng, ""))
+        stat["replaced"] = stat.get("replaced", 0) + 1
+
+    # ⚠⚠ **合并重叠区间**后再替换：slug 块与其内部的中文标题块会**重叠**
+    #   ⇒ 直接同时替换会让行号相互错位 ⇒ 删不干净
+    #   （实测 workbuddy：区外仍残留 1 份 `# 全局规则（GR-1 ~ GR-4）`）。
+    replacements[:] = _merge_overlapping(replacements)
+
+    # ② 重建托管区（内联白名单卡 + 指针清单区）
+    zone = _managed_zone_content(adapter, index_cards, hub_root, keep_inline, slugs, text, titleless)
+    rng = _managed_zone_span(text)
+    if rng is not None:
+        lines = text.splitlines(keepends=True)
+        old_zone = "".join(lines[rng[0] : rng[1]])
+        if old_zone == zone:
+            stat["skipped"] += 1
+        else:
+            replacements.append((rng, zone))
+            stat["replaced"] = stat.get("replaced", 0) + 1
+    else:
+        stat["added"] += 1
+        blocks.append(zone)
+    pushed_fps.add(fingerprint(zone))
+    return blocks, replacements, pushed_fps
+
+
+def _merge_overlapping(replacements: list[tuple]) -> list[tuple]:
+    """把**重叠**的行区间合并（按起点排序，前区间吸收后区间）。
+
+    ⚠ 不合并 ⇒ 区间替换时行号相互错位 ⇒ 删不干净
+    （实测 workbuddy：区外残留 1 份 `# 全局规则（GR-1 ~ GR-4）`）。
+    """
+    if len(replacements) <= 1:
+        return replacements
+    merged: list[tuple] = []
+    for r in sorted(replacements, key=lambda x: x[0][0] if isinstance(x[0], tuple) else 0):
+        if isinstance(r[0], tuple) and merged:
+            prev = merged[-1][0]
+            if r[0][0] < prev[1]:
+                merged[-1] = ((prev[0], max(prev[1], r[0][1])), r[1])
+                continue
+        merged.append(r)
+    return merged
+
+
 def _plan_push(
     adapter,
     cards: list,
@@ -434,6 +810,9 @@ def _plan_push(
     existing_bodies: set[str],
     existing_titles: set[str],
     stat: dict,
+    mode: str = "full",
+    hub_root: Path | None = None,
+    index_cards: list | None = None,
 ) -> tuple[list[str], list[tuple[str, str]], set[str]]:
     """规划本轮推送：返回 (追加块, 原地替换对, 本轮全部指纹)，并就地累加 stat 计数。
 
@@ -443,6 +822,17 @@ def _plan_push(
     pushed_fps = set(state.get("pushed", []))
     blocks: list[str] = []
     replacements: list[tuple[str, str]] = []
+    if mode == "pointer":
+        # ⚑⚑ 指针模式（迭代4）：**托管区**方案。
+        #   中枢管辖的全部内容（内联白名单卡 + 指针清单区）收进**一个**哨兵包围的区块
+        #   ⇒ 边界由中枢自己的标记决定 ⇒ **完全重建** ⇒ 天然幂等。
+        #
+        #   迭代 2/3 的实测教训（为什么不能逐块定位）：
+        #     · 交错结构下逐块定位必然互吞（workbuddy：`## global-rules` 与
+        #       `# 全局规则` 交错 ⇒ 替换互吞 ⇒ 推 3 次体量 11,556 → 12,887 → 9,157）。
+        #     · 靠「猜边界」（下一个标题 / 空行）会越界吞掉别的内容（实测吞 2,364 字符）。
+        return _plan_push_pointer(adapter, cards, text, stat, hub_root, index_cards, titleless)
+
     for card in cards:
         if not card.path:
             continue
@@ -485,8 +875,25 @@ def _compose_text(
     （两处各写一份 ⇒ 闸算 A、写的却是 B ⇒ 闸形同虚设）。
     """
     new_text = text
+    # ⚑ 统一成**行区间**替换，并按起始行**倒序**应用
+    #   （倒序 ⇒ 后面的替换不影响前面的行号 ⇒ 多处替换互不干扰）。
+    #   字符串形态的旧替换先转成行区间（一次性转换，避免混用两套语义）。
+    _lines = new_text.splitlines(keepends=True)
+    _edits: list[tuple[int, int, str]] = []
     for old_block, new_block in replacements:
-        new_text = new_text.replace(old_block, new_block, 1)
+        if isinstance(old_block, tuple):
+            _edits.append((old_block[0], old_block[1], new_block))
+            continue
+        # 字符串形态 ⇒ 定位首次出现 ⇒ 换成行区间
+        _pos = new_text.find(old_block)
+        if _pos < 0:
+            continue
+        _s = new_text.count("\n", 0, _pos)
+        _e = _s + old_block.count("\n") + (0 if old_block.endswith("\n") else 1)
+        _edits.append((_s, _e, new_block))
+    for _s, _e, _new in sorted(_edits, key=lambda x: x[0], reverse=True):
+        _lines = new_text.splitlines(keepends=True)
+        new_text = "".join(_lines[:_s]) + _new + "".join(_lines[_e:])
     if blocks:
         heads = _STOP_HEADS_SECT if titleless else _STOP_HEADS_MD
         new_text = _insert_after_instruction(new_text, "\n\n".join(blocks), heads)
@@ -603,6 +1010,88 @@ def _apply_push(
     return None
 
 
+def _check_budget_and_warn(
+    cfg,
+    platform: str,
+    root: Path,
+    target: Path,
+    text: str,
+    blocks: list,
+    replacements: list,
+    titleless: bool,
+    stat: dict,
+    dry_run: bool,
+) -> str | None:
+    """体量闸（阻断）+ 告警预算（只报不拦）；返回**拒绝原因**或 None（通过）。
+
+    ⚑ 体量闸（2026-11-12）：平台记忆文件是**消费端**的输入，消费端有自己的加载上限
+    （hermes `memory_char_limit`）⇒ 超限后消费端会**拒绝一切新增/替换写入**，
+    而 push 本身照样报「成功」⇒ 生产端不给任何信号，故必须在**写之前**按消费端上限核对。
+    口径：按**推后文件长度**核对（文件长度 ≥ 消费端的条目计数 ⇒ 保守方向：宁严勿松）。
+    """
+    try:
+        budget = _platform_budget(cfg, platform)
+    except ValueError as exc:
+        stat["status"] = (
+            f"拒绝写入：{exc} ⇒ 配置错误不得静默当成「不设闸」（闸悄悄失效 = 生产端零信号 = 本闸要根治的那类事故）"
+        )
+        stat["added"] = 0
+        stat["updated"] = 0
+        stat["replaced"] = 0
+        return stat["status"]
+    if budget is not None and (blocks or replacements):
+        projected = _compose_text(text, blocks, replacements, titleless)
+        if len(projected) > budget:
+            stat["status"] = (
+                f"拒绝写入：推后体量 {len(projected)} 字符 > 平台记忆上限 {budget}"
+                f"（= 消费端加载上限；超限后消费端会拒绝一切新增/替换写入）"
+                f" ⇒ 请改推更小的卡片，或先瘦身 {target.name}（中枢暂无「只推指针」模式）"
+            )
+            stat["added"] = 0
+            stat["updated"] = 0
+            stat["replaced"] = 0
+            return stat["status"]
+
+    # ⚑ 告警预算（2026-11-13）：**消费端上限无法核验**的平台（mavis / code / workbuddy /
+    # deepseek / pi）没有可声明的 `memory_char_limit` ⇒ 平台记忆文件会**无信号地长胖**
+    # （实测 mavis MEMORY.md 已 84,510 B，且此前**零告警** ⇒ 涨到多大都不会有人知道）。
+    # ⇒ 用 hub 侧自设的**告警线**补上信号：**只报不拦**（超线照常写入），
+    #    但 `stat["warnings"]` 出结构化告警 + 中枢日志 retro/log.md 留一行（stdout 会被吞）。
+    # 优先级：**limit 阻断优先**（上面已 return）⇒ warn 只在「不阻断」的路径上产生。
+    try:
+        warn_budget = _platform_warn_budget(cfg, platform)
+    except ValueError as exc:
+        stat["status"] = (
+            f"拒绝写入：{exc} ⇒ 告警线配置错误不得静默当成「未设告警」"
+            f"（探针悄悄失效 = 生产端零信号 = 本机制要根治的那类事故）"
+        )
+        stat["added"] = 0
+        stat["updated"] = 0
+        stat["replaced"] = 0
+        if not dry_run:
+            append_log(root, "push", f"拒绝写入：{exc}")
+        return stat["status"]
+    # 触发条件与体量闸一致：**本轮确实要写**（有新增/替换）才量体量 ⇒
+    # 空推（幂等重推）不刷告警日志（避免噪音掩盖真问题）。
+    if warn_budget is not None and (blocks or replacements):
+        projected = _compose_text(text, blocks, replacements, titleless)
+        if len(projected) > warn_budget:
+            stat["warnings"].append(
+                {
+                    "type": "memory_char_warn_limit",
+                    "platform": platform,
+                    "projected_chars": len(projected),
+                    "warn_limit": warn_budget,
+                    "message": (
+                        f"⚠ 告警：{platform} 推后体量 {len(projected)} 字符 > 告警线 {warn_budget}"
+                        f"（hub 侧自设预算，**只报不拦**；写入照常执行）"
+                        f" ⇒ 请考虑瘦身 {target.name} 或改推更小的卡片"
+                    ),
+                }
+            )
+    return None
+
+
 def push(
     root: Path,
     platform: str,
@@ -651,75 +1140,42 @@ def push(
         stat["status"] = not_found
         return stat
 
+    # ⚑ 推送模式（2026-11-13）：`pointer` = 平台只收指针（省每轮固定 token）；
+    #   默认 `full` ⇒ 行为逐字不变。
+    try:
+        mode = _push_mode(cfg, platform)
+    except ValueError as exc:
+        stat["status"] = f"拒绝写入：{exc}"
+        return stat
+
+    # ⚑ 指针模式的**清单区**必须反映「平台已落地的全部规则卡」，而非本次推送集合
+    #   （`--name xxx` 只推一张时，若清单按推送集合重算 ⇒ 清单只剩那张卡 ⇒ 规则清单丢失；
+    #    实测 7,457 → 5,186 字符，少 2,271）。
+    #   ⇒ 取**全量 rules/** 作为清单来源（与 `--name` / `--only-rules` 过滤无关）。
+    index_cards = None
+    if mode == "pointer":
+        all_rules, _nf = _select_cards(root, True, None)
+        index_cards = all_rules
+
     pushed_fps = set(state.get("pushed") or [])
     blocks, replacements, pushed_fps = _plan_push(
-        adapter, cards, text, state, titleless, existing_bodies, existing_titles, stat
+        adapter,
+        cards,
+        text,
+        state,
+        titleless,
+        existing_bodies,
+        existing_titles,
+        stat,
+        mode=mode,
+        hub_root=root,
+        index_cards=index_cards,
     )
 
-    # ⚑ 体量闸（2026-11-12）：平台记忆文件是**消费端**的输入，消费端有自己的加载上限
-    # （hermes `memory_char_limit`）⇒ 超限后消费端会**拒绝一切新增/替换写入**，
-    # 而 push 本身照样报「成功」⇒ 生产端不给任何信号，故必须在**写之前**按消费端上限核对。
-    # 口径：按**推后文件长度**核对（文件长度 ≥ 消费端的条目计数 ⇒ 保守方向：宁严勿松）。
-    try:
-        budget = _platform_budget(cfg, platform)
-    except ValueError as exc:
-        stat["status"] = (
-            f"拒绝写入：{exc} ⇒ 配置错误不得静默当成「不设闸」（闸悄悄失效 = 生产端零信号 = 本闸要根治的那类事故）"
-        )
-        stat["added"] = 0
-        stat["updated"] = 0
-        stat["replaced"] = 0
+    # ⚑ 体量闸 + 告警预算（抽成独立函数 ⇒ push() 复杂度可控，ruff C901）
+    _reject = _check_budget_and_warn(cfg, platform, root, target, text, blocks, replacements, titleless, stat, dry_run)
+    if _reject:
         return stat
-    if budget is not None and (blocks or replacements):
-        projected = _compose_text(text, blocks, replacements, titleless)
-        if len(projected) > budget:
-            stat["status"] = (
-                f"拒绝写入：推后体量 {len(projected)} 字符 > 平台记忆上限 {budget}"
-                f"（= 消费端加载上限；超限后消费端会拒绝一切新增/替换写入）"
-                f" ⇒ 请改推更小的卡片，或先瘦身 {target.name}（中枢暂无「只推指针」模式）"
-            )
-            stat["added"] = 0
-            stat["updated"] = 0
-            stat["replaced"] = 0
-            return stat
-
-    # ⚑ 告警预算（2026-11-13）：**消费端上限无法核验**的平台（mavis / code / workbuddy /
-    # deepseek / pi）没有可声明的 `memory_char_limit` ⇒ 平台记忆文件会**无信号地长胖**
-    # （实测 mavis MEMORY.md 已 84,510 B，且此前**零告警** ⇒ 涨到多大都不会有人知道）。
-    # ⇒ 用 hub 侧自设的**告警线**补上信号：**只报不拦**（超线照常写入），
-    #    但 `stat["warnings"]` 出结构化告警 + 中枢日志 retro/log.md 留一行（stdout 会被吞）。
-    # 优先级：**limit 阻断优先**（上面已 return）⇒ warn 只在「不阻断」的路径上产生。
-    try:
-        warn_budget = _platform_warn_budget(cfg, platform)
-    except ValueError as exc:
-        stat["status"] = (
-            f"拒绝写入：{exc} ⇒ 告警线配置错误不得静默当成「未设告警」"
-            f"（探针悄悄失效 = 生产端零信号 = 本机制要根治的那类事故）"
-        )
-        stat["added"] = 0
-        stat["updated"] = 0
-        stat["replaced"] = 0
-        if not dry_run:
-            append_log(root, "push", f"拒绝写入：{exc}")
-        return stat
-    # 触发条件与体量闸一致：**本轮确实要写**（有新增/替换）才量体量 ⇒
-    # 空推（幂等重推）不刷告警日志（避免噪音掩盖真问题）。
-    if warn_budget is not None and (blocks or replacements):
-        projected = _compose_text(text, blocks, replacements, titleless)
-        if len(projected) > warn_budget:
-            stat["warnings"].append(
-                {
-                    "type": "memory_char_warn_limit",
-                    "platform": platform,
-                    "projected_chars": len(projected),
-                    "warn_limit": warn_budget,
-                    "message": (
-                        f"⚠ 告警：{platform} 推后体量 {len(projected)} 字符 > 告警线 {warn_budget}"
-                        f"（hub 侧自设预算，**只报不拦**；写入照常执行）"
-                        f" ⇒ 请考虑瘦身 {target.name} 或改推更小的卡片"
-                    ),
-                }
-            )
 
     if dry_run or (not blocks and not replacements):
         if not dry_run:
