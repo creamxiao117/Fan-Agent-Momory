@@ -493,6 +493,24 @@ def _compose_text(
     return new_text
 
 
+def _parse_char_budget(raw, field: str, platform: str) -> int:
+    """把 hub.config.yaml 的体量字段（字符数）解析成正整数；非法 ⇒ 抛错（fail-closed）。
+
+    两个字段共用同一套解析规则 ⇒ 「声明了但非法」的行为完全一致（不因字段名而分叉）：
+      - `memory_char_limit`     = 消费端加载上限（超限 ⇒ **拒绝写入**）
+      - `memory_char_warn_limit` = hub 侧告警线（超限 ⇒ **只报不拦**）
+    """
+    if isinstance(raw, bool) or not isinstance(raw, (int, str)):
+        raise ValueError(f"平台 {platform} 的 {field} 非法：{raw!r}（须为正整数）")
+    try:
+        value = int(str(raw).strip())
+    except (TypeError, ValueError):
+        raise ValueError(f"平台 {platform} 的 {field} 非法：{raw!r}（须为正整数）") from None
+    if value <= 0:
+        raise ValueError(f"平台 {platform} 的 {field} 非法：{raw!r}（须为正整数）")
+    return value
+
+
 def _platform_budget(cfg, platform: str) -> int | None:
     """平台声明的**记忆文件体量上限**（字符数）；未声明 ⇒ None（不设闸）。
 
@@ -502,20 +520,53 @@ def _platform_budget(cfg, platform: str) -> int | None:
     ⚑ **声明了但非法 ⇒ 抛错（fail-closed）**，不得静默当成「未声明」：
     误写成 `"16k"` / `-5` / `0` 若被当成「不设闸」，就是**本闸要根治的同一类
     「生产端零信号」**（悄悄失效的闸比没有闸更坏）⇒ 调用方必须据此**拒绝写入**。
+
+    ⚑ 与 `memory_char_warn_limit`（告警线）的差别：**本字段超限 ⇒ 阻断写入**，
+    因为它代表**消费端契约**（消费端超限后会拒绝一切新增/替换写入 ⇒ 推了也白推）。
+    消费端上限**无法核验**的平台（mavis / code / workbuddy / deepseek / pi）
+    **不得声明本字段**，只能声明告警线。
     """
     meta = (getattr(cfg, "platforms", None) or {}).get(platform) or {}
     raw = meta.get("memory_char_limit")
     if raw is None or raw == "":
         return None
-    if isinstance(raw, bool) or not isinstance(raw, (int, str)):
-        raise ValueError(f"平台 {platform} 的 memory_char_limit 非法：{raw!r}（须为正整数）")
-    try:
-        value = int(str(raw).strip())
-    except (TypeError, ValueError):
-        raise ValueError(f"平台 {platform} 的 memory_char_limit 非法：{raw!r}（须为正整数）") from None
-    if value <= 0:
-        raise ValueError(f"平台 {platform} 的 memory_char_limit 非法：{raw!r}（须为正整数）")
-    return value
+    return _parse_char_budget(raw, "memory_char_limit", platform)
+
+
+def _platform_warn_budget(cfg, platform: str) -> int | None:
+    """平台声明的**告警预算**（hub 侧自设的告警线，字符数）；未声明 ⇒ None（不告警）。
+
+    ⚑ **与 `memory_char_limit` 的语义差别（务必分清）**：
+      - `memory_char_limit`     = **消费端自己的加载上限** ⇒ 超限 ⇒ **拒绝写入**（阻断）。
+        只有能**核验消费端上限**的平台才能声明它（hermes = 其 config.yaml 的 `memory_char_limit`）。
+      - `memory_char_warn_limit` = **hub 侧自设的预算**（告警线）⇒ 超限 ⇒ **照常写入**，
+        但必须留下**可见的告警信号**（`push()` 返回的 `stat["warnings"]` + 中枢日志
+        `retro/log.md` 留一行）。它是「提前知道在长胖」的**探针**，**不是**消费端限制。
+
+    ⇒ 适用对象：**消费端上限无法核验**的平台（mavis / code / workbuddy / deepseek / pi）。
+    实测 2026-11-13：mavis 平台记忆文件 `~/.mavis/memories/MEMORY.md`（84,510 B）在
+    MiniMax Code 运行时（app.asar）里**没有任何读取路径**（`memories` 字面量只出现在
+    Beta managed-agent 的 `./memory/memories` 工具与 Anthropic SDK 的 memoryStores 里；
+    运行时自己的记忆是 `~/.mavis/memory/user.md` 与 `~/.mavis/agents/<name>/memory/MEMORY.md`）
+    ⇒ 该文件本质是**中枢的镜像**（只有中枢自己 push/pull 读写）⇒ 没有消费端上限可核验
+    ⇒ **不能声明** `memory_char_limit`，只能声明告警线。
+
+    ⚑ **声明了但非法 ⇒ 抛错（fail-closed）**，不得静默当成「未声明」：
+    非法值 = 探针**悄悄失效** = 生产端零信号 = 与 `memory_char_limit` 同一类事故
+    ⇒ 调用方据此拒绝写入并要求修配置。
+    （注意：**非法**与**超限**是两件事——超限只是提醒、照常写；非法是配置错误、停下修。）
+    """
+    meta = (getattr(cfg, "platforms", None) or {}).get(platform) or {}
+    raw = meta.get("memory_char_warn_limit")
+    if raw is None or raw == "":
+        return None
+    return _parse_char_budget(raw, "memory_char_warn_limit", platform)
+
+
+def _log_warnings(root: Path, warnings: list[dict]) -> None:
+    """把告警写进中枢日志（retro/log.md）——stdout 会被吞，**必须留痕**。"""
+    for w in warnings:
+        append_log(root, "push", str(w.get("message", w)))
 
 
 def _apply_push(
@@ -566,7 +617,16 @@ def push(
     行为逐字不变（tests/test_platform_bridge.py 34 例看守）。
     """
     root = Path(root)
-    stat = {"added": 0, "updated": 0, "replaced": 0, "skipped": 0, "status": "ok"}
+    # `warnings`：结构化告警列表（**只报不拦**的告警线命中时才有内容）。
+    # 恒存在（无告警即空列表）⇒ 消费方不必判键是否存在。
+    stat = {
+        "added": 0,
+        "updated": 0,
+        "replaced": 0,
+        "skipped": 0,
+        "status": "ok",
+        "warnings": [],
+    }
     target = _target_path(root, platform)
     if not target.is_file():
         stat["status"] = f"平台记忆文件不存在: {target}"
@@ -623,9 +683,50 @@ def push(
             stat["replaced"] = 0
             return stat
 
+    # ⚑ 告警预算（2026-11-13）：**消费端上限无法核验**的平台（mavis / code / workbuddy /
+    # deepseek / pi）没有可声明的 `memory_char_limit` ⇒ 平台记忆文件会**无信号地长胖**
+    # （实测 mavis MEMORY.md 已 84,510 B，且此前**零告警** ⇒ 涨到多大都不会有人知道）。
+    # ⇒ 用 hub 侧自设的**告警线**补上信号：**只报不拦**（超线照常写入），
+    #    但 `stat["warnings"]` 出结构化告警 + 中枢日志 retro/log.md 留一行（stdout 会被吞）。
+    # 优先级：**limit 阻断优先**（上面已 return）⇒ warn 只在「不阻断」的路径上产生。
+    try:
+        warn_budget = _platform_warn_budget(cfg, platform)
+    except ValueError as exc:
+        stat["status"] = (
+            f"拒绝写入：{exc} ⇒ 告警线配置错误不得静默当成「未设告警」"
+            f"（探针悄悄失效 = 生产端零信号 = 本机制要根治的那类事故）"
+        )
+        stat["added"] = 0
+        stat["updated"] = 0
+        stat["replaced"] = 0
+        if not dry_run:
+            append_log(root, "push", f"拒绝写入：{exc}")
+        return stat
+    # 触发条件与体量闸一致：**本轮确实要写**（有新增/替换）才量体量 ⇒
+    # 空推（幂等重推）不刷告警日志（避免噪音掩盖真问题）。
+    if warn_budget is not None and (blocks or replacements):
+        projected = _compose_text(text, blocks, replacements, titleless)
+        if len(projected) > warn_budget:
+            stat["warnings"].append(
+                {
+                    "type": "memory_char_warn_limit",
+                    "platform": platform,
+                    "projected_chars": len(projected),
+                    "warn_limit": warn_budget,
+                    "message": (
+                        f"⚠ 告警：{platform} 推后体量 {len(projected)} 字符 > 告警线 {warn_budget}"
+                        f"（hub 侧自设预算，**只报不拦**；写入照常执行）"
+                        f" ⇒ 请考虑瘦身 {target.name} 或改推更小的卡片"
+                    ),
+                }
+            )
+
     if dry_run or (not blocks and not replacements):
+        if not dry_run:
+            _log_warnings(root, stat["warnings"])
         return stat
     err = _apply_push(root, platform, target, state, text, blocks, replacements, titleless, pushed_fps, stat)
     if err:
         stat["status"] = err
+    _log_warnings(root, stat["warnings"])
     return stat

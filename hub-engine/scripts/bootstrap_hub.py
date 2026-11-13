@@ -82,6 +82,19 @@ platforms:
   workbuddy:
     memory_dir: "{home}/.workbuddy"
     target_file: "MEMORY.md"
+  # ⚠ 平台级**告警预算**（只报不拦）—— 字段语义示例（**默认注释掉**；阈值由维护者按实测决定，
+  #    中枢不擅自给任何平台填数字）：
+  #   memory_char_warn_limit: <正整数，单位=字符>
+  #
+  #   与上面 memory_char_limit 的**语义差别**（务必分清，填错字段 = 闸/探针错位）：
+  #     - memory_char_limit     = **消费端自己的加载上限** ⇒ 超限 ⇒ **拒绝写入**（阻断）。
+  #                              只有能**核验消费端上限**的平台才能声明（如 hermes）；
+  #                              消费端上限未核验的平台**不得**声明它。
+  #     - memory_char_warn_limit = **hub 侧自设预算**（告警线）⇒ 超限 ⇒ **照常写入**，
+  #                              但 push() 返回的 stat 里出结构化告警（stat["warnings"]），
+  #                              且中枢日志 retro/log.md 留一行 ⇒ 「提前知道在长胖」的探针，
+  #                              **不是**消费端限制。
+  #     适用于消费端上限无法核验的平台（mavis / code / workbuddy / deepseek / pi）。
 engine:
   provider_keys: provider_keys.yaml
 """

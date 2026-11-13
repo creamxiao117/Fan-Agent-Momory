@@ -592,3 +592,130 @@ def test_push_refusal_leaves_platform_state_untouched(tmp_path):
     assert push(root, "testplat")["status"] != "ok"
     after = state.read_text(encoding="utf-8") if state.exists() else None
     assert after == before
+
+
+# ---------- 平台级告警预算 memory_char_warn_limit（2026-11-13：只报不拦）----------
+
+
+def _set_platform_warn_budget(root: Path, name: str, limit) -> None:
+    """给测试中枢的平台登记**告警预算**（hub 侧自设告警线，只报不拦，不阻断写入）"""
+    cfg_path = root / "hub.config.yaml"
+    data = yaml.safe_load(cfg_path.read_text(encoding="utf-8")) or {}
+    data.setdefault("platforms", {}).setdefault(name, {})["memory_char_warn_limit"] = limit
+    cfg_path.write_text(yaml.safe_dump(data, allow_unicode=True, sort_keys=False), encoding="utf-8")
+
+
+def test_push_warns_over_warn_limit_but_still_writes(tmp_path):
+    """超告警线 ⇒ **照常写入** + stat 出结构化告警 + 中枢日志 retro/log.md 留一行。
+
+    告警线是**只报不拦**的探针（与 memory_char_limit 的阻断语义相反）：
+    它服务于「消费端上限无法核验」的平台（mavis / code / workbuddy / deepseek / pi），
+    让平台记忆文件「在长胖」这件事不再零信号。
+    """
+    root = _root_with_platform(tmp_path, content="## 平台已有小节\n原有内容\n")
+    _hub_card(root, "新规则", "中枢规则正文" * 50)
+    _set_platform_warn_budget(root, "testplat", 100)
+    target = tmp_path / "platforms" / "memory.md"
+    before = target.read_text(encoding="utf-8")
+    stat = push(root, "testplat")
+    assert stat["status"] == "ok", stat
+    assert stat["added"] == 1
+    text = target.read_text(encoding="utf-8")
+    assert text != before, "超告警线必须**照常写入**（只报不拦）"
+    assert "新规则" in text
+    assert len(stat["warnings"]) == 1, stat
+    w = stat["warnings"][0]
+    assert w["platform"] == "testplat"
+    assert w["warn_limit"] == 100
+    assert w["projected_chars"] > 100
+    log = (root / "retro" / "log.md").read_text(encoding="utf-8")
+    assert "⚠ 告警" in log, "告警必须在中枢日志留痕（stdout 会被吞）"
+
+
+def test_push_no_warning_when_within_warn_limit(tmp_path):
+    """未超告警线 ⇒ 无告警（stat 里空列表 + 日志无告警行）"""
+    root = _root_with_platform(tmp_path, content="## 平台已有小节\n原有内容\n")
+    _hub_card(root, "新规则", "正文")
+    _set_platform_warn_budget(root, "testplat", 10**6)
+    stat = push(root, "testplat")
+    assert stat["status"] == "ok"
+    assert stat["added"] == 1
+    assert stat["warnings"] == []
+    assert "⚠ 告警" not in (root / "retro" / "log.md").read_text(encoding="utf-8")
+
+
+def test_push_refuses_when_warn_limit_is_invalid(tmp_path):
+    """告警线写错（"16k" / -5 / 0 / True）⇒ 显式配置错误 + 拒绝写入（探针不许悄悄失效）。
+
+    判定：告警线**超限**只是提醒、照常写；但告警线**非法**是配置错误 ⇒ fail-closed
+    （与 memory_char_limit 同一处置：宁可停下让人修配置，也不能让探针静默失效 ⇒ 生产端零信号）。
+    """
+    for bad in ("16k", -5, "0", 0, True):
+        root = _root_with_platform(tmp_path / f"warn_{bad}", content="## 平台已有小节\n原有内容\n")
+        _hub_card(root, "新规则", "正文")
+        _set_platform_warn_budget(root, "testplat", bad)
+        target = tmp_path / f"warn_{bad}" / "platforms" / "memory.md"
+        before = target.read_text(encoding="utf-8")
+        stat = push(root, "testplat")
+        assert stat["status"] != "ok", f"非法告警线 {bad!r} 竟未报错"
+        assert "非法" in stat["status"]
+        assert stat["added"] == 0
+        assert target.read_text(encoding="utf-8") == before
+
+
+def test_push_limit_block_takes_precedence_over_warn(tmp_path):
+    """两个字段同时存在 ⇒ **limit 阻断优先**：拒绝写入，且**不产生** warn 告警。
+
+    优先级口径：**阻断闸先判**（消费端契约），告警线只在「不阻断」的路径上产生
+    ⇒ 避免同一个 push 同时报「拒绝写入」又报「已超告警线」这种自相矛盾的信号。
+    """
+    root = _root_with_platform(tmp_path, content="## 平台已有小节\n原有内容\n")
+    _hub_card(root, "新规则", "中枢规则正文" * 50)
+    _set_platform_budget(root, "testplat", 100)
+    _set_platform_warn_budget(root, "testplat", 50)
+    target = tmp_path / "platforms" / "memory.md"
+    before = target.read_text(encoding="utf-8")
+    stat = push(root, "testplat")
+    assert stat["status"] != "ok"
+    assert "拒绝写入" in stat["status"]
+    assert stat["added"] == 0
+    assert stat["warnings"] == [], "阻断路径上不得再产生告警"
+    assert target.read_text(encoding="utf-8") == before
+    assert "⚠ 告警" not in (root / "retro" / "log.md").read_text(encoding="utf-8")
+
+
+def test_push_warn_fires_when_limit_allows(tmp_path):
+    """limit 未超限 + warn 超线 ⇒ 写入照常发生 + 出告警（warn 只在「不阻断」路径上产生）"""
+    root = _root_with_platform(tmp_path, content="## 平台已有小节\n原有内容\n")
+    _hub_card(root, "新规则", "中枢规则正文" * 20)
+    _set_platform_budget(root, "testplat", 10**6)
+    _set_platform_warn_budget(root, "testplat", 100)
+    stat = push(root, "testplat")
+    assert stat["status"] == "ok", stat
+    assert stat["added"] == 1
+    assert len(stat["warnings"]) == 1
+    assert "⚠ 告警" in (root / "retro" / "log.md").read_text(encoding="utf-8")
+
+
+def test_push_without_declared_limits_is_unchanged(tmp_path):
+    """未声明任何上限的平台（mavis 等镜像）⇒ 不设闸、不告警、行为与改前逐字一致"""
+    root = _root_with_platform(tmp_path, content="## 平台已有小节\n原有内容\n")
+    _hub_card(root, "新规则", "正文" * 200)
+    stat = push(root, "testplat")
+    assert stat["status"] == "ok"
+    assert stat["added"] == 1
+    assert stat["warnings"] == []
+    assert "新规则" in (tmp_path / "platforms" / "memory.md").read_text(encoding="utf-8")
+    assert "⚠ 告警" not in (root / "retro" / "log.md").read_text(encoding="utf-8")
+
+
+def test_push_warn_reported_in_dry_run_without_logging(tmp_path):
+    """dry-run 也报告警（维护者要先看见），但**不落日志**（dry-run 不许改中枢）"""
+    root = _root_with_platform(tmp_path, content="## 平台已有小节\n原有内容\n")
+    _hub_card(root, "新规则", "中枢规则正文" * 50)
+    _set_platform_warn_budget(root, "testplat", 100)
+    log_before = (root / "retro" / "log.md").read_text(encoding="utf-8")
+    stat = push(root, "testplat", dry_run=True)
+    assert len(stat["warnings"]) == 1
+    assert "新规则" not in (tmp_path / "platforms" / "memory.md").read_text(encoding="utf-8")
+    assert (root / "retro" / "log.md").read_text(encoding="utf-8") == log_before
